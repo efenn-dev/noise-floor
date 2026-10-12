@@ -22,6 +22,14 @@ func spawn(type: String, pos: Vector3) -> ZombieBrain:
 	return z
 
 
+## Brings back a saved zombie with its old id.
+func restore(id: int, type: String, pos: Vector3) -> ZombieBrain:
+	var z := ZombieBrain.new(id, type, data.zombies[type], pos, hash([seed_value, id]))
+	zombies[id] = z
+	_next_id = maxi(_next_id, id + 1)
+	return z
+
+
 ## Scatters `count` shamblers along the sidewalks of the main street, away from the spawn point.
 func spawn_town(count: int) -> void:
 	var rng := RandomNumberGenerator.new()

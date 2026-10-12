@@ -36,11 +36,13 @@ var spawn_point := Vector3.ZERO
 var bags: Array = []
 var _next_bag := 1
 var ticks: int = 0
+var seed_value: int = 1
 var paused := false
 var _accumulator := 0.0
 
 
-func _init(start_hour: float = 8.0, p_data: GameData = null, seed_value: int = 1) -> void:
+func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) -> void:
+	seed_value = p_seed
 	clock = GameClock.new(start_hour)
 	data = p_data if p_data != null else GameData.load_default()
 	build = BuildGrid.new(data)

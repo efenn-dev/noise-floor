@@ -11,7 +11,9 @@ const KEYS := {
 	"jump": [KEY_SPACE],
 	"crouch": [KEY_CTRL, KEY_C],
 	"flashlight": [KEY_F],
-	"free_mouse": [KEY_ESCAPE],
+	"free_mouse": [KEY_ESCAPE],  # opens the pause menu
+	"quicksave": [KEY_F5],
+	"quickload": [KEY_F9],
 	"build_mode": [KEY_B],
 	"build_rotate": [KEY_R],
 	"build_pick_1": [KEY_1],
