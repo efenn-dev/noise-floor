@@ -31,6 +31,10 @@ const MODELS := {
 	"rain_collector": "res://assets/models/rain_collector.glb",
 	"purifier": "res://assets/models/purifier.glb",
 	"canner": "res://assets/models/canner.glb",
+	"planter": "res://assets/models/planter.glb",
+	"generator": "res://assets/models/generator.glb",
+	"solar_panel": "res://assets/models/solar_panel.glb",
+	"power_pole": "res://assets/models/power_pole.glb",
 }
 const SURFACES := {"foundation": "res://assets/textures/concrete_floor"}  # <stem>_albedo.png + _normal.png
 
