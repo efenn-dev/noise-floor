@@ -1,0 +1,6 @@
+# Godot cache
+.godot/
+# Screenshots from tools/shot.sh (look, don't commit)
+.shots/
+# Exports
+/build/

@@ -1,0 +1,8 @@
+# LF everywhere so scripts run in Linux cloud sessions and diffs stay clean on Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ogg binary
+*.wav binary
+*.glb binary
+*.ttf binary
