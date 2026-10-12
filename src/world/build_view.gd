@@ -19,6 +19,11 @@ const COLORS := {
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
+## Art made with Codex (tools/art/). Pieces not listed stay plain coloured boxes.
+const MODELS := {"press": "res://assets/models/press.glb"}  # replaces the box mesh, collider unchanged
+const SURFACES := {"foundation": "res://assets/textures/concrete_floor"}  # <stem>_albedo.png + _normal.png
+
+var _surface_mats: Dictionary = {}  # id -> StandardMaterial3D, shared so world-space tiling lines up
 
 
 func setup(p_grid: BuildGrid) -> void:
@@ -44,15 +49,21 @@ func _on_added(key: String) -> void:
 	body.set_meta("piece_key", key)
 	body.position = grid.piece_center(key)
 	body.rotation_degrees.y = grid.yaw_for(id, piece["cell"], piece.get("side", 0))
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mesh.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = COLORS.get(info["kind"], Color.GRAY)
-	mat.roughness = 0.95
-	mesh.material_override = mat
-	body.add_child(mesh)
+	if MODELS.has(id):
+		body.add_child((load(MODELS[id]) as PackedScene).instantiate())
+	else:
+		var mesh := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = size
+		mesh.mesh = box
+		if SURFACES.has(id):
+			mesh.material_override = _surface(id)
+		else:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = COLORS.get(info["kind"], Color.GRAY)
+			mat.roughness = 0.95
+			mesh.material_override = mat
+		body.add_child(mesh)
 	match info["kind"]:
 		"belt":
 			# Two pale chevron bars toward the front (-Z) show which way it runs.
@@ -95,6 +106,24 @@ func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshI
 	part.material_override = mat
 	body.add_child(part)
 	return part
+
+
+func _surface(id: String) -> StandardMaterial3D:
+	if not _surface_mats.has(id):
+		var stem: String = SURFACES[id]
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = load(stem + "_albedo.png")
+		mat.albedo_color = Color(0.72, 0.72, 0.72)  # generated photos come out bright; noon sun washed them white
+		mat.normal_enabled = true
+		mat.normal_texture = load(stem + "_normal.png")
+		mat.roughness = 0.92
+		# World-space triplanar: one tile per 2 m build cell, seamless across neighbouring pieces.
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = true
+		mat.uv1_scale = Vector3.ONE * 0.5
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_surface_mats[id] = mat
+	return _surface_mats[id]
 
 
 func _on_removed(key: String, _piece: Dictionary) -> void:

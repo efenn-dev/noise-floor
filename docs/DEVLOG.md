@@ -2,6 +2,16 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — Art smoke test (Codex, not a milestone)
+
+**Built:** the first generated art, made on Emmitt's PC with Codex (his ChatGPT plan, no API key). **Concrete foundations:** Codex generated the photo; `tools/art/make_tileable.py` makes it seamless and derives a normal map (`assets/textures/concrete_floor_*`). It's drawn with world-space triplanar mapping, one tile per 2 m cell, so neighbouring foundations join without seams. **Press model:** Codex wrote `tools/art/press.py`, a deterministic Blender 5.1 script that builds a 2.7k-triangle low-poly press and exports `assets/models/press.glb`. `BuildView` has `MODELS` and `SURFACES` tables. A listed piece gets the model or texture, and everything else stays a coloured box. Colliders didn't change.
+
+**Try it on the PC:** `play.bat --demo-factory`, look at the press at the east end, and stand on the foundations.
+
+**Known gaps:** the in/out panels and the status-lamp cube are still placeholder boxes, and they look crude next to the model. Textures import lossless with mipmaps; switch to VRAM compression once the cloud renderer has been checked with it. The raw Codex image isn't committed, so to regenerate, run Codex again, then `make_tileable.py`. Codex and Blender only exist on the PC, so cloud sessions use the committed files and can't make new art.
+
+**Next:** if Emmitt likes the look, batch the other machines and surfaces (walls, belts, smelter) in the same style during M10.
+
 ## 2026-10-12 — M7 Power
 
 **Built:**
