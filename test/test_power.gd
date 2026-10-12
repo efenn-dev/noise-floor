@@ -160,7 +160,7 @@ func test_siphoning_cars() -> void:
 	sim.inventory.remove("gas_can", 10)
 	sim.loot.add("car_0", "car_trunk", Vector3.ZERO)
 	sim.add_car("car_0")
-	var cans: int = sim.car_fuel["car_0"]
+	var cans: int = int(sim.vehicles.cars["car_0"]["fuel"])
 	check(cans >= 1 and cans <= 3, "a car holds 1-3 cans (%d)" % cans)
 	sim.player_pos = Vector3(30, 0, 0)
 	eq(sim.siphon("car_0"), "Too far away", "stand by the car")
@@ -172,7 +172,7 @@ func test_siphoning_cars() -> void:
 	eq(sim.noise.recent.size(), 1, "siphoning makes a little noise")
 	var again := SimWorld.new(10.0)
 	again.add_car("car_0")
-	eq(again.car_fuel["car_0"], cans, "same world, same fuel in the same car")
+	eq(int(again.vehicles.cars["car_0"]["fuel"]), cans, "same world, same fuel in the same car")
 
 
 func test_removing_a_generator_returns_full_cans() -> void:

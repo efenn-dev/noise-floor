@@ -1,0 +1,17 @@
+{
+	"sedan": {
+		"name": "Sedan", "size": [1.9, 1.5, 4.4], "seat": [-0.38, 1.0, 0.35],
+		"tank": 4, "metres_per_can": 800, "idle_cans_per_minute": 0.02, "loudness": 72, "hp": 300, "ram_damage": 9,
+		"mass": 1200, "engine_force": 2600, "brake_force": 40, "max_steer_deg": 32, "max_speed": 24
+	},
+	"pickup": {
+		"name": "Pickup", "size": [2.0, 1.85, 5.2], "seat": [-0.4, 1.55, -0.05],
+		"tank": 6, "metres_per_can": 600, "idle_cans_per_minute": 0.03, "loudness": 78, "hp": 450, "ram_damage": 12,
+		"mass": 1800, "engine_force": 3800, "brake_force": 60, "max_steer_deg": 30, "max_speed": 22
+	},
+	"van": {
+		"name": "Van", "size": [2.0, 2.1, 4.9], "seat": [-0.42, 1.62, -0.55],
+		"tank": 5, "metres_per_can": 650, "idle_cans_per_minute": 0.025, "loudness": 75, "hp": 400, "ram_damage": 10,
+		"mass": 1600, "engine_force": 3200, "brake_force": 50, "max_steer_deg": 30, "max_speed": 21
+	}
+}

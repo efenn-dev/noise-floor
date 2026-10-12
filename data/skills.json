@@ -1,0 +1,14 @@
+{
+	"levels": [0, 30, 80, 150, 240, 350, 480, 630, 800, 1000, 1250],
+	"skills": {
+		"mechanics": {
+			"name": "Mechanics",
+			"xp": { "repair": 8, "repair_car": 15, "muffler": 20, "hotwire": 25 }
+		}
+	},
+	"hotwire_level": 2,
+	"hotwire_seconds": 12,
+	"hotwire_seconds_per_level": 2,
+	"hotwire_min_seconds": 4,
+	"hotwire_noise": 30
+}

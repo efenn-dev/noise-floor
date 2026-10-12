@@ -182,12 +182,13 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M9 — Keep it.** Save/load, main menu, settings (mouse sensitivity, volume, day length), pause.
 - [x] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.
 - [x] **M10b — Inventory screen.** **Tab** opens your pockets next to any crate in reach, with item icons, counts, weights and your carry limit. Click an item to use it (eat, drink, bandage), drop it, or move it between pockets and the crate (shift-click moves the whole stack). Item icons are made with Codex (`assets/icons/`). This comes before M11, because loot, bags and carry weight all need a place to see your stuff.
-- [ ] **M10c — Wheels.** Drivable cars, with better-looking ones:
+- [x] **M10c — Wheels.** Drivable cars, with better-looking ones:
   - **Look:** a few car types (sedan, pickup, van) with worn, rusty, scratched paint, tinted per car. Their textures are mapped to the car itself, not the world, so they don't slide when it moves.
   - **Driving:** **E** gets in and out, WASD drives, Space is the handbrake, **H** is the horn, and headlights come on at night. Physics is Godot's `VehicleBody3D`, and the car models need their wheels as separate parts.
   - **Noise:** a running engine is loud (about a generator) and draws zombies; the horn is very loud.
   - **Fuel:** a car's tank is the gas you can siphon, so siphoning strands it. Refuel from gas cans.
   - **Wrecks:** some cars can't drive (flat tyres, smashed); the rest start if they have fuel.
+  - **Keys (Zomboid style, Emmitt's call):** every car has its own key: in the ignition, in the glovebox (search the car), in the nearest house, or lost. Without it you can sit in the car but it won't start, unless you hotwire it (**R** in the car), which needs **Mechanics 2** and gets quicker with skill. Mechanics levels by doing: repairs, mufflers, car repairs and hotwiring. It's the first M12 skill, brought forward.
   - **Damage and storage:** hitting zombies hurts them and the car. The trunk is storage that shows up in the inventory screen.
   - **Saving:** cars are saved where you parked them.
   - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
@@ -195,7 +196,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 **The long game** (see "Long game" above), in this order:
 
 - [ ] **M11 — The world gets worse.** Finite loot, stale gas, food spoilage, the infamy score, the first evolved zombies (runner, screamer), the stats screen.
-- [ ] **M12 — Skills and carry weight.** Skills that level by doing, the Strength-based carry limit and bags, perk points, the three trees with a few perks each, synergies.
+- [ ] **M12 — Skills and carry weight.** (Mechanics and the skill table already exist, since M10c.) Skills that level by doing, the Strength-based carry limit and bags, perk points, the three trees with a few perks each, synergies.
 - [ ] **M13 — Loot.** Rarity colors, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set.
 - [ ] **M14 — Guns.** Firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk.
 - [ ] **M15 — Automated defense.** The turret lineup fed by belts, traps, sensors and actions, the repair station, attacks that play out while you're away, radio alerts and the base log.

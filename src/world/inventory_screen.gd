@@ -136,6 +136,10 @@ func refresh() -> void:
 	_weight_bar.modulate = Color(1.0, 0.4, 0.3) if over else (Color(1.0, 0.85, 0.4) if carried > limit * 0.8 else Color.WHITE)
 	if over:
 		_weight_label.text += "   Overloaded: slower and louder"
+	var mech := sim.skills.progress("mechanics")
+	_weight_label.text += "
+Mechanics %d%s" % [sim.skills.level("mechanics"),
+			("  (%d / %d xp to the next level)" % [mech[0], mech[1]]) if mech[1] > 0 else ""]
 
 	var held := sim.inventory if _selected_side == POCKETS else box
 	if _selected != "" and (held == null or held.count(_selected) == 0):
@@ -158,14 +162,14 @@ func _slot(item: String, count: int, side: String) -> Button:
 	b.focus_mode = Control.FOCUS_NONE  # keep Tab for closing
 	b.toggle_mode = true
 	b.button_pressed = item == _selected and side == _selected_side
-	b.tooltip_text = sim.data.item_name(item)
+	b.tooltip_text = _name(item)
 	var icon := _icon(item)
 	if icon != null:
 		b.icon = icon
 		b.expand_icon = true
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:  # no picture yet: a coloured tile with the name
-		b.text = sim.data.item_name(item)
+		b.text = _name(item)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD
 		b.add_theme_color_override("font_color", sim.data.item_color(item))
 	var n := Label.new()
@@ -190,7 +194,7 @@ func _show_details(held: Inventory) -> void:
 		return
 	var d := sim.data
 	var n := held.count(_selected)
-	var lines := ["%s  x%d" % [d.item_name(_selected), n],
+	var lines := ["%s  x%d" % [_name(_selected), n],
 			"%.2f kg each, %.1f kg in all" % [d.item_weight(_selected), d.item_weight(_selected) * n]]
 	var effects := []
 	if d.item_value(_selected, "food") > 0.0:
@@ -216,6 +220,15 @@ func _show_details(held: Inventory) -> void:
 		_action("Drop all", drop_selected.bind(true))
 
 
+## Item names, with car keys saying which car they start.
+func _name(item: String) -> String:
+	if item.begins_with(GameData.CAR_KEY):
+		var car := item.trim_prefix(GameData.CAR_KEY)
+		if sim.vehicles.cars.has(car):
+			return "Car key (%s)" % sim.vehicles.stats(car)["name"]
+	return sim.data.item_name(item)
+
+
 func _action(text: String, callback: Callable) -> void:
 	var b := Button.new()
 	b.text = text
@@ -235,6 +248,8 @@ func _best_bag() -> String:
 
 
 static func _icon(item: String) -> Texture2D:
+	if item.begins_with(GameData.CAR_KEY):
+		item = "car_key"  # every car's key looks the same
 	if not _icons.has(item):
 		var path := "res://assets/icons/%s.png" % item
 		_icons[item] = load(path) if ResourceLoader.exists(path) else null

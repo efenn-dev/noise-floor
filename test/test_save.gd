@@ -79,7 +79,7 @@ func test_round_trip_keeps_everything() -> void:
 	eq(b.horde.zombies.size(), 2, "both zombies")
 	near(b.horde.zombies[1].hp, 55.0, "a hurt zombie stays hurt")
 	near(b.director.heat, a.director.heat, "heat")
-	eq(b.car_fuel["car_0"], 0, "the siphoned car stays dry")
+	eq(b.vehicles.cars["car_0"]["fuel"], 0.0, "the siphoned car stays dry")
 	eq(b.bags.size(), 1, "death bag")
 	eq(b.bags[0]["items"], {"bandage": 2}, "with its contents")
 

@@ -2,6 +2,10 @@ class_name Interactor
 extends Node3D
 ## Looking at a machine or belt (outside build mode) shows what's in it. E takes a machine's output
 ## and loads it with any recipe inputs you carry, or picks up everything on a belt.
+## Cars: E at the back searches the trunk, E anywhere else gets in (main does the switch when
+## entered_car fires), G siphons, R pours in gas cans, T repairs.
+
+signal entered_car(id: String)
 
 const REACH := 4.0
 
@@ -15,6 +19,8 @@ var has_target := false
 var target_bag := -1  # id of the death bag being looked at, -1 if none
 var target_container := ""  # id of the loot container being looked at, "" if none
 var target_key := ""  # piece key of the machine/belt/bed/crate being looked at
+var target_car := ""  # id of the car being looked at, "" if none
+var target_trunk := false  # looking at the car's back (or it's a wreck): E searches instead of getting in
 var last_message := ""
 
 
@@ -40,11 +46,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		siphon()
 	elif event.is_action_pressed("repair"):
 		repair()
+	elif event.is_action_pressed("refuel"):
+		refuel()
 
 
 ## T on anything you built: repair it (pays part of its cost from pockets and nearby crates).
 func repair() -> String:
 	update_target()
+	if target_car != "":
+		var car_why := sim.repair_car(target_car)
+		last_message = car_why if car_why != "" else "Repaired"
+		return last_message
 	if target_key == "":
 		return ""
 	var why := sim.repair(target_key)
@@ -55,9 +67,18 @@ func repair() -> String:
 ## G on a car: siphon its gas.
 func siphon() -> String:
 	update_target()
-	if target_container == "" or not sim.car_fuel.has(target_container):
+	if target_car == "":
 		return ""
-	last_message = sim.siphon(target_container)
+	last_message = sim.siphon(target_car)
+	return last_message
+
+
+## R on a car: pour the gas cans you carry into its tank.
+func refuel() -> String:
+	update_target()
+	if target_car == "":
+		return ""
+	last_message = sim.refuel_car(target_car)
 	return last_message
 
 
@@ -76,10 +97,13 @@ func update_target() -> void:
 	var was_bag := target_bag
 	var was_container := target_container
 	var was_key := target_key
+	var was_car := target_car
 	has_target = false
 	target_bag = -1
 	target_container = ""
 	target_key = ""
+	target_car = ""
+	target_trunk = false
 	if builder.active:
 		return
 	var from := camera.global_position
@@ -89,6 +113,16 @@ func update_target() -> void:
 	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("bag_id"):
 		target_bag = hit["collider"].get_meta("bag_id")
 		if target_bag != was_bag:
+			last_message = ""
+		return
+	if not hit.is_empty() and hit["collider"] is CarBody:
+		var car := hit["collider"] as CarBody
+		target_car = car.id
+		var local: Vector3 = car.to_local(hit["position"])  # the body's front is +Z, so the trunk is -Z
+		target_trunk = local.z < -car.size.z * 0.2 or sim.vehicles.why_not(car.id) != ""
+		if target_trunk:
+			target_container = car.id
+		if target_car != was_car:
 			last_message = ""
 		return
 	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("container_id"):
@@ -118,6 +152,12 @@ func interact() -> String:
 		var items := sim.take_bag(target_bag)
 		last_message = "Took " + _list(items) if not items.is_empty() else ""
 		return last_message
+	if target_car != "" and not target_trunk:
+		var car_why := sim.enter_car(target_car)
+		last_message = car_why
+		if car_why == "":
+			entered_car.emit(target_car)
+		return car_why
 	if target_container != "":
 		var why := sim.search(target_container)
 		last_message = why
@@ -156,18 +196,16 @@ func interact() -> String:
 func status_text() -> String:
 	if target_bag != -1:
 		return "Your bag\n[E] pick it up"
+	if target_car != "":
+		return _car_status()
 	if target_container != "":
 		var c: Dictionary = sim.loot.containers.get(target_container, {})
 		var name := sim.loot.display_name(target_container)
 		if c.get("searched", false):
-			var tank := ""
-			if sim.car_fuel.has(target_container):
-				tank = "   [G] siphon gas" if sim.car_fuel[target_container] > 0 else "   tank dry"
-			return "%s · searched%s%s" % [name, tank, ("\n" + last_message) if last_message != "" else ""]
+			return "%s · searched%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 		if sim.loot.active == target_container:
 			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"]))]
-		var extra := "   [G] siphon gas" if sim.car_fuel.has(target_container) else ""
-		return "%s\n[E] search (stay close; it makes a little noise)%s%s" % [name, extra, ("\n" + last_message) if last_message != "" else ""]
+		return "%s\n[E] search (stay close; it makes a little noise)%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 	if target_key == "" or not sim.build.pieces.has(target_key):
 		return ""
 	var f := sim.factory
@@ -261,3 +299,35 @@ func _list(counts: Dictionary, empty: String = "nothing") -> String:
 	for item: String in counts:
 		parts.append("%d %s" % [counts[item], sim.data.item_name(item)])
 	return ", ".join(parts) if not parts.is_empty() else empty
+
+
+## What looking at a car shows: what it is, its gas and damage, and what the keys do here.
+func _car_status() -> String:
+	var c: Dictionary = sim.vehicles.cars[target_car]
+	var s := sim.vehicles.stats(target_car)
+	var head := "%s · gas %.1f / %d cans · damage %d%%" % [s["name"], c["fuel"], int(s["tank"]),
+			roundi(100.0 * (1.0 - float(c["hp"]) / float(s["hp"])))]
+	if c["wreck"] != "":
+		head += " · wreck: " + String(c["wreck"]).to_lower()
+	var keys := PackedStringArray()
+	if target_trunk:
+		var trunk: Dictionary = sim.loot.containers.get(target_car, {})
+		if sim.loot.active == target_car:
+			keys.append("searching the trunk %d%%" % roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"])))
+		elif trunk.get("searched", false):
+			keys.append("trunk searched")
+		else:
+			keys.append("[E] search the trunk")
+	else:
+		var why := sim.vehicles.why_not(target_car)
+		keys.append("[E] get in" if why == "" else why)
+	if float(c["fuel"]) >= 1.0:
+		keys.append("[G] siphon gas")
+	if sim.inventory.count("gas_can") > 0 and float(c["fuel"]) <= float(s["tank"]) - 1.0:
+		keys.append("[R] pour in gas cans")
+	if c["wreck"] == "" and float(c["hp"]) < float(s["hp"]):
+		keys.append("[T] repair (metal plate + 4 nails)")
+	var lines := PackedStringArray([head, "   ".join(keys)])
+	if last_message != "":
+		lines.append(last_message)
+	return "\n".join(lines)

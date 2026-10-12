@@ -4,7 +4,7 @@ extends RefCounted
 ## body, everything you built (with hp, door state, trap wear), machine buffers and progress, items
 ## on belts, turret ammo, crate contents, generator fuel, zombies (where they are and how hurt, not
 ## what they were thinking), the Director's heat, which containers are searched, gas left in cars,
-## death bags, and the world seed. The world (town, containers, cars) is rebuilt from code, then
+## death bags, the cars (where they're parked, fuel, damage), and the world seed. The world (town, containers, cars) is rebuilt from code, then
 ## this is laid over it.
 
 const VERSION := 1
@@ -53,7 +53,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"inventory": _counts(sim.inventory),
 		"player": {"health": p.health, "food": p.food, "water": p.water, "energy": p.energy, "stamina": p.stamina,
 				"bleeding": p.bleeding, "deaths": p.deaths, "dead": p.dead, "respawn_timer": p.respawn_timer},
-		"player_pos": _v3(sim.player_pos),
+		# Saved while driving: you load standing beside the car, not inside it.
+		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
 		"spawn_point": _v3(sim.spawn_point),
 		"pieces": pieces,
 		"machines": machines,
@@ -65,7 +66,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
 		"searched": searched,
-		"car_fuel": sim.car_fuel,
+		"vehicles": sim.vehicles.to_dict(),
+		"skills": sim.skills.xp,
 		"bags": bags,
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
@@ -134,8 +136,13 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for id: String in d["searched"]:
 		if sim.loot.containers.has(id):
 			sim.loot.containers[id]["searched"] = true
-	for id: String in d["car_fuel"]:
-		sim.car_fuel[id] = int(d["car_fuel"][id])
+	if d.has("vehicles"):
+		sim.vehicles.load_dict(d["vehicles"])
+	for s: String in d.get("skills", {}):
+		sim.skills.xp[s] = float(d["skills"][s])
+	for id: String in d.get("car_fuel", {}):  # saves from before M10c kept only the gas
+		if sim.vehicles.cars.has(id):
+			sim.vehicles.cars[id]["fuel"] = float(d["car_fuel"][id])
 	sim.bags = []
 	for b: Dictionary in d["bags"]:
 		sim.bags.append({"id": int(b["id"]), "pos": _to_v3(b["pos"]), "items": _ints(b["items"])})

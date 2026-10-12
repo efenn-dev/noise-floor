@@ -31,6 +31,7 @@ const KEYS := {
 	"drink": [KEY_X],
 	"bandage": [KEY_H],
 	"siphon": [KEY_G],
+	"refuel": [KEY_R],  # R also turns pieces, but only in build mode
 	"repair": [KEY_T],
 	"interact": [KEY_E],
 	"upgrade": [KEY_U],

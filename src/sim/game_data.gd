@@ -13,6 +13,8 @@ var debug_kit: Dictionary = {}   # item -> int
 var zombies: Dictionary = {}     # type -> stats (numbers), see data/zombies.json
 var weapons: Dictionary = {}     # id -> stats (numbers), see data/weapons.json
 var noise: Dictionary = {}       # muffler, sounds, director tuning: see data/noise.json
+var skills: Dictionary = {}      # levels, xp per action, hotwiring: data/skills.json
+var vehicles: Dictionary = {}    # car type -> size, seat, fuel, loudness, handling: data/vehicles.json
 var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, carry weight: data/survival.json
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
@@ -26,6 +28,8 @@ static func load_default() -> GameData:
 	data.weapons = _read_json(DIR + "weapons.json", data)
 	data.noise = _read_json(DIR + "noise.json", data)
 	data.survival = _read_json(DIR + "survival.json", data)
+	data.vehicles = _read_json(DIR + "vehicles.json", data)
+	data.skills = _read_json(DIR + "skills.json", data)
 	data.loot = _read_json(DIR + "loot.json", data)
 	return data
 
@@ -156,6 +160,19 @@ func validate() -> PackedStringArray:
 				errors.append("muffler costs unknown item '%s'" % item)
 		_check_stats(errors, "noise", {"muffler": muffler}, ["cut", "slowdown"])
 		_check_stats(errors, "noise", {"sounds": noise.get("sounds", {})}, SOUNDS)
+		_check_stats(errors, "vehicle", vehicles, VEHICLE_STATS)
+		var levels: Array = skills.get("levels", [])
+		if levels.size() < 3 or levels[0] != 0:
+			errors.append("skills.json needs 'levels' starting at 0")
+		for i in range(1, levels.size()):
+			if float(levels[i]) <= float(levels[i - 1]):
+				errors.append("skill levels must go up")
+		_check_stats(errors, "skills", {"hotwire": skills}, ["hotwire_level", "hotwire_seconds", "hotwire_min_seconds", "hotwire_noise"])
+		for id: String in vehicles:
+			for key: String in ["size", "seat"]:
+				var v: Variant = vehicles[id].get(key)
+				if not (v is Array and v.size() == 3):
+					errors.append("vehicle '%s' needs '%s' as [x, y, z]" % [id, key])
 		_check_stats(errors, "noise", {"director": noise.get("director", {})}, DIRECTOR_STATS)
 	return errors
 
@@ -168,8 +185,12 @@ const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sl
 		"respawn_minimum", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
-		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max"]
-const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck", "door"]
+		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance"]
+const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck", "door", "horn"]
+## Each car has its own key: item id "car_key:<car id>" (not in items.json).
+const CAR_KEY := "car_key:"
+const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudness", "hp", "ram_damage", "mass",
+		"engine_force", "brake_force", "max_steer_deg", "max_speed"]
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
 		"heat_per_zombie", "lure_time"]
@@ -187,10 +208,14 @@ static func _check_stats(errors: PackedStringArray, what: String, table: Diction
 
 ## Item color for drawing (items.json "color", grey if missing).
 func item_color(item: String) -> Color:
+	if item.begins_with(CAR_KEY):
+		return Color(0.85, 0.7, 0.3)
 	return Color.from_string(items.get(item, {}).get("color", ""), Color(0.6, 0.6, 0.6))
 
 
 func item_weight(item: String) -> float:
+	if item.begins_with(CAR_KEY):
+		return 0.02
 	return float(items.get(item, {}).get("weight", 0.0))
 
 
@@ -201,6 +226,8 @@ func item_value(item: String, key: String) -> float:
 
 
 func item_name(item: String) -> String:
+	if item.begins_with(CAR_KEY):
+		return "Car key"
 	return items.get(item, {}).get("name", item)
 
 

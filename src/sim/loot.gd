@@ -36,7 +36,13 @@ static func roll(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 
 
 func add(id: String, table: String, pos: Vector3) -> void:
-	containers[id] = {"table": table, "pos": pos, "searched": false}
+	containers[id] = {"table": table, "pos": pos, "searched": false, "extra": {}}
+
+
+## Puts something particular in a container (a car key in a glovebox or a kitchen drawer); a search finds it too.
+func add_extra(id: String, items: Dictionary) -> void:
+	for item: String in items:
+		containers[id]["extra"][item] = int(containers[id]["extra"].get(item, 0)) + int(items[item])
 
 
 func display_name(id: String) -> String:
@@ -71,6 +77,8 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, active])
 	var items := roll(data.loot[c["table"]], rng)
+	for item: String in c.get("extra", {}):
+		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
 	var done := {"id": active, "items": items}
 	active = ""

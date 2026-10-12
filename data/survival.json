@@ -25,5 +25,6 @@
 	"carry_footstep_bonus": 10,
 	"siphon_noise": 35,
 	"car_fuel_min": 1,
-	"car_fuel_max": 3
+	"car_fuel_max": 3,
+	"car_wreck_chance": 0.4
 }
