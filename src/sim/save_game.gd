@@ -7,7 +7,8 @@ extends RefCounted
 ## death bags, the cars (where they're parked, fuel, damage), and the world seed. The world (town, containers, cars) is rebuilt from code, then
 ## this is laid over it.
 
-const VERSION := 1
+## 2 = M11 (stats, infamy, fresh/stale gas). Older saves still load: anything they lack gets its default.
+const VERSION := 2
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:
@@ -80,7 +81,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 ## Lays saved state over a freshly made SimWorld whose town (loot containers, cars) is already set up,
 ## but which has nothing built and no zombies yet. Returns "" or what went wrong.
 static func apply(sim: SimWorld, d: Dictionary) -> String:
-	if int(d.get("version", 0)) != VERSION:
+	var version := int(d.get("version", 0))
+	if version < 1 or version > VERSION:  # unknown or from a newer game: refuse rather than guess
 		return "This save is from a different version (%s)" % str(d.get("version", "?"))
 	sim.ticks = int(d["ticks"])
 	sim.clock.time_of_day = float(d["clock"]["time"])

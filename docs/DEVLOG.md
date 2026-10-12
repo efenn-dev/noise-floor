@@ -19,9 +19,13 @@ Newest first. One entry per milestone: what was built, how to try it, known gaps
 
 **Try it on the PC:** merge, then double-click `play.bat`. To meet the new zombies straight away, run `play.bat --zombie=0,-10,2,-12 --zombie-type=runner` or `play.bat --zombie=0,-8 --zombie-type=screamer`. Press **Esc** to see your stats.
 
+**Saves:** the save version is now 2. Saves from M9-M10c still load, and whatever they lack starts at its default (no stats, no infamy, fresh gas); a save from a newer game is refused.
+
 **Known gaps:** rotten food has no use yet (compost for the planter would be a good one); only vegetables spoil; gas cans in pockets and crates never go stale; there's no infamy meter apart from the stats line; brutes, crawlers and listeners come later.
 
 **Next:** M12, skills and carry weight (Mechanics already exists).
+
+Built by Claude Opus 5.5.
 
 ## 2026-10-12 — M10c Wheels
 

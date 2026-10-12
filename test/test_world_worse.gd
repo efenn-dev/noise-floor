@@ -186,3 +186,22 @@ func test_stats_add_up_and_are_saved() -> void:
 	eq([b.stats["kills"], b.stats["deaths"]], [1, 1], "kills and deaths kept")
 	near(b.director.infamy, 1234.0, "infamy kept")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_saves_from_before_m11_still_load() -> void:
+	var sim := SimWorld.new(10.0)
+	sim.add_car("car_0", "sedan", Vector3(0, 0.75, 0), 0.0)
+	var d := SaveGame.to_dict(sim)
+	d["version"] = 1  # what M9-M10c wrote: none of M11's fields
+	for key in ["stats", "infamy", "unlocked"]:
+		d.erase(key)
+	for id: String in d["vehicles"]:
+		d["vehicles"][id].erase("fresh")
+		d["vehicles"][id].erase("stale")
+	var b := SimWorld.new(10.0)
+	b.add_car("car_0", "sedan", Vector3(0, 0.75, 0), 0.0)
+	eq(SaveGame.apply(b, JSON.parse_string(JSON.stringify(d))), "", "an M10 save loads")
+	eq([b.stats["kills"], b.stats["deaths"]], [0, 0], "with no stats yet")
+	near(b.director.infamy, 0.0, "and no infamy")
+	check(not b.vehicles.cars["car_0"]["stale"], "the car's gas isn't stale")
+	check(SaveGame.apply(SimWorld.new(10.0), {"version": SaveGame.VERSION + 1}) != "", "a save from a newer game is refused")
