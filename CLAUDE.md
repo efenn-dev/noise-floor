@@ -11,11 +11,11 @@ Owner: Emmitt. He is not very technical, so explain things in plain words, give 
 
 ## Commands
 ```bash
-tools/test.sh                      # headless: refresh class cache, run every test/test_*.gd; non-zero on any failed check or SCRIPT ERROR
+tools/test.sh                      # headless (--fixed-fps 60, so physics tests run faster than real time): run every test/test_*.gd; non-zero on any failed check or SCRIPT ERROR
 tools/shot.sh <name> [game flags]  # one frame -> .shots/<name>.png, then Read the PNG.  e.g. tools/shot.sh night --time=22
 tools/godot.sh <args>              # the pinned Godot binary
 ```
-Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`, `--cam=X,Y,Z[,YAW[,PITCH]]` (player feet position + look in degrees; 0,0 = north, +yaw turns left, +pitch looks up), `--flashlight`, `--build=foundation|wall` (start in build mode), `--demo-base` (pre-build a small base north of spawn), `--demo-factory` (smelter → belts → press loaded with scrap), `--advance=SECONDS` (run the sim first, so shots show items moving). e.g. `tools/shot.sh factory --time=15 --cam=-3,0,-100,30,10`, `tools/shot.sh base --demo-base --build=wall --cam=0,0,6,0,-20`, `tools/shot.sh factory --demo-factory --advance=7.5 --cam=0,0,6,0,-25`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
+Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`, `--cam=X,Y,Z[,YAW[,PITCH]]` (player feet position + look in degrees; 0,0 = north, +yaw turns left, +pitch looks up), `--flashlight`, `--build=foundation|wall` (start in build mode), `--demo-base` (pre-build a small base north of spawn), `--demo-factory` (smelter → belts → press loaded with scrap), `--advance=SECONDS` (run the sim first, so shots show items moving), `--zombies=N` (street zombies at start, default 8, 0 = none), `--zombie=X,Z[,X,Z...]` (extra zombies facing the player, for framing), `--hurt=N` (start damaged; 100 shows the death screen). e.g. `tools/shot.sh factory --time=15 --cam=-3,0,-100,30,10`, `tools/shot.sh base --demo-base --build=wall --cam=0,0,6,0,-20`, `tools/shot.sh factory --demo-factory --advance=7.5 --cam=0,0,6,0,-25`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
 
 ## Architecture rules
 - **`src/sim/`** holds the game rules as plain `RefCounted` classes: no Nodes, no scene tree, no rendering. Inventory, recipes, machines, belts, power, noise, zombie brains, the director and survival stats all live here, stepped by a **fixed sim tick**, separate from the frame rate, so results are deterministic. Everything here gets headless tests. **Cloud sessions can't watch the game, so an untested rule should be assumed broken.**

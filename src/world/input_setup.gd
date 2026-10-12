@@ -24,6 +24,7 @@ const KEYS := {
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,
 	"build_remove": MOUSE_BUTTON_RIGHT,
+	"attack": MOUSE_BUTTON_LEFT,
 }
 
 

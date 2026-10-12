@@ -7,6 +7,8 @@ func test_shipped_data_is_valid() -> void:
 	eq(errors.size(), 0, "data/ validates: %s" % ", ".join(errors))
 	check(data.buildables.has("foundation") and data.buildables.has("wall"), "has foundation and wall")
 	check(not data.debug_kit.is_empty(), "debug kit gives something")
+	check(data.zombies.has("shambler"), "has the shambler")
+	check(data.weapons.has("pipe"), "has the pipe")
 
 
 func test_pieces_fit_the_grid() -> void:
@@ -37,3 +39,5 @@ func test_validator_catches_mistakes() -> void:
 	check("positive" in text, "flags zero size")
 	check("unknown item 'gold'" in text, "flags unknown cost item")
 	check("debug kit has unknown item" in text, "flags unknown kit item")
+	check("needs positive hp" in text, "flags missing hp")
+	check("no zombie data" in text, "flags missing zombie data")

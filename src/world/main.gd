@@ -11,9 +11,15 @@ extends Node3D
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
 ##   --advance=SECONDS     run the sim this long before starting (e.g. so a screenshot shows items moving)
+##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none)
+##   --zombie=X,Z[,X,Z...] add a zombie at each point, facing the player (for framing screenshots)
+##   --hurt=N              start with N damage taken (--hurt=100 shows the death screen)
 
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
+const DEFAULT_ZOMBIES := 8
+## The area the zombie navmesh covers: the street and a margin around it.
+const NAV_BOUNDS := AABB(Vector3(-45, -1, -160), Vector3(90, 8, 200))
 
 var sim: SimWorld
 var player: Player
@@ -21,6 +27,10 @@ var build_view: BuildView
 var builder: BuildController
 var factory_view: FactoryView
 var interactor: Interactor
+var nav: NavBaker
+var zombie_view: ZombieView
+var melee: Melee
+var bag_view: BagView
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
@@ -29,6 +39,10 @@ var _hud: Label
 var _build_label: Label
 var _materials_hud: Label
 var _interact_label: Label
+var _health_label: Label
+var _hurt_flash: ColorRect
+var _death_label: Label
+var _last_health := 100.0
 var _shot_path := ""
 var _frames := 0
 
@@ -45,7 +59,10 @@ func _ready() -> void:
 	_build_town()
 	_build_player(args)
 	_build_building(args)
+	_build_zombies(args)
 	_build_hud()
+	if args.has("hurt"):
+		sim.player.damage(args["hurt"].to_float())
 	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
 		sim.step()
 	_apply_time()
@@ -54,9 +71,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_build_label.text = builder.status_text()
-	_materials_hud.text = builder.materials_text()
-	_interact_label.text = interactor.status_text()
+	_sync_player()
+	_update_hud(delta)
 	if _shot_path == "":
 		if sim.update(delta) > 0:
 			_apply_time()
@@ -102,6 +118,37 @@ func _build_environment() -> void:
 	add_child(_moon)
 
 
+## Tells the sim where the player is; freezes the player while dead.
+func _sync_player() -> void:
+	player.frozen = sim.player.dead
+	if not sim.player.dead:
+		sim.player_pos = player.global_position
+	sim.player_lit = player.flashlight.visible
+
+
+func _on_respawned() -> void:
+	player.position = sim.spawn_point
+	player.velocity = Vector3.ZERO
+
+
+func _update_hud(delta: float) -> void:
+	_build_label.text = builder.status_text()
+	_materials_hud.text = builder.materials_text()
+	var use := interactor.status_text()
+	_interact_label.text = use if use != "" else melee.last_message
+	var hp := sim.player.health
+	_health_label.text = "Health %d" % ceili(hp)
+	_health_label.modulate = Color(1, 0.35, 0.3) if hp <= 30.0 else Color.WHITE
+	if hp < _last_health:
+		_hurt_flash.color.a = 0.45
+	_last_health = hp
+	_hurt_flash.color.a = maxf(0.0, _hurt_flash.color.a - delta * 1.5)
+	_death_label.visible = sim.player.dead
+	if sim.player.dead:
+		_hurt_flash.color.a = 0.6
+		_death_label.text = "You died\nYour things are in a bag where you fell\nRespawning in %d" % ceili(sim.player.respawn_timer)
+
+
 func _build_ground() -> void:
 	var ground := StaticBody3D.new()
 	var mesh := MeshInstance3D.new()
@@ -111,7 +158,10 @@ func _build_ground() -> void:
 	mesh.material_override = _flat_material(Color(0.32, 0.36, 0.28))
 	ground.add_child(mesh)
 	var shape := CollisionShape3D.new()
-	shape.shape = WorldBoundaryShape3D.new()
+	var slab := BoxShape3D.new()  # a box, not an endless plane, so the navmesh baker can read it
+	slab.size = Vector3(400, 2, 400)
+	shape.shape = slab
+	shape.position.y = -1.0
 	ground.add_child(shape)
 	add_child(ground)
 
@@ -149,6 +199,9 @@ func _build_player(args: Dictionary) -> void:
 	if _shot_path != "":
 		player.use_device_input = false  # stand still for the photo
 	player.camera.current = true
+	sim.spawn_point = player.position
+	sim.player_pos = player.position
+	sim.player.respawned.connect(_on_respawned)
 
 
 func _build_building(args: Dictionary) -> void:
@@ -183,6 +236,30 @@ func _place_demo_base() -> void:
 		sim.build.place("wall", Vector2i(x, -1), BuildGrid.Side.NORTH, sim.inventory)
 	sim.build.place("wall", Vector2i(-2, -1), BuildGrid.Side.WEST, sim.inventory)
 	sim.build.place("wall", Vector2i(1, -1), BuildGrid.Side.EAST, sim.inventory)
+
+
+func _build_zombies(args: Dictionary) -> void:
+	nav = NavBaker.new()
+	add_child(nav)
+	nav.setup(self, NAV_BOUNDS)
+	nav.bake_now()
+	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
+	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
+	sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
+	if args.has("zombie"):
+		var v := String(args["zombie"]).split(",")
+		for i in range(0, v.size() - 1, 2):
+			var z := sim.horde.spawn("shambler", Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
+			z.facing = (player.position - z.pos).normalized()
+	zombie_view = ZombieView.new()
+	add_child(zombie_view)
+	zombie_view.setup(sim, player)
+	melee = Melee.new()
+	add_child(melee)
+	melee.setup(sim, player.camera, builder, [player.get_rid()])
+	bag_view = BagView.new()
+	add_child(bag_view)
+	bag_view.setup(sim)
 
 
 ## Smelter -> 3 belts -> press, running east just north of spawn, with 10 scrap loaded.
@@ -223,8 +300,27 @@ func _build_hud() -> void:
 	_interact_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	layer.add_child(_interact_label)
 
+	_health_label = _outlined_label(24)
+	_health_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
+	_health_label.position.y -= 30
+	layer.add_child(_health_label)
+
+	_hurt_flash = ColorRect.new()
+	_hurt_flash.color = Color(0.6, 0.0, 0.0, 0.0)
+	_hurt_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hurt_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_hurt_flash)
+	layer.move_child(_hurt_flash, 0)  # under the text
+
+	_death_label = _outlined_label(34)
+	_death_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_death_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_death_label.visible = false
+	layer.add_child(_death_label)
+
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · B build · E use · Esc free mouse"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · B build · E use · Esc free mouse"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)

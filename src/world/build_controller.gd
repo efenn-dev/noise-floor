@@ -145,14 +145,14 @@ func update_aim() -> void:
 	_show_ghost(id)
 
 
-## True if a town building, car, the player or anything else on the WORLD layer overlaps the piece.
+## True if a town building, car, the player, a zombie or anything else on the WORLD layer overlaps the piece.
 func placement_blocked(id: String, cell: Vector2i, side: int) -> bool:
 	var size: Vector3 = sim.data.buildables[id]["size"]
 	var box := BoxShape3D.new()
 	box.size = (size - CLEARANCE * 2.0).max(Vector3.ONE * 0.01)
 	var params := PhysicsShapeQueryParameters3D.new()
 	params.shape = box
-	params.collision_mask = Layers.WORLD
+	params.collision_mask = Layers.WORLD | Layers.ZOMBIE
 	params.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(sim.build.yaw_for(id, cell, side))),
 			sim.build.center_for(id, cell, side))
 	return not get_world_3d().direct_space_state.intersect_shape(params, 1).is_empty()

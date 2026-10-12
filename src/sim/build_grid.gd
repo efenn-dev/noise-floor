@@ -77,10 +77,11 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return reason
 	inv.take_all(data.buildables[id]["cost"])
 	var key := key_for(id, cell, side)
-	var piece := {"id": id, "cell": cell, "side": side}
+	var piece := {"id": id, "cell": cell, "side": side, "hp": data.buildables[id]["hp"]}
 	if _kind(id) == "wall":
 		var edge := canonical_edge(cell, side)
-		piece = {"id": id, "cell": edge[0], "side": edge[1]}
+		piece["cell"] = edge[0]
+		piece["side"] = edge[1]
 	pieces[key] = piece
 	piece_added.emit(key)
 	return ""
@@ -110,6 +111,39 @@ func remove(key: String, inv: Inventory) -> String:
 	inv.give_all(data.buildables[piece["id"]]["cost"])
 	piece_removed.emit(key, piece)
 	return ""
+
+
+## Zombies hitting a piece. Returns true if that destroyed it (see destroy).
+func damage(key: String, amount: int) -> bool:
+	if not pieces.has(key) or amount <= 0:
+		return false
+	pieces[key]["hp"] -= amount
+	if pieces[key]["hp"] > 0:
+		return false
+	destroy(key)
+	return true
+
+
+## Wrecks a piece: no refund, and the piece dict passed to piece_removed has "destroyed" = true.
+## A wrecked foundation takes down what stood on it and any wall it alone held up.
+func destroy(key: String) -> void:
+	if not pieces.has(key):
+		return
+	var piece: Dictionary = pieces[key]
+	var doomed := []
+	if _kind(piece["id"]) == "foundation":
+		var obj := "o:%d:%d" % [piece["cell"].x, piece["cell"].y]
+		if pieces.has(obj):
+			doomed.append(obj)
+		for wall_key: String in _walls_touching(piece["cell"]):
+			var w: Dictionary = pieces[wall_key]
+			if not _edge_supported(w["cell"], w["side"], key):
+				doomed.append(wall_key)
+	for k: String in doomed:
+		destroy(k)
+	pieces.erase(key)
+	piece["destroyed"] = true
+	piece_removed.emit(key, piece)
 
 
 ## World-space center of a piece (its box is data size; walls are turned 90 degrees on WEST edges).

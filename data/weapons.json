@@ -1,0 +1,10 @@
+{
+	"pipe": {
+		"name": "Pipe",
+		"damage": 34,
+		"head_multiplier": 2.0,
+		"range": 2.2,
+		"cooldown": 0.7,
+		"knockback": 3.0
+	}
+}
