@@ -14,11 +14,11 @@ Stay inside the account's 5-hour usage window. The lead checks it before launchi
 
 | # | Task | Owner | Status | Done when |
 |---|---|---|---|---|
-| S1-1 | M11 — the world gets worse, kept small (finite loot, stale gas, spoilage, infamy score, stats screen, runner and screamer as simple variants; no tuning pass) | Opus 5.5 session, worktree `noise-floor-m11` | In progress | PR merged; devlog names what landed and which model built it |
-| S1-2 | Direction, playtest template, this board | Fable | PR open | PR merged |
+| S1-1 | M11 — the world gets worse, kept small (finite loot, stale gas, spoilage, infamy score, stats screen, runner and screamer as simple variants; no tuning pass) | Opus 5.5 session, worktree `noise-floor-m11` | PR #16 open, mergeable; the session reports 983 checks green | PR merged; devlog names what landed and which model built it |
+| S1-2 | Direction, playtest template, this board | Fable | PR #17 open, clean | PR merged |
 | S1-3 | P0 playtest kit: session log the game writes on death and quit, first-five-minutes hints for a new game | Opus 5.5 agent, worktree `noise-floor-p0` | In progress | PR merged; tests green; Emmitt finds the log file on his PC |
-| S1-4 | Save upgrades: bump `SaveGame.VERSION` per milestone, load old saves with defaults, fixture-save test | Opus 5.5 agent, after S1-1 merges | Backlog | A committed save from the previous version still loads in a test |
-| S1-5 | Playtest #1 (30 minutes, then one `PLAYTESTS.md` entry) | Emmitt + Kaleb | Waiting on S1-1 and S1-3 | Entry pushed to `main` |
+| S1-4 | Save upgrades: bump `SaveGame.VERSION` per milestone, load old saves with defaults, fixture-save test | Done inside PR #16 (VERSION 2; version-1 saves load with defaults; test added) | Done | A committed save from the previous version still loads in a test |
+| S1-5 | Playtest #1 (30 minutes, then one `PLAYTESTS.md` entry) | Emmitt + Kaleb | Ready now on current `main`; play again after #16 and P0 land | Entry pushed to `main` |
 | S1-6 | Sprint review: read the playtest and the session log, plan Sprint 2 (W1 real town) | Fable | Waiting on S1-5 | `docs/plans/W1.md` written, Sprint 2 board here |
 
 ## What Emmitt tests, and when
