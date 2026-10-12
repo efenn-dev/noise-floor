@@ -19,6 +19,14 @@ const KEYS := {
 	"build_pick_3": [KEY_3],
 	"build_pick_4": [KEY_4],
 	"build_pick_5": [KEY_5],
+	"build_pick_6": [KEY_6],
+	"build_pick_7": [KEY_7],
+	"build_pick_8": [KEY_8],
+	"build_pick_9": [KEY_9],
+	"build_pick_10": [KEY_0],
+	"eat": [KEY_Z],
+	"drink": [KEY_X],
+	"bandage": [KEY_H],
 	"interact": [KEY_E],
 	"upgrade": [KEY_U],
 	"noise_overlay": [KEY_N],
@@ -27,6 +35,8 @@ const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,
 	"build_remove": MOUSE_BUTTON_RIGHT,
 	"attack": MOUSE_BUTTON_LEFT,
+	"build_next": MOUSE_BUTTON_WHEEL_DOWN,
+	"build_prev": MOUSE_BUTTON_WHEEL_UP,
 }
 
 

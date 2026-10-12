@@ -10,5 +10,29 @@
 		"time": 2.0,
 		"in": { "metal_plate": 1 },
 		"out": { "nails": 4 }
+	},
+	"collect_rain": {
+		"name": "Rainwater",
+		"time": 20.0,
+		"in": {},
+		"out": { "dirty_water": 1 }
+	},
+	"purify_water": {
+		"name": "Clean water",
+		"time": 4.0,
+		"in": { "dirty_water": 1 },
+		"out": { "clean_water": 1 }
+	},
+	"grow_vegetables": {
+		"name": "Vegetables",
+		"time": 60.0,
+		"in": { "seeds": 1, "dirty_water": 1 },
+		"out": { "vegetable": 3 }
+	},
+	"can_food": {
+		"name": "Canned food",
+		"time": 5.0,
+		"in": { "vegetable": 2, "metal_plate": 1 },
+		"out": { "canned_food": 2 }
 	}
 }

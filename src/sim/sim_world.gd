@@ -19,6 +19,10 @@ var noise: NoiseField
 var director: Director
 ## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
 var messages: Array = []
+var loot: Loot
+## Storage crates: piece key -> Inventory.
+var storages: Dictionary = {}
+var _rng := RandomNumberGenerator.new()
 var player := PlayerStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
@@ -40,6 +44,9 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, seed_value: int = 1
 	horde = Horde.new(data, seed_value)
 	noise = NoiseField.new(data, build)
 	director = Director.new(data, seed_value)
+	loot = Loot.new(data, seed_value)
+	player.cfg = data.survival
+	_rng.seed = hash([seed_value, "sim"])
 	player.died.connect(_on_player_died)
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
@@ -72,7 +79,12 @@ func step() -> void:
 	clock.advance(TICK)
 	factory.tick(TICK)
 	noise.refresh(factory, TICK)
+	player.carry_ratio = carry_ratio()
 	player.tick(TICK)
+	var found := loot.tick(TICK, player_pos)
+	if not found.is_empty():
+		inventory.give_all(found["items"])
+		add_message(("Found " + _list(found["items"])) if not found["items"].is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
 			"player_lit": player_lit, "pieces": build.pieces, "noise": noise}
@@ -82,6 +94,10 @@ func step() -> void:
 			continue
 		if e["target"] == "player":
 			player.damage(float(z.stats["damage"]))
+			if not player.dead and _rng.randf() < float(data.survival["bleed_chance"]):
+				if not player.bleeding:
+					add_message("You're bleeding (H to bandage)", 4.0)
+				player.bleeding = true
 		elif build.pieces.has(e["target"]):
 			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
@@ -101,8 +117,125 @@ func add_message(text: String, seconds: float = 6.0) -> void:
 
 
 ## A one-off sound from the player ("footstep_walk", "footstep_sprint", ...; see data/noise.json).
+## Footsteps get louder when you carry more than your limit.
 func make_noise(pos: Vector3, kind: String) -> void:
-	noise.emit_kind(pos, kind)
+	var loudness := float(data.noise["sounds"][kind])
+	if kind.begins_with("footstep") and carry_ratio() > 1.0:
+		loudness += float(data.survival["carry_footstep_bonus"])
+	noise.emit(pos, loudness, kind)
+
+
+# --- Carrying ---------------------------------------------------------------
+
+## Carry limit in kg: carry_base plus the best bag you're carrying (only one bag counts).
+func carry_limit() -> float:
+	var best := 0.0
+	for item: String in inventory.items():
+		best = maxf(best, data.item_value(item, "bag"))
+	return float(data.survival["carry_base"]) + best
+
+
+func carry_ratio() -> float:
+	return inventory.weight(data) / carry_limit()
+
+
+## Your pockets plus every storage crate within storage_range of `at`: what building and hand-feeding use.
+func stock_at(at: Vector3) -> Stock:
+	var crates := []
+	var reach := float(data.survival["storage_range"])
+	for key: String in storages:
+		if build.pieces.has(key) and _flat_dist(build.piece_center(key), at) <= reach:
+			crates.append(storages[key])
+	return Stock.new(inventory, crates)
+
+
+## Puts every building material you carry (not food, drink, bandages or bags) into a storage crate.
+func deposit(key: String) -> Dictionary:
+	if not storages.has(key):
+		return {}
+	var moved := {}
+	for item: String in inventory.items():
+		if _is_supply(item):
+			continue
+		moved[item] = inventory.count(item)
+	if not moved.is_empty():
+		inventory.take_all(moved)
+		storages[key].give_all(moved)
+	return moved
+
+
+## Puts the debug kit in a new storage crate on a new foundation at `cell` (the start-of-game stash).
+func place_start_stash(cell: Vector2i) -> String:
+	var kit := Inventory.new()
+	kit.give_all(data.debug_kit)
+	kit.give_all({"plank": 12, "nails": 8})  # pays for the foundation and crate themselves
+	if build.place("foundation", cell, BuildGrid.Side.NORTH, kit) != "":
+		return ""
+	if build.place("storage", cell, BuildGrid.Side.WEST, kit) != "":
+		return ""
+	var key := build.key_for("storage", cell)
+	storages[key].give_all(_counts_of(kit))
+	return key
+
+
+# --- Eating, drinking, first aid, sleep -----------------------------------------
+
+## Eats the most filling food you carry. Returns a message for the HUD.
+func eat_best() -> String:
+	return _consume_best("food", "Nothing to eat")
+
+
+func drink_best() -> String:
+	return _consume_best("water", "Nothing to drink")
+
+
+func use_bandage() -> String:
+	if not player.bleeding:
+		return "Not bleeding"
+	if not inventory.remove("bandage", 1):
+		return "No bandages"
+	player.bleeding = false
+	return "Bandaged"
+
+
+## Sleep in the bed `key`: it becomes your respawn point. Returns "" or why not.
+func sleep_in(key: String) -> String:
+	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "bed":
+		return "No bed"
+	spawn_point = build.piece_center(key) + Vector3(1.2, -build.piece_center(key).y, 0)
+	if player.energy >= float(data.survival["sleep_below_energy"]):
+		return "Not tired. You'll wake up here if you die"
+	player.sleep()
+	return ""
+
+
+func _consume_best(key: String, none: String) -> String:
+	var best := ""
+	for item: String in inventory.items():
+		if data.item_value(item, key) > (data.item_value(best, key) if best != "" else 0.0):
+			best = item
+	if best == "":
+		return none
+	inventory.remove(best, 1)
+	player.consume(data.item_value(best, "food"), data.item_value(best, "water"))
+	return "%s %s" % ["Ate" if key == "food" else "Drank", data.item_name(best)]
+
+
+func _is_supply(item: String) -> bool:
+	for key: String in ["food", "water", "bandage", "bag"]:
+		if data.item_value(item, key) > 0.0:
+			return true
+	return false
+
+
+# --- Searching ----------------------------------------------------------------
+
+## Starts searching a container (a little noise). Returns "" or why not.
+func search(id: String) -> String:
+	var reason := loot.start(id, player_pos)
+	if reason == "" and loot.progress == 0.0:
+		noise.emit(loot.containers[id]["pos"], float(data.survival["search_noise"]), "search")
+	return reason
 
 
 ## Fits a muffler to the machine at `cell`: -15 loudness, 10% slower. Returns "" or why not.
@@ -136,6 +269,24 @@ func weapon_stats() -> Dictionary:
 	return data.weapons[player.weapon]
 
 
+func _list(items: Dictionary) -> String:
+	var parts := PackedStringArray()
+	for item: String in items:
+		parts.append("%d %s" % [items[item], data.item_name(item)])
+	return ", ".join(parts)
+
+
+static func _flat_dist(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+static func _counts_of(inv: Inventory) -> Dictionary:
+	var out := {}
+	for item: String in inv.items():
+		out[item] = inv.count(item)
+	return out
+
+
 ## Picks up a death bag. Returns the items it held ({} if no such bag).
 func take_bag(id: int) -> Dictionary:
 	for i in bags.size():
@@ -153,13 +304,15 @@ func _on_player_respawned() -> void:
 
 ## Dying drops everything you carry in a bag where you fell.
 func _on_player_died() -> void:
-	var items := {}
-	for item: String in inventory.items():
-		items[item] = inventory.count(item)
+	var items := _counts_of(inventory)
 	if not items.is_empty():
 		inventory.take_all(items)
-		bags.append({"id": _next_bag, "pos": player_pos, "items": items})
-		_next_bag += 1
+		drop_bag(player_pos, items)
+
+
+func drop_bag(at: Vector3, items: Dictionary) -> void:
+	bags.append({"id": _next_bag, "pos": at, "items": items})
+	_next_bag += 1
 
 
 ## How far into the next tick we are (0..1), for smoothing visuals between ticks.
@@ -171,6 +324,8 @@ func alpha() -> float:
 func _on_piece_added(key: String) -> void:
 	var piece: Dictionary = build.pieces[key]
 	match build.kind_of(piece["id"]):
+		"storage":
+			storages[key] = Inventory.new()
 		"machine":
 			factory.add_machine(piece["id"], piece["cell"], piece["side"])
 		"belt":
@@ -179,8 +334,13 @@ func _on_piece_added(key: String) -> void:
 
 ## Removing one hands back whatever it was holding, on top of the build refund.
 ## If zombies wrecked it, the contents are lost.
-func _on_piece_removed(_key: String, piece: Dictionary) -> void:
-	if build.is_object(piece["id"]):
+func _on_piece_removed(key: String, piece: Dictionary) -> void:
+	if storages.has(key):
+		var held := _counts_of(storages[key])
+		storages.erase(key)
+		if not held.is_empty():
+			drop_bag(build.center_for(piece["id"], piece["cell"], piece["side"]) * Vector3(1, 0, 1), held)
+	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt"]:
 		var m: Factory.Machine = factory.machines.get(piece["cell"])
 		var muffled := m != null and m.muffled
 		var held := factory.remove_at(piece["cell"])

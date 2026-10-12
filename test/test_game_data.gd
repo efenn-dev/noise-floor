@@ -9,6 +9,11 @@ func test_shipped_data_is_valid() -> void:
 	check(not data.debug_kit.is_empty(), "debug kit gives something")
 	check(data.zombies.has("shambler"), "has the shambler")
 	check(data.weapons.has("pipe"), "has the pipe")
+	for id: String in data.items:
+		check(data.items[id].has("weight"), "%s has a weight" % id)
+	check(data.loot.has("kitchen") and data.loot.has("car_trunk"), "has loot tables")
+	for id: String in ["rain_collector", "purifier", "planter", "canner"]:
+		check(data.buildables.has(id), "has the %s" % id)
 
 
 func test_pieces_fit_the_grid() -> void:

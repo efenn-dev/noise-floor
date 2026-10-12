@@ -13,6 +13,8 @@ var exclude: Array[RID] = []
 var target_cell := Vector2i.ZERO
 var has_target := false
 var target_bag := -1  # id of the death bag being looked at, -1 if none
+var target_container := ""  # id of the loot container being looked at, "" if none
+var target_key := ""  # piece key of the machine/belt/bed/crate being looked at
 var last_message := ""
 
 
@@ -49,8 +51,11 @@ func upgrade() -> String:
 func update_target() -> void:
 	var was := target_cell
 	var was_bag := target_bag
+	var was_container := target_container
 	has_target = false
 	target_bag = -1
+	target_container = ""
+	target_key = ""
 	if builder.active:
 		return
 	var from := camera.global_position
@@ -62,12 +67,18 @@ func update_target() -> void:
 		if target_bag != was_bag:
 			last_message = ""
 		return
+	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("container_id"):
+		target_container = hit["collider"].get_meta("container_id")
+		if target_container != was_container:
+			last_message = ""
+		return
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("piece_key"):
 		return
 	var key: String = hit["collider"].get_meta("piece_key")
 	if not key.begins_with("o:") or not sim.build.pieces.has(key):
 		return
 	target_cell = sim.build.pieces[key]["cell"]
+	target_key = key
 	has_target = true
 	if target_cell != was:
 		last_message = ""
@@ -79,9 +90,23 @@ func interact() -> String:
 		var items := sim.take_bag(target_bag)
 		last_message = "Took " + _list(items) if not items.is_empty() else ""
 		return last_message
+	if target_container != "":
+		var why := sim.search(target_container)
+		last_message = why
+		return why
 	if not has_target:
 		return ""
-	var moved: Dictionary = sim.factory.hand_interact(target_cell, sim.inventory)
+	match sim.build.kind_of(sim.build.pieces[target_key]["id"]):
+		"storage":
+			var put := sim.deposit(target_key)
+			last_message = ("Stored " + _list(put)) if not put.is_empty() else "Nothing to store (food, drink, bandages and bags stay with you)"
+			return last_message
+		"bed":
+			var why := sim.sleep_in(target_key)
+			last_message = why if why != "" else "Sleeping... (any key wakes you)"
+			return last_message
+	# Machines load from your pockets and nearby crates; what they made goes in your pockets.
+	var moved: Dictionary = sim.factory.hand_interact(target_cell, sim.stock_at(sim.build.piece_center(target_key)))
 	var parts := PackedStringArray()
 	if not moved["took"].is_empty():
 		parts.append("Took " + _list(moved["took"]))
@@ -94,11 +119,30 @@ func interact() -> String:
 func status_text() -> String:
 	if target_bag != -1:
 		return "Your bag\n[E] pick it up"
+	if target_container != "":
+		var c: Dictionary = sim.loot.containers.get(target_container, {})
+		var name := sim.loot.display_name(target_container)
+		if c.get("searched", false):
+			return "%s · searched" % name
+		if sim.loot.active == target_container:
+			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"]))]
+		return "%s\n[E] search (stay close; it makes a little noise)%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 	if not has_target:
 		return ""
 	var f := sim.factory
 	var lines := PackedStringArray()
-	if f.machines.has(target_cell):
+	var kind := sim.build.kind_of(sim.build.pieces[target_key]["id"]) if sim.build.pieces.has(target_key) else ""
+	if kind == "storage":
+		var crate: Inventory = sim.storages.get(target_key, Inventory.new())
+		var held := {}
+		for item: String in crate.items():
+			held[item] = crate.count(item)
+		lines.append("Storage crate · %s" % _list(held, "empty"))
+		lines.append("[E] put away building materials · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
+	elif kind == "bed":
+		lines.append("Bed · energy %d" % roundi(sim.player.energy))
+		lines.append("[E] sleep here (you'll respawn here)")
+	elif f.machines.has(target_cell):
 		var m: Factory.Machine = f.machines[target_cell]
 		lines.append("%s · makes %s · %s · loudness %d%s" % [sim.data.buildables[m.id]["name"], m.recipe["name"],
 				m.status(), roundi(sim.noise.machine_loudness(m)), " (muffled)" if m.muffled else ""])

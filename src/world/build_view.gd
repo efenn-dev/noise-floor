@@ -11,6 +11,8 @@ const COLORS := {
 	"wall": Color(0.62, 0.52, 0.38),
 	"belt": Color(0.16, 0.16, 0.18),
 	"machine": Color(0.42, 0.44, 0.4),
+	"bed": Color(0.35, 0.4, 0.6),
+	"storage": Color(0.5, 0.38, 0.22),
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
@@ -58,6 +60,10 @@ func _on_added(key: String) -> void:
 			_add_part(body, Vector3(0.7, 0.5, 0.12), Vector3(0, -size.y / 2.0 + 0.4, size.z / 2.0 + 0.06), INPUT_COLOR)
 			var lamp := _add_part(body, Vector3(0.25, 0.25, 0.25), Vector3(0, size.y / 2.0 + 0.125, 0), Color(0.2, 0.2, 0.2))
 			lamp.name = "Lamp"
+		"bed":
+			_add_part(body, Vector3(0.7, 0.12, 0.35), Vector3(0, size.y / 2.0 + 0.06, -size.z / 2.0 + 0.25), Color(0.92, 0.92, 0.9))
+		"storage":
+			_add_part(body, Vector3(size.x + 0.04, 0.08, size.z + 0.04), Vector3(0, size.y / 2.0 - 0.1, 0), Color(0.3, 0.22, 0.12))
 	var shape := CollisionShape3D.new()
 	var box_shape := BoxShape3D.new()
 	box_shape.size = size

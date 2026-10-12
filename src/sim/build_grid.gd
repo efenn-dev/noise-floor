@@ -44,9 +44,9 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 	return "f:%d:%d" % [cell.x, cell.y]
 
 
-## Machines and belts: one per cell, on top of a foundation, facing a side.
+## Machines, belts, beds and storage crates: one per cell, on top of a foundation, facing a side.
 func is_object(id: String) -> bool:
-	return _kind(id) in ["machine", "belt"]
+	return _kind(id) in ["machine", "belt", "bed", "storage"]
 
 
 func kind_of(id: String) -> String:

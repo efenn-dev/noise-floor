@@ -1,6 +1,6 @@
 class_name Inventory
 extends RefCounted
-## Item counts by id. No slot or weight limits yet (those come with survival in M6).
+## Item counts by id. Each item has a weight (data/items.json); the carry limit lives in SimWorld.
 
 signal changed
 
@@ -50,6 +50,14 @@ func give_all(items: Dictionary) -> void:
 		if int(items[item]) > 0:
 			_counts[item] = count(item) + int(items[item])
 	changed.emit()
+
+
+## Total weight in kg.
+func weight(data: GameData) -> float:
+	var kg := 0.0
+	for item: String in _counts:
+		kg += _counts[item] * data.item_weight(item)
+	return kg
 
 
 ## Item ids currently held, sorted, for display.

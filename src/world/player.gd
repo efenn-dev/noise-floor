@@ -17,8 +17,11 @@ const MOUSE_SENSITIVITY := 0.0025
 const CROUCH_LERP := 10.0
 
 var use_device_input := true
-## While frozen (dead), input is ignored and the player only falls.
+## While frozen (dead or asleep), input is ignored and the player only falls.
 var frozen := false
+## Set each frame from the sim: carrying too much or exhaustion slows you; no stamina, no sprint.
+var speed_multiplier := 1.0
+var can_sprint := true
 ## x = strafe right, y = forward (both -1..1).
 var wish_move := Vector2.ZERO
 var wish_sprint := false
@@ -110,12 +113,12 @@ func _physics_process(delta: float) -> void:
 	var speed := WALK_SPEED
 	if crouching:
 		speed = CROUCH_SPEED
-	elif wish_sprint and wish_move.y > 0.0:
+	elif wish_sprint and can_sprint and wish_move.y > 0.0:
 		speed = SPRINT_SPEED
 	var dir := (transform.basis * Vector3(wish_move.x, 0.0, -wish_move.y))
 	dir.y = 0.0
 	dir = dir.normalized() * minf(wish_move.length(), 1.0)
-	var target := dir * speed
+	var target := dir * speed * speed_multiplier
 	var accel := ACCEL if is_on_floor() else AIR_ACCEL
 	var flat := Vector3(velocity.x, 0.0, velocity.z).lerp(target, clampf(accel * delta, 0.0, 1.0))
 	velocity.x = flat.x

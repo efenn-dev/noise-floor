@@ -20,7 +20,7 @@ func test_zombie_kills_player_who_drops_bag_and_respawns() -> void:
 	var respawns := [0]
 	sim.player.respawned.connect(func() -> void: respawns[0] += 1)
 	_run(sim, 1.0)
-	near(sim.player.health, 90.0, "first hit: -10")
+	near(sim.player.health, 90.0, "first hit: -10 (plus a little bleeding if it drew blood)", 0.6)
 	_run(sim, 11.0)  # 10 hits at 1.2 s
 	check(sim.player.dead, "dead after 10 hits")
 	eq(sim.player.deaths, 1, "one death")

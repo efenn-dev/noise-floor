@@ -32,6 +32,8 @@ Health, hunger, thirst, fatigue, and stamina (sprinting, swinging). Simple injur
 ### Scavenging
 Searchable containers in houses, cars and shops (cabinets, fridges, car trunks), each with a loot table. Searching takes time and makes a little noise.
 
+**Storage (added in M6):** storage crates hold what you can't carry. Building and hand-feeding machines draw from your pockets first, then from any crate within 30 m, and build refunds go back into the crate. The starting kit begins in a crate next to the spawn point.
+
 ### Building
 Build menu with a ghost preview, grid snapping (2 m foundations), and rotation. Costs come out of your inventory and deconstructing refunds 100%. Pieces: foundation, wall, doorway, door, barricaded window, stairs.
 
@@ -171,7 +173,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M3 — Machines and belts.** Item and recipe data, Smelter + Press, belts between ports, items visibly moving, all simulated headlessly on the fixed tick (tests prove throughput: N scrap in → N plates out in T seconds). Hand-feed and take output with interact.
 - [x] **M4 — The dead.** Zombies on a navmesh: wander, see, chase, attack the player and walls. Player health, melee weapon, death and respawn. Zombie brain is sim-side and tested (state transitions).
 - [x] **M5 — Noise.** Noise sources, the heard-level formula, walls muffling, zombies investigating sounds, the heat Director sending groups at night, mufflers. Debug overlay shows noise rings. **First playable.**
-- [ ] **M6 — Survive.** Hunger, thirst, fatigue, bleeding; searchable containers with loot tables; eat and drink; water and canned-food chains.
+- [x] **M6 — Survive.** Hunger, thirst, fatigue, bleeding; searchable containers with loot tables; eat and drink; water and canned-food chains.
   - Also in M6 (from the long-game plan): every item gets a weight in kg in `data/`, and the player gets a carry limit of 20 kg plus bags (Strength raises it in M12). Over the limit: slower, more stamina use, louder footsteps. Over 150%: no sprinting.
 - [ ] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
 - [ ] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.

@@ -1,6 +1,17 @@
 {
-	"plank": { "name": "Plank", "color": "#a07850" },
-	"nails": { "name": "Nails", "color": "#c8c8d0" },
-	"scrap_metal": { "name": "Scrap metal", "color": "#8a5a3c" },
-	"metal_plate": { "name": "Metal plate", "color": "#7890a8" }
+	"plank": { "name": "Plank", "color": "#a07850", "weight": 1.0 },
+	"nails": { "name": "Nails", "color": "#c8c8d0", "weight": 0.01 },
+	"scrap_metal": { "name": "Scrap metal", "color": "#8a5a3c", "weight": 0.5 },
+	"metal_plate": { "name": "Metal plate", "color": "#7890a8", "weight": 0.5 },
+	"dirty_water": { "name": "Rainwater", "color": "#8a9a70", "weight": 0.5 },
+	"clean_water": { "name": "Clean water", "color": "#80c0f0", "weight": 0.5, "water": 40 },
+	"soda": { "name": "Soda", "color": "#d04040", "weight": 0.4, "water": 25, "food": 5 },
+	"chips": { "name": "Chips", "color": "#e0c040", "weight": 0.1, "food": 15 },
+	"canned_food": { "name": "Canned food", "color": "#b0b0a0", "weight": 0.4, "food": 40 },
+	"seeds": { "name": "Seeds", "color": "#706040", "weight": 0.01 },
+	"vegetable": { "name": "Vegetable", "color": "#60b040", "weight": 0.2, "food": 12, "water": 4 },
+	"bandage": { "name": "Bandage", "color": "#f0f0f0", "weight": 0.05, "bandage": true },
+	"school_bag": { "name": "School bag", "color": "#4060c0", "weight": 0.5, "bag": 8 },
+	"hiking_pack": { "name": "Hiking pack", "color": "#c06020", "weight": 1.0, "bag": 18 },
+	"military_rucksack": { "name": "Military rucksack", "color": "#506040", "weight": 1.5, "bag": 25 }
 }

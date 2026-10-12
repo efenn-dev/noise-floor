@@ -43,12 +43,28 @@ func test_mouse_turns_the_view_and_swings() -> void:
 	vp.push_input(kb)
 	check(main.builder.active, "B opens build mode")
 	await tree.process_frame
-	var planks: int = main.sim.inventory.count("plank")
+	var planks: int = main.sim.stock_at(player.global_position).count("plank")
 	player.set_look(0, -20)  # about 4.5 m ahead: clear of the player's own feet
 	await tree.physics_frame
 	await tree.physics_frame
 	_click(vp, MOUSE_BUTTON_LEFT)
-	check(main.sim.inventory.count("plank") < planks, "left click in build mode builds (%s)" % main.builder.last_message)
+	check(main.sim.stock_at(player.global_position).count("plank") < planks, "left click in build mode builds from the start crate (%s)" % main.builder.last_message)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	wheel.pressed = true
+	vp.push_input(wheel)
+	eq(main.builder.piece(), "wall", "mouse wheel picks the next piece")
+	kb.pressed = false
+	vp.push_input(kb)
+	kb.pressed = true
+	vp.push_input(kb)  # B again: leave build mode
+	main.sim.player.food = 50.0
+	main.sim.inventory.add("canned_food", 1)
+	var z := InputEventKey.new()
+	z.physical_keycode = KEY_Z
+	z.pressed = true
+	vp.push_input(z)
+	check(main.sim.player.food > 85.0, "Z eats (food %.0f)" % main.sim.player.food)
 	main.queue_free()
 	InputSetup.assume_captured = false
 	await tree.process_frame
