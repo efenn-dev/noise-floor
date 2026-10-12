@@ -10,6 +10,7 @@ extends Node3D
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
+##   --demo-farm           pre-build rain collector -> purifier and planter -> canner north of spawn
 ##   --advance=SECONDS     run the sim this long before starting (e.g. so a screenshot shows items moving)
 ##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none)
 ##   --zombie=X,Z[,X,Z...] add a zombie at each point, facing the player (for framing screenshots)
@@ -20,6 +21,7 @@ extends Node3D
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
 const DEFAULT_ZOMBIES := 8
+const STASH_CELL := Vector2i(1, 3)  # just east of the spawn point
 ## The area the zombie navmesh covers: the street and a margin around it.
 const NAV_BOUNDS := AABB(Vector3(-45, -1, -160), Vector3(90, 8, 200))
 
@@ -133,7 +135,13 @@ func _build_environment() -> void:
 
 ## Tells the sim where the player is; freezes the player while dead.
 func _sync_player() -> void:
-	player.frozen = sim.player.dead
+	var p := sim.player
+	player.frozen = p.dead or p.asleep
+	player.speed_multiplier = p.speed_multiplier()
+	player.can_sprint = p.can_sprint()
+	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
+	if _shot_path == "":
+		Engine.time_scale = float(sim.data.survival["sleep_time_scale"]) if p.asleep else 1.0
 	if not sim.player.dead:
 		sim.player_pos = player.global_position
 	sim.player_lit = player.flashlight.visible
@@ -150,6 +158,24 @@ func _footsteps(delta: float) -> void:
 	if _step_timer <= 0.0:
 		_step_timer = SPRINT_STEP if sprinting else WALK_STEP
 		sim.make_noise(player.global_position, "footstep_sprint" if sprinting else "footstep_walk")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if sim.player.asleep:
+		if event is InputEventKey and event.pressed and not event.echo:
+			sim.player.wake()  # any key wakes you
+		return
+	if not InputSetup.captured():
+		return
+	var msg := ""
+	if event.is_action_pressed("eat"):
+		msg = sim.eat_best()
+	elif event.is_action_pressed("drink"):
+		msg = sim.drink_best()
+	elif event.is_action_pressed("bandage"):
+		msg = sim.use_bandage()
+	if msg != "":
+		sim.add_message(msg, 2.5)
 
 
 func _on_respawned() -> void:
@@ -171,8 +197,12 @@ func _update_hud(delta: float) -> void:
 	_heat_label.text = overlay if overlay != "" else ({"calm": "", "noticed": "The noise is being noticed",
 			"group": "The dead are gathering", "horde": "Something big is coming"}[level])
 	var hp := sim.player.health
-	_health_label.text = "Health %d" % ceili(hp)
-	_health_label.modulate = Color(1, 0.35, 0.3) if hp <= 30.0 else Color.WHITE
+	var p := sim.player
+	_health_label.text = "Health %d   Food %d   Water %d   Energy %d   Stamina %d%s%s" % [ceili(hp), ceili(p.food),
+			ceili(p.water), ceili(p.energy), ceili(p.stamina), "   BLEEDING (H)" if p.bleeding else "",
+			"   Sleeping... (any key wakes you)" if p.asleep else ""]
+	var low := hp <= 30.0 or p.bleeding or p.food < 15.0 or p.water < 15.0
+	_health_label.modulate = Color(1, 0.35, 0.3) if low else Color.WHITE
 	if hp < _last_health:
 		_hurt_flash.color.a = 0.45
 	_last_health = hp
@@ -202,6 +232,9 @@ func _build_ground() -> void:
 
 func _build_town() -> void:
 	# A road running north (-Z) with houses on both sides and the factory at the far end.
+	# Searchable things: a cabinet or fridge outside each house, every car's trunk, crates by the factory.
+	var loot_rng := RandomNumberGenerator.new()
+	loot_rng.seed = 11
 	_add_block(Vector3(0, 0.01, -55), Vector3(8, 0.02, 130), Color(0.17, 0.17, 0.19), false)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
@@ -210,10 +243,26 @@ func _build_town() -> void:
 			var size := Vector3(rng.randf_range(7, 10), rng.randf_range(4, 7), rng.randf_range(7, 10))
 			var pos := Vector3(side * (7.0 + size.x / 2.0), size.y / 2.0, -10.0 - i * 16.0)
 			_add_block(pos, size, Color(0.55, 0.5, 0.45).lerp(Color(0.4, 0.42, 0.5), rng.randf()))
+			var table: String = ["kitchen", "bathroom", "fridge"][loot_rng.randi_range(0, 2)]
+			var spot := Vector3(side * 6.6, 0.8, pos.z + loot_rng.randf_range(-2.0, 2.0))
+			_add_container("house_%d_%s" % [i, "e" if side > 0 else "w"], table, spot,
+					Vector3(0.7, 1.6, 0.7), Color(0.85, 0.85, 0.8) if table == "fridge" else Color(0.55, 0.42, 0.3))
 	_add_block(Vector3(0, 6, -125), Vector3(30, 12, 24), Color(0.45, 0.47, 0.5))
+	for i in 3:
+		_add_container("factory_crate_%d" % i, "factory_crate", Vector3(-8.0 + i * 8.0, 0.5, -111.8),
+				Vector3(1.2, 1.0, 1.0), Color(0.45, 0.4, 0.25))
 	for i in 4:
 		var car_color := Color(0.5, 0.2, 0.15).lerp(Color(0.2, 0.3, 0.45), rng.randf())
-		_add_block(Vector3(rng.randf_range(-2.5, 2.5), 0.75, -15.0 - i * 22.0), Vector3(1.9, 1.5, 4.4), car_color)
+		var car_pos := Vector3(rng.randf_range(-2.5, 2.5), 0.75, -15.0 - i * 22.0)
+		var car := _add_block(car_pos, Vector3(1.9, 1.5, 4.4), car_color)
+		car.set_meta("container_id", "car_%d" % i)  # look at the car: search its trunk
+		sim.loot.add("car_%d" % i, "car_trunk", car_pos)
+
+
+func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> void:
+	var body := _add_block(pos, size, color)
+	body.set_meta("container_id", id)
+	sim.loot.add(id, table, pos)
 
 
 func _build_player(args: Dictionary) -> void:
@@ -239,7 +288,9 @@ func _build_player(args: Dictionary) -> void:
 
 
 func _build_building(args: Dictionary) -> void:
-	sim.give_debug_kit()
+	# The debug kit waits in a crate next to the start; you carry a little food, water and a bandage.
+	sim.place_start_stash(STASH_CELL)
+	sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
 	build_view.setup(sim.build)
@@ -256,6 +307,8 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_base()
 	if args.has("demo-factory"):
 		_place_demo_factory()
+	if args.has("demo-farm"):
+		_place_demo_farm()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
@@ -263,13 +316,14 @@ func _build_building(args: Dictionary) -> void:
 
 ## A 4 x 3 floor just north of spawn with a back wall and two side walls.
 func _place_demo_base() -> void:
+	var stock := sim.stock_at(SPAWN)
 	for x in range(-2, 2):
 		for z in range(-1, 2):
-			sim.build.place("foundation", Vector2i(x, z), 0, sim.inventory)
+			sim.build.place("foundation", Vector2i(x, z), 0, stock)
 	for x in range(-2, 2):
-		sim.build.place("wall", Vector2i(x, -1), BuildGrid.Side.NORTH, sim.inventory)
-	sim.build.place("wall", Vector2i(-2, -1), BuildGrid.Side.WEST, sim.inventory)
-	sim.build.place("wall", Vector2i(1, -1), BuildGrid.Side.EAST, sim.inventory)
+		sim.build.place("wall", Vector2i(x, -1), BuildGrid.Side.NORTH, stock)
+	sim.build.place("wall", Vector2i(-2, -1), BuildGrid.Side.WEST, stock)
+	sim.build.place("wall", Vector2i(1, -1), BuildGrid.Side.EAST, stock)
 
 
 func _build_zombies(args: Dictionary) -> void:
@@ -303,15 +357,32 @@ func _build_zombies(args: Dictionary) -> void:
 ## Smelter -> 3 belts -> press, running east just north of spawn, with 20 scrap loaded.
 func _place_demo_factory() -> void:
 	var E := BuildGrid.Side.EAST
+	var stock := sim.stock_at(SPAWN)
 	for x in range(-2, 3):
-		sim.build.place("foundation", Vector2i(x, 0), 0, sim.inventory)
-	sim.build.place("smelter", Vector2i(-2, 0), E, sim.inventory)
+		sim.build.place("foundation", Vector2i(x, 0), 0, stock)
+	sim.build.place("smelter", Vector2i(-2, 0), E, stock)
 	for x in range(-1, 2):
-		sim.build.place("belt", Vector2i(x, 0), E, sim.inventory)
-	sim.build.place("press", Vector2i(2, 0), E, sim.inventory)
+		sim.build.place("belt", Vector2i(x, 0), E, stock)
+	sim.build.place("press", Vector2i(2, 0), E, stock)
 	var feed := Inventory.new()
 	feed.add("scrap_metal", 20)
 	sim.factory.hand_interact(Vector2i(-2, 0), feed)
+
+
+## Two short lines a row apart: rain collector -> belt -> purifier, and planter -> belt -> canner.
+func _place_demo_farm() -> void:
+	var E := BuildGrid.Side.EAST
+	var stock := sim.stock_at(SPAWN)
+	for z in [-1, 1]:
+		for x in range(-2, 1):
+			sim.build.place("foundation", Vector2i(x, z), 0, stock)
+		sim.build.place("belt", Vector2i(-1, z), E, stock)
+	sim.build.place("rain_collector", Vector2i(-2, -1), E, stock)
+	sim.build.place("purifier", Vector2i(0, -1), E, stock)
+	sim.build.place("planter", Vector2i(-2, 1), E, stock)
+	sim.build.place("canner", Vector2i(0, 1), E, stock)
+	sim.factory.machines[Vector2i(-2, 1)].input = {"seeds": 3, "dirty_water": 3}
+	sim.factory.machines[Vector2i(0, 1)].input = {"metal_plate": 3}
 
 
 func _build_hud() -> void:
@@ -373,7 +444,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · B build · E use · U muffle · N noise · Esc free mouse"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -402,7 +473,7 @@ func _outlined_label(font_size: int) -> Label:
 	return label
 
 
-func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> void:
+func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> StaticBody3D:
 	var mesh := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = size
@@ -411,7 +482,7 @@ func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true)
 	if not collide:
 		mesh.position = pos
 		add_child(mesh)
-		return
+		return null
 	var body := StaticBody3D.new()
 	body.position = pos
 	body.add_child(mesh)
@@ -421,6 +492,7 @@ func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true)
 	shape.shape = box_shape
 	body.add_child(shape)
 	add_child(body)
+	return body
 
 
 func _flat_material(color: Color) -> StandardMaterial3D:

@@ -3,7 +3,7 @@ extends RefCounted
 ## Content loaded from data/*.json. validate() lists every problem so a test can fail loudly.
 
 const DIR := "res://data/"
-const KINDS := ["foundation", "wall", "belt", "machine"]
+const KINDS := ["foundation", "wall", "belt", "machine", "bed", "storage"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -12,6 +12,8 @@ var debug_kit: Dictionary = {}   # item -> int
 var zombies: Dictionary = {}     # type -> stats (numbers), see data/zombies.json
 var weapons: Dictionary = {}     # id -> stats (numbers), see data/weapons.json
 var noise: Dictionary = {}       # muffler, sounds, director tuning: see data/noise.json
+var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, carry weight: data/survival.json
+var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
 
@@ -22,6 +24,8 @@ static func load_default() -> GameData:
 	data.zombies = _read_json(DIR + "zombies.json", data)
 	data.weapons = _read_json(DIR + "weapons.json", data)
 	data.noise = _read_json(DIR + "noise.json", data)
+	data.survival = _read_json(DIR + "survival.json", data)
+	data.loot = _read_json(DIR + "loot.json", data)
 	return data
 
 
@@ -61,6 +65,13 @@ func validate() -> PackedStringArray:
 	for id: String in items:
 		if not items[id] is Dictionary or not items[id].has("name"):
 			errors.append("item '%s' needs a name" % id)
+			continue
+		var w: Variant = items[id].get("weight")
+		if not (w is float or w is int) or float(w) < 0.0:
+			errors.append("item '%s' needs a weight in kg (0 or more)" % id)
+		for key: String in ["food", "water", "bag"]:
+			if items[id].has(key) and float(items[id][key]) <= 0.0:
+				errors.append("item '%s' needs a positive '%s'" % [id, key])
 	for id: String in buildables:
 		var b: Dictionary = buildables[id]
 		if not b["kind"] in KINDS:
@@ -85,8 +96,8 @@ func validate() -> PackedStringArray:
 		var r: Dictionary = recipes[id]
 		if r["time"] <= 0.0:
 			errors.append("recipe '%s' needs a positive time" % id)
-		if r["in"].is_empty() or r["out"].is_empty():
-			errors.append("recipe '%s' needs inputs and outputs" % id)
+		if r["out"].is_empty():
+			errors.append("recipe '%s' needs outputs" % id)  # no inputs is fine (rain collector)
 		for part in ["in", "out"]:
 			for item: String in r[part]:
 				if not items.has(item):
@@ -96,6 +107,19 @@ func validate() -> PackedStringArray:
 	for item: String in debug_kit:
 		if not items.has(item):
 			errors.append("debug kit has unknown item '%s'" % item)
+	_check_stats(errors, "survival", {"survival": survival} if not survival.is_empty() else {}, SURVIVAL_STATS)
+	for table: String in loot:
+		var t: Dictionary = loot[table]
+		var rolls: Array = t.get("rolls", [])
+		if rolls.size() != 2 or int(rolls[0]) < 1 or int(rolls[1]) < int(rolls[0]):
+			errors.append("loot '%s' needs rolls [min, max]" % table)
+		if t.get("items", []).is_empty():
+			errors.append("loot '%s' has no items" % table)
+		for e: Dictionary in t.get("items", []):
+			if not items.has(e.get("item", "")):
+				errors.append("loot '%s' has unknown item '%s'" % [table, e.get("item", "")])
+			if float(e.get("weight", 0)) <= 0.0 or int(e.get("min", 0)) < 1 or int(e.get("max", 0)) < int(e.get("min", 0)):
+				errors.append("loot '%s' entry '%s' needs weight > 0 and 1 <= min <= max" % [table, e.get("item", "")])
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
 	_check_stats(errors, "weapon", weapons, WEAPON_STATS)
 	if noise.is_empty():
@@ -115,6 +139,11 @@ const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "att
 		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius", "hearing_day",
 		"hearing_night", "investigate_speed"]
 const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback"]
+const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sleep_gain", "starve_damage",
+		"respawn_minimum", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
+		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
+		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
+		"carry_footstep_bonus"]
 const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck"]
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
@@ -134,6 +163,16 @@ static func _check_stats(errors: PackedStringArray, what: String, table: Diction
 ## Item color for drawing (items.json "color", grey if missing).
 func item_color(item: String) -> Color:
 	return Color.from_string(items.get(item, {}).get("color", ""), Color(0.6, 0.6, 0.6))
+
+
+func item_weight(item: String) -> float:
+	return float(items.get(item, {}).get("weight", 0.0))
+
+
+## An item's value for "food", "water" or "bag" (0 if it has none); "bandage" gives 1 for bandages.
+func item_value(item: String, key: String) -> float:
+	var v: Variant = items.get(item, {}).get(key, 0)
+	return 1.0 if v is bool and v else (float(v) if not v is bool else 0.0)
 
 
 func item_name(item: String) -> String:

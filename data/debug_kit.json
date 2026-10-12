@@ -1,6 +1,7 @@
 {
-	"plank": 100,
-	"nails": 100,
+	"plank": 150,
+	"nails": 150,
 	"scrap_metal": 50,
-	"metal_plate": 30
+	"metal_plate": 60,
+	"seeds": 10
 }

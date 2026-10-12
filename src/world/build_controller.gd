@@ -2,12 +2,13 @@ class_name BuildController
 extends Node3D
 ## Build mode: B toggles it. Aim at the ground or a foundation to see a ghost of the piece,
 ## snapped to the 2 m grid: green = can build, red = can't (the HUD says why).
-## 1-5 pick foundation / wall / belt / smelter / press. R turns the piece: walls move to the next edge,
+## 1-9, 0 and the mouse wheel pick the piece (see PIECES). R turns the piece: walls move to the next edge,
 ## belts and machines turn to face the next way (default: facing away from you).
 ## Left-click builds, right-click removes the piece you're looking at (full refund).
 
 const REACH := 8.0
-const PIECES := ["foundation", "wall", "belt", "smelter", "press"]
+const PIECES := ["foundation", "wall", "belt", "smelter", "press", "rain_collector", "purifier", "planter",
+		"canner", "bed", "storage"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 
@@ -73,10 +74,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_active(not active)
 	if not active:
 		return
-	for i in PIECES.size():
+	for i in mini(PIECES.size(), 10):  # keys 1-9 and 0; the rest via the wheel
 		if event.is_action_pressed("build_pick_%d" % (i + 1)):
 			select(i)
 			return
+	if event.is_action_pressed("build_next"):
+		select((piece_index + 1) % PIECES.size())
+		return
+	if event.is_action_pressed("build_prev"):
+		select((piece_index + PIECES.size() - 1) % PIECES.size())
+		return
 	if event.is_action_pressed("build_rotate"):
 		turns = (turns + 1) % 4
 	elif InputSetup.captured():
@@ -98,7 +105,7 @@ func try_place() -> String:
 	elif aim_reason != "":
 		last_message = aim_reason
 	else:
-		last_message = sim.build.place(piece(), aim_cell, aim_side, sim.inventory)
+		last_message = sim.build.place(piece(), aim_cell, aim_side, _stock())
 		update_aim()
 	return last_message
 
@@ -108,7 +115,9 @@ func try_remove() -> String:
 	if aim_remove_key == "":
 		last_message = "Look at something you built"
 	else:
-		last_message = sim.build.remove(aim_remove_key, sim.inventory)
+		var refund := sim.stock_at(sim.build.piece_center(aim_remove_key))
+		refund.refund_to_storage = true  # refunds go back in the crate, not your back
+		last_message = sim.build.remove(aim_remove_key, refund)
 		update_aim()
 	return last_message
 
@@ -139,7 +148,7 @@ func update_aim() -> void:
 	aim_cell = cell
 	aim_side = side
 	aim_valid = true
-	aim_reason = sim.build.can_place(id, aim_cell, aim_side, sim.inventory)
+	aim_reason = sim.build.can_place(id, aim_cell, aim_side, _stock())
 	if aim_reason == "" and placement_blocked(id, aim_cell, aim_side):
 		aim_reason = "Something's in the way"
 	_show_ghost(id)
@@ -185,7 +194,7 @@ func status_text() -> String:
 	var info: Dictionary = sim.data.buildables[piece()]
 	var lines := PackedStringArray()
 	lines.append("BUILD  %s  (%s)" % [info["name"], _cost_text(info["cost"])])
-	var hint := "1 foundation · 2 wall · 3 belt · 4 smelter · 5 press · R rotate · LMB build · RMB remove · B exit"
+	var hint := "1-9, 0 or wheel: pick · R rotate · LMB build · RMB remove · B exit · uses crates within %dm" % int(sim.data.survival["storage_range"])
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)
@@ -195,11 +204,20 @@ func status_text() -> String:
 	return "\n".join(lines)
 
 
+## Your pockets and carried weight; in build mode, what nearby crates add.
 func materials_text() -> String:
 	var parts := PackedStringArray()
-	for item: String in sim.inventory.items():
-		parts.append("%s %d" % [sim.data.item_name(item), sim.inventory.count(item)])
-	return "  ·  ".join(parts) if not parts.is_empty() else "No materials"
+	var stock: Inventory = _stock() if active else sim.inventory
+	for item: String in stock.items():
+		parts.append("%s %d" % [sim.data.item_name(item), stock.count(item)])
+	var kg := "%.1f / %d kg" % [sim.inventory.weight(sim.data), roundi(sim.carry_limit())]
+	var label := "Pockets + nearby crates: " if active else ""
+	return label + ("  ·  ".join(parts) if not parts.is_empty() else "Nothing carried") + "\n" + kg
+
+
+func _stock() -> Stock:
+	var at := sim.build.center_for(piece(), aim_cell, aim_side) if aim_valid else camera.global_position
+	return sim.stock_at(at)
 
 
 func _cost_text(cost: Dictionary) -> String:
