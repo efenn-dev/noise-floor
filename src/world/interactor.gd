@@ -12,6 +12,7 @@ var exclude: Array[RID] = []
 
 var target_cell := Vector2i.ZERO
 var has_target := false
+var target_bag := -1  # id of the death bag being looked at, -1 if none
 var last_message := ""
 
 
@@ -33,13 +34,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func update_target() -> void:
 	var was := target_cell
+	var was_bag := target_bag
 	has_target = false
+	target_bag = -1
 	if builder.active:
 		return
 	var from := camera.global_position
 	var query := PhysicsRayQueryParameters3D.create(from, from - camera.global_basis.z * REACH,
-			Layers.WORLD | Layers.BUILT, exclude)
+			Layers.WORLD | Layers.BUILT | Layers.BAG, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("bag_id"):
+		target_bag = hit["collider"].get_meta("bag_id")
+		if target_bag != was_bag:
+			last_message = ""
+		return
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("piece_key"):
 		return
 	var key: String = hit["collider"].get_meta("piece_key")
@@ -53,6 +61,10 @@ func update_target() -> void:
 
 func interact() -> String:
 	update_target()
+	if target_bag != -1:
+		var items := sim.take_bag(target_bag)
+		last_message = "Took " + _list(items) if not items.is_empty() else ""
+		return last_message
 	if not has_target:
 		return ""
 	var moved: Dictionary = sim.factory.hand_interact(target_cell, sim.inventory)
@@ -66,6 +78,8 @@ func interact() -> String:
 
 
 func status_text() -> String:
+	if target_bag != -1:
+		return "Your bag\n[E] pick it up"
 	if not has_target:
 		return ""
 	var f := sim.factory

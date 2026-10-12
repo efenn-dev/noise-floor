@@ -9,6 +9,8 @@ var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
 var recipes: Dictionary = {}     # id -> {name, time: float, in: {item: int}, out: {item: int}}
 var debug_kit: Dictionary = {}   # item -> int
+var zombies: Dictionary = {}     # type -> stats (numbers), see data/zombies.json
+var weapons: Dictionary = {}     # id -> stats (numbers), see data/weapons.json
 var load_errors: PackedStringArray = []
 
 
@@ -16,6 +18,8 @@ static func load_default() -> GameData:
 	var data := GameData.new()
 	data.load_from(_read_json(DIR + "items.json", data), _read_json(DIR + "buildables.json", data),
 			_read_json(DIR + "debug_kit.json", data), _read_json(DIR + "recipes.json", data))
+	data.zombies = _read_json(DIR + "zombies.json", data)
+	data.weapons = _read_json(DIR + "weapons.json", data)
 	return data
 
 
@@ -37,6 +41,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"size": Vector3(size[0], size[1], size[2]) if size.size() == 3 else Vector3.ZERO,
 			"cost": cost,
 			"recipe": b.get("recipe", ""),
+			"hp": int(b.get("hp", 0)),
 		}
 	recipes = {}
 	for id: String in raw_recipes:
@@ -67,6 +72,8 @@ func validate() -> PackedStringArray:
 				errors.append("buildable '%s' costs unknown item '%s'" % [id, item])
 			if b["cost"][item] <= 0:
 				errors.append("buildable '%s' has a non-positive cost for '%s'" % [id, item])
+		if b["hp"] <= 0:
+			errors.append("buildable '%s' needs positive hp" % id)
 		if b["kind"] == "machine" and not recipes.has(b["recipe"]):
 			errors.append("machine '%s' has unknown recipe '%s'" % [id, b["recipe"]])
 	for id: String in recipes:
@@ -84,7 +91,24 @@ func validate() -> PackedStringArray:
 	for item: String in debug_kit:
 		if not items.has(item):
 			errors.append("debug kit has unknown item '%s'" % item)
+	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
+	_check_stats(errors, "weapon", weapons, WEAPON_STATS)
 	return errors
+
+
+const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "attack_interval", "damage",
+		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius"]
+const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback"]
+
+
+static func _check_stats(errors: PackedStringArray, what: String, table: Dictionary, keys: Array) -> void:
+	if table.is_empty() and what != "":
+		errors.append("no %s data" % what)
+	for id: String in table:
+		for key: String in keys:
+			var v: Variant = table[id].get(key)
+			if not (v is float or v is int) or float(v) <= 0.0:
+				errors.append("%s '%s' needs a positive number for '%s'" % [what, id, key])
 
 
 ## Item color for drawing (items.json "color", grey if missing).

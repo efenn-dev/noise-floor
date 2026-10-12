@@ -17,6 +17,8 @@ const MOUSE_SENSITIVITY := 0.0025
 const CROUCH_LERP := 10.0
 
 var use_device_input := true
+## While frozen (dead), input is ignored and the player only falls.
+var frozen := false
 ## x = strafe right, y = forward (both -1..1).
 var wish_move := Vector2.ZERO
 var wish_sprint := false
@@ -34,7 +36,7 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 
 
 
 func _init() -> void:
-	collision_mask = Layers.WORLD | Layers.BUILT
+	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
 	_capsule = CapsuleShape3D.new()
 	_capsule.radius = RADIUS
 	_capsule.height = STAND_HEIGHT
@@ -72,7 +74,7 @@ func set_look(yaw_deg: float, pitch_deg: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not use_device_input:
+	if not use_device_input or frozen:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
@@ -87,7 +89,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if use_device_input:
+	if frozen:
+		wish_move = Vector2.ZERO
+		wish_jump = false
+		wish_sprint = false
+	elif use_device_input:
 		wish_move = Input.get_vector("move_left", "move_right", "move_back", "move_forward")
 		wish_sprint = Input.is_action_pressed("sprint")
 		wish_jump = Input.is_action_pressed("jump")
