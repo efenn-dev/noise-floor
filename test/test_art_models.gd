@@ -35,6 +35,26 @@ func test_models_fit_their_pieces() -> void:
 		root.free()
 
 
+func test_models_face_the_right_way() -> void:
+	# Pieces face -Z (BuildGrid), so a model's OUTPUT_ORANGE paint is at -Z and INPUT_BLUE at +Z.
+	for id: String in BuildView.MODELS:
+		var root := (load(BuildView.MODELS[id]) as PackedScene).instantiate() as Node3D
+		for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+			var xf := _transform_to(root, m)
+			for i in m.mesh.get_surface_count():
+				var mat := m.mesh.surface_get_material(i)
+				var paint := mat.resource_name if mat != null else ""
+				if paint not in ["OUTPUT_ORANGE", "INPUT_BLUE"]:
+					continue
+				var z := 0.0
+				var verts: PackedVector3Array = m.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+				for v in verts:
+					z += (xf * v).z / verts.size()
+				var front := paint == "OUTPUT_ORANGE"
+				check(z < 0.0 if front else z > 0.0, "%s: %s is at the %s (mean z %.2f)" % [id, paint, "front" if front else "back", z])
+		root.free()
+
+
 func test_each_machine_gets_its_own_lamp() -> void:
 	var sim := SimWorld.new(10.0)
 	sim.give_debug_kit()

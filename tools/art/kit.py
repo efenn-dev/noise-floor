@@ -7,8 +7,9 @@ collision box, checks it fits, and exports `assets/models/<id>.glb`.
     blender.exe -b --factory-startup --python tools/art/<id>.py
 
 Conventions the game relies on (src/world/build_view.gd, test/test_art_models.gd):
-- Metres. The FRONT (a machine's output side) faces -Y, which becomes -Z in Godot. The BACK
-  (input side) faces +Y. The model must fit the piece's collision box from data/buildables.json.
+- Metres. Build with the FRONT (a machine's output side) facing -Y and the BACK (input side)
+  facing +Y, as in Blender's front view. finish() turns the model round so the front ends up
+  at -Z in Godot, the game's front. The model must fit the piece's collision box from data/buildables.json.
   `finish()` checks that and puts the model's base on the box floor.
 - Machines and generators get a status lamp from `lamp()`. It's exported as a separate object
   named "Lamp" that the game recolours (green running, red no power, orange output full).
@@ -22,7 +23,7 @@ import math
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 log = logging.getLogger("kit")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -201,8 +202,17 @@ def finish(piece_id: str, size: tuple[float, float, float], max_triangles: int =
     # Centre the footprint and stand the base on the floor of the box (Godot centres the box).
     lo, hi = _bounds([body])
     shift = Vector((-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -lo.z - size[1] / 2))
+    # Turn it around: the glTF exporter maps Blender -Y to +Z, but the game's front is -Z.
+    half_turn = Matrix.Rotation(math.pi, 4, "Z")
     for o in [body] + ([lamp_obj] if lamp_obj else []):
         o.location += shift
+    bpy.context.view_layer.update()  # matrix_world is stale until this runs
+    for o in [body] + ([lamp_obj] if lamp_obj else []):
+        o.matrix_world = half_turn @ o.matrix_world
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.transform_apply(location=o is body, rotation=True, scale=False)
     bpy.context.view_layer.update()
 
     hx, hz, hy = size[0] / 2 + overhang[0], size[1] / 2, size[2] / 2 + overhang[1]
