@@ -75,7 +75,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 **First playable = M1–M5:** walk a dark town, build a noisy machine line, and defend it from the zombies it attracts.
 
 - [x] **M0 — Skeleton.** Godot 4.7 project, greybox town, day/night sun, headless tests, screenshot tool, cloud bootstrap.
-- [ ] **M1 — Walk the town.** First-person controller (WASD, mouse look, sprint, jump, crouch), flashlight, collisions with the greybox town, HUD clock, Esc to free the mouse. Game clock runs on a fixed sim tick. A test (or scripted run) proves the player can walk forward and is blocked by a wall. Screenshot flag gains a camera pose so shots can be framed.
+- [x] **M1 — Walk the town.** First-person controller (WASD, mouse look, sprint, jump, crouch), flashlight, collisions with the greybox town, HUD clock, Esc to free the mouse. Game clock runs on a fixed sim tick. A test (or scripted run) proves the player can walk forward and is blocked by a wall. Screenshot flag gains a camera pose so shots can be framed.
 - [ ] **M2 — Build.** Inventory (sim, tested), build mode with ghost preview, 2 m grid snap, rotate, place and deconstruct foundations and walls; debug kit gives starting materials. Building data in `data/`.
 - [ ] **M3 — Machines and belts.** Item and recipe data, Smelter + Press, belts between ports, items visibly moving, all simulated headlessly on the fixed tick (tests prove throughput: N scrap in → N plates out in T seconds). Hand-feed and take output with interact.
 - [ ] **M4 — The dead.** Zombies on a navmesh: wander, see, chase, attack the player and walls. Player health, melee weapon, death and respawn. Zombie brain is sim-side and tested (state transitions).

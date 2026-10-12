@@ -1,12 +1,18 @@
 extends Node3D
-## M0 greybox: a block-out town (road, houses, cars, the factory) under a day/night sun driven by GameClock.
+## Greybox town (road, houses, cars, the factory) under a day/night sun, walked by a first-person Player.
+## Game rules live in SimWorld (src/sim), stepped on a fixed tick; this node only draws them.
 ## Game flags go after `--`:
-##   --screenshot[=PATH]  freeze time, save one frame as PNG, quit (tools/shot.sh wraps this)
-##   --time=HOURS         start at this hour, e.g. --time=22 for night
+##   --screenshot[=PATH]   freeze time, save one frame as PNG, quit (tools/shot.sh wraps this)
+##   --time=HOURS          start at this hour, e.g. --time=22 for night
+##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
+##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
+##   --flashlight          start with the flashlight on
 
 const SHOT_DELAY_FRAMES := 30
+const SPAWN := Vector3(0, 0, 6)
 
-var clock: GameClock
+var sim: SimWorld
+var player: Player
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
@@ -17,22 +23,26 @@ var _frames := 0
 
 
 func _ready() -> void:
+	InputSetup.register()
 	var args := _parse_user_args()
-	clock = GameClock.new(float(args.get("time", "8.0")))
+	sim = SimWorld.new(float(args.get("time", "8.0")))
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
+		sim.paused = true
 	_build_environment()
 	_build_ground()
 	_build_town()
-	_build_camera()
+	_build_player(args)
 	_build_hud()
 	_apply_time()
+	if _shot_path == "":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _process(delta: float) -> void:
 	if _shot_path == "":
-		clock.advance(delta)
-		_apply_time()
+		if sim.update(delta) > 0:
+			_apply_time()
 		return
 	_frames += 1
 	if _frames == SHOT_DELAY_FRAMES:
@@ -40,6 +50,7 @@ func _process(delta: float) -> void:
 
 
 func _apply_time() -> void:
+	var clock := sim.clock
 	var arc := clock.sun_arc_deg()
 	var light := clock.daylight()
 	_sun.rotation_degrees = Vector3(-arc, -30.0, 0.0)
@@ -49,7 +60,7 @@ func _apply_time() -> void:
 	_env.background_energy_multiplier = lerpf(0.04, 1.0, light)
 	_env.ambient_light_energy = lerpf(0.08, 1.0, light)
 	_env.fog_light_energy = lerpf(0.03, 1.0, light)
-	_hud.text = "Noise Floor  ·  M0 greybox  ·  Day %d  %s" % [clock.day, clock.clock_text()]
+	_hud.text = "Day %d  %s" % [clock.day, clock.clock_text()]
 
 
 func _build_environment() -> void:
@@ -104,20 +115,48 @@ func _build_town() -> void:
 		_add_block(Vector3(rng.randf_range(-2.5, 2.5), 0.75, -15.0 - i * 22.0), Vector3(1.9, 1.5, 4.4), car_color)
 
 
-func _build_camera() -> void:
-	var cam := Camera3D.new()
-	cam.fov = 75.0
-	add_child(cam)
-	cam.look_at_from_position(Vector3(0, 1.7, 6), Vector3(0, 1.7, -60))
-	cam.current = true
+func _build_player(args: Dictionary) -> void:
+	player = Player.new()
+	player.position = SPAWN
+	add_child(player)
+	if args.has("cam"):
+		var v := PackedFloat64Array()
+		for part in String(args["cam"]).split(","):
+			v.append(part.to_float())
+		while v.size() < 5:
+			v.append(0.0)
+		player.position = Vector3(v[0], v[1], v[2])
+		player.set_look(v[3], v[4])
+	if args.has("flashlight"):
+		player.flashlight.visible = true
+	if _shot_path != "":
+		player.use_device_input = false  # stand still for the photo
+	player.camera.current = true
 
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	_hud = Label.new()
 	_hud.position = Vector2(16, 12)
-	_hud.add_theme_font_size_override("font_size", 22)
+	_hud.add_theme_font_size_override("font_size", 26)
+	_hud.add_theme_color_override("font_outline_color", Color.BLACK)
+	_hud.add_theme_constant_override("outline_size", 6)
 	layer.add_child(_hud)
+
+	var hint := Label.new()
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · Esc free mouse"
+	hint.add_theme_font_size_override("font_size", 16)
+	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	hint.add_theme_color_override("font_outline_color", Color.BLACK)
+	hint.add_theme_constant_override("outline_size", 4)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
+	layer.add_child(hint)
+
+	var dot := ColorRect.new()
+	dot.color = Color(1, 1, 1, 0.8)
+	dot.size = Vector2(4, 4)
+	dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	layer.add_child(dot)
 	add_child(layer)
 
 

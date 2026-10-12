@@ -2,6 +2,7 @@ extends SceneTree
 ## Zero-dependency headless test runner.
 ## Runs every test/test_*.gd. Each file extends "res://test/base_test.gd" and defines test_* methods.
 ## Use tools/test.sh (it refreshes the class cache first and fails on script errors).
+## A test may `await` (e.g. `await tree.physics_frame`) to run real physics; `tree` is set on every suite.
 ## Output stays compact on purpose: one line per file, plus one line per failure.
 
 const TEST_DIR := "res://test/"
@@ -21,6 +22,7 @@ func _initialize() -> void:
 			total_failed += 1
 			continue
 		var suite = script.new()
+		suite.tree = self
 		var seen := {}
 		var file_failed := 0
 		for method: Dictionary in script.get_script_method_list():
@@ -30,7 +32,7 @@ func _initialize() -> void:
 			seen[method_name] = true
 			var checks_before: int = suite.passed + suite.failed
 			var failures_before: int = suite.failures.size()
-			suite.call(method_name)
+			await suite.call(method_name)
 			if suite.passed + suite.failed == checks_before:
 				suite.failed += 1
 				suite.failures.append("%s made no checks (crashed early?)" % method_name)

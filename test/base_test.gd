@@ -3,6 +3,8 @@ extends RefCounted
 ##   extends "res://test/base_test.gd"
 ## and define methods named test_*; test/run_tests.gd finds and runs them.
 
+## The running SceneTree, for tests that need real nodes and physics frames.
+var tree: SceneTree
 var passed := 0
 var failed := 0
 var failures: PackedStringArray = []
