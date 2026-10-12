@@ -23,8 +23,15 @@ const COLORS := {
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
-## Art made with Codex (tools/art/). Pieces not listed stay plain coloured boxes.
-const MODELS := {"press": "res://assets/models/press.glb"}  # replaces the box mesh, collider unchanged
+## Art made with Codex: models built by tools/art/<id>.py (checked by test_art_models.gd) replace the box mesh,
+## collider unchanged. Pieces not listed stay plain coloured boxes.
+const MODELS := {
+	"press": "res://assets/models/press.glb",
+	"smelter": "res://assets/models/smelter.glb",
+	"rain_collector": "res://assets/models/rain_collector.glb",
+	"purifier": "res://assets/models/purifier.glb",
+	"canner": "res://assets/models/canner.glb",
+}
 const SURFACES := {"foundation": "res://assets/textures/concrete_floor"}  # <stem>_albedo.png + _normal.png
 
 var _surface_mats: Dictionary = {}  # id -> StandardMaterial3D, shared so world-space tiling lines up
