@@ -18,6 +18,8 @@ extends Node3D
 ##   --hurt=N              start with N damage taken (--hurt=100 shows the death screen)
 ##   --noise-overlay       start with the noise overlay (N) on
 ##   --heat=N              start the Director's heat at N
+##   --title / --pause / --settings   open that menu (for screenshots)
+## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
@@ -52,6 +54,9 @@ var _last_health := 100.0
 var _message_label: Label
 var _heat_label: Label
 var _step_timer := 0.0
+var menus: Menus
+var _loaded := false  # this scene was rebuilt from a save
+var _autosave := 0.0
 
 const WALK_STEP := 0.5    # seconds between walking footstep sounds
 const SPRINT_STEP := 0.35
@@ -61,8 +66,15 @@ var _frames := 0
 
 func _ready() -> void:
 	InputSetup.register()
+	Settings.load_settings()
 	var args := _parse_user_args()
-	sim = SimWorld.new(float(args.get("time", "8.0")))
+	var save := {}
+	if GameSession.pending_load != "":
+		save = SaveGame.read(GameSession.pending_load)
+		GameSession.pending_load = ""
+		_loaded = not save.is_empty()
+	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)))
+	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
@@ -73,6 +85,10 @@ func _ready() -> void:
 	_build_building(args)
 	_build_zombies(args)
 	_build_hud()
+	if _loaded:
+		_apply_save(save)
+	_build_menus(args)
+	_apply_settings()
 	if args.has("heat"):
 		sim.director.heat = args["heat"].to_float()
 	if args.has("hurt"):
@@ -80,11 +96,17 @@ func _ready() -> void:
 	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
 		sim.step()
 	_apply_time()
-	if _shot_path == "":
+	if _shot_path == "" and not menus.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _process(delta: float) -> void:
+	if _shot_path == "" and not get_tree().paused and not sim.player.dead:
+		_autosave += delta / maxf(Engine.time_scale, 1.0)
+		if _autosave >= GameSession.AUTOSAVE_SECONDS:
+			_autosave = 0.0
+			if save_game() == "":
+				sim.add_message("Autosaved", 2.0)
 	_sync_player()
 	if _shot_path == "":
 		_footsteps(delta)
@@ -162,6 +184,20 @@ func _footsteps(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("free_mouse"):
+		if not menus.is_open():
+			_open_pause()  # closing it again is handled by Menus, which runs while paused
+			get_viewport().set_input_as_handled()
+		return
+	if menus.is_open():
+		return
+	if event.is_action_pressed("quicksave"):
+		var why := save_game()
+		sim.add_message("Game saved (F9 loads it)" if why == "" else why, 3.0)
+		return
+	if event.is_action_pressed("quickload"):
+		load_game()
+		return
 	if sim.player.asleep:
 		if event is InputEventKey and event.pressed and not event.echo:
 			sim.player.wake()  # any key wakes you
@@ -177,6 +213,100 @@ func _unhandled_input(event: InputEvent) -> void:
 		msg = sim.use_bandage()
 	if msg != "":
 		sim.add_message(msg, 2.5)
+
+
+# --- Menus, saving, settings ----------------------------------------------------
+
+func _build_menus(args: Dictionary) -> void:
+	menus = Menus.new()
+	add_child(menus)
+	menus.new_game.connect(_start_playing)
+	menus.continue_game.connect(func() -> void: _reload_with(GameSession.save_path))
+	menus.resume.connect(_resume)
+	menus.save_requested.connect(func() -> void:
+		var why := save_game()
+		menus.set_status("Saved." if why == "" else why))
+	menus.load_requested.connect(load_game)
+	menus.quit_to_title.connect(func() -> void:
+		save_game()
+		GameSession.started = false
+		_reload_with(""))
+	menus.settings_changed.connect(_apply_settings)
+	var has_save := FileAccess.file_exists(GameSession.save_path)
+	var flags := not args.is_empty() and not (args.size() == 1 and args.has("title"))
+	if args.has("title") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
+		menus.show_title(has_save)
+		if _shot_path == "":  # a screenshot needs the frame counter running
+			get_tree().paused = true
+	elif args.has("pause"):
+		menus.show_pause(has_save)
+	elif args.has("settings"):
+		menus.show_settings("pause")
+	else:
+		GameSession.started = true
+
+
+func _start_playing() -> void:
+	GameSession.started = true
+	menus.hide_all()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _open_pause() -> void:
+	menus.show_pause(FileAccess.file_exists(GameSession.save_path))
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _resume() -> void:
+	Settings.save_settings()
+	menus.hide_all()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _apply_settings() -> void:
+	player.mouse_sensitivity = Player.MOUSE_SENSITIVITY * Settings.mouse_sensitivity
+	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
+	Settings.apply_engine()
+
+
+## Saves the game (sim state plus where you're looking). Returns "" or what went wrong.
+func save_game() -> String:
+	sim.player_pos = player.global_position
+	return SaveGame.write(sim, GameSession.save_path,
+			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x]})
+
+
+## Loads the last save: the scene restarts and lays the save over a freshly built town.
+func load_game() -> void:
+	if not FileAccess.file_exists(GameSession.save_path):
+		sim.add_message("No save yet (F5 saves)", 3.0)
+		return
+	_reload_with(GameSession.save_path)
+
+
+func _reload_with(path: String) -> void:
+	GameSession.pending_load = path
+	if path != "":
+		GameSession.started = true
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	get_tree().reload_current_scene()
+
+
+func _apply_save(save: Dictionary) -> void:
+	var why := SaveGame.apply(sim, save)
+	if why != "":
+		sim.add_message(why, 6.0)
+		return
+	player.position = sim.player_pos
+	var look: Array = save.get("look", [0.0, 0.0])
+	player.set_look(float(look[0]), float(look[1]))
+	nav.bake_now()  # the saved base changes where zombies can walk
+	_apply_time()
+	sim.add_message("Loaded: day %d, %s" % [sim.clock.day, sim.clock.clock_text()], 3.0)
 
 
 func _on_respawned() -> void:
@@ -291,8 +421,10 @@ func _build_player(args: Dictionary) -> void:
 
 func _build_building(args: Dictionary) -> void:
 	# The debug kit waits in a crate next to the start; you carry a little food, water and a bandage.
-	sim.place_start_stash(STASH_CELL)
-	sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
+	# (A loaded save brings back its own crates and pockets instead.)
+	if not _loaded:
+		sim.place_start_stash(STASH_CELL)
+		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
 	build_view.setup(sim.build)
@@ -338,7 +470,8 @@ func _build_zombies(args: Dictionary) -> void:
 	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
-	sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
+	if not _loaded:
+		sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):
@@ -478,7 +611,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · F5 save · Esc menu"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
