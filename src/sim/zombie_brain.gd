@@ -7,10 +7,12 @@ extends RefCounted
 ##   chasing but stuck against something you built -> BREAK (hits the piece until it's gone)
 ##   loses sight -> walks to where it last saw you, waits LOSE_TIME there, then gives up (IDLE);
 ##                  it also gives up after CHASE_MEMORY if it can't get there
+##   hears something (idle, wandering or already investigating) -> INVESTIGATE: walks to the sound;
+##                  if it was a machine, wrecks it (BREAK); otherwise looks around, then IDLE
 ##   hp 0 -> DEAD (the body lies there for CORPSE_TIME)
 
-enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, DEAD }
-const STATE_NAMES := ["idle", "wander", "chase", "attack", "break", "dead"]
+enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, INVESTIGATE, DEAD }
+const STATE_NAMES := ["idle", "wander", "chase", "attack", "break", "investigate", "dead"]
 const LOSE_TIME := 4.0
 const CHASE_MEMORY := 20.0
 const SEARCH_RADIUS := 1.5  # "at the last-seen spot" for LOSE_TIME purposes
@@ -20,6 +22,8 @@ const WANDER_TIMEOUT := 12.0
 const ARRIVE := 0.8
 const CORPSE_TIME := 15.0
 const EYE_HEIGHT := 1.6
+const INVESTIGATE_TIME := 30.0
+const MACHINE_REACH := 2.2  # close enough to a noisy machine to start wrecking it
 
 var id: int
 var type: String
@@ -30,6 +34,7 @@ var home: Vector3
 var target_pos: Vector3  # where it wants to walk
 var last_seen: Vector3
 var break_key := ""
+var sound_key := ""  # piece key of the machine it's walking toward, "" for other sounds
 var dead_time := 0.0
 
 ## Senses, written by the world body (or a test) before each think.
@@ -75,7 +80,25 @@ func move_speed() -> float:
 			return float(stats["wander_speed"])
 		State.CHASE:
 			return float(stats["chase_speed"])
+		State.INVESTIGATE:
+			return float(stats["investigate_speed"])
 	return 0.0
+
+
+## Hearing threshold: heard level must reach this for it to notice a sound.
+func hearing(night: bool) -> float:
+	return float(stats["hearing_night"] if night else stats["hearing_day"])
+
+
+## Heard a sound at `at` (`key` = the machine making it, if any). Only idle, wandering or already
+## investigating zombies follow sounds; chasing or fighting ones are busy.
+func hear(at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void:
+	if not (state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE):
+		return
+	state = State.INVESTIGATE
+	target_pos = at
+	sound_key = key
+	_timer = time
 
 
 ## Can a zombie at `from` facing `facing` see a player at `to`? Close by, it notices you whatever way it
@@ -112,7 +135,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 		last_seen = player_pos
 		_lost = 0.0
 		_unseen = 0.0
-		if state == State.IDLE or state == State.WANDER:
+		if state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE:
 			state = State.CHASE
 	var reach := float(stats["attack_range"])
 	var dist := _flat_dist(pos, player_pos)
@@ -129,6 +152,14 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 			_timer -= dt
 			if _flat_dist(pos, target_pos) < ARRIVE or _timer <= 0.0 or blocked_by != "":
 				_go_idle(false)
+		State.INVESTIGATE:
+			_timer -= dt
+			if blocked_by != "" and pieces.has(blocked_by):
+				_start_break(blocked_by)
+			elif sound_key != "" and pieces.has(sound_key) and _flat_dist(pos, target_pos) < MACHINE_REACH:
+				_start_break(sound_key)  # found the noisy machine: wreck it
+			elif _flat_dist(pos, target_pos) < ARRIVE * 2.0 or _timer <= 0.0:
+				_go_idle(true)
 		State.CHASE:
 			target_pos = last_seen
 			if player_dead:
@@ -136,9 +167,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 			elif sees and dist <= reach:
 				state = State.ATTACK
 			elif blocked_by != "" and pieces.has(blocked_by):
-				state = State.BREAK
-				break_key = blocked_by
-				_lost = 0.0
+				_start_break(blocked_by)
 			elif not sees:
 				_unseen += dt
 				if _flat_dist(pos, last_seen) < SEARCH_RADIUS:
@@ -182,7 +211,7 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 		hp = 0.0
 		state = State.DEAD
 		return true
-	if state == State.IDLE or state == State.WANDER:
+	if state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE:
 		state = State.CHASE  # it knows where you are now
 		last_seen = from
 		_lost = 0.0
@@ -190,9 +219,16 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 	return false
 
 
+func _start_break(key: String) -> void:
+	state = State.BREAK
+	break_key = key
+	_lost = 0.0
+
+
 func _go_idle(new_home: bool) -> void:
 	state = State.IDLE
 	break_key = ""
+	sound_key = ""
 	_timer = _rng.randf_range(2.0, 6.0)
 	target_pos = pos
 	if new_home:

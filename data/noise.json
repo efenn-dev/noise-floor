@@ -1,0 +1,32 @@
+{
+	"muffler": {
+		"cost": { "metal_plate": 4, "nails": 8 },
+		"cut": 15,
+		"slowdown": 0.1
+	},
+	"sounds": {
+		"footstep_walk": 22,
+		"footstep_sprint": 40,
+		"melee_hit": 45,
+		"zombie_bash": 50,
+		"wreck": 65
+	},
+	"director": {
+		"listen_distance": 50,
+		"gain_floor": 15,
+		"gain_rate": 0.1,
+		"night_multiplier": 1.5,
+		"decay": 0.25,
+		"max_heat": 150,
+		"check_every": 30,
+		"max_alive": 40,
+		"wanderers_at": 25,
+		"group_at": 50,
+		"horde_at": 90,
+		"wanderers": 2,
+		"group": 4,
+		"horde": 8,
+		"heat_per_zombie": 5,
+		"lure_time": 120
+	}
+}

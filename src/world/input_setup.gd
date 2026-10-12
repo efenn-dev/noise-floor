@@ -20,6 +20,8 @@ const KEYS := {
 	"build_pick_4": [KEY_4],
 	"build_pick_5": [KEY_5],
 	"interact": [KEY_E],
+	"upgrade": [KEY_U],
+	"noise_overlay": [KEY_N],
 }
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,

@@ -24,34 +24,45 @@ class Machine:
 	var progress := 0.0  # seconds into the current craft
 	var crafting := false
 	var crafted := 0     # crafts finished, ever
+	var muffled := false
+	var time_scale := 1.0  # a muffler slows the machine down
+
+	func craft_time() -> float:
+		return recipe["time"] * time_scale
 
 	func accepts(item: String) -> bool:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP
 
 	func status() -> String:
 		if crafting:
-			return "working %d%%" % int(100.0 * progress / recipe["time"])
+			return "working %d%%" % int(100.0 * progress / craft_time())
 		for item: String in recipe["out"]:
 			if output.get(item, 0) + recipe["out"][item] > OUTPUT_CAP:
 				return "output full"
 		return "needs input"
 
 	func tick(dt: float) -> void:
-		if not crafting and _can_start():
-			for item: String in recipe["in"]:
-				input[item] -= recipe["in"][item]
-				if input[item] == 0:
-					input.erase(item)
-			crafting = true
-			progress = 0.0
+		if not crafting:
+			_try_start()
 		if crafting:
 			progress += dt
-			if progress >= recipe["time"] - 1e-6:
+			if progress >= craft_time() - 1e-6:
 				for item: String in recipe["out"]:
 					output[item] = output.get(item, 0) + recipe["out"][item]
 				crafting = false
 				progress = 0.0
 				crafted += 1
+				_try_start()  # roll straight into the next one, so a busy machine never goes quiet for a tick
+
+	func _try_start() -> void:
+		if not _can_start():
+			return
+		for item: String in recipe["in"]:
+			input[item] -= recipe["in"][item]
+			if input[item] == 0:
+				input.erase(item)
+		crafting = true
+		progress = 0.0
 
 	func _can_start() -> bool:
 		for item: String in recipe["in"]:

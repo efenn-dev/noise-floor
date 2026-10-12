@@ -14,6 +14,8 @@ extends Node3D
 ##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none)
 ##   --zombie=X,Z[,X,Z...] add a zombie at each point, facing the player (for framing screenshots)
 ##   --hurt=N              start with N damage taken (--hurt=100 shows the death screen)
+##   --noise-overlay       start with the noise overlay (N) on
+##   --heat=N              start the Director's heat at N
 
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
@@ -31,6 +33,7 @@ var nav: NavBaker
 var zombie_view: ZombieView
 var melee: Melee
 var bag_view: BagView
+var noise_overlay: NoiseOverlay
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
@@ -43,6 +46,12 @@ var _health_label: Label
 var _hurt_flash: ColorRect
 var _death_label: Label
 var _last_health := 100.0
+var _message_label: Label
+var _heat_label: Label
+var _step_timer := 0.0
+
+const WALK_STEP := 0.5    # seconds between walking footstep sounds
+const SPRINT_STEP := 0.35
 var _shot_path := ""
 var _frames := 0
 
@@ -61,6 +70,8 @@ func _ready() -> void:
 	_build_building(args)
 	_build_zombies(args)
 	_build_hud()
+	if args.has("heat"):
+		sim.director.heat = args["heat"].to_float()
 	if args.has("hurt"):
 		sim.player.damage(args["hurt"].to_float())
 	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
@@ -72,6 +83,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_sync_player()
+	if _shot_path == "":
+		_footsteps(delta)
 	_update_hud(delta)
 	if _shot_path == "":
 		if sim.update(delta) > 0:
@@ -126,6 +139,19 @@ func _sync_player() -> void:
 	sim.player_lit = player.flashlight.visible
 
 
+## Footsteps make noise: walking barely carries, sprinting does; crouching is silent.
+func _footsteps(delta: float) -> void:
+	var speed := Vector2(player.velocity.x, player.velocity.z).length()
+	if sim.player.dead or player.crouching or not player.is_on_floor() or speed < 0.5:
+		_step_timer = 0.0
+		return
+	var sprinting := speed > Player.WALK_SPEED + 0.5
+	_step_timer -= delta
+	if _step_timer <= 0.0:
+		_step_timer = SPRINT_STEP if sprinting else WALK_STEP
+		sim.make_noise(player.global_position, "footstep_sprint" if sprinting else "footstep_walk")
+
+
 func _on_respawned() -> void:
 	player.position = sim.spawn_point
 	player.velocity = Vector3.ZERO
@@ -136,6 +162,14 @@ func _update_hud(delta: float) -> void:
 	_materials_hud.text = builder.materials_text()
 	var use := interactor.status_text()
 	_interact_label.text = use if use != "" else melee.last_message
+	var notes := PackedStringArray()
+	for m: Dictionary in sim.messages:
+		notes.append(m["text"])
+	_message_label.text = "\n".join(notes)
+	var overlay := noise_overlay.status_text()
+	var level := sim.director.level_name()
+	_heat_label.text = overlay if overlay != "" else ({"calm": "", "noticed": "The noise is being noticed",
+			"group": "The dead are gathering", "horde": "Something big is coming"}[level])
 	var hp := sim.player.health
 	_health_label.text = "Health %d" % ceili(hp)
 	_health_label.modulate = Color(1, 0.35, 0.3) if hp <= 30.0 else Color.WHITE
@@ -260,9 +294,13 @@ func _build_zombies(args: Dictionary) -> void:
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
+	noise_overlay = NoiseOverlay.new()
+	add_child(noise_overlay)
+	noise_overlay.setup(sim)
+	noise_overlay.visible = args.has("noise-overlay")
 
 
-## Smelter -> 3 belts -> press, running east just north of spawn, with 10 scrap loaded.
+## Smelter -> 3 belts -> press, running east just north of spawn, with 20 scrap loaded.
 func _place_demo_factory() -> void:
 	var E := BuildGrid.Side.EAST
 	for x in range(-2, 3):
@@ -272,7 +310,7 @@ func _place_demo_factory() -> void:
 		sim.build.place("belt", Vector2i(x, 0), E, sim.inventory)
 	sim.build.place("press", Vector2i(2, 0), E, sim.inventory)
 	var feed := Inventory.new()
-	feed.add("scrap_metal", 10)
+	feed.add("scrap_metal", 20)
 	sim.factory.hand_interact(Vector2i(-2, 0), feed)
 
 
@@ -312,6 +350,21 @@ func _build_hud() -> void:
 	layer.add_child(_hurt_flash)
 	layer.move_child(_hurt_flash, 0)  # under the text
 
+	_message_label = _outlined_label(26)
+	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_message_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_message_label.position.y += 60
+	_message_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_message_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
+	layer.add_child(_message_label)
+
+	_heat_label = _outlined_label(18)
+	_heat_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
+	_heat_label.position.y += 30
+	_heat_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_heat_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.4))
+	layer.add_child(_heat_label)
+
 	_death_label = _outlined_label(34)
 	_death_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_death_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -320,7 +373,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · B build · E use · Esc free mouse"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · B build · E use · U muffle · N noise · Esc free mouse"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)

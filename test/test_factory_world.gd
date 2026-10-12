@@ -41,6 +41,9 @@ func test_interact_and_items_drawn() -> void:
 	check(msg.begins_with("Loaded 20 Scrap metal"), "E loads scrap (%s)" % msg)
 	eq(sim.inventory.count("scrap_metal"), scrap - 20, "scrap left the inventory")
 	check("working" in interactor.status_text() or "needs" in interactor.status_text(), "HUD describes the machine")
+	check("loudness 60" in interactor.status_text(), "HUD shows how loud it is")
+	eq(interactor.upgrade(), "Muffler fitted: 15 quieter, 10% slower", "U fits a muffler")
+	check("loudness 45 (muffled)" in interactor.status_text(), "now 45")
 
 	builder.set_active(true)
 	interactor.update_target()

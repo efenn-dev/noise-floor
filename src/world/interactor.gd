@@ -28,8 +28,22 @@ func _physics_process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("interact") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if event.is_action_pressed("interact"):
 		interact()
+	elif event.is_action_pressed("upgrade"):
+		upgrade()
+
+
+## U on a machine: fit a muffler.
+func upgrade() -> String:
+	update_target()
+	if not has_target or not sim.factory.machines.has(target_cell):
+		return ""
+	var reason := sim.fit_muffler(target_cell)
+	last_message = "Muffler fitted: 15 quieter, 10% slower" if reason == "" else reason
+	return last_message
 
 
 func update_target() -> void:
@@ -86,12 +100,16 @@ func status_text() -> String:
 	var lines := PackedStringArray()
 	if f.machines.has(target_cell):
 		var m: Factory.Machine = f.machines[target_cell]
-		lines.append("%s · makes %s · %s" % [sim.data.buildables[m.id]["name"], m.recipe["name"], m.status()])
+		lines.append("%s · makes %s · %s · loudness %d%s" % [sim.data.buildables[m.id]["name"], m.recipe["name"],
+				m.status(), roundi(sim.noise.machine_loudness(m)), " (muffled)" if m.muffled else ""])
 		lines.append("in: %s   out: %s" % [_list(m.input, "empty"), _list(m.output, "empty")])
 		var names := PackedStringArray()
 		for item: String in m.recipe["in"]:
 			names.append(sim.data.item_name(item))
-		lines.append("[E] take output, load %s" % ", ".join(names))
+		var hint := "[E] take output, load %s" % ", ".join(names)
+		if not m.muffled:
+			hint += "   [U] fit muffler (%s)" % _list(sim.data.noise["muffler"]["cost"])
+		lines.append(hint)
 	elif f.belts.has(target_cell):
 		lines.append("Belt · %d items" % f.belts[target_cell].items.size())
 		lines.append("[E] pick up the items")
