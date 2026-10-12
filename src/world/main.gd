@@ -9,6 +9,8 @@ extends Node3D
 ##   --flashlight          start with the flashlight on
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
+##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
+##   --advance=SECONDS     run the sim this long before starting (e.g. so a screenshot shows items moving)
 
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
@@ -17,6 +19,8 @@ var sim: SimWorld
 var player: Player
 var build_view: BuildView
 var builder: BuildController
+var factory_view: FactoryView
+var interactor: Interactor
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
@@ -24,6 +28,7 @@ var _env: Environment
 var _hud: Label
 var _build_label: Label
 var _materials_hud: Label
+var _interact_label: Label
 var _shot_path := ""
 var _frames := 0
 
@@ -41,6 +46,8 @@ func _ready() -> void:
 	_build_player(args)
 	_build_building(args)
 	_build_hud()
+	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
+		sim.step()
 	_apply_time()
 	if _shot_path == "":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -49,6 +56,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_build_label.text = builder.status_text()
 	_materials_hud.text = builder.materials_text()
+	_interact_label.text = interactor.status_text()
 	if _shot_path == "":
 		if sim.update(delta) > 0:
 			_apply_time()
@@ -151,8 +159,16 @@ func _build_building(args: Dictionary) -> void:
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(sim, player.camera, [player.get_rid()])
+	factory_view = FactoryView.new()
+	add_child(factory_view)
+	factory_view.setup(sim, build_view)
+	interactor = Interactor.new()
+	add_child(interactor)
+	interactor.setup(sim, player.camera, builder, [player.get_rid()])
 	if args.has("demo-base"):
 		_place_demo_base()
+	if args.has("demo-factory"):
+		_place_demo_factory()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
@@ -167,6 +183,20 @@ func _place_demo_base() -> void:
 		sim.build.place("wall", Vector2i(x, -1), BuildGrid.Side.NORTH, sim.inventory)
 	sim.build.place("wall", Vector2i(-2, -1), BuildGrid.Side.WEST, sim.inventory)
 	sim.build.place("wall", Vector2i(1, -1), BuildGrid.Side.EAST, sim.inventory)
+
+
+## Smelter -> 3 belts -> press, running east just north of spawn, with 10 scrap loaded.
+func _place_demo_factory() -> void:
+	var E := BuildGrid.Side.EAST
+	for x in range(-2, 3):
+		sim.build.place("foundation", Vector2i(x, 0), 0, sim.inventory)
+	sim.build.place("smelter", Vector2i(-2, 0), E, sim.inventory)
+	for x in range(-1, 2):
+		sim.build.place("belt", Vector2i(x, 0), E, sim.inventory)
+	sim.build.place("press", Vector2i(2, 0), E, sim.inventory)
+	var feed := Inventory.new()
+	feed.add("scrap_metal", 10)
+	sim.factory.hand_interact(Vector2i(-2, 0), feed)
 
 
 func _build_hud() -> void:
@@ -186,8 +216,15 @@ func _build_hud() -> void:
 	_materials_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	layer.add_child(_materials_hud)
 
+	_interact_label = _outlined_label(20)
+	_interact_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interact_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_interact_label.position += Vector2(0, 40)
+	_interact_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	layer.add_child(_interact_label)
+
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · B build · Esc free mouse"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · B build · E use · Esc free mouse"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)

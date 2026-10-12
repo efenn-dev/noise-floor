@@ -109,7 +109,7 @@ func test_signals_report_changes() -> void:
 	var grid: BuildGrid = g[0]
 	var log := []
 	grid.piece_added.connect(func(k: String) -> void: log.append("+" + k))
-	grid.piece_removed.connect(func(k: String) -> void: log.append("-" + k))
+	grid.piece_removed.connect(func(k: String, _p: Dictionary) -> void: log.append("-" + k))
 	grid.place("foundation", Vector2i(0, 0), N, g[1])
 	grid.place("foundation", Vector2i(0, 0), N, g[1])  # fails, no signal
 	grid.remove("f:0:0", g[1])

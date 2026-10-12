@@ -10,5 +10,25 @@
 		"kind": "wall",
 		"size": [2.0, 2.5, 0.2],
 		"cost": { "plank": 3, "nails": 4 }
+	},
+	"belt": {
+		"name": "Belt",
+		"kind": "belt",
+		"size": [1.0, 0.15, 2.0],
+		"cost": { "metal_plate": 1 }
+	},
+	"smelter": {
+		"name": "Smelter",
+		"kind": "machine",
+		"size": [1.7, 1.6, 1.7],
+		"recipe": "smelt_plate",
+		"cost": { "plank": 10, "scrap_metal": 10 }
+	},
+	"press": {
+		"name": "Press",
+		"kind": "machine",
+		"size": [1.7, 1.4, 1.7],
+		"recipe": "press_nails",
+		"cost": { "plank": 10, "metal_plate": 10 }
 	}
 }

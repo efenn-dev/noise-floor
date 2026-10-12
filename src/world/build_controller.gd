@@ -2,11 +2,12 @@ class_name BuildController
 extends Node3D
 ## Build mode: B toggles it. Aim at the ground or a foundation to see a ghost of the piece,
 ## snapped to the 2 m grid: green = can build, red = can't (the HUD says why).
-## 1 / 2 pick foundation / wall, R turns a wall to the next edge, left-click builds,
-## right-click removes the piece you're looking at (full refund).
+## 1-5 pick foundation / wall / belt / smelter / press. R turns the piece: walls move to the next edge,
+## belts and machines turn to face the next way (default: facing away from you).
+## Left-click builds, right-click removes the piece you're looking at (full refund).
 
 const REACH := 8.0
-const PIECES := ["foundation", "wall"]
+const PIECES := ["foundation", "wall", "belt", "smelter", "press"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 
@@ -28,6 +29,7 @@ var last_message := ""
 
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
+var _ghost_nose: MeshInstance3D  # marks the front of belts and machines
 
 
 func setup(p_sim: SimWorld, p_camera: Camera3D, p_exclude: Array[RID]) -> void:
@@ -42,6 +44,12 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_exclude: Array[RID]) -> void:
 	_ghost.material_override = _ghost_mat
 	_ghost.visible = false
 	add_child(_ghost)
+	_ghost_nose = MeshInstance3D.new()
+	var nose := BoxMesh.new()
+	nose.size = Vector3(0.5, 0.3, 0.3)
+	_ghost_nose.mesh = nose
+	_ghost_nose.material_override = _ghost_mat
+	_ghost.add_child(_ghost_nose)
 
 
 func piece() -> String:
@@ -65,11 +73,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_active(not active)
 	if not active:
 		return
-	if event.is_action_pressed("build_pick_1"):
-		select(0)
-	elif event.is_action_pressed("build_pick_2"):
-		select(1)
-	elif event.is_action_pressed("build_rotate"):
+	for i in PIECES.size():
+		if event.is_action_pressed("build_pick_%d" % (i + 1)):
+			select(i)
+			return
+	if event.is_action_pressed("build_rotate"):
 		turns = (turns + 1) % 4
 	elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if event.is_action_pressed("build_place"):
@@ -157,6 +165,9 @@ func _show_ghost(id: String) -> void:
 	_ghost.global_position = sim.build.center_for(id, aim_cell, aim_side)
 	_ghost.rotation_degrees = Vector3(0, sim.build.yaw_for(id, aim_cell, aim_side), 0)
 	_ghost_mat.albedo_color = Color(0.3, 1.0, 0.4, 0.4) if aim_reason == "" else Color(1.0, 0.25, 0.2, 0.4)
+	var size: Vector3 = sim.data.buildables[id]["size"]
+	_ghost_nose.visible = sim.build.is_object(id)
+	_ghost_nose.position = Vector3(0, size.y / 2.0, -size.z / 2.0)
 	_ghost.visible = true
 
 
@@ -174,7 +185,7 @@ func status_text() -> String:
 	var info: Dictionary = sim.data.buildables[piece()]
 	var lines := PackedStringArray()
 	lines.append("BUILD  %s  (%s)" % [info["name"], _cost_text(info["cost"])])
-	var hint := "1 foundation · 2 wall · R rotate · LMB build · RMB remove · B exit"
+	var hint := "1 foundation · 2 wall · 3 belt · 4 smelter · 5 press · R rotate · LMB build · RMB remove · B exit"
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)
@@ -187,12 +198,12 @@ func status_text() -> String:
 func materials_text() -> String:
 	var parts := PackedStringArray()
 	for item: String in sim.inventory.items():
-		parts.append("%s %d" % [sim.data.items.get(item, {}).get("name", item), sim.inventory.count(item)])
+		parts.append("%s %d" % [sim.data.item_name(item), sim.inventory.count(item)])
 	return "  ·  ".join(parts) if not parts.is_empty() else "No materials"
 
 
 func _cost_text(cost: Dictionary) -> String:
 	var parts := PackedStringArray()
 	for item: String in cost:
-		parts.append("%d %s" % [cost[item], sim.data.items.get(item, {}).get("name", item)])
+		parts.append("%d %s" % [cost[item], sim.data.item_name(item)])
 	return ", ".join(parts)
