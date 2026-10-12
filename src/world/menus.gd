@@ -11,6 +11,8 @@ signal quit_to_title
 signal settings_changed
 
 var _title: Control
+var _heading: Label
+var _flicker := 0.0
 var _pause: Control
 var _settings: Control
 var _status: Label
@@ -23,8 +25,12 @@ func _init() -> void:
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_title = _screen()
-	var heading := _label("NOISE FLOOR", 72)
+	_title.color = Color(0.02, 0.02, 0.03, 0.4)  # let the foggy dusk street show through
+	_heading = _label("NOISE FLOOR", 96)
+	var heading := _heading
 	heading.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
+	heading.add_theme_constant_override("outline_size", 10)
+	heading.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.02, 0.85))
 	_title.get_child(0).add_child(heading)
 	_title.get_child(0).add_child(_label("Machines make noise. Noise draws the dead.", 22))
 	_title.get_child(0).add_child(_spacer())
@@ -208,3 +214,13 @@ func _spacer() -> Control:
 	var c := Control.new()
 	c.custom_minimum_size = Vector2(0, 16)
 	return c
+
+
+## The title flickers now and then, like a failing sign.
+func _process(delta: float) -> void:
+	if _title == null or not _title.visible:
+		return
+	_flicker -= delta
+	if _flicker <= 0.0:
+		_flicker = randf_range(0.04, 0.12) if randf() < 0.3 else randf_range(0.8, 3.0)
+		_heading.modulate.a = randf_range(0.55, 0.85) if randf() < 0.5 else 1.0

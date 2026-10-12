@@ -35,10 +35,16 @@ const MODELS := {
 	"generator": "res://assets/models/generator.glb",
 	"solar_panel": "res://assets/models/solar_panel.glb",
 	"power_pole": "res://assets/models/power_pole.glb",
+	"belt": "res://assets/models/belt.glb",
+	"bed": "res://assets/models/bed.glb",
+	"storage": "res://assets/models/storage.glb",
+	"door": "res://assets/models/door.glb",
+	"barricade": "res://assets/models/barricade.glb",
+	"spikes": "res://assets/models/spikes.glb",
+	"nail_turret": "res://assets/models/nail_turret.glb",
 }
-const SURFACES := {"foundation": "res://assets/textures/concrete_floor"}  # <stem>_albedo.png + _normal.png
+const SURFACES := {"foundation": "concrete_floor", "wall": "scrap_wall"}  # piece id -> texture name (see Surfaces)
 
-var _surface_mats: Dictionary = {}  # id -> StandardMaterial3D, shared so world-space tiling lines up
 
 
 func setup(p_grid: BuildGrid) -> void:
@@ -159,37 +165,26 @@ func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshI
 	return part
 
 
-## A model's "Lamp" becomes the body's own "Lamp" child with an unshared material, so
-## FactoryView can recolour each machine's lamp (see tools/art/kit.py).
+## A model's separate parts (tools/art/kit.py) become the body's own children, where FactoryView
+## looks for them: "Lamp" (recoloured, so it gets an unshared material) and a turret's "Head" (aimed).
 func _add_model(body: StaticBody3D, id: String) -> void:
 	var model := (load(MODELS[id]) as PackedScene).instantiate() as Node3D
 	body.add_child(model)
-	var lamp := model.get_node_or_null("Lamp") as MeshInstance3D
-	if lamp != null:
-		model.remove_child(lamp)  # the model root sits at the body origin, so the lamp's transform still holds
-		lamp.owner = null
-		body.add_child(lamp)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.2, 0.2, 0.2)
-		lamp.material_override = mat
+	for part_name in ["Lamp", "Head"]:
+		var part := model.get_node_or_null(part_name) as MeshInstance3D
+		if part == null:
+			continue
+		model.remove_child(part)  # the model root sits at the body origin, so the part's transform still holds
+		part.owner = null
+		body.add_child(part)
+		if part_name == "Lamp":
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.2, 0.2, 0.2)
+			part.material_override = mat
 
 
 func _surface(id: String) -> StandardMaterial3D:
-	if not _surface_mats.has(id):
-		var stem: String = SURFACES[id]
-		var mat := StandardMaterial3D.new()
-		mat.albedo_texture = load(stem + "_albedo.png")
-		mat.albedo_color = Color(0.72, 0.72, 0.72)  # generated photos come out bright; noon sun washed them white
-		mat.normal_enabled = true
-		mat.normal_texture = load(stem + "_normal.png")
-		mat.roughness = 0.92
-		# World-space triplanar: one tile per 2 m build cell, seamless across neighbouring pieces.
-		mat.uv1_triplanar = true
-		mat.uv1_world_triplanar = true
-		mat.uv1_scale = Vector3.ONE * 0.5
-		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-		_surface_mats[id] = mat
-	return _surface_mats[id]
+	return Surfaces.material(SURFACES[id])  # shared, so world-space tiling lines up across pieces
 
 
 func _on_removed(key: String, _piece: Dictionary) -> void:

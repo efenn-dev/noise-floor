@@ -43,4 +43,6 @@ func _initialize() -> void:
 		total_passed += suite.passed
 		total_failed += suite.failed
 	print("\n%d passed, %d failed" % [total_passed, total_failed])
+	Surfaces.clear_cache()
+	SoundView.clear_cache()
 	quit(1 if total_failed > 0 else 0)

@@ -180,7 +180,8 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
 - [x] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.
 - [x] **M9 — Keep it.** Save/load, main menu, settings (mouse sensitivity, volume, day length), pause.
-- [ ] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.
+- [x] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.
+- [ ] **M10b — Inventory screen.** **Tab** opens your pockets next to any crate in reach, with item icons, counts, weights and your carry limit. Click an item to use it (eat, drink, bandage), drop it, or move it between pockets and the crate (shift-click moves the whole stack). Item icons are made with Codex (`assets/icons/`). This comes before M11, because loot, bags and carry weight all need a place to see your stuff.
 
 **The long game** (see "Long game" above), in this order:
 

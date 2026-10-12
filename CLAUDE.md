@@ -24,6 +24,14 @@ Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--t
 - Build scene content in code where practical, and keep hand-written `.tscn` files tiny. That's easier to diff and harder to corrupt.
 - Commit `.uid` and `.import` files. `.godot/` and `.shots/` are ignored.
 
+## Art and sound (since M10)
+- **Models:** `tools/art/<id>.py` are deterministic Blender 5.1 scripts on the shared `tools/art/kit.py` (read its docstring: front = -Y, separate `Lamp`/`Head` parts, fit-in-collider checks). They export `assets/models/<id>.glb`, and `BuildView.MODELS` lists them. `test/test_art_models.gd` checks fit, floor contact, merging, lamps and heads, and facing. The zombie is `tools/art/zombie.py` (rigged, animated) and is driven by `ZombieBody`.
+- **Textures:** Codex-generated photos, made seamless with a normal map by `tools/art/make_tileable.py`. They're drawn via `Surfaces.material(name, tile_m, tint)`: world-space triplanar, shared, no UVs needed. Imports need mipmaps on (see existing `.import` files).
+- **Icons:** `tools/art/make_icon.py` cuts generated item pictures out to `assets/icons/<item_id>.png`.
+- **Sounds:** `tools/audio/synth.py` builds the machine, ambience and impact sounds; loop points are written into the WAVs, so they loop on import. Zombie voices are CC0 recordings in `assets/sounds/zombie/`. `SoundView` plays machine hums at the sim's loudness, so what you hear matches what zombies hear.
+- **Third-party files** are listed in `assets/CREDITS.md` (CC0 only, and ask Emmitt first).
+- Codex and Blender exist only on Emmitt's PC. Cloud sessions can re-run `synth.py` and use the committed assets, but can't make new models, textures or icons. Leave a placeholder and note it in the devlog.
+
 ## Godot 4.x traps (training data is full of Godot 3)
 - GDScript 2.0: `@export`, `@onready`, `super()`, typed `var x: int` / `:=`, `signal_name.connect(callable)` and `signal_name.emit()`, `await` (not `yield`), `instantiate()` (not `instance()`).
 - Renames: `Spatial`→`Node3D`, `KinematicBody`→`CharacterBody3D` (`velocity` is a property; `move_and_slide()` takes no args), `rand_range`→`randf_range`, `PoolStringArray`→`PackedStringArray`, `deg2rad`→`deg_to_rad`.

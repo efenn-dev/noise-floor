@@ -66,6 +66,7 @@ func _init() -> void:
 	flashlight.light_energy = 8.0
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
 	flashlight.shadow_enabled = true
+	flashlight.light_volumetric_fog_energy = 1.5  # the beam shows in night fog
 	flashlight.shadow_bias = 0.1
 	flashlight.shadow_normal_bias = 2.0
 	flashlight.visible = false
@@ -89,6 +90,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()  # this click only grabs the mouse; it doesn't build
 	elif event.is_action_pressed("flashlight"):
 		flashlight.visible = not flashlight.visible
+		SoundView.play_at(self, "click", camera.global_position, -6.0)
 
 
 func _physics_process(delta: float) -> void:
