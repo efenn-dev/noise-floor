@@ -34,6 +34,7 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 
 
 
 func _init() -> void:
+	collision_mask = Layers.WORLD | Layers.BUILT
 	_capsule = CapsuleShape3D.new()
 	_capsule.radius = RADIUS
 	_capsule.height = STAND_HEIGHT
@@ -58,6 +59,8 @@ func _init() -> void:
 	flashlight.light_energy = 8.0
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
 	flashlight.shadow_enabled = true
+	flashlight.shadow_bias = 0.1
+	flashlight.shadow_normal_bias = 2.0
 	flashlight.visible = false
 	camera.add_child(flashlight)
 
@@ -78,6 +81,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		get_viewport().set_input_as_handled()  # this click only grabs the mouse; it doesn't build
 	elif event.is_action_pressed("flashlight"):
 		flashlight.visible = not flashlight.visible
 

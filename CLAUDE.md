@@ -15,7 +15,7 @@ tools/test.sh                      # headless: refresh class cache, run every te
 tools/shot.sh <name> [game flags]  # one frame -> .shots/<name>.png, then Read the PNG.  e.g. tools/shot.sh night --time=22
 tools/godot.sh <args>              # the pinned Godot binary
 ```
-Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`, `--cam=X,Y,Z[,YAW[,PITCH]]` (player feet position + look in degrees; 0,0 = north, +yaw turns left, +pitch looks up), `--flashlight`. e.g. `tools/shot.sh factory --time=15 --cam=-3,0,-100,30,10`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
+Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`, `--cam=X,Y,Z[,YAW[,PITCH]]` (player feet position + look in degrees; 0,0 = north, +yaw turns left, +pitch looks up), `--flashlight`, `--build=foundation|wall` (start in build mode), `--demo-base` (pre-build a small base north of spawn). e.g. `tools/shot.sh factory --time=15 --cam=-3,0,-100,30,10`, `tools/shot.sh base --demo-base --build=wall --cam=0,0,6,0,-20`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
 
 ## Architecture rules
 - **`src/sim/`** holds the game rules as plain `RefCounted` classes: no Nodes, no scene tree, no rendering. Inventory, recipes, machines, belts, power, noise, zombie brains, the director and survival stats all live here, stepped by a **fixed sim tick**, separate from the frame rate, so results are deterministic. Everything here gets headless tests. **Cloud sessions can't watch the game, so an untested rule should be assumed broken.**
