@@ -3,7 +3,7 @@
 First-person survival-automation game: Project Zomboid survival × Satisfactory factory building, where **machines make noise and noise draws zombies**. Solo player. Godot **4.7**, GDScript 2.0.
 Owner: Emmitt. He is not very technical, so explain things in plain words, give one recommendation, and act on it.
 
-**Start every session by reading `docs/GAME_DESIGN.md` (design + milestone checklist) and the latest entry in `docs/DEVLOG.md`.** Unless told otherwise, build the first unchecked milestone.
+**Start every session by reading `docs/DIRECTION.md` (what to build next and why), the newest entry in `docs/PLAYTESTS.md`, `docs/GAME_DESIGN.md` (design + milestone checklist) and the latest entry in `docs/DEVLOG.md`.** If the newest playtest entry is newer than the last milestone, fix what it says first. Otherwise build the next step in the order `docs/DIRECTION.md` gives, which overrides the checklist order in `GAME_DESIGN.md`.
 
 ## Where this runs
 - Mostly in **Claude Code cloud sessions** (Linux, no GPU) from the private repo `efenn-dev/noise-floor`. At session start, `.claude/settings.json` runs `tools/cloud-setup.sh`, which installs the pinned Godot 4.7 (sha512-checked) to `~/.local/godot` plus Xvfb/Mesa for screenshots, then prints a status line. If it says FAILED, fix that before writing game code.
