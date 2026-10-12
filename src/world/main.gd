@@ -20,6 +20,7 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
 const SHOT_DELAY_FRAMES := 30
@@ -42,6 +43,8 @@ var zombie_view: ZombieView
 var melee: Melee
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
+var cars: Dictionary = {}  # car id -> CarBody
+var driving: CarBody = null  # the car you're in, or null when walking
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
@@ -62,6 +65,7 @@ var menus: Menus
 var _loaded := false  # this scene was rebuilt from a save
 var _autosave := 0.0
 
+const CAR_TYPES := ["sedan", "pickup", "van", "sedan"]  # town cars in order; car_0 (a sedan near the start) always drives
 const WALK_STEP := 0.5    # seconds between walking footstep sounds
 const SPRINT_STEP := 0.35
 var _shot_path := ""
@@ -104,6 +108,13 @@ func _ready() -> void:
 	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
 		sim.step()
 	_apply_time()
+	var drive_id: String = args.get("drive", "")
+	if drive_id == "":
+		drive_id = "car_0"
+	if args.has("drive") and sim.enter_car(drive_id) == "":
+		_enter_car(drive_id)  # --drive[=car_N]: start in a car (screenshots)
+		if args.has("flashlight"):
+			driving.toggle_lights()  # --drive --flashlight: headlights on
 	if args.has("inventory"):
 		sim.player_pos = player.global_position
 		inventory_screen.open()
@@ -194,15 +205,17 @@ func _sync_player() -> void:
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
 	if _shot_path == "":
 		Engine.time_scale = float(sim.data.survival["sleep_time_scale"]) if p.asleep else 1.0
-	if not sim.player.dead:
-		sim.player_pos = player.global_position
+	if driving != null and p.dead:
+		_exit_car()
+	if not sim.player.dead and driving == null:
+		sim.player_pos = player.global_position  # while driving, the car reports where you are
 	sim.player_lit = player.flashlight.visible
 
 
 ## Footsteps make noise: walking barely carries, sprinting does; crouching is silent.
 func _footsteps(delta: float) -> void:
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
-	if sim.player.dead or player.crouching or not player.is_on_floor() or speed < 0.5:
+	if driving != null or sim.player.dead or player.crouching or not player.is_on_floor() or speed < 0.5:
 		_step_timer = 0.0
 		return
 	var sprinting := speed > Player.WALK_SPEED + 0.5
@@ -231,6 +244,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed and not event.echo:
 			sim.player.wake()  # any key wakes you
 		return
+	if driving != null:
+		if event.is_action_pressed("interact"):
+			_exit_car()
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("bandage"):  # H is the horn while you drive
+			sim.honk()
+			return
+		if event.is_action_pressed("refuel"):  # R in a car without its key: hotwire
+			var why := sim.hotwire()
+			if why != "":
+				sim.add_message(why, 3.0)
+			return
+		if event.is_action_pressed("inventory"):
+			return  # no rummaging while driving
 	if event.is_action_pressed("inventory") and not sim.player.dead:
 		sim.player_pos = player.global_position
 		inventory_screen.open()
@@ -338,6 +366,8 @@ func _apply_save(save: Dictionary) -> void:
 		sim.add_message(why, 6.0)
 		return
 	player.position = sim.player_pos
+	for car: CarBody in cars.values():
+		car.place_from_sim()  # parked where you left it
 	var look: Array = save.get("look", [0.0, 0.0])
 	player.set_look(float(look[0]), float(look[1]))
 	nav.bake_now()  # the saved base changes where zombies can walk
@@ -353,7 +383,7 @@ func _on_respawned() -> void:
 func _update_hud(delta: float) -> void:
 	_build_label.text = builder.status_text()
 	_materials_hud.text = builder.materials_text()
-	var use := interactor.status_text()
+	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else melee.last_message
 	var notes := PackedStringArray()
 	for m: Dictionary in sim.messages:
@@ -425,12 +455,16 @@ func _build_town() -> void:
 		_dress(crate, "storage", 0.0, Color.WHITE, Vector3(1.2 / 1.4, 1.0, 1.0))  # the player's crate model, a bit narrower
 	for i in 4:
 		var car_color := Color(0.5, 0.2, 0.15).lerp(Color(0.2, 0.3, 0.45), rng.randf())
-		var car_pos := Vector3(rng.randf_range(-2.5, 2.5), 0.75, -15.0 - i * 22.0)
-		var car := _add_block(car_pos, Vector3(1.9, 1.5, 4.4), car_color)
-		car.set_meta("container_id", "car_%d" % i)  # look at the car: search its trunk
-		_dress(car, "car", 0.0 if i % 2 == 0 else PI, car_color * 1.6)
-		sim.loot.add("car_%d" % i, "car_trunk", car_pos)
-		sim.add_car("car_%d" % i)
+		var id := "car_%d" % i
+		var type: String = CAR_TYPES[i % CAR_TYPES.size()]
+		var size: Array = sim.data.vehicles[type]["size"]
+		var car_pos := Vector3(rng.randf_range(-2.5, 2.5), float(size[1]) / 2.0, -15.0 - i * 22.0)
+		sim.loot.add(id, "car_trunk", car_pos)  # look at the back of the car to search its trunk
+		sim.add_car(id, type, car_pos, 0.0 if i % 2 == 0 else PI)
+		var car := CarBody.new()
+		add_child(car)
+		car.setup(sim, id, car_color * 1.6)
+		cars[id] = car
 
 
 func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> StaticBody3D:
@@ -507,6 +541,7 @@ func _build_building(args: Dictionary) -> void:
 	interactor = Interactor.new()
 	add_child(interactor)
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
+	interactor.entered_car.connect(_enter_car)
 	if args.has("demo-base"):
 		_place_demo_base()
 	if args.has("demo-factory"):
@@ -797,3 +832,55 @@ func _exit_tree() -> void:
 	Surfaces.clear_cache()
 	InventoryScreen.clear_cache()
 	SoundView.clear_cache()
+
+
+## Get into a car: its camera takes over and the walker is switched off until you get out.
+func _enter_car(id: String) -> void:
+	if inventory_screen.is_open():
+		inventory_screen.close()
+	builder.set_active(false)
+	driving = cars[id]
+	_set_walker(false)
+	driving.drive(true)
+	sim.add_message("W/S gas and brake · A/D steer · Space handbrake · H horn · F lights · E get out", 6.0)
+
+
+func _exit_car() -> void:
+	var at := sim.exit_car()
+	driving.drive(false)
+	driving = null
+	player.global_position = Vector3(at.x, 0.1, at.z)
+	player.velocity = Vector3.ZERO
+	_set_walker(true)
+	player.camera.current = true
+	nav.request_rebake()  # zombies walk round the parked car
+
+
+func _set_walker(on: bool) -> void:
+	player.visible = on
+	player.collision_layer = Layers.WORLD if on else 0
+	for node: Node in [player, interactor, melee, builder]:
+		node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+
+
+## The driving readout: speed, gas, damage and the keys.
+func _car_hud() -> String:
+	var c: Dictionary = sim.vehicles.cars[driving.id]
+	var s := sim.vehicles.stats(driving.id)
+	var line := "%s · %d km/h · gas %.1f / %d · damage %d%%" % [s["name"], roundi(absf(driving.forward_speed()) * 3.6),
+			c["fuel"], int(s["tank"]), roundi(100.0 * (1.0 - float(c["hp"]) / float(s["hp"])))]
+	var keys := "[E] get out   [H] horn   [F] lights   [Space] handbrake"
+	if sim.vehicles.hotwire_left > 0.0:
+		line += " · hotwiring..."
+	elif not c["running"]:
+		if not sim.vehicles.can_start(driving.id, sim.inventory):
+			var need := int(sim.data.skills["hotwire_level"])
+			if sim.skills.level("mechanics") >= need:
+				line += " · no key"
+				keys = "[R] hotwire   " + keys
+			else:
+				line += " · no key (hotwiring needs Mechanics %d)" % need
+		else:
+			line += " · " + ("out of gas" if float(c["fuel"]) <= 0.0 else "engine dead")
+	return line + "
+" + keys

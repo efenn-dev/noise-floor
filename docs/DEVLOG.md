@@ -2,6 +2,29 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — M10c Wheels
+
+**Built:**
+- **Drivable cars.** The town has a sedan, a pickup, a van and another sedan (new Codex models, built by `tools/art/sedan.py`, `pickup.py` and `van.py`, with separate wheels that spin and steer). They have worn, rusty paint (a Codex texture mapped to the car, so it doesn't slide as the car moves) tinted per car, and see-through glass with a dashboard and steering wheel inside. Godot's `VehicleBody3D` does the physics (`CarBody`).
+- **Driving:** look at the front or side of a car and press **E** to get in. **W/S** are gas and brake (hold S to reverse), **A/D** steer, **Space** is the handbrake, **H** the horn, **F** the headlights, **E** gets out beside the driver's door, and the mouse looks around the cab. The readout shows speed, gas, damage and what's wrong.
+- **Noise:** a running engine is a continuous noise source as loud as a generator, so it draws zombies, and its sound revs with speed. The horn is very loud (95).
+- **Fuel** is the same gas **G** siphons: siphoning strands a car, **R** pours gas cans back in, and driving burns gas by distance (plus a little idling). The tank's in gas cans; pickups are thirstier.
+- **Keys, Zomboid style (Emmitt's call).** Every car has its own key: in the ignition, in the glovebox (search the car), in the nearest house, or lost. car_0's is always in its glovebox. Without it the engine won't start. **Hotwiring** (**R** in the car) needs **Mechanics 2**, takes 12 s (2 s less per level above 2, at least 4), makes a little noise, and stays hotwired. **Mechanics** levels by doing (`data/skills.json`): piece repairs, car repairs, mufflers, hotwiring. It shows in the inventory screen. This is the first M12 skill, brought forward.
+- **Wrecks** (flat tyres, a dead engine, smashed) can be searched and siphoned but not driven. **Damage:** zombies hit the car, not you, while you're inside; running zombies over hurts them by speed and dents the car; **T** repairs a quarter for a metal plate and 4 nails.
+- **The trunk** is searched from the back of the car (and moves with it). **Saved:** where each car is parked, its gas, damage, key and hotwiring, plus your Mechanics. Saving while driving loads you beside the car. Zombies path around a parked car (the navmesh is rebaked when you get out).
+- **Footsteps** are redone: a soft, dull heel thud with a gentle scuff, much quieter (Emmitt: the old ones were "too loud and sharp"). Each sound now has its own random seed, so adding a sound never changes the others.
+- **`play.bat` updates itself:** it fast-forwards a clean `main` checkout from GitHub before starting, so merging a PR is all you need to do. It skips other branches or local changes, and plays what you have if it's offline.
+
+**Rules (sim, tested):** `Vehicles` (cars, fuel, keys, hotwiring state, ram damage, repair, engine noise, save), `Skills`, and in `SimWorld`: `enter_car`, `exit_car`, `car_moved`, `honk`, `hotwire`, `refuel_car`, `repair_car`, `car_hits_zombie`. `Loot.add_extra` (a key in a particular container). Data: `data/vehicles.json` and `data/skills.json`; the horn and wreck chance are in `noise.json` and `survival.json`. World: `CarBody`, plus driving in `main.gd`, car prompts in `Interactor`, engine and horn in `SoundView`, and `--drive[=car_N]`.
+
+**Tests:** `test_vehicles.gd` (wrecks, getting in and out, fuel, engine noise and horn, out of gas, idling, siphon and refuel, zombies hitting the car, ramming, repair, save), `test_car_keys.gd` (key spots, glovebox search, ignition, hotwiring needs Mechanics 2 and is quicker with skill, Mechanics levels by doing, save), `test_driving.gd` (real physics: drives the way it faces, brakes then reverses, steers, no gas no go, parked cars stay put), `test_vehicle_models.gd`. 929 checks.
+
+**Try it on the PC:** merge, then double-click `play.bat` (it pulls the update itself). Walk north up the street to the first car (a red sedan), look at its back, press **E** to search the trunk and you'll find its key. Then look at the side, press **E** to get in, and drive. `play.bat --drive` starts you in it (without the key: search for it, or level Mechanics by repairing things).
+
+**Known gaps:** no crash damage from hitting walls or houses (only zombies dent it); no passengers; in a new game the van is a wreck (its engine won't turn over), the pickup's key is in its glovebox and the far sedan's is in its ignition; the zombie navmesh only updates when you get out, so zombies can bump into a car you're driving; you can't use the trunk as storage from the inventory screen yet. The sounds still need your ears: say if the engine or horn are off.
+
+**Next:** M11, the world gets worse.
+
 ## 2026-10-12 — M10b Inventory screen
 
 **Built:**

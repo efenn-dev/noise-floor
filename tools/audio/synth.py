@@ -12,6 +12,7 @@ Usage:
 import argparse
 import logging
 import struct
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +20,7 @@ import numpy as np
 log = logging.getLogger("synth")
 SR = 32000
 OUT = Path(__file__).resolve().parents[2] / "assets" / "sounds"
-rng = np.random.default_rng(7)
+rng = np.random.default_rng(7)  # reseeded per sound in main(), so adding a sound never changes the others
 
 
 # ---------- building blocks ----------
@@ -216,6 +217,32 @@ def generator() -> np.ndarray:
     return normalize(out + clatter + rumble, -3)
 
 
+def car_engine() -> np.ndarray:
+    """A worn four-cylinder at idle: 26 smooth firing pulses a second through a low exhaust resonance.
+    The game raises its pitch with speed."""
+    n = seconds(2)
+    out = np.zeros(n)
+    pop_n = seconds(0.06)
+    for k in range(52):
+        pop = oneshot_noise(pop_n, lambda f: lp(500, 2)(f) * (1 + 4 * bp(120, 0.45)(f))) * decay(pop_n, 0.02, attack=0.004)
+        place(out, pop * (0.85 + 0.15 * np.sin(k * 0.9)), k / 26 + 0.0015 * np.sin(k * 1.7))
+    out = normalize(out, 0)
+    rumble = tone(n, [(26, 0.3), (52, 0.18), (78, 0.08)])
+    hiss = 0.03 * normalize(shape(noise(n), bp(1800, 1.2)), 0)
+    return normalize(out + rumble + hiss, -4)
+
+
+def horn() -> np.ndarray:
+    """A car horn: two buzzy tones a little under a minor third apart, through a tinny resonance."""
+    n = seconds(0.75)
+    t_ = t_axis(n)
+    buzz = sum(np.sign(np.sin(2 * np.pi * f * t_)) * a for f, a in ((415, 1.0), (494, 0.8)))
+    out = np.concatenate([buzz, np.zeros(n)])
+    out = shape(out, lambda f: bp(1400, 1.3)(f) + 0.4 * lp(900, 2)(f))[:n]
+    env = np.minimum(t_ / 0.012, 1.0) * np.minimum((t_[-1] - t_) / 0.04, 1.0)
+    return fade_edges(normalize(out * env, -3))
+
+
 def wind(night: bool) -> np.ndarray:
     """Wind bed. Night is colder: whistling bands that swell in turn over a low rumble."""
     n = seconds(10 if night else 8)
@@ -233,14 +260,18 @@ def wind(night: bool) -> np.ndarray:
 
 
 def footstep(variant: int) -> np.ndarray:
-    """A step on grit and asphalt: heel thud plus a gritty scuff."""
-    n = seconds(0.28)
-    heel = oneshot_noise(n, lp(260 + 40 * variant, 2)) * decay(n, 0.025)
-    grit = oneshot_noise(n, bp(2200 + 300 * variant, 1.0)) * decay(n, 0.045, attack=0.012)
-    crackle = np.zeros(n)
-    for at in rng.uniform(0.005, 0.09, 6):
-        place(crackle, oneshot_noise(seconds(0.004), hp(3000)) * 0.6, at, wrap=False)
-    return fade_edges(normalize(normalize(heel, 0) + 0.45 * normalize(grit, 0) + 0.3 * crackle, -6))
+    """A step on grit and asphalt: a soft, dull heel thud, then a gentle scuff. Nothing sharp or clicky
+    (the first version's bright grit crackle read as a click, not a step)."""
+    n = seconds(0.34)
+    heel = oneshot_noise(n, lp(130 + 15 * variant, 2)) * decay(n, 0.03, attack=0.007)
+    thud = thump(0.34, 90 + 6 * variant, 55, 0.035)
+    lag = seconds(0.03 + 0.006 * variant)  # the scuff comes as the foot rolls
+    scuff_env = np.concatenate([np.zeros(lag), decay(n - lag, 0.06, attack=0.025)])
+    scuff = oneshot_noise(n, bp(650 + 70 * variant, 1.1)) * scuff_env
+    out = 0.7 * normalize(heel, 0) + 0.45 * thud + 0.16 * normalize(scuff, 0)
+    out = np.concatenate([out, np.zeros(n)])
+    out = shape(out, lp(2500, 2))[:n]  # dull it: nothing bright left
+    return fade_edges(normalize(out, -12))
 
 
 def swing() -> np.ndarray:
@@ -306,14 +337,19 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     OUT.mkdir(parents=True, exist_ok=True)
     loops = {"hum_smelter": smelter, "hum_press": press, "hum_purifier": purifier, "hum_canner": canner,
-             "engine_generator": generator, "wind_day": lambda: wind(False), "wind_night": lambda: wind(True)}
+             "engine_generator": generator, "engine_car": car_engine, "wind_day": lambda: wind(False),
+             "wind_night": lambda: wind(True)}
     shots = {"swing": swing, "hit_body": hit_body, "bash": bash, "turret_shot": turret_shot, "door": door,
-             "build_place": build_place, "click": click}
+             "build_place": build_place, "click": click, "horn": horn}
+    global rng
     for name, make in loops.items():
+        rng = np.random.default_rng(zlib.crc32(name.encode()))
         write_wav(name, make(), loop=True)
     for i in range(4):
+        rng = np.random.default_rng(zlib.crc32(f"step_{i + 1}".encode()))
         write_wav(f"step_{i + 1}", footstep(i), loop=False)
     for name, make in shots.items():
+        rng = np.random.default_rng(zlib.crc32(name.encode()))
         write_wav(name, make(), loop=False)
 
 

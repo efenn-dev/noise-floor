@@ -19,6 +19,11 @@ Conventions the game relies on (src/world/build_view.gd, test/test_art_models.gd
   LAMP_ALLOWANCE above the box. In the game, FactoryView turns it toward its target.
 - finish() turns the model 180 degrees, so Blender -X ends up on the game's +X side. That only
   matters for left/right details such as a door handle.
+- Vehicles: each wheel (tyre + hub) is its own object made with `part()`, named Wheel_FL, Wheel_FR,
+  Wheel_RL, Wheel_RR, with its origin (pivot) at the wheel centre and the axle along X. F is the front
+  (-Y), and L is the driver's left, which is +X in Blender. The game hangs them on VehicleWheel3D nodes
+  so they spin and steer. Windows use a material named "Car Glass" (the game makes it see-through)
+  and the body paint uses "Car Paint" (the game textures and tints it per car).
 - Item machines show which side is which with paint: an OUTPUT_ORANGE part on the front (chute,
   hatch or tray) and an INPUT_BLUE part on the back (hopper or intake), each easy to see from 5 m.
 """
@@ -37,6 +42,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = ROOT / "assets" / "models"
 LAMP_ALLOWANCE = 0.2  # metres a separate part (lamp, turret head) may rise above the collision box
 SEPARATE = ("Lamp", "Head")  # objects exported as their own nodes; the game moves or recolours them
+WHEEL_PREFIX = "Wheel_"  # vehicle wheels (Wheel_FL, Wheel_FR, Wheel_RL, Wheel_RR) are separate too
 EPS = 1.0e-4
 
 # The shared palette, so every machine looks like part of the same scavenged set.
@@ -210,7 +216,8 @@ def finish(piece_id: str, size: tuple[float, float, float], max_triangles: int =
     `size` is the piece's collision box from data/buildables.json, in Godot order
     (width X, height Y, depth Z). `overhang` lets parts stick out past the box in X and depth
     (only the power pole's crossbar needs it). Objects named in SEPARATE stay their own nodes."""
-    separate = [bpy.data.objects[n] for n in SEPARATE if n in bpy.data.objects]
+    separate = [o for o in bpy.context.scene.objects
+                if o.type == "MESH" and (o.name in SEPARATE or o.name.startswith(WHEEL_PREFIX))]
     parts = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in separate]
     bpy.ops.object.select_all(action="DESELECT")
     for o in parts:

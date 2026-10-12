@@ -18,8 +18,10 @@ var horde: Horde
 var noise: NoiseField
 var power: PowerGrid
 var defense: Defense
-## Gas cans left in each car (container id -> cans), siphoned with G.
-var car_fuel: Dictionary = {}
+## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
+var vehicles: Vehicles
+## Skills that level by doing (just Mechanics until M12).
+var skills: Skills
 var director: Director
 ## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
 var messages: Array = []
@@ -53,6 +55,8 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	noise = NoiseField.new(data, build)
 	director = Director.new(data, seed_value)
 	loot = Loot.new(data, seed_value)
+	vehicles = Vehicles.new(data)
+	skills = Skills.new(data)
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
 	player.died.connect(_on_player_died)
@@ -87,7 +91,9 @@ func step() -> void:
 	clock.advance(TICK)
 	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
-	noise.refresh(factory, TICK, power)
+	vehicles.tick(TICK)
+	_tick_hotwire()
+	noise.refresh(factory, TICK, power, vehicles)
 	player.carry_ratio = carry_ratio()
 	player.tick(TICK)
 	var found := loot.tick(TICK, player_pos)
@@ -101,7 +107,10 @@ func step() -> void:
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
 		if z == null:
 			continue
-		if e["target"] == "player":
+		if e["target"] == "player" and vehicles.driving != "":
+			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
+			noise.emit_kind(z.pos, "zombie_bash")
+		elif e["target"] == "player":
 			player.damage(float(z.stats["damage"]))
 			if not player.dead and _rng.randf() < float(data.survival["bleed_chance"]):
 				if not player.bleeding:
@@ -303,7 +312,10 @@ func toggle_door(key: String) -> String:
 func repair(key: String) -> String:
 	if not build.pieces.has(key):
 		return "Nothing to repair"
-	return build.repair(key, stock_at(build.piece_center(key)))
+	var why := build.repair(key, stock_at(build.piece_center(key)))
+	if why == "":
+		_practice("mechanics", "repair")
+	return why
 
 
 # --- Fuel ---------------------------------------------------------------------
@@ -312,26 +324,159 @@ func clock_daylight() -> float:
 	return clock.daylight()
 
 
-## Registers a car that holds some gas (amount fixed by the world seed and the car's id).
-func add_car(id: String) -> void:
+## Registers a town car: its gas (fixed by the world seed and the car's id) and whether it's a wreck.
+## car_0 always drives, so there's one to find near the start.
+func add_car(id: String, type: String = "sedan", pos: Vector3 = Vector3.ZERO, yaw: float = 0.0) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([_rng.seed, id, "fuel"])
-	car_fuel[id] = rng.randi_range(int(data.survival["car_fuel_min"]), int(data.survival["car_fuel_max"]))
+	var fuel := rng.randi_range(int(data.survival["car_fuel_min"]), int(data.survival["car_fuel_max"]))
+	var wreck := ""
+	if id != "car_0" and rng.randf() < float(data.survival["car_wreck_chance"]):
+		wreck = ["Flat tyres", "The engine won't turn over", "Smashed up too badly"][rng.randi_range(0, 2)]
+	if pos == Vector3.ZERO and loot.containers.has(id):
+		pos = loot.containers[id]["pos"]  # registered without a spot: where its trunk is
+	# Its key (Zomboid style): in the ignition, the glovebox (search the car), the nearest house, or lost.
+	# car_0's is always in its glovebox, so a new game teaches you to look.
+	var r := rng.randf()
+	var key_in := "glovebox" if id == "car_0" else ("ignition" if r < 0.25 else ("glovebox" if r < 0.6 else ("house" if r < 0.85 else "lost")))
+	vehicles.add(id, type, pos, yaw, fuel, wreck, key_in)
+	if loot.containers.has(id):
+		loot.containers[id]["pos"] = vehicles.trunk_pos(id)
+	var key := {Vehicles.key_item(id): 1}
+	if key_in == "glovebox" and loot.containers.has(id):
+		loot.add_extra(id, key)
+	elif key_in == "house":
+		var house := _nearest_house(pos)
+		if house != "":
+			loot.add_extra(house, key)
+		else:
+			vehicles.cars[id]["key_in"] = "lost"
 
 
-## Siphons every gas can's worth out of a car into your pockets (a sloshing noise). Returns a message.
+func _nearest_house(pos: Vector3) -> String:
+	var best := ""
+	var best_d := INF
+	for cid: String in loot.containers:
+		if cid.begins_with("house_"):
+			var d := _flat_dist(loot.containers[cid]["pos"], pos)
+			if d < best_d:
+				best_d = d
+				best = cid
+	return best
+
+
+## Siphons every whole gas can's worth out of a car into your pockets (a sloshing noise). Returns a message.
 func siphon(id: String) -> String:
-	if not car_fuel.has(id):
+	if not vehicles.cars.has(id):
 		return "No fuel tank"
-	if loot.containers.has(id) and _flat_dist(loot.containers[id]["pos"], player_pos) > float(data.survival["search_range"]) + 1.5:
+	if _flat_dist(vehicles.cars[id]["pos"], player_pos) > float(data.survival["search_range"]) + 2.5:
 		return "Too far away"
-	var cans: int = car_fuel[id]
+	var cans := vehicles.siphon(id)
 	if cans <= 0:
 		return "The tank is dry"
-	car_fuel[id] = 0
 	inventory.add("gas_can", cans)
 	noise.emit(player_pos, float(data.survival["siphon_noise"]), "siphon")
 	return "Siphoned %d gas can%s" % [cans, "s" if cans > 1 else ""]
+
+
+# --- Driving ------------------------------------------------------------------
+
+## Gets into car `id`. Returns "" or why not.
+func enter_car(id: String) -> String:
+	if player.dead:
+		return "You're dead"
+	var why := vehicles.enter(id)
+	if why == "":
+		player_pos = vehicles.cars[id]["pos"]  # you're in the car now: zombies come for it
+		var c: Dictionary = vehicles.cars[id]
+		c["running"] = c["fuel"] > 0.0 and vehicles.can_start(id, inventory)  # no key, no engine
+	return why
+
+
+## R while sitting in a car you have no key for: hotwire it. Needs Mechanics (data/skills.json
+## hotwire_level); higher levels are quicker. Makes a little noise. Returns "" or why not.
+func hotwire() -> String:
+	var id := vehicles.driving
+	if id == "":
+		return "Not in a car"
+	if vehicles.can_start(id, inventory):
+		return "You don't need to: you can start this one"
+	var need := int(data.skills["hotwire_level"])
+	var lv := skills.level("mechanics")
+	if lv < need:
+		return "You don't know how to hotwire a car (needs Mechanics %d)" % need
+	if vehicles.hotwire_left <= 0.0:
+		vehicles.hotwire_left = maxf(float(data.skills["hotwire_min_seconds"]),
+				float(data.skills["hotwire_seconds"]) - float(data.skills["hotwire_seconds_per_level"]) * (lv - need))
+		noise.emit(vehicles.cars[id]["pos"], float(data.skills["hotwire_noise"]), "hotwire")
+	return ""
+
+
+func _tick_hotwire() -> void:
+	if vehicles.hotwire_left <= 0.0 or vehicles.driving == "":
+		return
+	vehicles.hotwire_left -= TICK
+	if vehicles.hotwire_left > 0.0:
+		return
+	vehicles.hotwire_left = 0.0
+	var c: Dictionary = vehicles.cars[vehicles.driving]
+	c["hotwired"] = true
+	c["running"] = c["fuel"] > 0.0
+	_practice("mechanics", "hotwire")
+	add_message("Hotwired. The engine coughs into life" if c["running"] else "Hotwired, but the tank is empty", 4.0)
+
+
+## Gets out; you end up beside the driver's door. Returns where you stand.
+func exit_car() -> Vector3:
+	var id := vehicles.exit()
+	if id == "":
+		return player_pos
+	player_pos = vehicles.exit_pos(id)
+	return player_pos
+
+
+## The world reports the car you're driving each physics step: you're where the car is (so zombies come
+## for the car), fuel burns, and the trunk moves with it.
+func car_moved(pos: Vector3, yaw: float, speed: float) -> void:
+	var id := vehicles.driving
+	if id == "":
+		return
+	vehicles.moved(id, pos, yaw, speed)
+	player_pos = pos
+	if loot.containers.has(id):
+		loot.containers[id]["pos"] = vehicles.trunk_pos(id)
+
+
+func honk() -> void:
+	if vehicles.driving != "":
+		noise.emit_kind(vehicles.cars[vehicles.driving]["pos"], "horn")
+
+
+func refuel_car(id: String) -> String:
+	if not vehicles.cars.has(id):
+		return "No fuel tank"
+	return vehicles.refuel(id, inventory)
+
+
+## Repairs a car with a metal plate and nails from your pockets and nearby crates. Returns "" or why not.
+func repair_car(id: String) -> String:
+	if not vehicles.cars.has(id):
+		return "Nothing to repair"
+	var why := vehicles.repair(id, stock_at(vehicles.cars[id]["pos"]))
+	if why == "":
+		_practice("mechanics", "repair_car")
+	return why
+
+
+## The car you're driving hit zombie `zombie_id` at `speed` m/s. Returns true if it died.
+func car_hits_zombie(zombie_id: int, speed: float) -> bool:
+	var z: ZombieBrain = horde.zombies.get(zombie_id)
+	if z == null or z.is_dead() or vehicles.driving == "":
+		return false
+	var car: Dictionary = vehicles.cars[vehicles.driving]
+	var damage := vehicles.ram(vehicles.driving, speed)
+	noise.emit_kind(z.pos, "zombie_bash")
+	return z.take_hit(damage, car["pos"], speed * 0.6)
 
 
 # --- Searching ----------------------------------------------------------------
@@ -353,6 +498,7 @@ func fit_muffler(cell: Vector2i) -> String:
 		if not inventory.take_all(data.noise["muffler"]["cost"]):
 			return "Not enough materials"
 		power.generators[gen_key]["muffled"] = true
+		_practice("mechanics", "muffler")
 		return ""
 	var m: Factory.Machine = factory.machines.get(cell)
 	if m == null:
@@ -364,6 +510,7 @@ func fit_muffler(cell: Vector2i) -> String:
 		return "Not enough materials"
 	m.muffled = true
 	m.time_scale = 1.0 + float(muffler["slowdown"])
+	_practice("mechanics", "muffler")
 	return ""
 
 
@@ -467,3 +614,11 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 			inventory.give_all(held)
 			if muffled:
 				inventory.give_all(data.noise["muffler"]["cost"])
+
+
+## Practising a skill; says so when it levels up. (A signal from Skills back to here would make a
+## reference cycle and leak every SimWorld.)
+func _practice(skill: String, action: String) -> void:
+	var before := skills.level(skill)
+	if skills.practice(skill, action) > before:
+		add_message("%s is now level %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)

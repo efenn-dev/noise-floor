@@ -13,7 +13,8 @@
 		"melee_hit": 45,
 		"zombie_bash": 50,
 		"wreck": 65,
-		"door": 25
+		"door": 25,
+		"horn": 95
 	},
 	"director": {
 		"listen_distance": 50,

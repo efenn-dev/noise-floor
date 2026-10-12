@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://8nrliyeaafe7"
-path="res://.godot/imported/car.glb-f308e570422473ac3fa4ef143695b627.scn"
+uid="uid://djat1wstgowhu"
+path="res://.godot/imported/pickup.glb-f0e20536c3d2d5ed19396ac16cb6d751.scn"
 
 [deps]
 
-source_file="res://assets/models/car.glb"
-dest_files=["res://.godot/imported/car.glb-f308e570422473ac3fa4ef143695b627.scn"]
+source_file="res://assets/models/pickup.glb"
+dest_files=["res://.godot/imported/pickup.glb-f0e20536c3d2d5ed19396ac16cb6d751.scn"]
 
 [params]
 

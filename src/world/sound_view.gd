@@ -8,10 +8,14 @@ extends Node3D
 ## Zombie voices live on ZombieBody. Sounds come from tools/audio/synth.py and assets/sounds/zombie/.
 
 const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum_purifier",
-		"canner": "hum_canner", "generator": "engine_generator"}
+		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car"}
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
-		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"]}
+		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"]}
+## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones
+## were "too loud and sharp"), since they're right under your ears.
+const EVENT_BOOST := 10.0
+const STEP_BOOST := 2.0
 ## Volume = (loudness - LOUD_REF) * LOUD_SLOPE dB. The sim's loudness range (5-80) is wide, so it's
 ## squeezed: a generator (80) plays at +7.5 dB, a purifier (40) at -12.5 dB, a muffler takes 7.5 dB off.
 const LOUD_REF := 65.0
@@ -110,6 +114,10 @@ func _update_hums() -> void:
 				p.play(randf() * p.stream.get_length())  # machines of one kind don't play in lockstep
 			_hums[key] = p
 		p.volume_db = volume_for(s["loudness"])
+		if s["kind"] == "car":  # the engine revs with speed
+			var car: Dictionary = sim.vehicles.cars.get(key.trim_prefix("car:"), {})
+			p.pitch_scale = 0.8 + minf(float(car.get("speed", 0.0)) / 20.0, 1.1)
+			p.position = s["pos"]
 	for key: String in _hums.keys():
 		if not live.has(key):
 			_hums[key].queue_free()
@@ -123,7 +131,8 @@ func _play_new_events() -> void:
 			continue
 		var options: Array = EVENTS[s["kind"]]
 		_step += 1
-		play_at(self, options[_step % options.size()], s["pos"], volume_for(s["loudness"]) + 10.0, randf_range(0.92, 1.08))
+		var boost := STEP_BOOST if String(s["kind"]).begins_with("footstep") else EVENT_BOOST
+		play_at(self, options[_step % options.size()], s["pos"], volume_for(s["loudness"]) + boost, randf_range(0.92, 1.08))
 	_heard = now.duplicate()
 
 

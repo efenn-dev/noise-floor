@@ -38,10 +38,12 @@ func emit_kind(pos: Vector3, kind: String) -> void:
 
 
 ## Once per tick: lists the machines that are working, ages one-offs and takes in new ones.
-func refresh(factory: Factory, dt: float, power: PowerGrid = null) -> void:
+func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Vehicles = null) -> void:
 	continuous.clear()
 	if power != null:
 		continuous.append_array(power.noise_sources())  # running generators
+	if vehicles != null:
+		continuous.append_array(vehicles.noise_sources())  # running car engines
 	for cell: Vector2i in factory.machines:
 		var m: Factory.Machine = factory.machines[cell]
 		if m.crafting:
