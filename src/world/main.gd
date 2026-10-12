@@ -7,17 +7,23 @@ extends Node3D
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
+##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
+##   --demo-base           pre-build a small base in front of the spawn point
 
 const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
 
 var sim: SimWorld
 var player: Player
+var build_view: BuildView
+var builder: BuildController
 
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
 var _hud: Label
+var _build_label: Label
+var _materials_hud: Label
 var _shot_path := ""
 var _frames := 0
 
@@ -33,6 +39,7 @@ func _ready() -> void:
 	_build_ground()
 	_build_town()
 	_build_player(args)
+	_build_building(args)
 	_build_hud()
 	_apply_time()
 	if _shot_path == "":
@@ -40,6 +47,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_build_label.text = builder.status_text()
+	_materials_hud.text = builder.materials_text()
 	if _shot_path == "":
 		if sim.update(delta) > 0:
 			_apply_time()
@@ -134,6 +143,32 @@ func _build_player(args: Dictionary) -> void:
 	player.camera.current = true
 
 
+func _build_building(args: Dictionary) -> void:
+	sim.give_debug_kit()
+	build_view = BuildView.new()
+	add_child(build_view)
+	build_view.setup(sim.build)
+	builder = BuildController.new()
+	add_child(builder)
+	builder.setup(sim, player.camera, [player.get_rid()])
+	if args.has("demo-base"):
+		_place_demo_base()
+	if args.has("build"):
+		builder.set_active(true)
+		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
+
+
+## A 4 x 3 floor just north of spawn with a back wall and two side walls.
+func _place_demo_base() -> void:
+	for x in range(-2, 2):
+		for z in range(-1, 2):
+			sim.build.place("foundation", Vector2i(x, z), 0, sim.inventory)
+	for x in range(-2, 2):
+		sim.build.place("wall", Vector2i(x, -1), BuildGrid.Side.NORTH, sim.inventory)
+	sim.build.place("wall", Vector2i(-2, -1), BuildGrid.Side.WEST, sim.inventory)
+	sim.build.place("wall", Vector2i(1, -1), BuildGrid.Side.EAST, sim.inventory)
+
+
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	_hud = Label.new()
@@ -143,8 +178,16 @@ func _build_hud() -> void:
 	_hud.add_theme_constant_override("outline_size", 6)
 	layer.add_child(_hud)
 
+	_build_label = _outlined_label(20)
+	_build_label.position = Vector2(16, 52)
+	layer.add_child(_build_label)
+	_materials_hud = _outlined_label(18)
+	_materials_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
+	_materials_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	layer.add_child(_materials_hud)
+
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · Esc free mouse"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · B build · Esc free mouse"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -158,6 +201,14 @@ func _build_hud() -> void:
 	dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
 	layer.add_child(dot)
 	add_child(layer)
+
+
+func _outlined_label(font_size: int) -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 5)
+	return label
 
 
 func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> void:

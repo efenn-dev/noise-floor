@@ -10,13 +10,23 @@ const TICK := 1.0 / TICK_RATE
 const MAX_TICKS_PER_UPDATE := 10
 
 var clock: GameClock
+var data: GameData
+var inventory := Inventory.new()
+var build: BuildGrid
 var ticks: int = 0
 var paused := false
 var _accumulator := 0.0
 
 
-func _init(start_hour: float = 8.0) -> void:
+func _init(start_hour: float = 8.0, p_data: GameData = null) -> void:
 	clock = GameClock.new(start_hour)
+	data = p_data if p_data != null else GameData.load_default()
+	build = BuildGrid.new(data)
+
+
+## Starting materials for testing builds (data/debug_kit.json).
+func give_debug_kit() -> void:
+	inventory.give_all(data.debug_kit)
 
 
 ## Feeds real frame time in; runs as many whole ticks as fit. Returns how many ran.
