@@ -28,6 +28,7 @@ const KEYS := {
 	"drink": [KEY_X],
 	"bandage": [KEY_H],
 	"siphon": [KEY_G],
+	"repair": [KEY_T],
 	"interact": [KEY_E],
 	"upgrade": [KEY_U],
 	"noise_overlay": [KEY_N],

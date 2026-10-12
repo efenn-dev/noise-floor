@@ -17,6 +17,7 @@ var factory: Factory
 var horde: Horde
 var noise: NoiseField
 var power: PowerGrid
+var defense: Defense
 ## Gas cans left in each car (container id -> cans), siphoned with G.
 var car_fuel: Dictionary = {}
 var director: Director
@@ -45,6 +46,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, seed_value: int = 1
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
 	power = PowerGrid.new(data, build, factory)
+	defense = Defense.new(data, build, factory)
 	horde = Horde.new(data, seed_value)
 	noise = NoiseField.new(data, build)
 	director = Director.new(data, seed_value)
@@ -108,6 +110,7 @@ func step() -> void:
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
 			if build.damage(e["target"], int(z.stats["structure_damage"])):
 				noise.emit_kind(at, "wreck")
+	defense.tick(TICK, horde, noise)
 	var wave := director.tick(TICK, noise, night, horde)
 	if not wave.is_empty():
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
@@ -231,6 +234,24 @@ func _is_supply(item: String) -> bool:
 		if data.item_value(item, key) > 0.0:
 			return true
 	return false
+
+
+# --- Doors and repair ---------------------------------------------------------
+
+## Opens or closes a door (a little noise). Returns a message.
+func toggle_door(key: String) -> String:
+	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "door":
+		return ""
+	var open := build.toggle_door(key)
+	noise.emit_kind(build.piece_center(key), "door")
+	return "Door opened" if open else "Door closed"
+
+
+## Repairs a piece with materials from your pockets and nearby crates. Returns "" or why not.
+func repair(key: String) -> String:
+	if not build.pieces.has(key):
+		return "Nothing to repair"
+	return build.repair(key, stock_at(build.piece_center(key)))
 
 
 # --- Fuel ---------------------------------------------------------------------
@@ -367,6 +388,8 @@ func _on_piece_added(key: String) -> void:
 	match build.kind_of(piece["id"]):
 		"storage":
 			storages[key] = Inventory.new()
+		"turret":
+			factory.add_turret(piece["id"], piece["cell"])
 		"machine":
 			factory.add_machine(piece["id"], piece["cell"], piece["side"])
 		"belt":
@@ -384,7 +407,7 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 		storages.erase(key)
 		if not held.is_empty():
 			drop_bag(build.center_for(piece["id"], piece["cell"], piece["side"]) * Vector3(1, 0, 1), held)
-	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt"]:
+	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt", "turret"]:
 		var m: Factory.Machine = factory.machines.get(piece["cell"])
 		var muffled := m != null and m.muffled
 		var held := factory.remove_at(piece["cell"])

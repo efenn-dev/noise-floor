@@ -55,10 +55,6 @@ func test_interact_and_items_drawn() -> void:
 		sim.step()
 	await tree.process_frame  # process_frame fires before nodes' _process, so wait for the next one
 	await tree.process_frame
-	var shown := 0
-	for child in fview.get_children():
-		if child is MeshInstance3D and child.visible:
-			shown += 1
-	eq(shown, 1, "one plate drawn on the belt")
+	eq(fview.items_shown, 1, "one plate drawn on the belt")
 	_scene.queue_free()
 	await tree.process_frame

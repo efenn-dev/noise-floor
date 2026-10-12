@@ -99,8 +99,23 @@ class Belt:
 		items.append({"item": item, "pos": 0.0, "prev": 0.0})
 
 
+## A nail turret's magazine: takes its ammo by hand or from a belt on any side.
+class Turret:
+	extends RefCounted
+	var ammo_item: String
+	var cap: int
+	var ammo := 0
+	var cooldown := 0.0
+	var target := -1  # zombie id it's aiming at, -1 if none
+	var shots := 0
+
+	func accepts(item: String) -> bool:
+		return item == ammo_item and ammo < cap
+
+
 var data: GameData
 var machines: Dictionary = {}  # Vector2i -> Machine
+var turrets: Dictionary = {}   # Vector2i -> Turret
 var belts: Dictionary = {}     # Vector2i -> Belt
 
 
@@ -127,11 +142,20 @@ func add_belt(cell: Vector2i, facing: int) -> Belt:
 	return b
 
 
+func add_turret(id: String, cell: Vector2i) -> Turret:
+	var t := Turret.new()
+	t.ammo_item = data.buildables[id]["ammo"]
+	t.cap = data.buildables[id]["ammo_cap"]
+	turrets[cell] = t
+	return t
+
+
 ## Removes whatever is at `cell` and returns the items it held ({item: count}).
 func remove_at(cell: Vector2i) -> Dictionary:
 	var held := contents_at(cell)
 	machines.erase(cell)
 	belts.erase(cell)
+	turrets.erase(cell)
 	return held
 
 
@@ -148,6 +172,8 @@ func contents_at(cell: Vector2i) -> Dictionary:
 	if belts.has(cell):
 		for entry: Dictionary in belts[cell].items:
 			held[entry["item"]] = held.get(entry["item"], 0) + 1
+	if turrets.has(cell) and turrets[cell].ammo > 0:
+		held[turrets[cell].ammo_item] = held.get(turrets[cell].ammo_item, 0) + turrets[cell].ammo
 	return held
 
 
@@ -177,7 +203,13 @@ func tick(dt: float) -> void:
 func hand_interact(cell: Vector2i, inv: Inventory) -> Dictionary:
 	var took := {}
 	var fed := {}
-	if belts.has(cell):
+	if turrets.has(cell):
+		var t: Turret = turrets[cell]
+		var n := mini(inv.count(t.ammo_item), t.cap - t.ammo)
+		if n > 0 and inv.remove(t.ammo_item, n):
+			t.ammo += n
+			fed[t.ammo_item] = n
+	elif belts.has(cell):
 		took = contents_at(cell)
 		belts[cell].items.clear()
 		inv.give_all(took)
@@ -209,6 +241,12 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 		if to + DIRS[b.facing] == from or not b.can_accept():
 			return false  # can't feed a belt from its front end
 		b.accept(item)
+		return true
+	if turrets.has(to):
+		var t: Turret = turrets[to]
+		if not t.accepts(item):
+			return false
+		t.ammo += 1  # turrets take ammo from a belt on any side
 		return true
 	if machines.has(to):
 		var m: Machine = machines[to]

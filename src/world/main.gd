@@ -11,6 +11,7 @@ extends Node3D
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
 ##   --demo-farm           pre-build rain collector -> purifier and planter -> canner north of spawn
+##   --demo-defense        pre-build a walled square north of spawn: door, barricades, nail turret, spikes
 ##   --advance=SECONDS     run the sim this long before starting (e.g. so a screenshot shows items moving)
 ##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none)
 ##   --zombie=X,Z[,X,Z...] add a zombie at each point, facing the player (for framing screenshots)
@@ -310,6 +311,8 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_factory()
 	if args.has("demo-farm"):
 		_place_demo_farm()
+	if args.has("demo-defense"):
+		_place_demo_defense()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
@@ -334,6 +337,7 @@ func _build_zombies(args: Dictionary) -> void:
 	nav.bake_now()
 	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
+	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
 	sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
@@ -392,6 +396,27 @@ func _place_demo_farm() -> void:
 	sim.build.place("solar_panel", Vector2i(1, 0), E, stock)  # silent power for the purifier and canner
 	sim.factory.machines[Vector2i(-2, 1)].input = {"seeds": 3, "dirty_water": 3}
 	sim.factory.machines[Vector2i(0, 1)].input = {"metal_plate": 3}
+
+
+## A 2 x 2 walled square just north of spawn: door on the south side, barricades on the north with a
+## loaded nail turret behind them, and two spike strips further out.
+func _place_demo_defense() -> void:
+	var stock := sim.stock_at(SPAWN)
+	var S := BuildGrid.Side
+	for x in [-1, 0]:
+		for z in [-1, 0]:
+			sim.build.place("foundation", Vector2i(x, z), 0, stock)
+	for x in [-1, 0]:
+		sim.build.place("barricade", Vector2i(x, -1), S.NORTH, stock)
+	for z in [-1, 0]:
+		sim.build.place("wall", Vector2i(-1, z), S.WEST, stock)
+		sim.build.place("wall", Vector2i(0, z), S.EAST, stock)
+	sim.build.place("wall", Vector2i(-1, 0), S.SOUTH, stock)
+	sim.build.place("door", Vector2i(0, 0), S.SOUTH, stock)
+	sim.build.place("nail_turret", Vector2i(0, -1), S.NORTH, stock)
+	sim.factory.hand_interact(Vector2i(0, -1), stock)
+	for x in [-1, 0]:
+		sim.build.place("spikes", Vector2i(x, -3), 0, stock)
 
 
 func _build_hud() -> void:
@@ -453,7 +478,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
