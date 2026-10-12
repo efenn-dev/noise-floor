@@ -145,6 +145,14 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	return ""
 
 
+## Puts back a saved piece exactly as it was (no rules, no cost), announcing it like a new one.
+func restore(key: String, piece: Dictionary) -> void:
+	pieces[key] = piece
+	piece_added.emit(key)
+	if piece.get("open", false):
+		piece_changed.emit(key)
+
+
 func can_remove(key: String) -> String:
 	if not pieces.has(key):
 		return "Nothing to remove"

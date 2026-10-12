@@ -22,6 +22,8 @@ var frozen := false
 ## Set each frame from the sim: carrying too much or exhaustion slows you; no stamina, no sprint.
 var speed_multiplier := 1.0
 var can_sprint := true
+## Radians per pixel of mouse movement (MOUSE_SENSITIVITY x the settings multiplier).
+var mouse_sensitivity := MOUSE_SENSITIVITY
 ## x = strafe right, y = forward (both -1..1).
 var wish_move := Vector2.ZERO
 var wish_sprint := false
@@ -80,10 +82,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not use_device_input or frozen:
 		return
 	if event is InputEventMouseMotion and InputSetup.captured():
-		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
-		head.rotation.x = clampf(head.rotation.x - event.relative.y * MOUSE_SENSITIVITY, -PI / 2 + 0.01, PI / 2 - 0.01)
-	elif event.is_action_pressed("free_mouse"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		rotate_y(-event.relative.x * mouse_sensitivity)
+		head.rotation.x = clampf(head.rotation.x - event.relative.y * mouse_sensitivity, -PI / 2 + 0.01, PI / 2 - 0.01)
 	elif event is InputEventMouseButton and event.pressed and not InputSetup.captured():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()  # this click only grabs the mouse; it doesn't build

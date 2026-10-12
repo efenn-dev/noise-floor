@@ -23,6 +23,7 @@ func _click(vp: Viewport, button: MouseButton) -> void:
 
 func test_mouse_turns_the_view_and_swings() -> void:
 	InputSetup.assume_captured = true
+	GameSession.skip_menu = true
 	var main: Node3D = load(MAIN).instantiate()
 	tree.root.add_child(main)
 	for i in 5:
@@ -67,4 +68,5 @@ func test_mouse_turns_the_view_and_swings() -> void:
 	check(main.sim.player.food > 85.0, "Z eats (food %.0f)" % main.sim.player.food)
 	main.queue_free()
 	InputSetup.assume_captured = false
+	GameSession.skip_menu = false
 	await tree.process_frame
