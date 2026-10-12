@@ -15,7 +15,7 @@ tools/test.sh                      # headless: refresh class cache, run every te
 tools/shot.sh <name> [game flags]  # one frame -> .shots/<name>.png, then Read the PNG.  e.g. tools/shot.sh night --time=22
 tools/godot.sh <args>              # the pinned Godot binary
 ```
-Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
+Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--time=HOURS`, `--cam=X,Y,Z[,YAW[,PITCH]]` (player feet position + look in degrees; 0,0 = north, +yaw turns left, +pitch looks up), `--flashlight`. e.g. `tools/shot.sh factory --time=15 --cam=-3,0,-100,30,10`. Add new flags in `src/world/main.gd` `_parse_user_args()` and list them here.
 
 ## Architecture rules
 - **`src/sim/`** holds the game rules as plain `RefCounted` classes: no Nodes, no scene tree, no rendering. Inventory, recipes, machines, belts, power, noise, zombie brains, the director and survival stats all live here, stepped by a **fixed sim tick**, separate from the frame rate, so results are deterministic. Everything here gets headless tests. **Cloud sessions can't watch the game, so an untested rule should be assumed broken.**
@@ -28,7 +28,7 @@ Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--t
 - GDScript 2.0: `@export`, `@onready`, `super()`, typed `var x: int` / `:=`, `signal_name.connect(callable)` and `signal_name.emit()`, `await` (not `yield`), `instantiate()` (not `instance()`).
 - Renames: `Spatial`→`Node3D`, `KinematicBody`→`CharacterBody3D` (`velocity` is a property; `move_and_slide()` takes no args), `rand_range`→`randf_range`, `PoolStringArray`→`PackedStringArray`, `deg2rad`→`deg_to_rad`.
 - After adding or renaming a `class_name` script, the class cache needs a refresh. `tools/test.sh` does it (`--import`).
-- Test files extend `"res://test/base_test.gd"` **by path** and name methods `test_*`. Use `check`, `eq`, `near`. Don't name non-test files `test_*.gd`.
+- Test files extend `"res://test/base_test.gd"` **by path** and name methods `test_*`. Use `check`, `eq`, `near`. A test may `await tree.physics_frame` to run real physics (see `test/test_player_walk.gd`); free what it adds to `tree.root`. Don't name non-test files `test_*.gd`.
 - Input actions: register them in code at startup (one place), not by hand-editing `project.godot`.
 
 ## Visual checks
