@@ -16,6 +16,9 @@ var build: BuildGrid
 var factory: Factory
 var horde: Horde
 var noise: NoiseField
+var power: PowerGrid
+## Gas cans left in each car (container id -> cans), siphoned with G.
+var car_fuel: Dictionary = {}
 var director: Director
 ## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
 var messages: Array = []
@@ -41,6 +44,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, seed_value: int = 1
 	data = p_data if p_data != null else GameData.load_default()
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
+	power = PowerGrid.new(data, build, factory)
 	horde = Horde.new(data, seed_value)
 	noise = NoiseField.new(data, build)
 	director = Director.new(data, seed_value)
@@ -77,8 +81,9 @@ func update(real_delta: float) -> int:
 func step() -> void:
 	ticks += 1
 	clock.advance(TICK)
+	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
-	noise.refresh(factory, TICK)
+	noise.refresh(factory, TICK, power)
 	player.carry_ratio = carry_ratio()
 	player.tick(TICK)
 	var found := loot.tick(TICK, player_pos)
@@ -228,6 +233,34 @@ func _is_supply(item: String) -> bool:
 	return false
 
 
+# --- Fuel ---------------------------------------------------------------------
+
+func clock_daylight() -> float:
+	return clock.daylight()
+
+
+## Registers a car that holds some gas (amount fixed by the world seed and the car's id).
+func add_car(id: String) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([_rng.seed, id, "fuel"])
+	car_fuel[id] = rng.randi_range(int(data.survival["car_fuel_min"]), int(data.survival["car_fuel_max"]))
+
+
+## Siphons every gas can's worth out of a car into your pockets (a sloshing noise). Returns a message.
+func siphon(id: String) -> String:
+	if not car_fuel.has(id):
+		return "No fuel tank"
+	if loot.containers.has(id) and _flat_dist(loot.containers[id]["pos"], player_pos) > float(data.survival["search_range"]) + 1.5:
+		return "Too far away"
+	var cans: int = car_fuel[id]
+	if cans <= 0:
+		return "The tank is dry"
+	car_fuel[id] = 0
+	inventory.add("gas_can", cans)
+	noise.emit(player_pos, float(data.survival["siphon_noise"]), "siphon")
+	return "Siphoned %d gas can%s" % [cans, "s" if cans > 1 else ""]
+
+
 # --- Searching ----------------------------------------------------------------
 
 ## Starts searching a container (a little noise). Returns "" or why not.
@@ -240,6 +273,14 @@ func search(id: String) -> String:
 
 ## Fits a muffler to the machine at `cell`: -15 loudness, 10% slower. Returns "" or why not.
 func fit_muffler(cell: Vector2i) -> String:
+	var gen_key := "o:%d:%d" % [cell.x, cell.y]
+	if power.generators.has(gen_key):
+		if power.generators[gen_key]["muffled"]:
+			return "Already muffled"
+		if not inventory.take_all(data.noise["muffler"]["cost"]):
+			return "Not enough materials"
+		power.generators[gen_key]["muffled"] = true
+		return ""
 	var m: Factory.Machine = factory.machines.get(cell)
 	if m == null:
 		return "No machine there"
@@ -335,6 +376,9 @@ func _on_piece_added(key: String) -> void:
 ## Removing one hands back whatever it was holding, on top of the build refund.
 ## If zombies wrecked it, the contents are lost.
 func _on_piece_removed(key: String, piece: Dictionary) -> void:
+	var cans := power.take_refund(key)
+	if cans > 0 and not piece.get("destroyed", false):
+		inventory.add(data.buildables[piece["id"]]["fuel"], cans)  # unburnt fuel comes back
 	if storages.has(key):
 		var held := _counts_of(storages[key])
 		storages.erase(key)

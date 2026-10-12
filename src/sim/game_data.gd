@@ -3,7 +3,7 @@ extends RefCounted
 ## Content loaded from data/*.json. validate() lists every problem so a test can fail loudly.
 
 const DIR := "res://data/"
-const KINDS := ["foundation", "wall", "belt", "machine", "bed", "storage"]
+const KINDS := ["foundation", "wall", "belt", "machine", "bed", "storage", "generator", "solar", "pole"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -49,6 +49,11 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"recipe": b.get("recipe", ""),
 			"hp": int(b.get("hp", 0)),
 			"loudness": float(b.get("loudness", 0.0)),
+			"watts": float(b.get("watts", 0.0)),          # power a machine draws while working
+			"watts_out": float(b.get("watts_out", 0.0)),  # power a generator or panel makes
+			"fuel": b.get("fuel", ""),
+			"burn_time": float(b.get("burn_time", 0.0)),  # seconds of full load per fuel item
+			"reach": float(b.get("reach", 0.0)),          # how far a power pole connects
 		}
 	recipes = {}
 	for id: String in raw_recipes:
@@ -90,7 +95,15 @@ func validate() -> PackedStringArray:
 			errors.append("buildable '%s' needs positive hp" % id)
 		if b["kind"] == "machine" and not recipes.has(b["recipe"]):
 			errors.append("machine '%s' has unknown recipe '%s'" % [id, b["recipe"]])
-		if b["kind"] == "machine" and (b["loudness"] <= 0.0 or b["loudness"] > 100.0):
+		if b["kind"] in ["generator", "solar"] and b["watts_out"] <= 0.0:
+			errors.append("%s '%s' needs a positive watts_out" % [b["kind"], id])
+		if b["kind"] == "generator" and (not items.has(b["fuel"]) or b["burn_time"] <= 0.0):
+			errors.append("generator '%s' needs a known fuel item and a positive burn_time" % id)
+		if b["kind"] == "pole" and b["reach"] <= 0.0:
+			errors.append("pole '%s' needs a positive reach" % id)
+		if b["watts"] < 0.0:
+			errors.append("buildable '%s' can't draw negative watts" % id)
+		if b["kind"] in ["machine", "generator"] and (b["loudness"] <= 0.0 or b["loudness"] > 100.0):
 			errors.append("machine '%s' needs a loudness from 1 to 100" % id)
 	for id: String in recipes:
 		var r: Dictionary = recipes[id]
@@ -143,7 +156,7 @@ const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sl
 		"respawn_minimum", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
-		"carry_footstep_bonus"]
+		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max"]
 const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck"]
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",

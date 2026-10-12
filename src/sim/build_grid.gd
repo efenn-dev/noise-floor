@@ -44,9 +44,10 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 	return "f:%d:%d" % [cell.x, cell.y]
 
 
-## Machines, belts, beds and storage crates: one per cell, on top of a foundation, facing a side.
+## Machines, belts, beds, crates and power pieces: one per cell, facing a side. All but power poles
+## need a foundation.
 func is_object(id: String) -> bool:
-	return _kind(id) in ["machine", "belt", "bed", "storage"]
+	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole"]
 
 
 func kind_of(id: String) -> String:
@@ -63,7 +64,7 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		var edge := canonical_edge(cell, side)
 		if not _edge_supported(edge[0], edge[1], ""):
 			return "Needs a foundation"
-	if is_object(id) and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
+	if is_object(id) and _kind(id) != "pole" and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
 		return "Needs a foundation"
 	if not inv.has_all(data.buildables[id]["cost"]):
 		return "Not enough materials"

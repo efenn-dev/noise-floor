@@ -53,6 +53,8 @@ Machines have input and output buffers, and each recipe takes a set time. Belts 
 ### Power
 A generator burns fuel and feeds a power network through poles. Machines draw watts, and if demand exceeds supply, everything stops. Later: solar, wind, batteries. **Quiet power is a big reward because of noise.**
 
+**As built (M7):** poles link anything within 12 m; other powered pieces link to neighbours within 3 m. Generators (100 W, loudness 80) burn gas cans siphoned from cars, only in proportion to the load, and are silent when idle. Solar panels (60 W x daylight) are silent and used first. Smelter 40 W, press 30 W, purifier 20 W, canner 30 W; the rain collector and planter need no power.
+
 ### Noise (the signature system)
 - Every source has a **loudness** L from 0 to 100. Continuous: machines, generators. One-off: gunshots, breaking glass, sprinting footsteps.
 - **Heard level** at distance d meters = `L − 20·log10(max(d, 1)) − 10 × (walls in between)`.
@@ -175,7 +177,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M5 — Noise.** Noise sources, the heard-level formula, walls muffling, zombies investigating sounds, the heat Director sending groups at night, mufflers. Debug overlay shows noise rings. **First playable.**
 - [x] **M6 — Survive.** Hunger, thirst, fatigue, bleeding; searchable containers with loot tables; eat and drink; water and canned-food chains.
   - Also in M6 (from the long-game plan): every item gets a weight in kg in `data/`, and the player gets a carry limit of 20 kg plus bags (Strength raises it in M12). Over the limit: slower, more stamina use, louder footsteps. Over 150%: no sprinting.
-- [ ] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
+- [x] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
 - [ ] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.
 - [ ] **M9 — Keep it.** Save/load, main menu, settings (mouse sensitivity, volume, day length), pause.
 - [ ] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.

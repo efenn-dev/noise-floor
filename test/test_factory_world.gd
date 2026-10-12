@@ -8,6 +8,7 @@ func test_interact_and_items_drawn() -> void:
 	_scene = Node3D.new()
 	tree.root.add_child(_scene)
 	var sim := SimWorld.new(10.0)
+	sim.power.free = true
 	sim.give_debug_kit()
 	var view := BuildView.new()
 	_scene.add_child(view)

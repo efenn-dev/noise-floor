@@ -134,6 +134,7 @@ func test_hand_feed_respects_cap_and_recipe() -> void:
 
 func test_sim_world_builds_and_refunds_contents() -> void:
 	var sim := SimWorld.new(8.0)
+	sim.power.free = true
 	sim.give_debug_kit()
 	sim.build.place("foundation", Vector2i(0, 0), N, sim.inventory)
 	eq(sim.build.place("smelter", Vector2i(1, 0), E, sim.inventory), "Needs a foundation", "machines need a floor")
