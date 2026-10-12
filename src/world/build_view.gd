@@ -50,7 +50,7 @@ func _on_added(key: String) -> void:
 	body.position = grid.piece_center(key)
 	body.rotation_degrees.y = grid.yaw_for(id, piece["cell"], piece.get("side", 0))
 	if MODELS.has(id):
-		body.add_child((load(MODELS[id]) as PackedScene).instantiate())
+		_add_model(body, id)
 	else:
 		var mesh := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -64,7 +64,8 @@ func _on_added(key: String) -> void:
 			mat.roughness = 0.95
 			mesh.material_override = mat
 		body.add_child(mesh)
-	match info["kind"]:
+	# Models carry their own details (lamp, in/out paint), so they skip these placeholder parts.
+	match info["kind"] if not MODELS.has(id) else "":
 		"belt":
 			# Two pale chevron bars toward the front (-Z) show which way it runs.
 			for z in [-0.55, 0.25]:
@@ -106,6 +107,21 @@ func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshI
 	part.material_override = mat
 	body.add_child(part)
 	return part
+
+
+## A model's "Lamp" becomes the body's own "Lamp" child with an unshared material, so
+## FactoryView can recolour each machine's lamp (see tools/art/kit.py).
+func _add_model(body: StaticBody3D, id: String) -> void:
+	var model := (load(MODELS[id]) as PackedScene).instantiate() as Node3D
+	body.add_child(model)
+	var lamp := model.get_node_or_null("Lamp") as MeshInstance3D
+	if lamp != null:
+		model.remove_child(lamp)  # the model root sits at the body origin, so the lamp's transform still holds
+		lamp.owner = null
+		body.add_child(lamp)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.2, 0.2)
+		lamp.material_override = mat
 
 
 func _surface(id: String) -> StandardMaterial3D:
