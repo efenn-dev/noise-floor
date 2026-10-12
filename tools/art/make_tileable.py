@@ -8,7 +8,10 @@ wrap-around so it tiles too. Godot uses the OpenGL convention (green = up).
 
 Usage:
     python tools/art/make_tileable.py assets/textures/concrete_floor_raw.png assets/textures/concrete_floor
-    -> concrete_floor_albedo.png, concrete_floor_normal.png, and a 2x2 preview in .shots/
+    -> concrete_floor_albedo.jpg, concrete_floor_normal.jpg, and a 2x2 preview in .shots/
+
+JPG, not PNG: these photo-like textures are about 6x smaller with no visible difference, and git keeps
+every version forever.
 """
 
 import argparse
@@ -54,9 +57,10 @@ def normal_from_albedo(img: np.ndarray, strength: float) -> np.ndarray:
     return n * 0.5 + 0.5
 
 
-def save(arr: np.ndarray, path: Path) -> None:
-    """Write a 0-1 float array as an 8-bit PNG."""
-    Image.fromarray((arr * 255.0 + 0.5).astype(np.uint8)).save(path)
+def save(arr: np.ndarray, path: Path, quality: int = 92) -> None:
+    """Write a 0-1 float array as an 8-bit image (JPG quality `quality`, or PNG)."""
+    img = Image.fromarray((arr * 255.0 + 0.5).astype(np.uint8))
+    img.save(path, quality=quality, subsampling=0) if path.suffix == ".jpg" else img.save(path)
     log.info("wrote %s", path)
 
 
@@ -78,8 +82,8 @@ def main() -> None:
 
     albedo = make_seamless(img, args.blend)
     args.out_stem.parent.mkdir(parents=True, exist_ok=True)
-    save(albedo, args.out_stem.with_name(args.out_stem.name + "_albedo.png"))
-    save(normal_from_albedo(albedo, args.strength), args.out_stem.with_name(args.out_stem.name + "_normal.png"))
+    save(albedo, args.out_stem.with_name(args.out_stem.name + "_albedo.jpg"))
+    save(normal_from_albedo(albedo, args.strength), args.out_stem.with_name(args.out_stem.name + "_normal.jpg"), quality=95)
 
     preview = Path(".shots") / f"{args.out_stem.name}_tile2x2.png"
     preview.parent.mkdir(exist_ok=True)

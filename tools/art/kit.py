@@ -14,6 +14,11 @@ Conventions the game relies on (src/world/build_view.gd, test/test_art_models.gd
 - Machines and generators get a status lamp from `lamp()`. It's exported as a separate object
   named "Lamp" that the game recolours (green running, red no power, orange output full).
   The lamp may poke up to LAMP_ALLOWANCE above the box. Nothing else may.
+- A turret's aiming head is a separate object named "Head", made with `part()` and pivoting on a
+  vertical axis through its origin, with the barrel pointing -Y (the front). It may also rise
+  LAMP_ALLOWANCE above the box. In the game, FactoryView turns it toward its target.
+- finish() turns the model 180 degrees, so Blender -X ends up on the game's +X side. That only
+  matters for left/right details such as a door handle.
 - Item machines show which side is which with paint: an OUTPUT_ORANGE part on the front (chute,
   hatch or tray) and an INPUT_BLUE part on the back (hopper or intake), each easy to see from 5 m.
 """
@@ -30,7 +35,8 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = ROOT / "assets" / "models"
-LAMP_ALLOWANCE = 0.2  # metres the lamp may rise above the collision box
+LAMP_ALLOWANCE = 0.2  # metres a separate part (lamp, turret head) may rise above the collision box
+SEPARATE = ("Lamp", "Head")  # objects exported as their own nodes; the game moves or recolours them
 EPS = 1.0e-4
 
 # The shared palette, so every machine looks like part of the same scavenged set.
@@ -167,6 +173,24 @@ def lamp(location: tuple[float, float, float], radius: float = 0.08) -> None:
     cylinder("Lamp", radius, 0.11, (x, y, z + 0.04 + 0.055), material("Lamp", (0.2, 0.2, 0.2), 0.0, 0.4), 12)
 
 
+def part(name: str, objects: list[bpy.types.Object], pivot: tuple[float, float, float]) -> bpy.types.Object:
+    """Join `objects` into one separate, named object whose origin is `pivot`. The game moves it on
+    its own, e.g. a turret's "Head" turns about a vertical axis through its pivot."""
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in objects:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objects[0]
+    if len(objects) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.object
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    bpy.context.scene.cursor.location = pivot
+    bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+    obj.name = name
+    obj.data.name = name
+    return obj
+
+
 def _bounds(objects: list[bpy.types.Object]) -> tuple[Vector, Vector]:
     pts = [o.matrix_world @ Vector(c) for o in objects for c in o.bound_box]
     return (Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts))),
@@ -185,10 +209,9 @@ def finish(piece_id: str, size: tuple[float, float, float], max_triangles: int =
 
     `size` is the piece's collision box from data/buildables.json, in Godot order
     (width X, height Y, depth Z). `overhang` lets parts stick out past the box in X and depth
-    (only the power pole's crossbar needs it)."""
-    meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
-    lamp_obj = bpy.data.objects.get("Lamp")
-    parts = [o for o in meshes if o is not lamp_obj]
+    (only the power pole's crossbar needs it). Objects named in SEPARATE stay their own nodes."""
+    separate = [bpy.data.objects[n] for n in SEPARATE if n in bpy.data.objects]
+    parts = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in separate]
     bpy.ops.object.select_all(action="DESELECT")
     for o in parts:
         o.select_set(True)
@@ -198,16 +221,17 @@ def finish(piece_id: str, size: tuple[float, float, float], max_triangles: int =
     body.name = piece_id
     body.data.name = piece_id
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    everything = [body] + separate
 
     # Centre the footprint and stand the base on the floor of the box (Godot centres the box).
     lo, hi = _bounds([body])
     shift = Vector((-(lo.x + hi.x) / 2, -(lo.y + hi.y) / 2, -lo.z - size[1] / 2))
-    # Turn it around: the glTF exporter maps Blender -Y to +Z, but the game's front is -Z.
-    half_turn = Matrix.Rotation(math.pi, 4, "Z")
-    for o in [body] + ([lamp_obj] if lamp_obj else []):
+    for o in everything:
         o.location += shift
     bpy.context.view_layer.update()  # matrix_world is stale until this runs
-    for o in [body] + ([lamp_obj] if lamp_obj else []):
+    # Turn it around: the glTF exporter maps Blender -Y to +Z, but the game's front is -Z.
+    half_turn = Matrix.Rotation(math.pi, 4, "Z")
+    for o in everything:
         o.matrix_world = half_turn @ o.matrix_world
         bpy.ops.object.select_all(action="DESELECT")
         o.select_set(True)
@@ -220,23 +244,23 @@ def finish(piece_id: str, size: tuple[float, float, float], max_triangles: int =
     assert lo.x >= -hx - EPS and hi.x <= hx + EPS, f"{piece_id}: {hi.x - lo.x:.3f} m wide, box allows {2 * hx:.3f}"
     assert lo.y >= -hy - EPS and hi.y <= hy + EPS, f"{piece_id}: {hi.y - lo.y:.3f} m deep, box allows {2 * hy:.3f}"
     assert hi.z <= hz + EPS, f"{piece_id}: {hi.z - lo.z:.3f} m tall, box allows {2 * hz:.3f}"
-    if lamp_obj:
-        llo, lhi = _bounds([lamp_obj])
-        assert lhi.z <= hz + LAMP_ALLOWANCE + EPS, f"{piece_id}: lamp top {lhi.z:.3f} is too far above the box"
-        assert abs(llo.x) <= hx and abs(llo.y) <= hy, f"{piece_id}: lamp is outside the footprint"
-    tris = _triangles(body) + (_triangles(lamp_obj) if lamp_obj else 0)
+    for o in separate:
+        slo, shi = _bounds([o])
+        assert shi.z <= hz + LAMP_ALLOWANCE + EPS, f"{piece_id}: {o.name} top {shi.z:.3f} is too far above the box"
+        assert slo.x >= -hx - EPS and shi.x <= hx + EPS and slo.y >= -hy - EPS and shi.y <= hy + EPS,             f"{piece_id}: {o.name} sticks out of the footprint"
+    tris = sum(_triangles(o) for o in everything)
     assert tris <= max_triangles, f"{piece_id}: {tris} triangles, limit {max_triangles}"
 
     out = MODEL_DIR / f"{piece_id}.glb"
     out.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
-    for o in [body] + ([lamp_obj] if lamp_obj else []):
+    for o in everything:
         o.select_set(True)
     bpy.ops.export_scene.gltf(filepath=str(out), export_format="GLB", use_selection=True,
                               export_apply=True, export_materials="EXPORT", export_cameras=False,
                               export_lights=False, export_animations=False, export_yup=True)
-    log.info("MODEL %s: %d tris, %.2f x %.2f x %.2f m (w x h x d), lamp=%s, %d KiB -> %s",
-             piece_id, tris, hi.x - lo.x, hi.z - lo.z, hi.y - lo.y, bool(lamp_obj),
+    log.info("MODEL %s: %d tris, %.2f x %.2f x %.2f m (w x h x d), parts=%s, %d KiB -> %s",
+             piece_id, tris, hi.x - lo.x, hi.z - lo.z, hi.y - lo.y, [o.name for o in separate] or "-",
              out.stat().st_size // 1024, out.relative_to(ROOT))
     return out
 

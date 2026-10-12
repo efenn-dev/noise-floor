@@ -9,6 +9,15 @@ const HEIGHT := 1.8
 const RADIUS := 0.35
 const LOS_EVERY := 3   # physics frames between line-of-sight checks
 const REPATH_DIST := 0.75
+const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
+const MODEL_SCALE := 1.0  # built at real size (about HEIGHT tall)
+const WALK_ANIM_SPEED := 1.0  # m/s the Walk animation's feet move at speed_scale 1
+const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
+const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)
+const GRUNTS := 11  # assets/sounds/zombie/grunt_NN.wav
+## Faded shirt colours, one per zombie, so a crowd isn't identical.
+const SHIRTS := [Color(0.62, 0.6, 0.55), Color(0.45, 0.5, 0.6), Color(0.6, 0.42, 0.38), Color(0.5, 0.55, 0.42),
+		Color(0.7, 0.66, 0.5), Color(0.38, 0.4, 0.44)]
 
 var brain: ZombieBrain
 var player: Node3D
@@ -19,6 +28,14 @@ var _push := Vector3.ZERO
 var _frame := 0
 var _last_target := Vector3.INF
 var _fall := 0.0
+var _model: Node3D
+var _anim: AnimationPlayer
+var _last_hp := INF
+var _flinch := 0.0  # seconds left of the hit reaction
+var _voice: AudioStreamPlayer3D
+var _next_moan := 3.0
+var _was_attacking := false
+var _said_death := false
 
 
 func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
@@ -30,6 +47,17 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 	if f.length_squared() > 1e-6:
 		rotation.y = atan2(-f.x, -f.z)
 	_frame = brain.id  # stagger sight checks across zombies
+	_last_hp = brain.hp
+	_voice.pitch_scale = 0.85 + 0.06 * (brain.id % 5)
+	_next_moan = 1.5 + brain.id % 9
+	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4))
+	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh.mesh.get_surface_count():
+			var mat := mesh.mesh.surface_get_material(i) as StandardMaterial3D
+			if mat != null and mat.resource_name == "Shirt":
+				mat = mat.duplicate()
+				mat.albedo_color = SHIRTS[brain.id % SHIRTS.size()]
+				mesh.set_surface_override_material(i, mat)
 
 
 func _init() -> void:
@@ -54,6 +82,8 @@ func _init() -> void:
 func _physics_process(delta: float) -> void:
 	if brain == null:
 		return
+	_animate(delta)
+	_speak(delta)
 	if brain.is_dead():
 		_lie_down(delta)
 		return
@@ -127,8 +157,7 @@ func _lie_down(delta: float) -> void:
 	if collision_layer != 0:
 		collision_layer = 0
 		collision_mask = Layers.WORLD
-	_fall = minf(1.0, _fall + delta * 2.5)
-	rotation.x = lerpf(0.0, -PI / 2.0, _fall)
+	_fall = minf(1.0, _fall + delta * 2.5)  # the Death animation does the falling
 	velocity = Vector3(0, velocity.y - _gravity * delta, 0) if not is_on_floor() else Vector3.ZERO
 	move_and_slide()
 
@@ -138,31 +167,73 @@ static func _flat(v: Vector3) -> Vector3:
 
 
 func _build_mesh() -> void:
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.45, 0.55, 0.4)
-	var cloth := StandardMaterial3D.new()
-	cloth.albedo_color = Color(0.28, 0.25, 0.3)
-	var body := MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.3
-	capsule.height = 1.45
-	body.mesh = capsule
-	body.position.y = 0.75
-	body.material_override = cloth
-	add_child(body)
-	var head := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.2
-	sphere.height = 0.4
-	head.mesh = sphere
-	head.position.y = 1.62
-	head.material_override = skin
-	add_child(head)
-	for side in [-1.0, 1.0]:  # arms reaching forward
-		var arm := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(0.12, 0.12, 0.6)
-		arm.mesh = box
-		arm.position = Vector3(side * 0.28, 1.3, -0.3)
-		arm.material_override = skin
-		add_child(arm)
+	_model = MODEL.instantiate() as Node3D
+	_model.rotation.y = PI  # built facing Blender -Y, which imports as +Z; bodies walk toward -Z
+	_model.scale = Vector3.ONE * MODEL_SCALE
+	add_child(_model)
+	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	for anim_name: String in LOOPED:
+		if _anim.has_animation(anim_name):
+			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+	_anim.play("Idle")
+	_voice = AudioStreamPlayer3D.new()
+	_voice.position.y = 1.6
+	_voice.max_distance = 45.0
+	_voice.unit_size = 4.0
+	_voice.volume_db = -4.0
+	add_child(_voice)
+
+
+## Pick the animation from what the brain is doing and how fast the body really moves.
+func _animate(delta: float) -> void:
+	if brain.hp < _last_hp and not brain.is_dead():
+		_flinch = 0.45
+		_say("grunt", GRUNTS)
+	_last_hp = brain.hp
+	_flinch = maxf(0.0, _flinch - delta)
+	var want := "Idle"
+	var speed_scale := 1.0
+	var moving := Vector2(velocity.x, velocity.z).length()
+	if brain.is_dead():
+		want = "Death"
+	elif _flinch > 0.0:
+		want = "HitReact"
+	elif brain.state == ZombieBrain.State.ATTACK or brain.state == ZombieBrain.State.BREAK:
+		want = "Punch"
+	elif moving > 0.1:
+		want = "Walk"
+		speed_scale = clampf(moving / (WALK_ANIM_SPEED * _model.scale.x / MODEL_SCALE), 0.5, 1.6)
+	if _anim.current_animation != want and not (want == "Death" and _anim.assigned_animation == "Death"):
+		_anim.play(want, 0.2)
+	_anim.speed_scale = speed_scale
+
+
+## Moans now and then (more often while chasing), a grunt when it starts an attack or gets hit,
+## and one last moan when it dies.
+func _speak(delta: float) -> void:
+	if brain.is_dead():
+		if not _said_death:
+			_said_death = true
+			_say("moan", MOANS)
+		return
+	var attacking := brain.state == ZombieBrain.State.ATTACK or brain.state == ZombieBrain.State.BREAK
+	if attacking and not _was_attacking:
+		_say("grunt", GRUNTS)
+	_was_attacking = attacking
+	_next_moan -= delta
+	if _next_moan <= 0.0:
+		_say("moan", MOANS)
+		_next_moan = randf_range(2.5, 5.0) if brain.state == ZombieBrain.State.CHASE else randf_range(6.0, 14.0)
+
+
+func _say(kind: String, count: int) -> void:
+	if _voice.playing and kind == "moan":
+		return  # don't cut itself off for an idle moan
+	_voice.stream = SoundView.stream("zombie/%s_%02d" % [kind, 1 + randi() % count])
+	if SoundView.audible:
+		_voice.play()
+
+
+func _exit_tree() -> void:
+	if _voice != null:
+		_voice.stop()  # a sound still playing when the node goes would be held by the audio server

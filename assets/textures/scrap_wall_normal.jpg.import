@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d3vpcnclh843"
-path="res://.godot/imported/concrete_floor_normal.png-5c5288a1fef2401bd54d0faf1c28af3c.ctex"
+uid="uid://ebwhru2sbqa"
+path="res://.godot/imported/scrap_wall_normal.jpg-bff10117515bf51234ce3e75a4a98504.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/concrete_floor_normal.png"
-dest_files=["res://.godot/imported/concrete_floor_normal.png-5c5288a1fef2401bd54d0faf1c28af3c.ctex"]
+source_file="res://assets/textures/scrap_wall_normal.jpg"
+dest_files=["res://.godot/imported/scrap_wall_normal.jpg-bff10117515bf51234ce3e75a4a98504.ctex"]
 
 [params]
 

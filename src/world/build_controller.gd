@@ -107,6 +107,8 @@ func try_place() -> String:
 		last_message = aim_reason
 	else:
 		last_message = sim.build.place(piece(), aim_cell, aim_side, _stock())
+		if last_message == "":
+			SoundView.play_at(self, "build_place", sim.build.center_for(piece(), aim_cell, aim_side), -4.0, randf_range(0.9, 1.1))
 		update_aim()
 	return last_message
 

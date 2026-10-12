@@ -109,7 +109,8 @@ func test_pipe_hits_head_and_body() -> void:
 	eq(melee.swing(), z.id, "low swing hits too")
 	check(z.is_dead(), "body hit finishes it (32 hp left, 34 damage)")
 	await _run(1.0)
-	check(zview.body_for(z.id).rotation.x < -0.5, "the body falls over")
+	var anim := zview.body_for(z.id).find_child("AnimationPlayer", true, false) as AnimationPlayer
+	eq(anim.assigned_animation if anim != null else "", "Death", "the body plays its fall")
 	await _teardown()
 
 

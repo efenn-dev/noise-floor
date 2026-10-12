@@ -54,6 +54,7 @@ func swing() -> int:
 	if not sim.player.try_swing(float(sim.weapon_stats()["cooldown"])):
 		return -2
 	_swing = 0.0
+	SoundView.play_at(self, "swing", camera.global_position, -8.0, randf_range(0.9, 1.1))
 	var from := camera.global_position
 	var to := from - camera.global_basis.z * float(sim.weapon_stats()["range"])
 	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT | Layers.ZOMBIE, exclude)

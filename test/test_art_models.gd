@@ -1,9 +1,9 @@
 extends "res://test/base_test.gd"
 ## The models BuildView uses (assets/models/, built by tools/art/*.py): each loads, sits on the
 ## floor of its piece's collision box and fits inside it, is merged into one mesh, and machines
-## and generators carry the status lamp FactoryView recolours.
+## and generators carry the status lamp FactoryView recolours, and turrets the Head it aims.
 
-const LAMP_ALLOWANCE := 0.2  # tools/art/kit.py: the lamp may rise this far above the box
+const LAMP_ALLOWANCE := 0.2  # tools/art/kit.py: a lamp or turret head may rise this far above the box
 const OVERHANG := {"power_pole": Vector3(0.4, 0.0, 0.05)}  # the crossbar is wider than the pole
 const SLACK := 0.01
 
@@ -19,13 +19,16 @@ func test_models_fit_their_pieces() -> void:
 		var half: Vector3 = data.buildables[id]["size"] / 2.0 + OVERHANG.get(id, Vector3.ZERO)
 		var meshes := root.find_children("*", "MeshInstance3D", true, false)
 		var lamp := root.get_node_or_null("Lamp")
-		check(meshes.size() <= 2, "%s is one merged mesh plus its lamp (%d meshes)" % [id, meshes.size()])
+		var head := root.get_node_or_null("Head")
+		check(meshes.size() <= 2, "%s is one merged mesh plus its lamp or head (%d meshes)" % [id, meshes.size()])
 		if data.buildables[id]["kind"] in ["machine", "generator"]:
 			check(lamp is MeshInstance3D, "%s has a Lamp directly under the model root" % id)
+		if data.buildables[id]["kind"] == "turret":
+			check(head is MeshInstance3D, "%s has a Head directly under the model root" % id)
 		var lowest := INF
 		for m: MeshInstance3D in meshes:
 			var box := _transform_to(root, m) * m.get_aabb()
-			var top := half.y + (LAMP_ALLOWANCE if m == lamp else 0.0)
+			var top := half.y + (LAMP_ALLOWANCE if m == lamp or m == head else 0.0)
 			var inside := box.position.x >= -half.x - SLACK and box.end.x <= half.x + SLACK \
 					and box.position.z >= -half.z - SLACK and box.end.z <= half.z + SLACK \
 					and box.position.y >= -half.y - SLACK and box.end.y <= top + SLACK

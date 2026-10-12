@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bd60jry518qr5"
-path="res://.godot/imported/concrete_floor_albedo.png-4bd8e8d18b3912589af43648f43ba1e4.ctex"
+uid="uid://iq742vfc82c"
+path="res://.godot/imported/hiking_pack.png-a743c442c53aa9cd425b47302311d6e8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/concrete_floor_albedo.png"
-dest_files=["res://.godot/imported/concrete_floor_albedo.png-4bd8e8d18b3912589af43648f43ba1e4.ctex"]
+source_file="res://assets/icons/hiking_pack.png"
+dest_files=["res://.godot/imported/hiking_pack.png-a743c442c53aa9cd425b47302311d6e8.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -37,4 +37,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

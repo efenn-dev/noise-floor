@@ -33,6 +33,7 @@ var player: Player
 var build_view: BuildView
 var builder: BuildController
 var factory_view: FactoryView
+var sound_view: SoundView
 var interactor: Interactor
 var nav: NavBaker
 var zombie_view: ZombieView
@@ -43,6 +44,7 @@ var noise_overlay: NoiseOverlay
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
+var _title_camera: Camera3D  # set while the title screen shows its dusk view
 var _hud: Label
 var _build_label: Label
 var _materials_hud: Label
@@ -121,6 +123,8 @@ func _process(delta: float) -> void:
 
 
 func _apply_time() -> void:
+	if _title_camera != null:
+		return  # the title screen keeps its own dusk look
 	var clock := sim.clock
 	var arc := clock.sun_arc_deg()
 	var light := clock.daylight()
@@ -131,6 +135,10 @@ func _apply_time() -> void:
 	_env.background_energy_multiplier = lerpf(0.04, 1.0, light)
 	_env.ambient_light_energy = lerpf(0.08, 1.0, light)
 	_env.fog_light_energy = lerpf(0.03, 1.0, light)
+	# Thicker, darker fog at night; the volumetric part (Forward+ only) is what shows the flashlight beam.
+	_env.fog_density = lerpf(0.02, 0.006, light)
+	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(Color(0.62, 0.66, 0.7), light)
+	_env.volumetric_fog_density = lerpf(0.022, 0.002, light)
 	_hud.text = "Day %d  %s" % [clock.day, clock.clock_text()]
 
 
@@ -144,6 +152,14 @@ func _build_environment() -> void:
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	_env.fog_enabled = true
 	_env.fog_density = 0.008
+	_env.fog_sky_affect = 0.5
+	_env.volumetric_fog_enabled = true  # Forward+ only; the Compatibility renderer (cloud screenshots) ignores it
+	_env.volumetric_fog_albedo = Color(0.8, 0.82, 0.85)
+	_env.volumetric_fog_length = 48.0
+	_env.glow_enabled = true  # machine lamps bloom a little at night
+	_env.glow_intensity = 0.6
+	_env.glow_bloom = 0.04
+	_env.ssao_enabled = true
 	var world_env := WorldEnvironment.new()
 	world_env.environment = _env
 	add_child(world_env)
@@ -236,6 +252,7 @@ func _build_menus(args: Dictionary) -> void:
 	var flags := not args.is_empty() and not (args.size() == 1 and args.has("title"))
 	if args.has("title") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
 		menus.show_title(has_save)
+		_title_view(true)
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
 	elif args.has("pause"):
@@ -248,6 +265,7 @@ func _build_menus(args: Dictionary) -> void:
 
 func _start_playing() -> void:
 	GameSession.started = true
+	_title_view(false)
 	menus.hide_all()
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -350,7 +368,7 @@ func _build_ground() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400, 400)
 	mesh.mesh = plane
-	mesh.material_override = _flat_material(Color(0.32, 0.36, 0.28))
+	mesh.material_override = Surfaces.material("ground", 6.0, Color(0.62, 0.64, 0.56))
 	ground.add_child(mesh)
 	var shape := CollisionShape3D.new()
 	var slab := BoxShape3D.new()  # a box, not an endless plane, so the navmesh baker can read it
@@ -366,35 +384,66 @@ func _build_town() -> void:
 	# Searchable things: a cabinet or fridge outside each house, every car's trunk, crates by the factory.
 	var loot_rng := RandomNumberGenerator.new()
 	loot_rng.seed = 11
-	_add_block(Vector3(0, 0.01, -55), Vector3(8, 0.02, 130), Color(0.17, 0.17, 0.19), false)
+	_add_block(Vector3(0, 0.01, -55), Vector3(8, 0.02, 130), Color(0.17, 0.17, 0.19), false, Surfaces.material("asphalt", 4.0, Color(0.55, 0.55, 0.55)))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	for i in 6:
 		for side in [-1, 1]:
 			var size := Vector3(rng.randf_range(7, 10), rng.randf_range(4, 7), rng.randf_range(7, 10))
 			var pos := Vector3(side * (7.0 + size.x / 2.0), size.y / 2.0, -10.0 - i * 16.0)
-			_add_block(pos, size, Color(0.55, 0.5, 0.45).lerp(Color(0.4, 0.42, 0.5), rng.randf()))
+			var paint := Color(0.55, 0.5, 0.45).lerp(Color(0.4, 0.42, 0.5), rng.randf())
+			# Every third house is brick, the rest painted siding; same rng calls as before, so the town doesn't move.
+			var walls := "brick" if (i * 2 + (1 if side > 0 else 0)) % 3 == 0 else "siding"
+			_add_block(pos, size, paint, true, Surfaces.material(walls, 2.5, (paint * 1.5).clamp()))
 			var table: String = ["kitchen", "bathroom", "fridge"][loot_rng.randi_range(0, 2)]
 			var spot := Vector3(side * 6.6, 0.8, pos.z + loot_rng.randf_range(-2.0, 2.0))
-			_add_container("house_%d_%s" % [i, "e" if side > 0 else "w"], table, spot,
+			var box := _add_container("house_%d_%s" % [i, "e" if side > 0 else "w"], table, spot,
 					Vector3(0.7, 1.6, 0.7), Color(0.85, 0.85, 0.8) if table == "fridge" else Color(0.55, 0.42, 0.3))
-	_add_block(Vector3(0, 6, -125), Vector3(30, 12, 24), Color(0.45, 0.47, 0.5))
+			_dress(box, "fridge" if table == "fridge" else "cabinet", side * PI / 2.0)  # front faces the road
+	_add_block(Vector3(0, 6, -125), Vector3(30, 12, 24), Color(0.45, 0.47, 0.5), true, Surfaces.material("brick", 3.0, Color(0.6, 0.6, 0.62)))
 	for i in 3:
-		_add_container("factory_crate_%d" % i, "factory_crate", Vector3(-8.0 + i * 8.0, 0.5, -111.8),
+		var crate := _add_container("factory_crate_%d" % i, "factory_crate", Vector3(-8.0 + i * 8.0, 0.5, -111.8),
 				Vector3(1.2, 1.0, 1.0), Color(0.45, 0.4, 0.25))
+		_dress(crate, "storage", 0.0, Color.WHITE, Vector3(1.2 / 1.4, 1.0, 1.0))  # the player's crate model, a bit narrower
 	for i in 4:
 		var car_color := Color(0.5, 0.2, 0.15).lerp(Color(0.2, 0.3, 0.45), rng.randf())
 		var car_pos := Vector3(rng.randf_range(-2.5, 2.5), 0.75, -15.0 - i * 22.0)
 		var car := _add_block(car_pos, Vector3(1.9, 1.5, 4.4), car_color)
 		car.set_meta("container_id", "car_%d" % i)  # look at the car: search its trunk
+		_dress(car, "car", 0.0 if i % 2 == 0 else PI, car_color * 1.6)
 		sim.loot.add("car_%d" % i, "car_trunk", car_pos)
 		sim.add_car("car_%d" % i)
 
 
-func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> void:
+func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> StaticBody3D:
 	var body := _add_block(pos, size, color)
 	body.set_meta("container_id", id)
 	sim.loot.add(id, table, pos)
+	return body
+
+
+## Swap a town block's box for assets/models/<model>.glb (tools/art/<model>.py), keeping its collider.
+## `paint` tints the model's "Car Paint" surface. If the model hasn't been made, the box stays.
+func _dress(body: StaticBody3D, model: String, yaw: float, paint := Color.WHITE, scale := Vector3.ONE) -> void:
+	var path := "res://assets/models/%s.glb" % model
+	if body == null or not ResourceLoader.exists(path):
+		return
+	for child in body.get_children():
+		if child is MeshInstance3D:
+			child.queue_free()
+	var node := (load(path) as PackedScene).instantiate() as Node3D
+	node.rotation.y = yaw
+	node.scale = scale
+	body.add_child(node)
+	if paint == Color.WHITE:
+		return
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		for s in mesh.mesh.get_surface_count():
+			var mat := mesh.mesh.surface_get_material(s) as StandardMaterial3D
+			if mat != null and mat.resource_name == "Car Paint":
+				mat = mat.duplicate()
+				mat.albedo_color = paint.clamp()
+				mesh.set_surface_override_material(s, mat)
 
 
 func _build_player(args: Dictionary) -> void:
@@ -434,6 +483,9 @@ func _build_building(args: Dictionary) -> void:
 	factory_view = FactoryView.new()
 	add_child(factory_view)
 	factory_view.setup(sim, build_view)
+	sound_view = SoundView.new()
+	add_child(sound_view)
+	sound_view.setup(sim)
 	interactor = Interactor.new()
 	add_child(interactor)
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
@@ -640,12 +692,13 @@ func _outlined_label(font_size: int) -> Label:
 	return label
 
 
-func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> StaticBody3D:
+func _add_block(pos: Vector3, size: Vector3, color: Color, collide: bool = true,
+		surface: StandardMaterial3D = null) -> StaticBody3D:
 	var mesh := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = size
 	mesh.mesh = box
-	mesh.material_override = _flat_material(color)
+	mesh.material_override = surface if surface != null else _flat_material(color)
 	if not collide:
 		mesh.position = pos
 		add_child(mesh)
@@ -689,3 +742,39 @@ func _parse_user_args() -> Dictionary:
 		var parts := arg.substr(2).split("=", true, 1)
 		out[parts[0]] = parts[1] if parts.size() > 1 else ""
 	return out
+
+
+## The title screen's backdrop: a still, foggy dusk view down the main street. It only changes the
+## camera and the lighting, never the sim, because "New game" carries on in this same world.
+func _title_view(on: bool) -> void:
+	for layer: CanvasLayer in find_children("*", "CanvasLayer", true, false):
+		if layer != menus:
+			layer.visible = not on  # no HUD over the title
+	if not on:
+		if _title_camera != null:
+			_title_camera.queue_free()
+			_title_camera = null
+			player.camera.current = true
+			_apply_time()
+		return
+	_title_camera = Camera3D.new()
+	add_child(_title_camera)
+	_title_camera.position = Vector3(-1.5, 2.0, 2.0)  # just north of the stash crate, so it's out of shot
+	_title_camera.look_at(Vector3(1.0, 2.2, -60.0))
+	_title_camera.fov = 60.0
+	_title_camera.current = true
+	_sun.rotation_degrees = Vector3(-7.0, -60.0, 0.0)
+	_sun.light_color = Color(1.0, 0.62, 0.38)
+	_sun.light_energy = 0.7
+	_moon.light_energy = 0.0
+	_env.background_energy_multiplier = 0.35
+	_env.ambient_light_energy = 0.3
+	_env.fog_density = 0.018
+	_env.fog_light_color = Color(0.36, 0.33, 0.4)
+	_env.fog_light_energy = 0.6
+	_env.volumetric_fog_density = 0.012
+
+
+func _exit_tree() -> void:
+	Surfaces.clear_cache()
+	SoundView.clear_cache()
