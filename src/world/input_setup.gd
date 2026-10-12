@@ -16,6 +16,10 @@ const KEYS := {
 	"build_rotate": [KEY_R],
 	"build_pick_1": [KEY_1],
 	"build_pick_2": [KEY_2],
+	"build_pick_3": [KEY_3],
+	"build_pick_4": [KEY_4],
+	"build_pick_5": [KEY_5],
+	"interact": [KEY_E],
 }
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,

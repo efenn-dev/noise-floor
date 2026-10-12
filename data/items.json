@@ -1,5 +1,6 @@
 {
-	"plank": { "name": "Plank" },
-	"nails": { "name": "Nails" },
-	"scrap_metal": { "name": "Scrap metal" }
+	"plank": { "name": "Plank", "color": "#a07850" },
+	"nails": { "name": "Nails", "color": "#c8c8d0" },
+	"scrap_metal": { "name": "Scrap metal", "color": "#8a5a3c" },
+	"metal_plate": { "name": "Metal plate", "color": "#7890a8" }
 }

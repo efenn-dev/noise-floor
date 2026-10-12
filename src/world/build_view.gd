@@ -6,7 +6,14 @@ extends Node3D
 var grid: BuildGrid
 var _bodies: Dictionary = {}  # key -> StaticBody3D
 
-const COLORS := {"foundation": Color(0.55, 0.45, 0.32), "wall": Color(0.62, 0.52, 0.38)}
+const COLORS := {
+	"foundation": Color(0.55, 0.45, 0.32),
+	"wall": Color(0.62, 0.52, 0.38),
+	"belt": Color(0.16, 0.16, 0.18),
+	"machine": Color(0.42, 0.44, 0.4),
+}
+const INPUT_COLOR := Color(0.25, 0.45, 0.9)
+const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
 
 
 func setup(p_grid: BuildGrid) -> void:
@@ -41,6 +48,16 @@ func _on_added(key: String) -> void:
 	mat.roughness = 0.95
 	mesh.material_override = mat
 	body.add_child(mesh)
+	match info["kind"]:
+		"belt":
+			# Two pale chevron bars toward the front (-Z) show which way it runs.
+			for z in [-0.55, 0.25]:
+				_add_part(body, Vector3(0.7, 0.02, 0.12), Vector3(0, size.y / 2.0 + 0.01, z), Color(0.8, 0.75, 0.3))
+		"machine":
+			_add_part(body, Vector3(0.7, 0.5, 0.12), Vector3(0, -size.y / 2.0 + 0.4, -size.z / 2.0 - 0.06), OUTPUT_COLOR)
+			_add_part(body, Vector3(0.7, 0.5, 0.12), Vector3(0, -size.y / 2.0 + 0.4, size.z / 2.0 + 0.06), INPUT_COLOR)
+			var lamp := _add_part(body, Vector3(0.25, 0.25, 0.25), Vector3(0, size.y / 2.0 + 0.125, 0), Color(0.2, 0.2, 0.2))
+			lamp.name = "Lamp"
 	var shape := CollisionShape3D.new()
 	var box_shape := BoxShape3D.new()
 	box_shape.size = size
@@ -50,7 +67,20 @@ func _on_added(key: String) -> void:
 	_bodies[key] = body
 
 
-func _on_removed(key: String) -> void:
+func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	part.mesh = box
+	part.position = pos
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	part.material_override = mat
+	body.add_child(part)
+	return part
+
+
+func _on_removed(key: String, _piece: Dictionary) -> void:
 	if _bodies.has(key):
 		_bodies[key].queue_free()
 		_bodies.erase(key)

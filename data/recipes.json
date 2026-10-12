@@ -1,0 +1,14 @@
+{
+	"smelt_plate": {
+		"name": "Metal plate",
+		"time": 2.0,
+		"in": { "scrap_metal": 1 },
+		"out": { "metal_plate": 1 }
+	},
+	"press_nails": {
+		"name": "Nails",
+		"time": 2.0,
+		"in": { "metal_plate": 1 },
+		"out": { "nails": 4 }
+	}
+}

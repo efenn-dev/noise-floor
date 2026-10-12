@@ -1,5 +1,6 @@
 {
 	"plank": 100,
 	"nails": 100,
-	"scrap_metal": 20
+	"scrap_metal": 50,
+	"metal_plate": 30
 }
