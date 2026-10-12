@@ -20,7 +20,7 @@ from kit import box, cylinder, material, reset  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "assets" / "models" / "zombie.glb"
 FPS = 30
-EXPECTED_ACTIONS = ("Idle", "Walk", "Punch", "HitReact", "Death")
+EXPECTED_ACTIONS = ("Idle", "Walk", "Run", "Punch", "HitReact", "Death", "Scream")
 
 
 def deg(value):
@@ -297,6 +297,40 @@ def build_animations(armature):
     }
     make_action(armature, "Walk", [(1, walk_1), (11, {}), (21, walk_2), (31, {}), (40, walk_1)])
 
+    run_1 = {
+        "Hips": {"rot": (9, 0, -5), "loc": (0, 0, 0.045)}, "Spine": {"rot": (14, 0, 6)}, "Chest": {"rot": (12, 0, -7)},
+        "Neck": {"rot": (-6, 2, 5)}, "Head": {"rot": (-8, -4, -7)},
+        "UpperLeg.L": {"rot": (-70, 0, 3)}, "LowerLeg.L": {"rot": (8, 0, 0)}, "Foot.L": {"rot": (48, 0, 0)},
+        "UpperLeg.R": {"rot": (64, 0, -3)}, "LowerLeg.R": {"rot": (4, 0, 0)}, "Foot.R": {"rot": (-48, 0, 0)},
+        "UpperArm.L": {"rot": (48, -5, -14)}, "LowerArm.L": {"rot": (32, 0, -10)}, "Hand.L": {"rot": (12, 0, 8)},
+        "UpperArm.R": {"rot": (36, 7, 10)}, "LowerArm.R": {"rot": (22, 0, 8)}, "Hand.R": {"rot": (18, 0, -6)},
+    }
+    run_stumble = {
+        "Hips": {"rot": (13, 0, 3), "loc": (0, 0, -0.015)}, "Spine": {"rot": (17, 0, -4)}, "Chest": {"rot": (15, 0, 5)},
+        "Neck": {"rot": (-9, -2, -4)}, "Head": {"rot": (-5, 5, 6)},
+        "UpperLeg.L": {"rot": (-8, 0, 2)}, "LowerLeg.L": {"rot": (58, 0, 0)}, "Foot.L": {"rot": (-18, 0, 0)},
+        "UpperLeg.R": {"rot": (17, 0, -2)}, "LowerLeg.R": {"rot": (38, 0, 0)}, "Foot.R": {"rot": (-24, 0, 0)},
+        "UpperArm.L": {"rot": (34, 4, -21)}, "LowerArm.L": {"rot": (19, 0, -12)}, "Hand.L": {"rot": (20, 0, 10)},
+        "UpperArm.R": {"rot": (57, -6, 15)}, "LowerArm.R": {"rot": (38, 0, 11)}, "Hand.R": {"rot": (9, 0, -9)},
+    }
+    run_2 = {
+        "Hips": {"rot": (10, 0, 5), "loc": (0, 0, 0.055)}, "Spine": {"rot": (13, 0, -6)}, "Chest": {"rot": (13, 0, 7)},
+        "Neck": {"rot": (-5, -2, -5)}, "Head": {"rot": (-9, 4, 7)},
+        "UpperLeg.L": {"rot": (64, 0, 3)}, "LowerLeg.L": {"rot": (4, 0, 0)}, "Foot.L": {"rot": (-48, 0, 0)},
+        "UpperLeg.R": {"rot": (-70, 0, -3)}, "LowerLeg.R": {"rot": (-60, 0, 0)}, "Foot.R": {"rot": (70, 0, 0)},
+        "UpperArm.L": {"rot": (39, 7, -10)}, "LowerArm.L": {"rot": (24, 0, -8)}, "Hand.L": {"rot": (16, 0, 6)},
+        "UpperArm.R": {"rot": (51, -5, 16)}, "LowerArm.R": {"rot": (35, 0, 12)}, "Hand.R": {"rot": (11, 0, -8)},
+    }
+    run_flight = {
+        "Hips": {"rot": (8, 0, -2), "loc": (0, 0, 0.095)}, "Spine": {"rot": (15, 0, 3)}, "Chest": {"rot": (11, 0, -4)},
+        "Neck": {"rot": (-7, 3, 4)}, "Head": {"rot": (-7, -5, -6)},
+        "UpperLeg.L": {"rot": (36, 0, 2)}, "LowerLeg.L": {"rot": (47, 0, 0)}, "Foot.L": {"rot": (-28, 0, 0)},
+        "UpperLeg.R": {"rot": (-30, 0, -2)}, "LowerLeg.R": {"rot": (61, 0, 0)}, "Foot.R": {"rot": (-12, 0, 0)},
+        "UpperArm.L": {"rot": (56, -6, -17)}, "LowerArm.L": {"rot": (37, 0, -13)}, "Hand.L": {"rot": (10, 0, 9)},
+        "UpperArm.R": {"rot": (33, 6, 12)}, "LowerArm.R": {"rot": (20, 0, 9)}, "Hand.R": {"rot": (19, 0, -7)},
+    }
+    make_action(armature, "Run", [(1, run_1), (7, run_stumble), (12, run_2), (18, run_flight), (24, run_1)])
+
     punch_ready = {"Hips": {"rot": (3, 0, -2)}, "Spine": {"rot": (7, 0, 2)}, "Chest": {"rot": (8, 0, -2)}, "Head": {"rot": (6, 0, 3)}}
     punch_back = {
         "Hips": {"rot": (-3, 0, 5)}, "Spine": {"rot": (0, 0, -7)}, "Chest": {"rot": (1, 0, 7)},
@@ -343,6 +377,43 @@ def build_animations(armature):
         "UpperArm.R": {"rot": (18, 0, 34)}, "LowerArm.R": {"rot": (5, 0, 12)},
     }
     make_action(armature, "Death", [(1, death_start), (11, death_knees), (24, death_fall), (36, death_flat), (40, death_flat)])
+
+    scream_neutral = {
+        "Hips": {"rot": (2, 0, -1)}, "Spine": {"rot": (5, 0, 2)}, "Chest": {"rot": (6, 0, -2)},
+        "Neck": {"rot": (5, 0, 2)}, "Head": {"rot": (6, -2, -3)},
+        "UpperArm.L": {"rot": (2, 0, -3)}, "UpperArm.R": {"rot": (-2, 0, 3)},
+    }
+    scream_crouch = {
+        "Hips": {"rot": (8, 0, 2), "loc": (0, 0, -0.035)}, "Spine": {"rot": (13, 0, -3)}, "Chest": {"rot": (12, 0, 3)},
+        "Neck": {"rot": (7, 0, -2)}, "Head": {"rot": (9, 3, 4)},
+        "UpperArm.L": {"rot": (12, 0, -12)}, "LowerArm.L": {"rot": (8, 0, -5)},
+        "UpperArm.R": {"rot": (9, 0, 13)}, "LowerArm.R": {"rot": (6, 0, 5)},
+        "UpperLeg.L": {"rot": (-8, 0, 0)}, "LowerLeg.L": {"rot": (13, 0, 0)},
+        "UpperLeg.R": {"rot": (-6, 0, 0)}, "LowerLeg.R": {"rot": (11, 0, 0)},
+    }
+    scream_hold_a = {
+        "Hips": {"rot": (-7, 0, -2), "loc": (0, 0, 0.01)}, "Spine": {"rot": (-15, 0, 3)}, "Chest": {"rot": (-20, 0, -3)},
+        "Neck": {"rot": (-8, 0, 2)}, "Head": {"rot": (-28, -3, -4)},
+        "UpperArm.L": {"rot": (-18, -6, -58)}, "LowerArm.L": {"rot": (-8, 0, -12)}, "Hand.L": {"rot": (-8, 0, -8)},
+        "UpperArm.R": {"rot": (-20, 6, 58)}, "LowerArm.R": {"rot": (-6, 0, 12)}, "Hand.R": {"rot": (-10, 0, 8)},
+    }
+    scream_hold_b = {
+        "Hips": {"rot": (-6, 0, 2), "loc": (0, 0, 0.014)}, "Spine": {"rot": (-16, -2, -3)}, "Chest": {"rot": (-18, 3, 4)},
+        "Neck": {"rot": (-10, -3, -2)}, "Head": {"rot": (-31, 5, 5)},
+        "UpperArm.L": {"rot": (-21, 4, -61)}, "LowerArm.L": {"rot": (-6, 0, -14)}, "Hand.L": {"rot": (-11, 0, -6)},
+        "UpperArm.R": {"rot": (-17, -4, 61)}, "LowerArm.R": {"rot": (-9, 0, 14)}, "Hand.R": {"rot": (-7, 0, 6)},
+    }
+    scream_slump = {
+        "Hips": {"rot": (10, 0, 2), "loc": (0, 0, -0.025)}, "Spine": {"rot": (16, 0, -3)}, "Chest": {"rot": (13, 0, 3)},
+        "Neck": {"rot": (7, 0, -2)}, "Head": {"rot": (11, 3, 4)},
+        "UpperArm.L": {"rot": (11, 0, -14)}, "LowerArm.L": {"rot": (7, 0, -6)},
+        "UpperArm.R": {"rot": (9, 0, 15)}, "LowerArm.R": {"rot": (5, 0, 6)},
+        "UpperLeg.L": {"rot": (-6, 0, 0)}, "LowerLeg.L": {"rot": (10, 0, 0)},
+        "UpperLeg.R": {"rot": (-5, 0, 0)}, "LowerLeg.R": {"rot": (9, 0, 0)},
+    }
+    make_action(armature, "Scream", [(1, scream_neutral), (7, scream_crouch), (12, scream_hold_a), (17, scream_hold_b),
+                                      (21, scream_hold_a), (26, scream_hold_b), (30, scream_hold_a), (36, scream_slump),
+                                      (43, scream_neutral)])
     armature.animation_data.action = None
     bpy.context.scene.frame_set(0)
     reset_pose(armature)
@@ -408,7 +479,8 @@ def verify_reimport():
     actions = {a.name: a for a in bpy.data.actions if a.name in EXPECTED_ACTIONS}
     assert {a.name for a in bpy.data.actions} == set(EXPECTED_ACTIONS), sorted(a.name for a in bpy.data.actions)
     ranges = {name: tuple(round(v, 3) for v in actions[name].frame_range) for name in EXPECTED_ACTIONS}
-    expected_ranges = {"Idle": (1.0, 76.0), "Walk": (1.0, 40.0), "Punch": (1.0, 34.0), "HitReact": (1.0, 15.0), "Death": (1.0, 40.0)}
+    expected_ranges = {"Idle": (1.0, 76.0), "Walk": (1.0, 40.0), "Run": (1.0, 24.0), "Punch": (1.0, 34.0),
+                       "HitReact": (1.0, 15.0), "Death": (1.0, 40.0), "Scream": (1.0, 43.0)}
     assert ranges == expected_ranges, ranges
     armature.animation_data_create()
     armature.animation_data.action = None

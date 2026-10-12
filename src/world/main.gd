@@ -20,6 +20,7 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
@@ -302,6 +303,7 @@ func _build_menus(args: Dictionary) -> void:
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
 	elif args.has("pause"):
+		menus.set_stats(sim.stats_text())
 		menus.show_pause(has_save)
 	elif args.has("settings"):
 		menus.show_settings("pause")
@@ -318,6 +320,7 @@ func _start_playing() -> void:
 
 
 func _open_pause() -> void:
+	menus.set_stats(sim.stats_text())
 	menus.show_pause(FileAccess.file_exists(GameSession.save_path))
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -580,7 +583,7 @@ func _build_zombies(args: Dictionary) -> void:
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):
-			var z := sim.horde.spawn("shambler", Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
+			var z := sim.horde.spawn(args.get("zombie-type", "shambler"), Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
 			z.facing = (player.position - z.pos).normalized()
 	zombie_view = ZombieView.new()
 	add_child(zombie_view)

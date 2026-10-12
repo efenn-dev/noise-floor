@@ -12,6 +12,13 @@ const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
 const MODEL_SCALE := 1.0  # built at real size (about HEIGHT tall)
 const WALK_ANIM_SPEED := 1.0  # m/s the Walk animation's feet move at speed_scale 1
+const RUN_ANIM_SPEED := 3.45  # m/s the Run animation's feet move at speed_scale 1
+const RUN_ABOVE := 2.0  # m/s: faster than this, a runner runs instead of walking
+## How each kind of zombie looks, so you can tell them apart: skin and shirt tints, size.
+const LOOKS := {
+	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92},
+	"screamer": {"skin": Color(0.62, 0.62, 0.58), "shirts": [Color(0.55, 0.12, 0.1)], "scale": 1.0},
+}
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
 const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)
 const GRUNTS := 11  # assets/sounds/zombie/grunt_NN.wav
@@ -50,13 +57,21 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 	_last_hp = brain.hp
 	_voice.pitch_scale = 0.85 + 0.06 * (brain.id % 5)
 	_next_moan = 1.5 + brain.id % 9
-	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4))
+	var look: Dictionary = LOOKS.get(brain.type, {})
+	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4)) * float(look.get("scale", 1.0))
+	var shirts: Array = look.get("shirts", SHIRTS)
 	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
 		for i in mesh.mesh.get_surface_count():
 			var mat := mesh.mesh.surface_get_material(i) as StandardMaterial3D
-			if mat != null and mat.resource_name == "Shirt":
+			if mat == null:
+				continue
+			if mat.resource_name == "Shirt":
 				mat = mat.duplicate()
-				mat.albedo_color = SHIRTS[brain.id % SHIRTS.size()]
+				mat.albedo_color = shirts[brain.id % shirts.size()]
+				mesh.set_surface_override_material(i, mat)
+			elif mat.resource_name == "Zombie Skin" and look.has("skin"):
+				mat = mat.duplicate()
+				mat.albedo_color = look["skin"]
 				mesh.set_surface_override_material(i, mat)
 
 
@@ -196,14 +211,21 @@ func _animate(delta: float) -> void:
 	var moving := Vector2(velocity.x, velocity.z).length()
 	if brain.is_dead():
 		want = "Death"
+	elif brain.screaming > 0.0 and _anim.has_animation("Scream"):
+		want = "Scream"
 	elif _flinch > 0.0:
 		want = "HitReact"
 	elif brain.state == ZombieBrain.State.ATTACK or brain.state == ZombieBrain.State.BREAK:
 		want = "Punch"
+	elif moving > RUN_ABOVE and _anim.has_animation("Run"):
+		want = "Run"
+		speed_scale = clampf(moving / (RUN_ANIM_SPEED * _model.scale.x / MODEL_SCALE), 0.6, 1.5)
 	elif moving > 0.1:
 		want = "Walk"
 		speed_scale = clampf(moving / (WALK_ANIM_SPEED * _model.scale.x / MODEL_SCALE), 0.5, 1.6)
-	if _anim.current_animation != want and not (want == "Death" and _anim.assigned_animation == "Death"):
+	var once := want == "Death" or want == "Scream"  # these play through once, then hold
+	if _anim.current_animation != want and not (once and _anim.assigned_animation == want and _anim.is_playing()) \
+			and not (want == "Death" and _anim.assigned_animation == "Death"):
 		_anim.play(want, 0.2)
 	_anim.speed_scale = speed_scale
 

@@ -36,6 +36,8 @@ var last_seen: Vector3
 var break_key := ""
 var sound_key := ""  # piece key of the machine it's walking toward, "" for other sounds
 var dead_time := 0.0
+var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
+var _scream_cd := 0.0
 
 ## Senses, written by the world body (or a test) before each think.
 var pos: Vector3
@@ -77,6 +79,8 @@ func is_dead() -> bool:
 
 ## How fast the body should walk right now (m/s). 0 = stand still.
 func move_speed() -> float:
+	if screaming > 0.0:
+		return 0.0
 	match state:
 		State.WANDER:
 			return float(stats["wander_speed"]) * slow
@@ -143,8 +147,15 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 		return []
 	var events := []
 	_cooldown = maxf(0.0, _cooldown - dt)
+	_scream_cd = maxf(0.0, _scream_cd - dt)
+	screaming = maxf(0.0, screaming - dt)
 	if player_dead:
 		sees = false
+	# Screamers shriek when they spot you: a loud noise that pulls in everything within earshot.
+	if sees and stats.has("scream_loudness") and _scream_cd <= 0.0:
+		events.append({"target": "scream"})
+		screaming = float(stats["scream_time"])
+		_scream_cd = float(stats["scream_cooldown"])
 	if sees:
 		last_seen = player_pos
 		_lost = 0.0

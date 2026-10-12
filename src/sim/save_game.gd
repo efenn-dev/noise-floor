@@ -68,6 +68,9 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"searched": searched,
 		"vehicles": sim.vehicles.to_dict(),
 		"skills": sim.skills.xp,
+		"stats": sim.stats,
+		"infamy": sim.director.infamy,
+		"unlocked": sim.director.unlocked,
 		"bags": bags,
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
@@ -140,6 +143,11 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.vehicles.load_dict(d["vehicles"])
 	for s: String in d.get("skills", {}):
 		sim.skills.xp[s] = float(d["skills"][s])
+	var st: Dictionary = d.get("stats", {})
+	sim.stats = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
+	sim.director.infamy = float(d.get("infamy", 0.0))
+	sim.director.unlocked = Array(d.get("unlocked", []))
+	sim._day = sim.clock.day
 	for id: String in d.get("car_fuel", {}):  # saves from before M10c kept only the gas
 		if sim.vehicles.cars.has(id):
 			sim.vehicles.cars[id]["fuel"] = float(d["car_fuel"][id])
