@@ -65,3 +65,13 @@ func items() -> Array:
 	var ids := _counts.keys()
 	ids.sort()
 	return ids
+
+
+## Moves up to `amount` of `item` into `other`. Returns how many moved.
+func move_to(other: Inventory, item: String, amount: int) -> int:
+	var n := mini(amount, count(item))
+	if n <= 0 or other == self:
+		return 0
+	remove(item, n)
+	other.add(item, n)
+	return n

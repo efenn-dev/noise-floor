@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — M10b Inventory screen
+
+**Built:**
+- **Tab** (or **I**) opens your pockets next to the nearest storage crate within arm's reach (3 m; arrows switch between crates if several are close). Every item shows its Codex-made icon and count. **Tab** or **Esc** closes it. You stand still while it's open, but the game keeps running, so a zombie can walk up while you sort.
+- **Click** an item to see its weight and what it does (food, water, stops bleeding, or how much a bag adds to your carry limit), with buttons to **Use** it (eat, drink, bandage), **Move 1 / Move all** to the other side, or **Drop 1 / Drop all**. **Shift-click** moves the whole stack straight across; **ctrl-click** moves one.
+- **Carry weight** shows at the top, with your best bag's bonus. It turns yellow near the limit and red when you're overloaded (slower and louder).
+- **Dropping** puts items in a bag at your feet (into one already lying there if there is one), the same as a death bag: **E** picks it back up, and it's saved.
+- The plan gained **M10c — Wheels**: drivable cars with better textures, loud engines, fuel shared with siphoning, wrecks, saved where you park.
+
+**Rules (sim, tested):** `Inventory.move_to`, `SimWorld.use_item` / `can_use` (one particular item, not just the best one), `drop_items` (joins a nearby bag), `crates_near` (within `crate_reach`, nearest first). World: `InventoryScreen`, plus the new `--inventory[=ITEM]` screenshot flag.
+
+**Tests:** `test_inventory_actions.gd` (moving, using, dropping, reach) and `test_inventory_screen.gd` (what the screen shows; shift-click and ctrl-click moves; use and drop; no crate in reach; bag limit). 785 checks.
+
+**Try it on the PC:** merge, `git pull`, `play.bat`, walk up to the starting crate just east of where you spawn, and press **Tab**.
+
+**Known gaps:** only storage crates appear on the right, not car trunks, fridges or ground bags (searching still drops loot straight into your pockets). There's no drag and drop yet, just clicks. The pipe isn't an inventory item yet.
+
+**Next:** M10c — Wheels.
+
 ## 2026-10-12 — M10 Look and sound
 
 **Built:**
