@@ -36,7 +36,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("attack") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not builder.active:
+	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active:
 		swing()
 
 

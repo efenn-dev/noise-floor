@@ -30,6 +30,15 @@ const MOUSE := {
 }
 
 
+## Tests set this: headless runs can't really lock the mouse, but input should act as if it were.
+static var assume_captured := false
+
+
+## True while the mouse is locked to the game (look around, swing, build).
+static func captured() -> bool:
+	return assume_captured or Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+
+
 static func register() -> void:
 	for action: String in KEYS:
 		if InputMap.has_action(action):

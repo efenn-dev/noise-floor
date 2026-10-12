@@ -76,12 +76,12 @@ func set_look(yaw_deg: float, pitch_deg: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not use_device_input or frozen:
 		return
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion and InputSetup.captured():
 		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
 		head.rotation.x = clampf(head.rotation.x - event.relative.y * MOUSE_SENSITIVITY, -PI / 2 + 0.01, PI / 2 - 0.01)
 	elif event.is_action_pressed("free_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	elif event is InputEventMouseButton and event.pressed and not InputSetup.captured():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()  # this click only grabs the mouse; it doesn't build
 	elif event.is_action_pressed("flashlight"):

@@ -386,6 +386,11 @@ func _build_hud() -> void:
 	dot.size = Vector2(4, 4)
 	dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
 	layer.add_child(dot)
+	# The HUD only shows things; it must never catch the mouse. A locked mouse sits in the middle of the
+	# screen, right on the crosshair, and a HUD element there would swallow every look and click.
+	for child in layer.get_children():
+		if child is Control:
+			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
 
 
