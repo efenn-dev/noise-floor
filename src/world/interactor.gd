@@ -28,7 +28,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if not InputSetup.captured():
 		return
 	if event.is_action_pressed("interact"):
 		interact()

@@ -79,7 +79,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if event.is_action_pressed("build_rotate"):
 		turns = (turns + 1) % 4
-	elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	elif InputSetup.captured():
 		if event.is_action_pressed("build_place"):
 			try_place()
 		elif event.is_action_pressed("build_remove"):
