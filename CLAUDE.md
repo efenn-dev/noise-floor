@@ -7,7 +7,7 @@ Owner: Emmitt. He is not very technical, so explain things in plain words, give 
 
 ## Where this runs
 - Mostly in **Claude Code cloud sessions** (Linux, no GPU) from the private repo `efenn-dev/noise-floor`. At session start, `.claude/settings.json` runs `tools/cloud-setup.sh`, which installs the pinned Godot 4.7 (sha512-checked) to `~/.local/godot` plus Xvfb/Mesa for screenshots, then prints a status line. If it says FAILED, fix that before writing game code.
-- Also on Emmitt's Windows PC at `C:/projects/noise-floor` (Godot in `C:/projects/Godot_v4.7-stable_win64.exe/`). Everything must work in both places: use `tools/*.sh`, and never hard-code one OS's paths in game code. On his PC, run one heavy job at a time (the machine hard-powers-off under sustained load); a screenshot run is fine.
+- Also on Emmitt's Windows PC at `C:/projects/noise-floor` (Godot in `C:/projects/Godot_v4.7-stable_win64.exe/`). He plays by double-clicking `play.bat` (or `play.bat --demo-factory` etc. in a terminal); it runs `--import` first so new `class_name` scripts are known. When telling him how to try something, give `play.bat` commands, not raw Godot command lines. Everything must work in both places: use `tools/*.sh`, and never hard-code one OS's paths in game code. On his PC, run one heavy job at a time (the machine hard-powers-off under sustained load); a screenshot run is fine.
 
 ## Commands
 ```bash
