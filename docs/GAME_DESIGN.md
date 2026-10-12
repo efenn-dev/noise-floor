@@ -178,7 +178,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M6 — Survive.** Hunger, thirst, fatigue, bleeding; searchable containers with loot tables; eat and drink; water and canned-food chains.
   - Also in M6 (from the long-game plan): every item gets a weight in kg in `data/`, and the player gets a carry limit of 20 kg plus bags (Strength raises it in M12). Over the limit: slower, more stamina use, louder footsteps. Over 150%: no sprinting.
 - [x] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
-- [ ] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.
+- [x] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.
 - [ ] **M9 — Keep it.** Save/load, main menu, settings (mouse sensitivity, volume, day length), pause.
 - [ ] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.
 

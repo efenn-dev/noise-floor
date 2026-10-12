@@ -38,6 +38,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		upgrade()
 	elif event.is_action_pressed("siphon"):
 		siphon()
+	elif event.is_action_pressed("repair"):
+		repair()
+
+
+## T on anything you built: repair it (pays part of its cost from pockets and nearby crates).
+func repair() -> String:
+	update_target()
+	if target_key == "":
+		return ""
+	var why := sim.repair(target_key)
+	last_message = why if why != "" else "Repaired"
+	return last_message
 
 
 ## G on a car: siphon its gas.
@@ -63,6 +75,7 @@ func update_target() -> void:
 	var was := target_cell
 	var was_bag := target_bag
 	var was_container := target_container
+	var was_key := target_key
 	has_target = false
 	target_bag = -1
 	target_container = ""
@@ -71,7 +84,7 @@ func update_target() -> void:
 		return
 	var from := camera.global_position
 	var query := PhysicsRayQueryParameters3D.create(from, from - camera.global_basis.z * REACH,
-			Layers.WORLD | Layers.BUILT | Layers.BAG, exclude)
+			Layers.WORLD | Layers.BUILT | Layers.BAG | Layers.TRAP, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("bag_id"):
 		target_bag = hit["collider"].get_meta("bag_id")
@@ -86,10 +99,14 @@ func update_target() -> void:
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("piece_key"):
 		return
 	var key: String = hit["collider"].get_meta("piece_key")
-	if not key.begins_with("o:") or not sim.build.pieces.has(key):
+	if not sim.build.pieces.has(key):
+		return
+	target_key = key  # any piece: walls, doors and floors can be repaired
+	if key != was_key:
+		last_message = ""
+	if not key.begins_with("o:"):
 		return
 	target_cell = sim.build.pieces[key]["cell"]
-	target_key = key
 	has_target = true
 	if target_cell != was:
 		last_message = ""
@@ -105,6 +122,9 @@ func interact() -> String:
 		var why := sim.search(target_container)
 		last_message = why
 		return why
+	if target_key != "" and sim.build.kind_of(sim.build.pieces[target_key]["id"]) == "door":
+		last_message = sim.toggle_door(target_key)
+		return last_message
 	if not has_target:
 		return ""
 	match sim.build.kind_of(sim.build.pieces[target_key]["id"]):
@@ -148,10 +168,21 @@ func status_text() -> String:
 			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"]))]
 		var extra := "   [G] siphon gas" if sim.car_fuel.has(target_container) else ""
 		return "%s\n[E] search (stay close; it makes a little noise)%s%s" % [name, extra, ("\n" + last_message) if last_message != "" else ""]
-	if not has_target:
+	if target_key == "" or not sim.build.pieces.has(target_key):
 		return ""
 	var f := sim.factory
 	var lines := PackedStringArray()
+	if not has_target:  # a wall, door, barricade or foundation
+		var piece: Dictionary = sim.build.pieces[target_key]
+		var b: Dictionary = sim.data.buildables[piece["id"]]
+		var line := "%s · %d/%d hp" % [b["name"], piece["hp"], b["hp"]]
+		if b["kind"] == "door":
+			line += " · %s   [E] %s" % ["open" if piece.get("open", false) else "closed", "close" if piece.get("open", false) else "open"]
+		lines.append(line)
+		_append_repair(lines, piece, b)
+		if last_message != "":
+			lines.append(last_message)
+		return "\n".join(lines)
 	var kind := sim.build.kind_of(sim.build.pieces[target_key]["id"]) if sim.build.pieces.has(target_key) else ""
 	if kind == "storage":
 		var crate: Inventory = sim.storages.get(target_key, Inventory.new())
@@ -160,6 +191,14 @@ func status_text() -> String:
 			held[item] = crate.count(item)
 		lines.append("Storage crate · %s" % _list(held, "empty"))
 		lines.append("[E] put away building materials · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
+	elif kind == "turret":
+		var t: Factory.Turret = f.turrets[target_cell]
+		lines.append("Nail turret · %d/%d nails · %s · range %d m · loudness %d" % [t.ammo, t.cap,
+				"shooting" if t.target != -1 and t.ammo > 0 else ("out of nails" if t.ammo == 0 else "watching"),
+				int(sim.data.buildables["nail_turret"]["range"]), int(sim.data.buildables["nail_turret"]["loudness"])])
+		lines.append("[E] load nails · or feed it with a belt from any side")
+	elif kind == "trap":
+		lines.append("Spike strip · slows and hurts zombies that cross it · wears out")
 	elif kind == "generator":
 		var g: Dictionary = sim.power.generators[target_key]
 		var net := sim.power.network_of(target_key)
@@ -195,9 +234,19 @@ func status_text() -> String:
 	elif f.belts.has(target_cell):
 		lines.append("Belt · %d items" % f.belts[target_cell].items.size())
 		lines.append("[E] pick up the items")
+	var piece2: Dictionary = sim.build.pieces[target_key]
+	var b2: Dictionary = sim.data.buildables[piece2["id"]]
+	if piece2["hp"] < b2["hp"]:
+		lines.append("%d/%d hp" % [piece2["hp"], b2["hp"]])
+		_append_repair(lines, piece2, b2)
 	if last_message != "":
 		lines.append(last_message)
 	return "\n".join(lines)
+
+
+func _append_repair(lines: PackedStringArray, piece: Dictionary, b: Dictionary) -> void:
+	if piece["hp"] < b["hp"]:
+		lines.append("[T] repair (%s)" % _list(sim.build.repair_cost(target_key)))
 
 
 func _network_line(net: Dictionary) -> String:

@@ -3,7 +3,8 @@ extends RefCounted
 ## Content loaded from data/*.json. validate() lists every problem so a test can fail loudly.
 
 const DIR := "res://data/"
-const KINDS := ["foundation", "wall", "belt", "machine", "bed", "storage", "generator", "solar", "pole"]
+const KINDS := ["foundation", "wall", "door", "barricade", "belt", "machine", "bed", "storage", "generator", "solar",
+		"pole", "trap", "turret"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -54,6 +55,12 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"fuel": b.get("fuel", ""),
 			"burn_time": float(b.get("burn_time", 0.0)),  # seconds of full load per fuel item
 			"reach": float(b.get("reach", 0.0)),          # how far a power pole connects
+			"damage": float(b.get("damage", 0.0)),        # trap: per second; turret: per shot
+			"slow": float(b.get("slow", 1.0)),            # trap: speed factor for zombies on it
+			"range": float(b.get("range", 0.0)),          # turret reach in m
+			"interval": float(b.get("interval", 0.0)),    # turret: seconds between shots
+			"ammo": b.get("ammo", ""),
+			"ammo_cap": int(b.get("ammo_cap", 0)),
 		}
 	recipes = {}
 	for id: String in raw_recipes:
@@ -99,6 +106,11 @@ func validate() -> PackedStringArray:
 			errors.append("%s '%s' needs a positive watts_out" % [b["kind"], id])
 		if b["kind"] == "generator" and (not items.has(b["fuel"]) or b["burn_time"] <= 0.0):
 			errors.append("generator '%s' needs a known fuel item and a positive burn_time" % id)
+		if b["kind"] == "trap" and (b["damage"] <= 0.0 or b["slow"] <= 0.0 or b["slow"] > 1.0):
+			errors.append("trap '%s' needs positive damage and a slow factor in (0, 1]" % id)
+		if b["kind"] == "turret" and (b["damage"] <= 0.0 or b["range"] <= 0.0 or b["interval"] <= 0.0
+				or not items.has(b["ammo"]) or b["ammo_cap"] <= 0 or b["loudness"] <= 0.0):
+			errors.append("turret '%s' needs damage, range, interval, a known ammo item, ammo_cap and loudness" % id)
 		if b["kind"] == "pole" and b["reach"] <= 0.0:
 			errors.append("pole '%s' needs a positive reach" % id)
 		if b["watts"] < 0.0:
@@ -157,7 +169,7 @@ const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sl
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
 		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max"]
-const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck"]
+const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck", "door"]
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
 		"heat_per_zombie", "lure_time"]

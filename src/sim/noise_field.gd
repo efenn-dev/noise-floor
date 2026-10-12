@@ -5,7 +5,8 @@ extends RefCounted
 ## Continuous sounds: machines while they work and generators while they run (a muffler takes 15 off). One-off sounds: footsteps,
 ## pipe hits, zombies bashing and wrecking things. One-offs stay audible for HEAR_WINDOW so every
 ## zombie (they listen every HEAR_WINDOW) gets one chance to hear each.
-## Walls are the player's built walls on the 2 m grid; the town's buildings don't muffle yet.
+## Walls are the player's built walls, closed doors and barricades on the 2 m grid; the town's
+## buildings don't muffle yet.
 
 const HEAR_WINDOW := 0.5
 const DRAW_TIME := 1.5  # one-offs stay in `recent` this long so the overlay can show them
@@ -92,8 +93,9 @@ func outdoor_level(s: Dictionary, distance: float) -> float:
 	return best
 
 
-## Built walls crossed by the straight line from a to b (walks the grid cell by cell).
-func walls_between(a: Vector3, b: Vector3) -> int:
+## Built walls crossed by the straight line from a to b (walks the grid cell by cell). Closed doors
+## count; open doors don't. Barricades count for sound but not for sight (`for_sight`).
+func walls_between(a: Vector3, b: Vector3, for_sight: bool = false) -> int:
 	var g := BuildGrid.GRID
 	var x0 := a.x / g
 	var z0 := a.z / g
@@ -112,13 +114,13 @@ func walls_between(a: Vector3, b: Vector3) -> int:
 	for i in steps:
 		if t_max_x < t_max_z:
 			var line_x := cx + (1 if step_x > 0 else 0)  # crossing the west edge of cell (line_x, cz)
-			if build.pieces.has("w:%d:%d:w" % [line_x, cz]):
+			if build.edge_blocks("w:%d:%d:w" % [line_x, cz], for_sight):
 				count += 1
 			cx += step_x
 			t_max_x += t_dx
 		else:
 			var line_z := cz + (1 if step_z > 0 else 0)  # crossing the north edge of cell (cx, line_z)
-			if build.pieces.has("w:%d:%d:n" % [cx, line_z]):
+			if build.edge_blocks("w:%d:%d:n" % [cx, line_z], for_sight):
 				count += 1
 			cz += step_z
 			t_max_z += t_dz
