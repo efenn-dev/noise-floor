@@ -15,6 +15,10 @@ var inventory := Inventory.new()
 var build: BuildGrid
 var factory: Factory
 var horde: Horde
+var noise: NoiseField
+var director: Director
+## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
+var messages: Array = []
 var player := PlayerStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
@@ -34,6 +38,8 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, seed_value: int = 1
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
 	horde = Horde.new(data, seed_value)
+	noise = NoiseField.new(data, build)
+	director = Director.new(data, seed_value)
 	player.died.connect(_on_player_died)
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
@@ -65,17 +71,53 @@ func step() -> void:
 	ticks += 1
 	clock.advance(TICK)
 	factory.tick(TICK)
+	noise.refresh(factory, TICK)
 	player.tick(TICK)
-	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": clock.is_night(),
-			"player_lit": player_lit, "pieces": build.pieces}
+	var night := clock.is_night()
+	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
+			"player_lit": player_lit, "pieces": build.pieces, "noise": noise}
 	for e: Dictionary in horde.tick(TICK, ctx):
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
 		if z == null:
 			continue
 		if e["target"] == "player":
 			player.damage(float(z.stats["damage"]))
-		else:
-			build.damage(e["target"], int(z.stats["structure_damage"]))
+		elif build.pieces.has(e["target"]):
+			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
+			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
+			if build.damage(e["target"], int(z.stats["structure_damage"])):
+				noise.emit_kind(at, "wreck")
+	var wave := director.tick(TICK, noise, night, horde)
+	if not wave.is_empty():
+		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
+		add_message("%s from the %s..." % [what, wave["edge"]])
+	for m: Dictionary in messages:
+		m["time_left"] -= TICK
+	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
+
+
+func add_message(text: String, seconds: float = 6.0) -> void:
+	messages.append({"text": text, "time_left": seconds})
+
+
+## A one-off sound from the player ("footstep_walk", "footstep_sprint", ...; see data/noise.json).
+func make_noise(pos: Vector3, kind: String) -> void:
+	noise.emit_kind(pos, kind)
+
+
+## Fits a muffler to the machine at `cell`: -15 loudness, 10% slower. Returns "" or why not.
+func fit_muffler(cell: Vector2i) -> String:
+	var m: Factory.Machine = factory.machines.get(cell)
+	if m == null:
+		return "No machine there"
+	if m.muffled:
+		return "Already muffled"
+	var muffler: Dictionary = data.noise["muffler"]
+	if not inventory.take_all(muffler["cost"]):
+		return "Not enough materials"
+	m.muffled = true
+	m.time_scale = 1.0 + float(muffler["slowdown"])
+	return ""
 
 
 ## The player hits zombie `id` with their weapon (call after player.try_swing succeeds and the swing
@@ -86,6 +128,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 		return false
 	var w: Dictionary = data.weapons[player.weapon]
 	var dmg := float(w["damage"]) * (float(w["head_multiplier"]) if head else 1.0)
+	noise.emit_kind(z.pos, "melee_hit")
 	return z.take_hit(dmg, player_pos, float(w["knockback"]))
 
 
@@ -138,6 +181,10 @@ func _on_piece_added(key: String) -> void:
 ## If zombies wrecked it, the contents are lost.
 func _on_piece_removed(_key: String, piece: Dictionary) -> void:
 	if build.is_object(piece["id"]):
+		var m: Factory.Machine = factory.machines.get(piece["cell"])
+		var muffled := m != null and m.muffled
 		var held := factory.remove_at(piece["cell"])
 		if not piece.get("destroyed", false):
 			inventory.give_all(held)
+			if muffled:
+				inventory.give_all(data.noise["muffler"]["cost"])

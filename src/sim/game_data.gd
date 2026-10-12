@@ -11,6 +11,7 @@ var recipes: Dictionary = {}     # id -> {name, time: float, in: {item: int}, ou
 var debug_kit: Dictionary = {}   # item -> int
 var zombies: Dictionary = {}     # type -> stats (numbers), see data/zombies.json
 var weapons: Dictionary = {}     # id -> stats (numbers), see data/weapons.json
+var noise: Dictionary = {}       # muffler, sounds, director tuning: see data/noise.json
 var load_errors: PackedStringArray = []
 
 
@@ -20,6 +21,7 @@ static func load_default() -> GameData:
 			_read_json(DIR + "debug_kit.json", data), _read_json(DIR + "recipes.json", data))
 	data.zombies = _read_json(DIR + "zombies.json", data)
 	data.weapons = _read_json(DIR + "weapons.json", data)
+	data.noise = _read_json(DIR + "noise.json", data)
 	return data
 
 
@@ -42,6 +44,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"cost": cost,
 			"recipe": b.get("recipe", ""),
 			"hp": int(b.get("hp", 0)),
+			"loudness": float(b.get("loudness", 0.0)),
 		}
 	recipes = {}
 	for id: String in raw_recipes:
@@ -76,6 +79,8 @@ func validate() -> PackedStringArray:
 			errors.append("buildable '%s' needs positive hp" % id)
 		if b["kind"] == "machine" and not recipes.has(b["recipe"]):
 			errors.append("machine '%s' has unknown recipe '%s'" % [id, b["recipe"]])
+		if b["kind"] == "machine" and (b["loudness"] <= 0.0 or b["loudness"] > 100.0):
+			errors.append("machine '%s' needs a loudness from 1 to 100" % id)
 	for id: String in recipes:
 		var r: Dictionary = recipes[id]
 		if r["time"] <= 0.0:
@@ -93,12 +98,27 @@ func validate() -> PackedStringArray:
 			errors.append("debug kit has unknown item '%s'" % item)
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
 	_check_stats(errors, "weapon", weapons, WEAPON_STATS)
+	if noise.is_empty():
+		errors.append("no noise data")
+	else:
+		var muffler: Dictionary = noise.get("muffler", {})
+		for item: String in muffler.get("cost", {}):
+			if not items.has(item):
+				errors.append("muffler costs unknown item '%s'" % item)
+		_check_stats(errors, "noise", {"muffler": muffler}, ["cut", "slowdown"])
+		_check_stats(errors, "noise", {"sounds": noise.get("sounds", {})}, SOUNDS)
+		_check_stats(errors, "noise", {"director": noise.get("director", {})}, DIRECTOR_STATS)
 	return errors
 
 
 const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "attack_interval", "damage",
-		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius"]
+		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius", "hearing_day",
+		"hearing_night", "investigate_speed"]
 const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback"]
+const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck"]
+const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
+		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
+		"heat_per_zombie", "lure_time"]
 
 
 static func _check_stats(errors: PackedStringArray, what: String, table: Dictionary, keys: Array) -> void:

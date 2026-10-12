@@ -24,6 +24,7 @@
 		"name": "Smelter",
 		"kind": "machine",
 		"hp": 150,
+		"loudness": 60,
 		"size": [1.7, 1.6, 1.7],
 		"recipe": "smelt_plate",
 		"cost": { "plank": 10, "scrap_metal": 10 }
@@ -32,6 +33,7 @@
 		"name": "Press",
 		"kind": "machine",
 		"hp": 150,
+		"loudness": 55,
 		"size": [1.7, 1.4, 1.7],
 		"recipe": "press_nails",
 		"cost": { "plank": 10, "metal_plate": 10 }

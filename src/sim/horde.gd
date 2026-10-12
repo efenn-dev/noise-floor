@@ -1,12 +1,13 @@
 class_name Horde
 extends RefCounted
-## All the zombies. Thinks for each one on the sim tick (in id order, so it's deterministic) and
-## clears away corpses after a while.
+## All the zombies. Thinks for each one on the sim tick (in id order, so it's deterministic), lets each
+## listen for sounds every NoiseField.HEAR_WINDOW (staggered by id), and clears away corpses.
 
 var data: GameData
 var seed_value: int
 var zombies: Dictionary = {}  # id -> ZombieBrain
 var _next_id := 1
+var _ticks := 0
 
 
 func _init(p_data: GameData, p_seed: int = 1) -> void:
@@ -39,13 +40,21 @@ func alive_count() -> int:
 	return n
 
 
-## ctx: player_pos, player_dead, night, player_lit, pieces. Returns attack events with "zombie" added.
+## ctx: player_pos, player_dead, night, player_lit, pieces, and optionally noise (NoiseField).
+## Returns attack events with "zombie" added.
 func tick(dt: float, ctx: Dictionary) -> Array:
 	var events := []
+	_ticks += 1
+	var listen_every := maxi(1, roundi(NoiseField.HEAR_WINDOW / dt))
+	var noise: NoiseField = ctx.get("noise")
 	var ids := zombies.keys()
 	ids.sort()
 	for id: int in ids:
 		var z: ZombieBrain = zombies[id]
+		if noise != null and not z.is_dead() and (_ticks + id) % listen_every == 0:
+			var heard := noise.loudest_heard(z.pos, z.hearing(ctx["night"]))
+			if not heard.is_empty():
+				z.hear(heard["pos"], heard["key"])
 		var eye := z.pos + Vector3.UP * ZombieBrain.EYE_HEIGHT
 		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, ctx["player_pos"], z.los_clear,
 				ctx["night"], ctx["player_lit"], z.stats)

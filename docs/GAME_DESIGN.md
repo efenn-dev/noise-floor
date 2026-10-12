@@ -170,7 +170,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M2 — Build.** Inventory (sim, tested), build mode with ghost preview, 2 m grid snap, rotate, place and deconstruct foundations and walls; debug kit gives starting materials. Building data in `data/`.
 - [x] **M3 — Machines and belts.** Item and recipe data, Smelter + Press, belts between ports, items visibly moving, all simulated headlessly on the fixed tick (tests prove throughput: N scrap in → N plates out in T seconds). Hand-feed and take output with interact.
 - [x] **M4 — The dead.** Zombies on a navmesh: wander, see, chase, attack the player and walls. Player health, melee weapon, death and respawn. Zombie brain is sim-side and tested (state transitions).
-- [ ] **M5 — Noise.** Noise sources, the heard-level formula, walls muffling, zombies investigating sounds, the heat Director sending groups at night, mufflers. Debug overlay shows noise rings. **First playable.**
+- [x] **M5 — Noise.** Noise sources, the heard-level formula, walls muffling, zombies investigating sounds, the heat Director sending groups at night, mufflers. Debug overlay shows noise rings. **First playable.**
 - [ ] **M6 — Survive.** Hunger, thirst, fatigue, bleeding; searchable containers with loot tables; eat and drink; water and canned-food chains.
   - Also in M6 (from the long-game plan): every item gets a weight in kg in `data/`, and the player gets a carry limit of 20 kg plus bags (Strength raises it in M12). Over the limit: slower, more stamina use, louder footsteps. Over 150%: no sprinting.
 - [ ] **M7 — Power.** Generator + fuel, poles and wires, power draw, brownouts; first quiet power source.
