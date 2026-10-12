@@ -26,6 +26,12 @@ class Machine:
 	var crafted := 0     # crafts finished, ever
 	var muffled := false
 	var time_scale := 1.0  # a muffler slows the machine down
+	var watts := 0.0       # power it draws while working (0 = needs no power)
+	var powered := true    # set by PowerGrid each tick; an unpowered machine does nothing
+
+	## Would draw power this tick: working, or able to start.
+	func wants_power() -> bool:
+		return crafting or _can_start()
 
 	func craft_time() -> float:
 		return recipe["time"] * time_scale
@@ -34,6 +40,8 @@ class Machine:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP
 
 	func status() -> String:
+		if not powered:
+			return "no power"
 		if crafting:
 			return "working %d%%" % int(100.0 * progress / craft_time())
 		for item: String in recipe["out"]:
@@ -42,6 +50,8 @@ class Machine:
 		return "needs input"
 
 	func tick(dt: float) -> void:
+		if not powered:
+			return
 		if not crafting:
 			_try_start()
 		if crafting:
@@ -104,6 +114,7 @@ func add_machine(id: String, cell: Vector2i, facing: int) -> Machine:
 	m.cell = cell
 	m.facing = facing
 	m.recipe = data.recipes[data.buildables[id]["recipe"]]
+	m.watts = data.buildables[id]["watts"]
 	machines[cell] = m
 	return m
 

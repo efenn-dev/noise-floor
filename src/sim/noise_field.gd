@@ -2,7 +2,7 @@ class_name NoiseField
 extends RefCounted
 ## Every sound in the world this tick, and how loud each one is wherever a zombie stands.
 ##   heard level = loudness - 20 * log10(max(distance, 1)) - 10 * (walls in between)
-## Continuous sounds: machines while they work (a muffler takes 15 off). One-off sounds: footsteps,
+## Continuous sounds: machines while they work and generators while they run (a muffler takes 15 off). One-off sounds: footsteps,
 ## pipe hits, zombies bashing and wrecking things. One-offs stay audible for HEAR_WINDOW so every
 ## zombie (they listen every HEAR_WINDOW) gets one chance to hear each.
 ## Walls are the player's built walls on the 2 m grid; the town's buildings don't muffle yet.
@@ -37,8 +37,10 @@ func emit_kind(pos: Vector3, kind: String) -> void:
 
 
 ## Once per tick: lists the machines that are working, ages one-offs and takes in new ones.
-func refresh(factory: Factory, dt: float) -> void:
+func refresh(factory: Factory, dt: float, power: PowerGrid = null) -> void:
 	continuous.clear()
+	if power != null:
+		continuous.append_array(power.noise_sources())  # running generators
 	for cell: Vector2i in factory.machines:
 		var m: Factory.Machine = factory.machines[cell]
 		if m.crafting:

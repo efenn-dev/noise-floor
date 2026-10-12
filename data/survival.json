@@ -21,5 +21,8 @@
 	"carry_slow_per_overload": 0.5,
 	"carry_min_speed": 0.5,
 	"carry_no_sprint": 1.5,
-	"carry_footstep_bonus": 10
+	"carry_footstep_bonus": 10,
+	"siphon_noise": 35,
+	"car_fuel_min": 1,
+	"car_fuel_max": 3
 }

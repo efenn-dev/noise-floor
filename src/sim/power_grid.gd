@@ -1,0 +1,203 @@
+class_name PowerGrid
+extends RefCounted
+## Electricity. Generators (burn fuel, loud), solar panels (silent, daylight only) and power poles form
+## networks with the machines that need power:
+##   * a power pole links to anything within its reach (12 m), including other poles
+##   * other powered things link to each other within DEVICE_REACH (next-door cells)
+## Each network adds up supply and demand every tick. If demand is more than supply, it browns out:
+## every machine on it stops. Solar is used first (it's free); generators cover the rest and burn fuel
+## in proportion to that load. An idle generator burns nothing and makes no noise.
+## Machines that draw no watts (rain collector, planter) don't need power at all.
+
+const DEVICE_REACH := 3.0
+const MAX_CANS := 10
+
+var data: GameData
+var build: BuildGrid
+var factory: Factory
+## Debug/tests: every machine is powered.
+var free := false
+## Generators: piece key -> {cans: int, fuel: float (seconds of full load left in the open can),
+##   running: bool, load: float 0..1, muffled: bool}
+var generators: Dictionary = {}
+## Networks after the last tick: [{keys: Array, supply: float, demand: float, brownout: bool}]
+var networks: Array = []
+## Every connection, for drawing wires: [[key_a, key_b], ...]
+var links: Array = []
+var _network_of: Dictionary = {}  # piece key -> index into networks
+var _dirty := true
+var _refunds: Dictionary = {}  # key -> full cans left in a generator that was just removed
+
+
+func _init(p_data: GameData, p_build: BuildGrid, p_factory: Factory) -> void:
+	data = p_data
+	build = p_build
+	factory = p_factory
+	build.piece_added.connect(_on_added)
+	build.piece_removed.connect(_on_removed)
+
+
+## Is this piece part of the electric world (makes, carries or needs power)?
+func is_node(key: String) -> bool:
+	if not build.pieces.has(key):
+		return false
+	var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+	return b["kind"] in ["generator", "solar", "pole"] or b["watts"] > 0.0
+
+
+func network_of(key: String) -> Dictionary:
+	return networks[_network_of[key]] if _network_of.has(key) else {}
+
+
+## Loads fuel into a generator from `inv`, up to MAX_CANS. Returns how many went in.
+func load_fuel(key: String, inv: Inventory) -> int:
+	if not generators.has(key):
+		return 0
+	var g: Dictionary = generators[key]
+	var fuel: String = data.buildables[build.pieces[key]["id"]]["fuel"]
+	var n := mini(inv.count(fuel), MAX_CANS - g["cans"])
+	if n > 0 and inv.remove(fuel, n):
+		g["cans"] += n
+		return n
+	return 0
+
+
+## Fuel left in a generator, in seconds at full load.
+func fuel_seconds(key: String) -> float:
+	var g: Dictionary = generators[key]
+	return g["fuel"] + g["cans"] * data.buildables[build.pieces[key]["id"]]["burn_time"]
+
+
+## Rebuilds the networks now if building changed since the last tick (the world calls this to draw wires).
+func refresh() -> void:
+	if _dirty:
+		_rebuild()
+
+
+func tick(dt: float, daylight: float) -> void:
+	refresh()
+	for cell: Vector2i in factory.machines:
+		var m: Factory.Machine = factory.machines[cell]
+		m.powered = free or m.watts <= 0.0  # networked machines get set below
+	for g: Dictionary in generators.values():
+		g["running"] = false
+		g["load"] = 0.0
+	for net: Dictionary in networks:
+		var solar := 0.0
+		var gen_capacity := 0.0
+		var gens := []
+		var machines := []
+		var demand := 0.0
+		for key: String in net["keys"]:
+			var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+			match b["kind"]:
+				"solar":
+					solar += b["watts_out"] * daylight
+				"generator":
+					if fuel_seconds(key) > 0.0:
+						gen_capacity += b["watts_out"]
+						gens.append(key)
+				"machine":
+					var m: Factory.Machine = factory.machines.get(build.pieces[key]["cell"])
+					if m != null and m.watts > 0.0:
+						machines.append(m)
+						if m.wants_power():
+							demand += m.watts
+		net["supply"] = solar + gen_capacity
+		net["demand"] = demand
+		net["brownout"] = demand > net["supply"] + 1e-6
+		for m: Factory.Machine in machines:
+			m.powered = free or not net["brownout"]
+		if net["brownout"] or gen_capacity <= 0.0:
+			continue
+		var load := maxf(0.0, demand - solar) / gen_capacity  # solar first, generators cover the rest
+		if load <= 0.0:
+			continue
+		for key: String in gens:
+			var g: Dictionary = generators[key]
+			g["running"] = true
+			g["load"] = load
+			g["fuel"] -= dt * load
+			while g["fuel"] <= 0.0 and g["cans"] > 0:
+				g["cans"] -= 1
+				g["fuel"] += data.buildables[build.pieces[key]["id"]]["burn_time"]
+			g["fuel"] = maxf(0.0, g["fuel"])
+
+
+## Running generators, as noise sources: {pos, loudness, key, kind}.
+func noise_sources() -> Array:
+	var out := []
+	var cut := float(data.noise["muffler"]["cut"])
+	for key: String in generators:
+		var g: Dictionary = generators[key]
+		if g["running"]:
+			var id: String = build.pieces[key]["id"]
+			out.append({"pos": build.piece_center(key), "loudness": data.buildables[id]["loudness"] - (cut if g["muffled"] else 0.0),
+					"key": key, "kind": id})
+	return out
+
+
+## Full gas cans that were in generator `key` when it was removed (once).
+func take_refund(key: String) -> int:
+	var n: int = _refunds.get(key, 0)
+	_refunds.erase(key)
+	return n
+
+
+func _on_added(key: String) -> void:
+	if build.kind_of(build.pieces[key]["id"]) == "generator":
+		generators[key] = {"cans": 0, "fuel": 0.0, "running": false, "load": 0.0, "muffled": false}
+	_dirty = true
+
+
+func _on_removed(key: String, _piece: Dictionary) -> void:
+	if generators.has(key):
+		_refunds[key] = generators[key]["cans"]
+	generators.erase(key)
+	_dirty = true
+
+
+## Groups the powered pieces into networks (union-find over every pair in reach).
+func _rebuild() -> void:
+	_dirty = false
+	var keys := []
+	for key: String in build.pieces:
+		if is_node(key):
+			keys.append(key)
+	keys.sort()
+	var parent := {}
+	links = []
+	for k: String in keys:
+		parent[k] = k
+	for i in keys.size():
+		for j in range(i + 1, keys.size()):
+			var a: String = keys[i]
+			var b: String = keys[j]
+			var reach := maxf(_reach(a), _reach(b))
+			var pa := build.piece_center(a)
+			var pb := build.piece_center(b)
+			if Vector2(pa.x - pb.x, pa.z - pb.z).length() <= reach + 1e-3:
+				parent[_find(parent, a)] = _find(parent, b)
+				links.append([a, b])
+	var index := {}
+	networks = []
+	_network_of = {}
+	for k: String in keys:
+		var root := _find(parent, k)
+		if not index.has(root):
+			index[root] = networks.size()
+			networks.append({"keys": [], "supply": 0.0, "demand": 0.0, "brownout": false})
+		networks[index[root]]["keys"].append(k)
+		_network_of[k] = index[root]
+
+
+func _reach(key: String) -> float:
+	var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+	return b["reach"] if b["kind"] == "pole" else DEVICE_REACH
+
+
+static func _find(parent: Dictionary, k: String) -> String:
+	while parent[k] != k:
+		parent[k] = parent[parent[k]]
+		k = parent[k]
+	return k

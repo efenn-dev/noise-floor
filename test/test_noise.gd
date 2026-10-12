@@ -15,6 +15,7 @@ func _run(sim: SimWorld, seconds: float) -> void:
 ## A sim with a smelter at cell (0, 0) (centre 1, 1) that keeps working.
 func _smelter_sim(hour := 10.0) -> SimWorld:
 	var sim := SimWorld.new(hour)
+	sim.power.free = true  # these tests are about noise, not power
 	sim.give_debug_kit()
 	sim.inventory.add("plank", 200)
 	sim.inventory.add("nails", 200)

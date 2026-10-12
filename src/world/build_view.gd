@@ -13,6 +13,9 @@ const COLORS := {
 	"machine": Color(0.42, 0.44, 0.4),
 	"bed": Color(0.35, 0.4, 0.6),
 	"storage": Color(0.5, 0.38, 0.22),
+	"generator": Color(0.6, 0.5, 0.15),
+	"solar": Color(0.12, 0.16, 0.3),
+	"pole": Color(0.4, 0.3, 0.2),
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
@@ -62,6 +65,14 @@ func _on_added(key: String) -> void:
 			lamp.name = "Lamp"
 		"bed":
 			_add_part(body, Vector3(0.7, 0.12, 0.35), Vector3(0, size.y / 2.0 + 0.06, -size.z / 2.0 + 0.25), Color(0.92, 0.92, 0.9))
+		"generator":
+			_add_part(body, Vector3(0.15, 0.6, 0.15), Vector3(size.x / 2.0 - 0.2, size.y / 2.0 + 0.3, 0.3), Color(0.25, 0.25, 0.25))  # exhaust
+			var glamp := _add_part(body, Vector3(0.2, 0.2, 0.2), Vector3(-size.x / 2.0 + 0.25, size.y / 2.0 + 0.1, 0), Color(0.2, 0.2, 0.2))
+			glamp.name = "Lamp"
+		"solar":
+			_add_part(body, Vector3(0.12, 0.5, 0.12), Vector3(0, -0.3, 0), Color(0.5, 0.5, 0.5))  # stand
+		"pole":
+			_add_part(body, Vector3(1.0, 0.1, 0.1), Vector3(0, size.y / 2.0 - 0.2, 0), Color(0.35, 0.25, 0.15))  # crossbar
 		"storage":
 			_add_part(body, Vector3(size.x + 0.04, 0.08, size.z + 0.04), Vector3(0, size.y / 2.0 - 0.1, 0), Color(0.3, 0.22, 0.12))
 	var shape := CollisionShape3D.new()

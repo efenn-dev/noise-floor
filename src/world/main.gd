@@ -257,6 +257,7 @@ func _build_town() -> void:
 		var car := _add_block(car_pos, Vector3(1.9, 1.5, 4.4), car_color)
 		car.set_meta("container_id", "car_%d" % i)  # look at the car: search its trunk
 		sim.loot.add("car_%d" % i, "car_trunk", car_pos)
+		sim.add_car("car_%d" % i)
 
 
 func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> void:
@@ -354,7 +355,8 @@ func _build_zombies(args: Dictionary) -> void:
 	noise_overlay.visible = args.has("noise-overlay")
 
 
-## Smelter -> 3 belts -> press, running east just north of spawn, with 20 scrap loaded.
+## Smelter -> 3 belts -> press, running east just north of spawn, with 20 scrap loaded,
+## powered by a fuelled generator and a pole.
 func _place_demo_factory() -> void:
 	var E := BuildGrid.Side.EAST
 	var stock := sim.stock_at(SPAWN)
@@ -364,6 +366,11 @@ func _place_demo_factory() -> void:
 	for x in range(-1, 2):
 		sim.build.place("belt", Vector2i(x, 0), E, stock)
 	sim.build.place("press", Vector2i(2, 0), E, stock)
+	# Power: a generator behind the smelter and a pole to reach the press.
+	sim.build.place("foundation", Vector2i(-2, 1), 0, stock)
+	sim.build.place("generator", Vector2i(-2, 1), E, stock)
+	sim.build.place("power_pole", Vector2i(0, 1), E, stock)
+	sim.power.load_fuel(sim.build.key_for("generator", Vector2i(-2, 1)), stock)
 	var feed := Inventory.new()
 	feed.add("scrap_metal", 20)
 	sim.factory.hand_interact(Vector2i(-2, 0), feed)
@@ -381,6 +388,8 @@ func _place_demo_farm() -> void:
 	sim.build.place("purifier", Vector2i(0, -1), E, stock)
 	sim.build.place("planter", Vector2i(-2, 1), E, stock)
 	sim.build.place("canner", Vector2i(0, 1), E, stock)
+	sim.build.place("foundation", Vector2i(1, 0), 0, stock)
+	sim.build.place("solar_panel", Vector2i(1, 0), E, stock)  # silent power for the purifier and canner
 	sim.factory.machines[Vector2i(-2, 1)].input = {"seeds": 3, "dirty_water": 3}
 	sim.factory.machines[Vector2i(0, 1)].input = {"metal_plate": 3}
 
@@ -444,7 +453,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · Esc"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
