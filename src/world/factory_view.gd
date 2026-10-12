@@ -9,6 +9,7 @@ const ITEM_SIZE := 0.3
 var sim: SimWorld
 var build_view: BuildView
 var _pool: Array[MeshInstance3D] = []
+var items_shown := 0  # belt items drawn last frame
 var _materials: Dictionary = {}  # item -> material
 var _item_mesh := BoxMesh.new()
 
@@ -24,10 +25,44 @@ var _wire_node: MeshInstance3D
 var _wired_links: Array = []
 
 
+var _tracers := ImmediateMesh.new()
+var _tracer_node: MeshInstance3D
+
+
 func _process(_delta: float) -> void:
 	_draw_items()
 	_draw_lamps()
 	_draw_wires()
+	_draw_turrets()
+
+
+## Turret heads swing toward their target; each shot leaves a brief tracer.
+func _draw_turrets() -> void:
+	for cell: Vector2i in sim.factory.turrets:
+		var t: Factory.Turret = sim.factory.turrets[cell]
+		var body := build_view.body_for("o:%d:%d" % [cell.x, cell.y])
+		var head := body.get_node_or_null("Head") as Node3D if body != null else null
+		if head == null or not sim.horde.zombies.has(t.target):
+			continue
+		var to: Vector3 = sim.horde.zombies[t.target].pos - head.global_position
+		head.global_rotation.y = atan2(-to.x, -to.z)
+	if _tracer_node == null:
+		_tracer_node = MeshInstance3D.new()
+		_tracer_node.mesh = _tracers
+		_tracer_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = Color(1.0, 0.9, 0.5)
+		_tracer_node.material_override = mat
+		add_child(_tracer_node)
+	_tracers.clear_surfaces()
+	if sim.defense.recent_shots.is_empty():
+		return
+	_tracers.surface_begin(Mesh.PRIMITIVE_LINES)
+	for s: Dictionary in sim.defense.recent_shots:
+		_tracers.surface_add_vertex(s["from"])
+		_tracers.surface_add_vertex(s["to"])
+	_tracers.surface_end()
 
 
 ## Wires sag a little between the tops of connected pieces; redrawn only when the network changes.
@@ -85,6 +120,7 @@ func _draw_items() -> void:
 			mesh.visible = true
 	for i in range(used, _pool.size()):
 		_pool[i].visible = false
+	items_shown = used
 
 
 func _draw_lamps() -> void:

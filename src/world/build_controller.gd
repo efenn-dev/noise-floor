@@ -7,8 +7,9 @@ extends Node3D
 ## Left-click builds, right-click removes the piece you're looking at (full refund).
 
 const REACH := 8.0
-const PIECES := ["foundation", "wall", "belt", "smelter", "press", "rain_collector", "purifier", "planter",
-		"canner", "bed", "storage", "generator", "solar_panel", "power_pole"]
+const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
+		"purifier", "planter", "canner", "bed", "storage", "generator", "solar_panel", "power_pole", "spikes",
+		"nail_turret"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 
@@ -128,7 +129,7 @@ func update_aim() -> void:
 	aim_remove_key = ""
 	var from := camera.global_position
 	var forward := -camera.global_basis.z
-	var query := PhysicsRayQueryParameters3D.create(from, from + forward * REACH, Layers.WORLD | Layers.BUILT, exclude)
+	var query := PhysicsRayQueryParameters3D.create(from, from + forward * REACH, Layers.WORLD | Layers.BUILT | Layers.TRAP, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		_ghost.visible = false

@@ -45,6 +45,8 @@ var blocked_by := ""       # piece key it is walking into, "" if none
 
 ## Set by take_hit; the world body applies it as a shove and clears it.
 var knockback := Vector3.ZERO
+## Set each tick by traps it stands on (1 = full speed).
+var slow := 1.0
 
 var _cooldown := 0.0
 var _timer := 0.0
@@ -77,12 +79,24 @@ func is_dead() -> bool:
 func move_speed() -> float:
 	match state:
 		State.WANDER:
-			return float(stats["wander_speed"])
+			return float(stats["wander_speed"]) * slow
 		State.CHASE:
-			return float(stats["chase_speed"])
+			return float(stats["chase_speed"]) * slow
 		State.INVESTIGATE:
-			return float(stats["investigate_speed"])
+			return float(stats["investigate_speed"]) * slow
 	return 0.0
+
+
+## Damage that doesn't come from anyone (traps): hurts, but doesn't tell it where you are.
+func hurt(damage: float) -> bool:
+	if state == State.DEAD:
+		return false
+	hp -= damage
+	if hp <= 0.0:
+		hp = 0.0
+		state = State.DEAD
+		return true
+	return false
 
 
 ## Hearing threshold: heard level must reach this for it to notice a sound.

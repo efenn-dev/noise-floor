@@ -2,12 +2,16 @@ class_name BuildGrid
 extends RefCounted
 ## Where player-built pieces are and the rules for placing and removing them.
 ## The ground is a grid of 2 m cells. North is -Z. A foundation fills one cell; a wall stands on
-## one edge of a cell and needs a foundation on at least one side of that edge.
+## one edge of a cell and needs a foundation on at least one side of that edge. Doors and barricades
+## are edge pieces too (one per edge, same rules as walls).
 ## Edges are stored once, so "south of cell A" and "north of the cell below A" are the same wall.
 ## Machines and belts ("objects") stand on a foundation, one per cell, facing a side.
 
 signal piece_added(key: String)
 signal piece_removed(key: String, piece: Dictionary)
+signal piece_changed(key: String)  # a door opened or closed
+
+const EDGE_KINDS := ["wall", "door", "barricade"]
 
 const GRID := 2.0
 enum Side { NORTH, EAST, SOUTH, WEST }
@@ -37,21 +41,74 @@ static func canonical_edge(cell: Vector2i, side: int) -> Array:
 
 
 func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
-	if _kind(id) == "wall":
+	if is_edge(id):
 		return key_for_wall_edge(cell, side)
 	if is_object(id):
 		return "o:%d:%d" % [cell.x, cell.y]
 	return "f:%d:%d" % [cell.x, cell.y]
 
 
-## Machines, belts, beds, crates and power pieces: one per cell, facing a side. All but power poles
-## need a foundation.
+## Machines, belts, beds, crates, power pieces, traps and turrets: one per cell, facing a side.
+## All but power poles and traps need a foundation.
 func is_object(id: String) -> bool:
-	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole"]
+	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret"]
 
 
 func kind_of(id: String) -> String:
 	return _kind(id)
+
+
+## Walls, doors and barricades: they stand on a cell edge.
+func is_edge(id: String) -> bool:
+	return _kind(id) in EDGE_KINDS
+
+
+## A built edge piece blocks sound and sight unless it's an open door. Barricades are low, so a
+## turret can shoot over them (they still count for sound).
+func edge_blocks(key: String, for_sight: bool = false) -> bool:
+	if not pieces.has(key):
+		return false
+	var kind := _kind(pieces[key]["id"])
+	if kind == "door":
+		return not pieces[key].get("open", false)
+	if kind == "barricade":
+		return not for_sight
+	return true
+
+
+## Opens or closes a door. Returns the new state (true = open).
+func toggle_door(key: String) -> bool:
+	if not pieces.has(key) or _kind(pieces[key]["id"]) != "door":
+		return false
+	pieces[key]["open"] = not pieces[key].get("open", false)
+	piece_changed.emit(key)
+	return pieces[key]["open"]
+
+
+## Fully repairs a piece, paying a share of its build cost for the damage. Returns "" or why not.
+func repair(key: String, inv: Inventory) -> String:
+	if not pieces.has(key):
+		return "Nothing to repair"
+	var piece: Dictionary = pieces[key]
+	var max_hp: int = data.buildables[piece["id"]]["hp"]
+	if piece["hp"] >= max_hp:
+		return "Not damaged"
+	var cost := repair_cost(key)
+	if not inv.take_all(cost):
+		return "Not enough materials"
+	piece["hp"] = max_hp
+	return ""
+
+
+## What repairing a piece would cost: its build cost times the share of hp missing (at least 1 each).
+func repair_cost(key: String) -> Dictionary:
+	var piece: Dictionary = pieces[key]
+	var b: Dictionary = data.buildables[piece["id"]]
+	var missing := 1.0 - float(piece["hp"]) / float(b["hp"])
+	var cost := {}
+	for item: String in b["cost"]:
+		cost[item] = maxi(1, ceili(b["cost"][item] * missing))
+	return cost
 
 
 ## "" if the piece can go here with what's in `inv`, otherwise a short reason for the HUD.
@@ -60,11 +117,11 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Unknown piece"
 	if pieces.has(key_for(id, cell, side)):
 		return "Already built"
-	if _kind(id) == "wall":
+	if is_edge(id):
 		var edge := canonical_edge(cell, side)
 		if not _edge_supported(edge[0], edge[1], ""):
 			return "Needs a foundation"
-	if is_object(id) and _kind(id) != "pole" and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
+	if is_object(id) and not _kind(id) in ["pole", "trap"] and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
 		return "Needs a foundation"
 	if not inv.has_all(data.buildables[id]["cost"]):
 		return "Not enough materials"
@@ -79,7 +136,7 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	inv.take_all(data.buildables[id]["cost"])
 	var key := key_for(id, cell, side)
 	var piece := {"id": id, "cell": cell, "side": side, "hp": data.buildables[id]["hp"]}
-	if _kind(id) == "wall":
+	if is_edge(id):
 		var edge := canonical_edge(cell, side)
 		piece["cell"] = edge[0]
 		piece["side"] = edge[1]
@@ -173,7 +230,7 @@ func center_for(id: String, cell: Vector2i, side: int) -> Vector3:
 func yaw_for(id: String, cell: Vector2i, side: int) -> float:
 	if is_object(id):
 		return -90.0 * side
-	if _kind(id) != "wall":
+	if not is_edge(id):
 		return 0.0
 	return 0.0 if canonical_edge(cell, side)[1] == Side.NORTH else 90.0
 
