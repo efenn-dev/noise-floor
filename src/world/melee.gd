@@ -64,7 +64,7 @@ func swing() -> int:
 	var id: int = body.get_meta("zombie_id")
 	var head: bool = hit["position"].y > body.global_position.y + ZombieBody.HEAD_Y
 	var killed := sim.hit_zombie(id, head)
-	last_message = "Killed it" if killed else ("Head hit!" if head else "Hit")
+	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
 	_message_time = 1.0
 	return id
 
