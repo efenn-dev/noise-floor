@@ -23,6 +23,22 @@ const COLORS := {
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
+## Art made with Codex: models built by tools/art/<id>.py (checked by test_art_models.gd) replace the box mesh,
+## collider unchanged. Pieces not listed stay plain coloured boxes.
+const MODELS := {
+	"press": "res://assets/models/press.glb",
+	"smelter": "res://assets/models/smelter.glb",
+	"rain_collector": "res://assets/models/rain_collector.glb",
+	"purifier": "res://assets/models/purifier.glb",
+	"canner": "res://assets/models/canner.glb",
+	"planter": "res://assets/models/planter.glb",
+	"generator": "res://assets/models/generator.glb",
+	"solar_panel": "res://assets/models/solar_panel.glb",
+	"power_pole": "res://assets/models/power_pole.glb",
+}
+const SURFACES := {"foundation": "res://assets/textures/concrete_floor"}  # <stem>_albedo.png + _normal.png
+
+var _surface_mats: Dictionary = {}  # id -> StandardMaterial3D, shared so world-space tiling lines up
 
 
 func setup(p_grid: BuildGrid) -> void:
@@ -49,16 +65,23 @@ func _on_added(key: String) -> void:
 	body.set_meta("piece_key", key)
 	body.position = grid.piece_center(key)
 	body.rotation_degrees.y = grid.yaw_for(id, piece["cell"], piece.get("side", 0))
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mesh.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = COLORS.get(info["kind"], Color.GRAY)
-	mat.roughness = 0.95
-	mesh.material_override = mat
-	body.add_child(mesh)
-	match info["kind"]:
+	if MODELS.has(id):
+		_add_model(body, id)
+	else:
+		var mesh := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = size
+		mesh.mesh = box
+		if SURFACES.has(id):
+			mesh.material_override = _surface(id)
+		else:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = COLORS.get(info["kind"], Color.GRAY)
+			mat.roughness = 0.95
+			mesh.material_override = mat
+		body.add_child(mesh)
+	# Models carry their own details (lamp, in/out paint), so they skip these placeholder parts.
+	match info["kind"] if not MODELS.has(id) else "":
 		"belt":
 			# Two pale chevron bars toward the front (-Z) show which way it runs.
 			for z in [-0.55, 0.25]:
@@ -134,6 +157,39 @@ func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshI
 	part.material_override = mat
 	body.add_child(part)
 	return part
+
+
+## A model's "Lamp" becomes the body's own "Lamp" child with an unshared material, so
+## FactoryView can recolour each machine's lamp (see tools/art/kit.py).
+func _add_model(body: StaticBody3D, id: String) -> void:
+	var model := (load(MODELS[id]) as PackedScene).instantiate() as Node3D
+	body.add_child(model)
+	var lamp := model.get_node_or_null("Lamp") as MeshInstance3D
+	if lamp != null:
+		model.remove_child(lamp)  # the model root sits at the body origin, so the lamp's transform still holds
+		lamp.owner = null
+		body.add_child(lamp)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.2, 0.2)
+		lamp.material_override = mat
+
+
+func _surface(id: String) -> StandardMaterial3D:
+	if not _surface_mats.has(id):
+		var stem: String = SURFACES[id]
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = load(stem + "_albedo.png")
+		mat.albedo_color = Color(0.72, 0.72, 0.72)  # generated photos come out bright; noon sun washed them white
+		mat.normal_enabled = true
+		mat.normal_texture = load(stem + "_normal.png")
+		mat.roughness = 0.92
+		# World-space triplanar: one tile per 2 m build cell, seamless across neighbouring pieces.
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = true
+		mat.uv1_scale = Vector3.ONE * 0.5
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_surface_mats[id] = mat
+	return _surface_mats[id]
 
 
 func _on_removed(key: String, _piece: Dictionary) -> void:

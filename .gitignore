@@ -4,3 +4,5 @@
 .shots/
 # Exports
 /build/
+# Python bytecode from tools/art
+__pycache__/
