@@ -19,6 +19,7 @@ extends Node3D
 ##   --noise-overlay       start with the noise overlay (N) on
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
+##   --inventory                     open the inventory screen (Tab in game)
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
 const SHOT_DELAY_FRAMES := 30
@@ -34,6 +35,7 @@ var build_view: BuildView
 var builder: BuildController
 var factory_view: FactoryView
 var sound_view: SoundView
+var inventory_screen: InventoryScreen
 var interactor: Interactor
 var nav: NavBaker
 var zombie_view: ZombieView
@@ -87,6 +89,10 @@ func _ready() -> void:
 	_build_building(args)
 	_build_zombies(args)
 	_build_hud()
+	inventory_screen = InventoryScreen.new()
+	add_child(inventory_screen)
+	inventory_screen.setup(sim)
+	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
 	if _loaded:
 		_apply_save(save)
 	_build_menus(args)
@@ -98,7 +104,12 @@ func _ready() -> void:
 	for i in roundi(float(args.get("advance", "0")) * SimWorld.TICK_RATE):
 		sim.step()
 	_apply_time()
-	if _shot_path == "" and not menus.is_open():
+	if args.has("inventory"):
+		sim.player_pos = player.global_position
+		inventory_screen.open()
+		if args["inventory"] != "":
+			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
+	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
@@ -175,7 +186,9 @@ func _build_environment() -> void:
 ## Tells the sim where the player is; freezes the player while dead.
 func _sync_player() -> void:
 	var p := sim.player
-	player.frozen = p.dead or p.asleep
+	if inventory_screen.is_open() and (p.dead or p.asleep):
+		inventory_screen.close()
+	player.frozen = p.dead or p.asleep or inventory_screen.is_open()  # no walking while sorting your pockets
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -217,6 +230,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if sim.player.asleep:
 		if event is InputEventKey and event.pressed and not event.echo:
 			sim.player.wake()  # any key wakes you
+		return
+	if event.is_action_pressed("inventory") and not sim.player.dead:
+		sim.player_pos = player.global_position
+		inventory_screen.open()
+		get_viewport().set_input_as_handled()
 		return
 	if not InputSetup.captured():
 		return
@@ -777,4 +795,5 @@ func _title_view(on: bool) -> void:
 
 func _exit_tree() -> void:
 	Surfaces.clear_cache()
+	InventoryScreen.clear_cache()
 	SoundView.clear_cache()

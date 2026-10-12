@@ -45,4 +45,5 @@ func _initialize() -> void:
 	print("\n%d passed, %d failed" % [total_passed, total_failed])
 	Surfaces.clear_cache()
 	SoundView.clear_cache()
+	InventoryScreen.clear_cache()
 	quit(1 if total_failed > 0 else 0)

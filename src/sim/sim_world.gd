@@ -188,7 +188,57 @@ func place_start_stash(cell: Vector2i) -> String:
 	return key
 
 
+## Storage crates within arm's reach (crate_reach) of `at`, nearest first: what the inventory screen shows.
+func crates_near(at: Vector3) -> Array:
+	var reach := float(data.survival["crate_reach"])
+	var found := []
+	for key: String in storages:
+		if build.pieces.has(key):
+			var d := _flat_dist(build.piece_center(key), at)
+			if d <= reach:
+				found.append([d, key])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return found.map(func(e: Array) -> String: return e[1])
+
+
+## Drops items from your pockets in a bag at your feet (into a bag already lying there, if any).
+## Pick it back up with E like a death bag. Returns a message.
+func drop_items(item: String, amount: int) -> String:
+	var n := mini(amount, inventory.count(item))
+	if n <= 0:
+		return "Nothing to drop"
+	inventory.remove(item, n)
+	var msg := "Dropped %d %s" % [n, data.item_name(item)]
+	for bag: Dictionary in bags:
+		if _flat_dist(bag["pos"], player_pos) <= 1.0:
+			bag["items"][item] = int(bag["items"].get(item, 0)) + n
+			return msg
+	drop_bag(player_pos, {item: n})
+	return msg
+
+
 # --- Eating, drinking, first aid, sleep -----------------------------------------
+
+## True if `item` can be used from the inventory screen (food, drink or a bandage).
+func can_use(item: String) -> bool:
+	return data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0 			or data.item_value(item, "bandage") > 0.0
+
+
+## Uses one of a particular item from your pockets: eat or drink it, or put on a bandage.
+func use_item(item: String) -> String:
+	if inventory.count(item) <= 0:
+		return "You don't have that"
+	if data.item_value(item, "bandage") > 0.0:
+		return use_bandage()
+	var food := data.item_value(item, "food")
+	var water := data.item_value(item, "water")
+	if food <= 0.0 and water <= 0.0:
+		return "Can't use %s" % data.item_name(item)
+	inventory.remove(item, 1)
+	player.consume(food, water)
+	return "%s %s" % ["Ate" if food >= water else "Drank", data.item_name(item)]
+
+
 
 ## Eats the most filling food you carry. Returns a message for the HUD.
 func eat_best() -> String:

@@ -17,6 +17,7 @@
 	"search_range": 3.0,
 	"search_noise": 30,
 	"storage_range": 30,
+	"crate_reach": 3,
 	"carry_base": 20,
 	"carry_slow_per_overload": 0.5,
 	"carry_min_speed": 0.5,

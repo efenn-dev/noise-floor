@@ -26,6 +26,7 @@ const KEYS := {
 	"build_pick_8": [KEY_8],
 	"build_pick_9": [KEY_9],
 	"build_pick_10": [KEY_0],
+	"inventory": [KEY_TAB, KEY_I],
 	"eat": [KEY_Z],
 	"drink": [KEY_X],
 	"bandage": [KEY_H],

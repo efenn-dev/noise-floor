@@ -181,7 +181,16 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M8 — Defend.** Doors, barricades, traps, a turret that uses produced ammo; structure HP and repair.
 - [x] **M9 — Keep it.** Save/load, main menu, settings (mouse sensitivity, volume, day length), pause.
 - [x] **M10 — Look and sound.** CC0 models (ask Emmitt first), machine hums and zombie moans (sound sells the noise theme), fog and flashlight atmosphere, title screen.
-- [ ] **M10b — Inventory screen.** **Tab** opens your pockets next to any crate in reach, with item icons, counts, weights and your carry limit. Click an item to use it (eat, drink, bandage), drop it, or move it between pockets and the crate (shift-click moves the whole stack). Item icons are made with Codex (`assets/icons/`). This comes before M11, because loot, bags and carry weight all need a place to see your stuff.
+- [x] **M10b — Inventory screen.** **Tab** opens your pockets next to any crate in reach, with item icons, counts, weights and your carry limit. Click an item to use it (eat, drink, bandage), drop it, or move it between pockets and the crate (shift-click moves the whole stack). Item icons are made with Codex (`assets/icons/`). This comes before M11, because loot, bags and carry weight all need a place to see your stuff.
+- [ ] **M10c — Wheels.** Drivable cars, with better-looking ones:
+  - **Look:** a few car types (sedan, pickup, van) with worn, rusty, scratched paint, tinted per car. Their textures are mapped to the car itself, not the world, so they don't slide when it moves.
+  - **Driving:** **E** gets in and out, WASD drives, Space is the handbrake, **H** is the horn, and headlights come on at night. Physics is Godot's `VehicleBody3D`, and the car models need their wheels as separate parts.
+  - **Noise:** a running engine is loud (about a generator) and draws zombies; the horn is very loud.
+  - **Fuel:** a car's tank is the gas you can siphon, so siphoning strands it. Refuel from gas cans.
+  - **Wrecks:** some cars can't drive (flat tyres, smashed); the rest start if they have fuel.
+  - **Damage and storage:** hitting zombies hurts them and the car. The trunk is storage that shows up in the inventory screen.
+  - **Saving:** cars are saved where you parked them.
+  - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
 
 **The long game** (see "Long game" above), in this order:
 
