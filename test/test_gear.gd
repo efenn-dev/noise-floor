@@ -272,24 +272,29 @@ func test_old_pete_drops_his_axe() -> void:
 	check(TownPlan.factory_rect().has_point(Vector2(pete.pos.x, pete.pos.z)), "he stands in the factory hall")
 	pete.take_hit(1000.0, Vector3.ZERO, 0.0)
 	sim.step()
-	eq(sim.bags.size(), 1, "a bag where he fell")
-	var axe: Dictionary = sim.bags[0]["gear"][0]
+	eq(sim.bags.size(), 0, "S4: no bag; his body is what you search")
+	var cid := SimWorld.CORPSE + str(pete.id)
+	check(sim.loot.containers.has(cid), "his corpse is a container")
+	var axe: Dictionary = sim.loot.containers[cid]["gear"][0]
 	eq(axe["name"], "Pete's Fire Axe", "with his axe")
 	eq(axe["rarity"], "gold", "gold")
 	eq(axe["base"], "axe", "an axe")
-	check(sim.bags[0]["pos"].distance_to(pete.pos) < 0.01, "where he fell")
-	check(sim.messages.any(func(m: Dictionary) -> bool: return m["text"] == "Old Pete drops something gold"),
-			"the HUD says Old Pete drops something gold")
+	check(sim.loot.containers[cid]["pos"].distance_to(pete.pos) < 0.01, "where he fell")
+	check(sim.messages.any(func(m: Dictionary) -> bool: return m["text"] == "Old Pete is carrying something gold: search the body"),
+			"the HUD says Old Pete is carrying something gold")
 	sim.player_pos = pete.pos
-	var took := sim.take_bag(sim.bags[0]["id"])
-	check(took.has("Pete's Fire Axe"), "picking up the bag says what you took")
+	eq(sim.search(cid), "", "search the body")
+	for i in roundi(sim.loot.search_time() / SimWorld.TICK) + 2:
+		sim.step()
+	check(sim.loot.containers[cid]["searched"], "searched")
 	eq(sim.gear.pieces.size(), 2, "the axe (and, since M14, his deer rifle) are in your pockets")
 	eq(sim.equip_gear(axe["uid"]), "Equipped Pete's Fire Axe", "equip it")
 	eq(sim.gear.weapon_name(), "Pete's Fire Axe", "it's your weapon now")
 	check(sim.skills.bonus("melee_damage") >= 0.15, "its damage stat counts")
 
 
-func test_zombie_drops_land_in_a_bag() -> void:
+func test_zombie_drops_are_on_their_bodies() -> void:
+	# S4: what a zombie carried is on its corpse (searched with E), no longer in a drop bag.
 	var sim := SimWorld.new(8.0, null, 3)
 	var drops := 0
 	var kills := 400
@@ -297,27 +302,35 @@ func test_zombie_drops_land_in_a_bag() -> void:
 		var z := sim.horde.spawn("shambler", Vector3(i, 0, 50))
 		z.take_hit(1000.0, Vector3.ZERO, 0.0)
 	sim.step()
-	for b: Dictionary in sim.bags:
-		drops += b["gear"].size()
-		if drops == 1:
-			check(b["items"].is_empty() and b["gear"].size() == 1, "one piece per bag")
-	near(drops / float(kills), 0.10, "about 10% of shamblers drop a piece", 0.04)
+	eq(sim.bags.size(), 0, "no bags on the ground")
+	for cid: String in sim.loot.containers:
+		if cid.begins_with(SimWorld.CORPSE):
+			drops += sim.loot.containers[cid]["gear"].size()
+			if drops == 1:
+				check(sim.loot.containers[cid]["gear"].size() == 1, "one piece per corpse")
+	near(drops / float(kills), 0.10, "about 10% of shamblers carry a piece", 0.04)
 	var runs := 0
 	for i in kills:
 		sim.horde.spawn("runner", Vector3(i, 0, 80)).take_hit(1000.0, Vector3.ZERO, 0.0)
-	var before := sim.bags.size()
 	sim.step()
-	runs = sim.bags.size() - before
+	for cid: String in sim.loot.containers:
+		if cid.begins_with(SimWorld.CORPSE) and sim.loot.containers[cid]["pos"].z == 80.0 and not sim.loot.containers[cid]["gear"].is_empty():
+			runs += 1
 	near(runs / float(kills), 0.20, "about 20% of runners", 0.05)
 	var same := SimWorld.new(8.0, null, 3)
 	for i in 50:
 		same.horde.spawn("shambler", Vector3(i, 0, 50)).take_hit(1000.0, Vector3.ZERO, 0.0)
 	same.step()
 	var first := 0
-	for b: Dictionary in sim.bags:
-		if b["pos"].z == 50.0 and b["pos"].x < 50.0:
+	var again := 0
+	for cid: String in sim.loot.containers:
+		var c: Dictionary = sim.loot.containers[cid]
+		if cid.begins_with(SimWorld.CORPSE) and c["pos"].z == 50.0 and c["pos"].x < 50.0 and not c["gear"].is_empty():
 			first += 1
-	eq(same.bags.size(), first, "the same seed drops the same")
+	for cid: String in same.loot.containers:
+		if cid.begins_with(SimWorld.CORPSE) and not same.loot.containers[cid]["gear"].is_empty():
+			again += 1
+	eq(again, first, "the same seed carries the same")
 
 
 func test_searches_turn_up_gear() -> void:

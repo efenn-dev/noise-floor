@@ -358,6 +358,52 @@ def reload_click() -> np.ndarray:
     return fade_edges(normalize(out, -8))
 
 
+def pad_shape(x: np.ndarray, gain) -> np.ndarray:
+    """shape() for a one-shot: padded so the circular filter can't wrap the tail onto the head."""
+    return shape(np.concatenate([x, np.zeros(len(x))]), gain)[: len(x)]
+
+
+def saw_sweep(n: int, f_of_t: np.ndarray) -> np.ndarray:
+    """A sawtooth following a frequency curve (Hz per sample)."""
+    phase = np.cumsum(f_of_t) / SR
+    return 2.0 * (phase % 1.0) - 1.0
+
+
+def sting_close() -> np.ndarray:
+    """S4 jumpscare sting: a sharp noise slap, a dissonant two-voice stab that falls away, and a low thud."""
+    n = seconds(0.75)
+    t = t_axis(n)
+    slap = oneshot_noise(n, bp(2600, 1.6)) * decay(n, 0.03, attack=0.001)
+    f = 470.0 * 2.0 ** (-t * 1.4)
+    stab = saw_sweep(n, f) + 0.8 * saw_sweep(n, f * 1.0595 * 1.3)  # a minor second over, up a bit: never a chord
+    stab = pad_shape(stab * decay(n, 0.2, attack=0.004), lp(3200, 2))
+    thud = thump(0.75, 160, 42, 0.13)
+    out = normalize(slap, 0) + 0.9 * normalize(stab, 0) + 1.1 * thud
+    return fade_edges(normalize(out, -2))
+
+
+def sting_horde() -> np.ndarray:
+    """S4 horde sting: a cluster of detuned tones rising for a second over a rumble, a hit, then a long dark
+    tail (a mob has turned on you)."""
+    n = seconds(2.6)
+    t = t_axis(n)
+    rise_len = 1.15
+    cluster = np.zeros(n)
+    for k, ratio in enumerate([1.0, 1.02, 1.5, 1.53, 2.03]):
+        f = 95.0 * ratio * 2.0 ** (np.clip(t / rise_len, 0, 1) * 1.0)
+        cluster += (0.8 ** k) * saw_sweep(n, f)
+    swell = np.clip(t / rise_len, 0, 1) ** 1.5 * (t < rise_len)
+    cluster = pad_shape(cluster * swell, lp(1800, 2))
+    rumble = oneshot_noise(n, lp(90, 2)) * np.clip(t / 0.3, 0, 1) * (t < rise_len + 0.1)
+    hit = np.zeros(n)
+    place(hit, normalize(oneshot_noise(seconds(0.3), bp(1800, 1.5)) * decay(seconds(0.3), 0.025, attack=0.001), 0), rise_len, wrap=False)
+    place(hit, 1.3 * thump(0.8, 140, 36, 0.18), rise_len, wrap=False)
+    tail = oneshot_noise(n, lp(600, 2)) * decay(n, 0.5, attack=0.01)
+    tail = np.roll(tail, seconds(rise_len)) * (t >= rise_len)
+    out = 0.9 * normalize(cluster, 0) + 0.7 * normalize(rumble, 0) + normalize(hit, 0) + 0.5 * normalize(tail, 0)
+    return fade_edges(normalize(out, -1))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--only", nargs="*", default=None, help="make only these sounds (by file name)")
@@ -371,7 +417,8 @@ def main() -> None:
              "build_place": build_place, "click": click, "horn": horn,
              "shot_pistol": lambda: gunshot(False, False), "shot_rifle": lambda: gunshot(True, False),
              "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
-             "reload": reload_click}
+             "reload": reload_click,
+             "sting_close": sting_close, "sting_horde": sting_horde}  # S4: jumpscares
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:

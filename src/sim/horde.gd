@@ -80,7 +80,7 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 		for e: Dictionary in z.think(dt, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
 			e["zombie"] = id
 			events.append(e)
-		if z.is_dead() and z.dead_time >= ZombieBrain.CORPSE_TIME:
+		if z.is_dead() and z.dead_time >= (ZombieBrain.SEARCHED_CORPSE_TIME if z.searched else ZombieBrain.CORPSE_TIME):
 			zombies.erase(id)
 	return events
 

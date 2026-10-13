@@ -89,6 +89,7 @@ func refresh() -> void:
 		var icon: Texture2D = null
 		if kind == "build":
 			have = stock.has_all(sim.data.buildables[id]["cost"])
+			icon = InventoryScreen.icon_for("piece_" + id)  # S4: rendered by tools/art/piece_icons.gd
 		elif kind == "item":
 			var n := sim.inventory.count(id)
 			have = n > 0

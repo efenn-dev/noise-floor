@@ -29,7 +29,10 @@ const BREAK_GIVE_UP := 30.0
 const WANDER_RADIUS := 8.0
 const WANDER_TIMEOUT := 12.0
 const ARRIVE := 0.8
-const CORPSE_TIME := 15.0
+## S4: a corpse lies there, searchable, for CORPSE_TIME (four game-hours at the default clock); once
+## searched it is cleared after SEARCHED_CORPSE_TIME.
+const CORPSE_TIME := 240.0
+const SEARCHED_CORPSE_TIME := 30.0
 const EYE_HEIGHT := 1.6
 const INVESTIGATE_TIME := 30.0
 const MACHINE_REACH := 2.2  # close enough to a noisy machine to start wrecking it
@@ -48,6 +51,7 @@ var sound_key := ""  # piece key of the machine it's walking toward, "" for othe
 var sound_pos: Vector3  # where the sound it's investigating came from (target_pos once the route is walked)
 var route: Array = []   # W1b: waypoints (Vector3) to walk before heading for sound_pos; target_pos = route[0]
 var dead_time := 0.0
+var searched := false  # S4: the corpse has been looted
 var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
 ## M15: seconds left pinned by a bear trap (can't walk, can still bite) and stunned by an electric fence
 ## (can't walk or attack). Set by Defense.

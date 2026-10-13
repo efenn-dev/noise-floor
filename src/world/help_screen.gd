@@ -56,12 +56,23 @@ const ROWS := [
 	["Game", ["quickload"], "", "load the last save"],
 	["Game", ["free_mouse"], "", "pause menu; closes any screen (while building it stops building first)"],
 ]
+## S4: the six steps of a first factory, shown under the controls (Playtest #1: building and machines
+## were not clear). test_help_screen.gd checks they're on screen.
+const GUIDE := [
+	"1. The crate beside you holds your starting kit: press E on it (Tab shows what's inside).",
+	"2. Press 1 and click the ground to lay foundations. Everything you build stands on them.",
+	"3. Press B, click Smelter, then click a foundation to place it (R turns it). Esc stops building.",
+	"4. Machines need power: build a Generator and a Power pole beside the smelter (B, Power). E on the generator loads gas cans; the crate has some, G siphons more from cars.",
+	"5. E on the smelter loads scrap metal from your pockets or the crate; it makes metal plates. E again takes them. A Press turns plates into nails.",
+	"6. Running machines are loud, and loud draws zombies. N shows how far. Walls block sound; U on a machine fits a muffler.",
+]
 const MOUSE_NAMES := {MOUSE_BUTTON_LEFT: "Left click", MOUSE_BUTTON_RIGHT: "Right click",
 		MOUSE_BUTTON_WHEEL_UP: "Wheel up", MOUSE_BUTTON_WHEEL_DOWN: "Wheel down"}
 
 var from := ""  # "title", "pause" or "" (opened in play)
 var _root: Control
 var _rows: Array[Label] = []
+var _guide: Array[Label] = []
 
 
 func setup() -> void:
@@ -92,6 +103,14 @@ func _input(event: InputEvent) -> void:
 	if is_open() and (event.is_action_pressed("help") or event.is_action_pressed("free_mouse")):
 		close()
 		get_viewport().set_input_as_handled()
+
+
+## S4: the first-factory guide as shown, one step per line, for tests.
+func guide_text() -> String:
+	var out := PackedStringArray()
+	for l: Label in _guide:
+		out.append(l.text)
+	return "\n".join(out)
 
 
 ## Every row as "keys:  what it does", one per line, for tests.
@@ -148,11 +167,15 @@ func _build() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
+	var scrolled := VBoxContainer.new()  # S4: the controls and the guide scroll together on a small window
+	scrolled.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scrolled.add_theme_constant_override("separation", 14)
+	scroll.add_child(scrolled)
 	var cols := HBoxContainer.new()
 	cols.alignment = BoxContainer.ALIGNMENT_CENTER
 	cols.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_theme_constant_override("separation", 36)
-	scroll.add_child(cols)
+	scrolled.add_child(cols)
 	for groups: Array in COLUMNS:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", 4)
@@ -177,6 +200,29 @@ func _build() -> void:
 				l.custom_minimum_size = Vector2(360, 0)
 				col.add_child(l)
 				_rows.append(l)
+	# S4: the first factory, in two columns of three steps, under the controls.
+	var guide_head := Label.new()
+	guide_head.text = "Your first factory"
+	guide_head.add_theme_font_size_override("font_size", 21)
+	guide_head.add_theme_color_override("font_color", GOLD)
+	guide_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scrolled.add_child(guide_head)
+	var guide_cols := HBoxContainer.new()
+	guide_cols.alignment = BoxContainer.ALIGNMENT_CENTER
+	guide_cols.add_theme_constant_override("separation", 36)
+	scrolled.add_child(guide_cols)
+	for half in 2:
+		var gcol := VBoxContainer.new()
+		gcol.add_theme_constant_override("separation", 4)
+		guide_cols.add_child(gcol)
+		for i in range(half * 3, half * 3 + 3):
+			var l := Label.new()
+			l.text = GUIDE[i]
+			l.add_theme_font_size_override("font_size", 15)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size = Vector2(560, 0)
+			gcol.add_child(l)
+			_guide.append(l)
 	var foot := Label.new()
 	foot.text = "F1 or Esc: close"
 	foot.add_theme_font_size_override("font_size", 16)

@@ -39,7 +39,20 @@ static func roll(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 
 
 func add(id: String, table: String, pos: Vector3) -> void:
-	containers[id] = {"table": table, "pos": pos, "searched": false, "extra": {}}
+	containers[id] = {"table": table, "pos": pos, "searched": false, "extra": {}, "gear": []}
+
+
+## S4: gear pieces a search hands over as well (what a dead zombie carried).
+func add_gear(id: String, pieces: Array) -> void:
+	containers[id]["gear"].append_array(pieces)
+
+
+## S4: drops a container (a cleared corpse); a search of it in progress is abandoned.
+func remove(id: String) -> void:
+	containers.erase(id)
+	if active == id:
+		active = ""
+		progress = 0.0
 
 
 ## Puts something particular in a container (a car key in a glovebox or a kitchen drawer); a search finds it too.
@@ -90,7 +103,7 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	for item: String in c.get("extra", {}):
 		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
-	var done := {"id": active, "items": items, "table": c["table"], "lucky": lucky}
+	var done := {"id": active, "items": items, "table": c["table"], "lucky": lucky, "gear": c.get("gear", [])}
 	active = ""
 	return done
 

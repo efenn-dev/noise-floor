@@ -6,10 +6,15 @@ extends Label
 
 const TIMEOUT := 90.0
 const NOISE_SECONDS := 40.0  # the noise and house hints are just information, so they go sooner
+## S4 (Playtest #1: "not able to figure out the building and machines"): the steps walk through a whole first
+## factory, power and loading included; each waits for the sim to show you did it.
 const STEPS := [
 	"Find the crate next to you and press E (Tab looks inside)",
 	"Houses have food inside. E opens doors; close them behind you",
-	"Press 1 and click to lay a foundation, then B to pick a smelter from the build menu",
+	"Press 1 and click the ground to lay a foundation, then B and pick a Smelter to put on it",
+	"A smelter needs power: press B and build a Generator and a Power pole beside it",
+	"Press E on the generator to load gas cans (your crate has some; G siphons more from cars)",
+	"Press E on the smelter: it loads scrap metal and makes metal plates (E again takes them)",
 	"It's loud. Zombies hear it. Press N to see how far",
 	"Wall it in, or press U on it to fit a muffler",
 ]
@@ -60,10 +65,43 @@ func _done(i: int) -> bool:
 		2:
 			return int(sim.stats.built.get("smelter", 0)) > 0
 		3:
-			return _time >= NOISE_SECONDS or (overlay != null and overlay.visible)
+			return _powered_machine()
 		4:
+			return _fuelled_generator()
+		5:
+			return _machine_fed()
+		6:
+			return _time >= NOISE_SECONDS or (overlay != null and overlay.visible)
+		7:
 			return sim.stats.mufflers > 0 or _walls() >= 4
 	return true
+
+
+## S4: a machine of yours on a power network (a generator or panel and a pole reach it).
+func _powered_machine() -> bool:
+	for cell: Vector2i in sim.factory.machines:
+		var key := "o:%d:%d" % [cell.x, cell.y]
+		if sim.build.pieces.has(key) and not sim.power.network_of(key).is_empty():
+			return true
+	return false
+
+
+## S4: a generator with gas in it (loaded, or already running).
+func _fuelled_generator() -> bool:
+	for key: String in sim.power.generators:
+		var g: Dictionary = sim.power.generators[key]
+		if int(g["cans"]) > 0 or float(g["fuel"]) > 0.0 or bool(g["running"]):
+			return true
+	return false
+
+
+## S4: a machine that has made something (it was loaded and ran).
+func _machine_fed() -> bool:
+	for cell: Vector2i in sim.factory.machines:
+		var m: Factory.Machine = sim.factory.machines[cell]
+		if m.crafted > 0 or not m.input.is_empty() or m.crafting:
+			return true
+	return false
 
 
 ## The house tip is done once you've searched something inside a house (W1a).

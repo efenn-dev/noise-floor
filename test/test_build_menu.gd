@@ -53,6 +53,9 @@ func test_every_piece_is_in_the_menu_once_with_a_blurb() -> void:
 	for id: String in BuildController.PIECES:
 		check(listed.has(id), "%s is in a group" % id)
 		check(BuildMenu.BLURBS.has(id) and String(BuildMenu.BLURBS[id]).length() > 10, "%s has a blurb" % id)
+		check(ResourceLoader.exists("res://assets/icons/piece_%s.png" % id), "%s has a picture (tools/art/piece_icons.gd)" % id)
+	for g: Array in BuildMenu.GROUPS:
+		check(BuildMenu.GROUP_NOTES.has(g[0]), "group %s has a note on how its pieces work" % g[0])
 	var data := GameData.load_default()
 	for id: String in data.buildables:
 		if not data.buildables[id].get("player_placeable", true):
