@@ -42,6 +42,11 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 
 
 func _init() -> void:
 	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
+	# Q1: nothing in the game is a moving platform, and a parked car you had driven could hand a body
+	# touching it a NaN platform velocity (see ZombieBody), so the player takes none either.
+	platform_floor_layers = 0
+	platform_wall_layers = 0
+	platform_on_leave = CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING
 	_capsule = CapsuleShape3D.new()
 	_capsule.radius = RADIUS
 	_capsule.height = STAND_HEIGHT

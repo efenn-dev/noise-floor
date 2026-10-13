@@ -33,6 +33,9 @@ var agent: NavigationAgent3D
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
 var _push := Vector3.ZERO
+var _last_good := Vector3.ZERO  # Q1: the last finite position after a move (see the NaN guard)
+## Q1: how many times a move came back NaN and was undone (for tests and the soak).
+var nan_recoveries := 0
 var _frame := 0
 var _last_target := Vector3.INF
 var _fall := 0.0
@@ -51,6 +54,7 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 	player = p_player
 	set_meta("zombie_id", brain.id)
 	position = brain.pos
+	_last_good = brain.pos
 	var f := Vector3(brain.facing.x, 0.0, brain.facing.z)
 	if f.length_squared() > 1e-6:
 		rotation.y = atan2(-f.x, -f.z)
@@ -79,6 +83,11 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 func _init() -> void:
 	collision_layer = Layers.ZOMBIE
 	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
+	# Q1: zombies never ride anything. A car you had driven and parked handed a zombie scraping past it a
+	# NaN "platform velocity", which turned its position NaN; taking no velocity from floors or walls stops it.
+	platform_floor_layers = 0
+	platform_wall_layers = 0
+	platform_on_leave = CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = RADIUS
 	capsule.height = HEIGHT
@@ -126,6 +135,16 @@ func _physics_process(delta: float) -> void:
 	velocity.z = move.z
 	velocity.y = 0.0 if is_on_floor() else velocity.y - _gravity * delta
 	move_and_slide()
+	if global_position.is_finite():
+		_last_good = global_position
+	else:
+		# Q1: a NaN move (the soak saw one beside a car you had just got out of) used to stick for good: the
+		# brain went NaN too and every frame logged warnings. Step back to the last good spot instead.
+		global_position = _last_good
+		brain.pos = _last_good
+		velocity = Vector3.ZERO
+		_push = Vector3.ZERO
+		nan_recoveries += 1
 
 	if face.length_squared() > 1e-4:
 		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), clampf(6.0 * delta, 0.0, 1.0))
