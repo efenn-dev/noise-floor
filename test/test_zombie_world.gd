@@ -135,3 +135,27 @@ func test_navmesh_leads_around_a_building() -> void:
 	var d := Vector2(z.pos.x - player.position.x, z.pos.z - player.position.z).length()
 	check(d < 2.5, "zombie walked round and reached the player (%.1f m away, %s)" % [d, z.state_name()])
 	await _teardown()
+
+
+## Q1: the soak found move_and_slide handing back a NaN position next to a parked car; a NaN body never
+## recovered (its brain went NaN too and the log filled with warnings). Now the body steps back.
+func test_a_nan_move_is_undone() -> void:
+	_setup(Vector3.ZERO)
+	var z := _zombie(Vector3(0, 0, -8), Vector3.BACK)
+	_start_zombies()
+	await _run(1.0)
+	var body: ZombieBody = zview.body_for(z.id)
+	var was := body.global_position
+	body.global_position = Vector3(NAN, NAN, NAN)  # what the bad slide left behind
+	await _run(0.1)
+	check(body.global_position.is_finite(), "the body is back on a real position (%s)" % body.global_position)
+	check(z.pos.is_finite(), "and so is its brain (%s)" % z.pos)
+	check(body.nan_recoveries >= 1, "the guard counted it (%d)" % body.nan_recoveries)
+	check(Vector2(body.global_position.x, body.global_position.z).distance_to(Vector2(was.x, was.z)) < 1.0,
+			"where it was, not at the origin (%s, was %s)" % [body.global_position, was])
+	eq(body.platform_floor_layers, 0, "zombies take no velocity from what they stand on (the NaN's source)")
+	eq(player.platform_floor_layers, 0, "nor does the player")
+	await _run(3.0)
+	check(Vector2(z.pos.x, z.pos.z).length() < Vector2(was.x, was.z).length() - 1.0,
+			"and it keeps chasing (%.1f m, was %.1f m)" % [Vector2(z.pos.x, z.pos.z).length(), Vector2(was.x, was.z).length()])
+	await _teardown()

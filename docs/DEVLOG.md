@@ -2,6 +2,42 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Q1 Soak and tour
+
+From the Q1 brief by the project lead, on top of P3 (PR #32), so the whole unmerged stack (M12 skills to P3) runs as one game. No new content, no tuning: a bot plays the game for days, a fix for what it found, and a screenshot tour.
+
+**Built:**
+- **`tools/soak.sh [--days=N]`** (`test/stress/soak.gd`): a headless bot plays the real game scene (`main.tscn`, `--fixed-fps 60`) from day 1 08:00. Once per game-hour it does the next thing on its list: walks up the street, opens house 1's door and goes in, searches its fridge and cabinets, comes out and closes the door, siphons car_0 and searches its trunk, builds a foundation row, a smelter, belts, a press, a generator and a pole from the starting crate and hand-feeds scrap, fits a muffler, builds a workbench and a wall, eats and drinks, draws the gun it found (or one through `--gun`'s path) and fires four shots at the nearest zombie, refuels and drives car_0, sleeps in house 1's bed, saves through F5's path and loads through F9's (the real scene reload) and carries on. With `--days=3` it also, at dusk on day 2, refuels the generator, feeds the smelter and sets heat 100 while standing in the base, and on day 3 stands still among six zombies until it dies, then picks up its bag. It walks by moving the player node 2 m at a time with physics running, swings at any zombie within reach (except while dying on purpose), and walks back for its bag after any death. Every game-hour it prints one line (time, health, food, water, energy, zombies, heat, infamy, pieces, deaths, static memory, worst physics frame, navmesh bakes and the first bake's time) and checks: health, food, water, energy, stamina and heat in range; carried weight not negative; no NaN or past-1000 m position for the player, zombies or cars; zombies alive at most the Director's cap plus the street and house zombies plus the bot's own; every piece has a drawn node. At the end it also checks that the save round-trip kept day, clock, pieces, zombies, gear, skill xp, infamy and base-log length; that static memory is under 1.6x the end of hour 1; and that the dusk wave came. It prints "SOAK OK" or "SOAK FAILED: <why>" and exits non-zero on failure or on any SCRIPT ERROR / Parse Error. It also prints every piece that disappears and how many NaN moves the zombie guard undid.
+- **`tools/tour.sh`**: twelve screenshots, one Godot at a time, into `.shots/tour/` (street 08:00, street 22:00 with the flashlight, house 0 kitchen, house 0 bathroom, the factory hall with Old Pete, `--demo-factory`, `--demo-farm`, `--demo-defense` at 22:00, title, inventory with `--gear=yellow`, skills, help), then `tools/contact_sheet.py` (Pillow) lays them out as one labelled 4x3 sheet, `.shots/tour/contact.png`. About 40 s.
+- **Fix: a zombie could turn into NaN for good.** After you got into car_0 and out again, a zombie scraping past the parked car picked up a NaN "platform velocity" from it (the engine carrying bodies along on moving floors), its position went NaN on its next move, its brain followed, and every frame after that logged "Vector3 cannot be normalized" (836,000 warnings in one soak hour, and it slowed the game right down). Zombies and the player now take no velocity from floors or walls (nothing in the game is a moving platform), and a zombie whose move still comes back NaN steps back to its last good spot.
+
+**Rules:** none changed. World: `ZombieBody` and `Player` set `platform_floor_layers = 0`, `platform_wall_layers = 0` and `platform_on_leave = DO_NOTHING`; `ZombieBody` keeps its last finite position and undoes a NaN move (`nan_recoveries` counts them).
+
+**Soak results (this PC):** one game-day: `SOAK OK: NaN moves undone 0; 1 game-day(s) in 53 s wall; deaths 2, kills 10, waves 0, swings 30, gear 2, pieces 779` (54 s). Three game-days: `SOAK OK: NaN moves undone 0; 3 game-day(s) in 176 s wall; deaths 7, kills 25, waves 1, swings 36, gear 2, pieces 778, bag taken`. Static memory 113 MB after hour 1 and 124-125 MB at the end; the worst physics frame in any hour 2.2 ms; first navmesh bake 42-47 ms.
+
+**Tests:** `test_zombie_world.gd`: a zombie whose body is put on a NaN position is back on a finite one next to where it was, its brain too, the guard counted it, and it keeps chasing; zombies and the player take no platform velocity. **4713 checks** (was 4706).
+
+**Try it on the PC:** merge, then in Git Bash in the game folder:
+- `tools/soak.sh` (about a minute) or `tools/soak.sh --days=3` (about three minutes): watch the hourly lines; the last line says SOAK OK.
+- `tools/tour.sh`, then open `.shots/tour/contact.png`.
+- `play.bat`, get into the first car (E), get out again and let a zombie follow you round it: it keeps walking instead of freezing in place.
+
+**Known gaps:**
+- The bot dies a lot: 2 deaths on day 1 and 7 in three days, mostly to the 8 street zombies and the zombie in house 1 while it walks or searches (it only swings when one is within 2.2 m). Not a bug, but worth watching in Playtest #1. Repro: `tools/soak.sh --days=3`, the `deaths` column.
+- Zombies break town furniture and doors while chasing: a town door (`w:-4:-14:w`) at 08:29 and house 1's kitchen counter (`o:6:-13`) at 13:12 on day 1, every run. Probably fine (it is what they do); listed so nobody is surprised. Repro: `tools/soak.sh`, the "piece gone" lines.
+- Heat and infamy climb fast from the starter factory: heat 0 to 145 within the hour the smelter, press and unmuffled generator start (day 1 13:00-14:00) and infamy 2 to 187 in that hour; infamy 200 to 405 in the first hour of the day-2 dusk run. Not tuned here. Repro: `tools/soak.sh --days=3`, the 14:00 and day 2 22:00 lines.
+- No wave comes from heat alone: waves need a running machine (`noise.continuous`), so heat 100 with the factory out of scrap and fuel sends nothing, and on day 1 the heat (145 at 14:00) has decayed to 25 by dark with no wave. Repro: the day-1 lines (waves 0), or `play.bat --heat=100` with no machines.
+- With `--demo-factory` the orange heat warning ("The noise is being noticed") sits on the same line as the carry weight, right after "0.7 / 20 kg", in the top-right HUD. Repro: `tools/shot.sh f --demo-factory --advance=7.5 --time=12 --cam=0,0,6,0,-25`.
+- Inside the factory hall the day fog is as thick as outside, so Old Pete is grey at 7 m. Repro: `tools/shot.sh hall --time=15 --cam=0,0,-116,0,-5`. CLAUDE.md's factory camera (`--cam=-3,0,-100,30,10`) looks at the hall's outside wall, so the tour uses this one instead.
+- The `--demo-defense` night shot from CLAUDE.md's camera is very dark apart from one floodlight. Repro: `tools/shot.sh night --demo-defense --time=22 --advance=1 --cam=7,0,-13,148,-14`.
+- The bot's sleep at 22:00 woke at energy 56-58 (a zombie or bleeding wakes you) and it never slept again, so energy sat at 0 from day 2 evening. The bot's limit, not the game's.
+- The parked car's NaN platform velocity is an engine quirk (it reads NaN once, right after you get out) and is not fixed at its source; only its effect is.
+- Every other gap from the P3, P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — P3 Playtest readiness
 
 From the P3 brief by the project lead, on top of P2 (PR #31). No new content, no tuning: the game explains itself, and the session log says what happened.
