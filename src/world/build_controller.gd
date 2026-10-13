@@ -9,7 +9,10 @@ extends Node3D
 const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
 		"purifier", "planter", "canner", "bed", "storage", "generator", "solar_panel", "power_pole", "spikes",
-		"nail_turret", "workbench"]
+		"nail_turret", "workbench",
+		# M15: automated defense (mouse wheel)
+		"crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor", "floodlight", "noisemaker",
+		"bear_trap", "tripwire", "electric_fence", "repair_station"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 

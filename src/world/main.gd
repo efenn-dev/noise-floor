@@ -51,6 +51,9 @@ var zombie_view: ZombieView
 var melee: Melee
 var shooter: Shooter  # M14: the gun in your hands
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
+var sensor_screen: SensorScreen  # M15: E on a sensor
+var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
+var defense_view: DefenseView
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
 var session_log: SessionLog
@@ -133,6 +136,13 @@ func _ready() -> void:
 	add_child(workbench_screen)
 	workbench_screen.setup(sim)
 	workbench_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	sensor_screen = SensorScreen.new()
+	add_child(sensor_screen)
+	sensor_screen.setup(sim)
+	sensor_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	base_log_screen = BaseLogScreen.new()
+	add_child(base_log_screen)
+	base_log_screen.setup(sim)
 	if _wants_hints(args):
 		hints = Hints.new()
 		hints.setup(sim, inventory_screen, noise_overlay)
@@ -171,8 +181,13 @@ func _ready() -> void:
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
 	if args.has("shoot"):
 		shooter.fire.call_deferred()  # --shoot: fire once (screenshots of the HUD line after a shot)
+	if args.has("sensor-screen"):
+		_open_sensor(_demo_sensor_key())  # M15: --sensor-screen (with --demo-defense), for screenshots
+	if args.has("base-log"):
+		_fill_demo_log()
+		base_log_screen.open()  # M15: --base-log, for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
-			and not workbench_screen.is_open():
+			and not workbench_screen.is_open() and not _m15_screen_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	sim.stats.muted = false
 
@@ -228,6 +243,42 @@ func _open_workbench(key: String) -> void:
 	if skills_screen.is_open():
 		skills_screen.close()
 	workbench_screen.open(key)
+
+
+## M15: E on a sensor.
+func _open_sensor(key: String) -> void:
+	if key == "":
+		return
+	if inventory_screen.is_open():
+		inventory_screen.close()
+	if skills_screen.is_open():
+		skills_screen.close()
+	sensor_screen.open(key)
+
+
+func _m15_screen_open() -> bool:
+	return sensor_screen.is_open() or base_log_screen.is_open()
+
+
+## The demo base's first sensor (--sensor-screen), or any sensor.
+func _demo_sensor_key() -> String:
+	var keys := sim.automation.sensors.keys()
+	keys.sort()
+	return keys[0] if not keys.is_empty() else ""
+
+
+## --base-log on a fresh game: a few made-up nights so the screen has something to show (screenshots only).
+func _fill_demo_log() -> void:
+	if not sim.base_log.entries.is_empty():
+		return
+	var lines := [["day 3 21:12", "Motion sensor (north): 3 zombies, floodlights on"], ["day 3 21:12", "Nail turret (north) killed a shambler"],
+			["day 3 21:14", "North barricade under attack: 4 zombies"], ["day 3 21:15", "Noisemaker (east) going off"],
+			["day 3 21:19", "Nail turret (north) out of nails"], ["day 3 21:30", "North barricade destroyed"],
+			["day 3 22:02", "A horde coming from the north: 8 zombies"], ["day 4 02:40", "Repair station fixed the west wall (200/200 hp)"]]
+	for l: Array in lines:
+		sim.base_log.now = l[0]
+		sim.base_log.add(l[1], Vector3(0, 0, -100), false)
+	sim.base_log.now = sim.when_text()
 
 
 ## First-game hints: a new game only (no save loaded, no --demo-*/--cam/--no-hints, not a screenshot).
@@ -323,8 +374,11 @@ func _sync_player() -> void:
 		skills_screen.close()
 	if workbench_screen.is_open() and (p.dead or p.asleep):
 		workbench_screen.close()
+	if sensor_screen.is_open() and (p.dead or p.asleep):
+		sensor_screen.close()
 	# no walking while sorting your pockets, spending perk points or at the workbench
-	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open()
+	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
+			or _m15_screen_open()
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -386,8 +440,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.is_action_pressed("inventory") or event.is_action_pressed("skills"):
 			return  # no rummaging while driving
-	if workbench_screen.is_open():
-		return  # it closes itself on E, Tab or Esc
+	if workbench_screen.is_open() or _m15_screen_open():
+		return  # they close themselves on E, Tab or Esc (the base log on L too)
+	if event.is_action_pressed("base_log") and not sim.player.dead:
+		base_log_screen.open()  # M15: L
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
 		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
 		get_viewport().set_input_as_handled()
@@ -428,6 +486,9 @@ func _build_menus(args: Dictionary) -> void:
 		var why := save_game()
 		menus.set_status("Saved." if why == "" else why))
 	menus.load_requested.connect(load_game)
+	menus.base_log_requested.connect(func() -> void:
+		_resume()
+		base_log_screen.open())
 	menus.quit_to_title.connect(func() -> void:
 		save_game()
 		GameSession.started = false
@@ -721,6 +782,10 @@ func _build_building(args: Dictionary) -> void:
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
 	interactor.entered_car.connect(_enter_car)
 	interactor.opened_workbench.connect(_open_workbench)
+	interactor.opened_sensor.connect(_open_sensor)
+	defense_view = DefenseView.new()
+	add_child(defense_view)
+	defense_view.setup(sim, build_view)
 	if args.has("demo-base"):
 		_place_demo_base()
 	if args.has("demo-factory"):
@@ -844,6 +909,24 @@ func _place_demo_defense() -> void:
 	sim.factory.hand_interact(Vector2i(0, -1), stock)
 	for x in [-1, 0]:
 		sim.build.place("spikes", Vector2i(x, -3), 0, stock)
+	# M15: a hopper of nails behind the turret, a motion sensor that turns on two floodlights, a bear trap,
+	# a tripwire in front, a generator for the lights, and a decoy noisemaker 30 m east on its own pole line.
+	stock.give_all({"metal_plate": 40, "nails": 200, "plank": 20, "scrap_metal": 10, "gas_can": 2})
+	sim.build.place("hopper", Vector2i(0, 0), S.NORTH, stock)
+	sim.factory.hand_interact(Vector2i(0, 0), stock)
+	sim.build.place("generator", Vector2i(-1, 0), S.NORTH, stock)
+	sim.power.load_fuel(sim.build.key_for("generator", Vector2i(-1, 0)), stock)
+	for c: Vector2i in [Vector2i(-2, -2), Vector2i(1, -2)]:
+		sim.build.place("floodlight", c, S.NORTH, stock)
+		sim.toggle_floodlight(sim.build.key_for("floodlight", c))  # lit every night, for the demo
+	sim.build.place("motion_sensor", Vector2i(-2, -1), S.NORTH, stock)
+	sim.set_sensor_action(sim.build.key_for("motion_sensor", Vector2i(-2, -1)), "decoy")
+	for c: Vector2i in [Vector2i(1, -1), Vector2i(7, -1), Vector2i(13, -1)]:
+		sim.build.place("power_pole", c, S.NORTH, stock)
+	sim.build.place("noisemaker", Vector2i(15, -1), S.NORTH, stock)
+	sim.build.place("bear_trap", Vector2i(-1, -4), 0, stock)
+	for x in [-1, 0]:
+		sim.build.place("tripwire", Vector2i(x, -4), S.NORTH, stock)
 
 
 func _build_hud() -> void:

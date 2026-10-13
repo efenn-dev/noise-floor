@@ -4,7 +4,7 @@ extends "res://test/base_test.gd"
 ## and generators carry the status lamp FactoryView recolours, and turrets the Head it aims.
 
 const LAMP_ALLOWANCE := 0.2  # tools/art/kit.py: a lamp or turret head may rise this far above the box
-const OVERHANG := {"power_pole": Vector3(0.4, 0.0, 0.05)}  # the crossbar is wider than the pole
+const OVERHANG := {"power_pole": Vector3(0.4, 0.0, 0.05), "floodlight": Vector3(0.4, 0.0, 0.05)}  # the crossbar is wider than the pole (M15: the floodlight is a pole too)
 const SLACK := 0.01
 
 

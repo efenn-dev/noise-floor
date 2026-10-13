@@ -204,7 +204,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M12 — Skills and carry weight.** (Mechanics and the skill table already exist, since M10c.) Skills that level by doing, the Strength-based carry limit and bags, perk points, the three trees with a few perks each, synergies.
 - [x] **M13 — Loot.** Rarity colors, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set.
 - [x] **M14 — Guns.** Firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk.
-- [ ] **M15 — Automated defense.** The turret lineup fed by belts, traps, sensors and actions, the repair station, attacks that play out while you're away, radio alerts and the base log.
+- [x] **M15 — Automated defense.** The turret lineup fed by belts, traps, sensors and actions, the repair station, attacks that play out while you're away, radio alerts and the base log.
 - [ ] **M16 — Seasons.** Winter, heat, crop cycles, sound carrying farther in the cold.
 - [ ] **M17 — Further out.** A second, harder area, the first big project (water tower), outposts.
 

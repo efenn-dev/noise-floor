@@ -20,6 +20,13 @@ var horde: Horde
 var noise: NoiseField
 var power: PowerGrid
 var defense: Defense
+## M15: sensors and their actions, floodlights, noisemakers, locked doors.
+var automation: Automation
+## M15: what happened at your base (the last 50 events with game time). L opens it.
+var base_log: BaseLog
+## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
+var radio_lines: Array = []
+var _pete_busy := false
 ## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
 var vehicles: Vehicles
 ## Skills that level by doing and the perks they earn (M12). Kept when you die.
@@ -72,6 +79,12 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	director = Director.new(data, seed_value)
 	loot = Loot.new(data, seed_value)
 	vehicles = Vehicles.new(data)
+	base_log = BaseLog.new(data, build)
+	automation = Automation.new(data, build, power, noise)
+	automation.base_log = base_log
+	defense.power = power
+	defense.base_log = base_log
+	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
 	factory.skills = skills  # belt speed, craft speed, planter yield
 	noise.skills = skills    # quieter machines (Dampened Gears)
@@ -81,6 +94,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	skills.gear = gear       # M13: every bonus(effect) query includes what you wear
 	gear.give_start()        # the pipe, white, in the weapon slot
 	guns = Gunplay.new(data, gear, skills)
+	defense.gear = gear  # M15: turret suppressors and scopes are gear pieces
 	_day = clock.day
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
@@ -115,6 +129,7 @@ func update(real_delta: float) -> int:
 func step() -> void:
 	ticks += 1
 	clock.advance(TICK)
+	base_log.now = when_text()
 	stats.tick(TICK, clock.seconds_per_day)
 	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
@@ -153,7 +168,7 @@ func step() -> void:
 		add_message(("Found " + ", ".join(names)) if not names.is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
-			"player_lit": player_lit, "pieces": build.pieces, "noise": noise}
+			"player_lit": player_lit or automation.in_light(player_pos), "pieces": build.pieces, "noise": noise}
 	for e: Dictionary in horde.tick(TICK, ctx):
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
 		if z == null:
@@ -172,9 +187,17 @@ func step() -> void:
 		elif build.pieces.has(e["target"]):
 			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
-			if build.damage(e["target"], int(z.stats["structure_damage"])):
+			var target: String = e["target"]
+			if build.player_placeable(build.pieces[target]["id"]):  # M15: your own walls, doors, machines
+				base_log.add_once("hit:" + target, float(data.defense["log"]["attack_every"]), "%s under attack: %s" % [
+						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
+			if build.damage(target, int(z.stats["structure_damage"])):
 				noise.emit_kind(at, "wreck")
 	defense.tick(TICK, horde, noise)
+	automation.tick(TICK, horde, night, defense.bells)
+	base_log.tick(TICK)
+	if ticks % TICK_RATE == 0:
+		_watch_pete()
 	var wave := director.tick(TICK, noise, night, horde)
 	if stats.is_peak_heat(director.heat):
 		stats.note_heat(director.heat, when_text())
@@ -188,9 +211,57 @@ func step() -> void:
 		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
 		add_message("%s from the %s..." % [what, wave["edge"]])
+		var label: String = {"wanderers": "Wanderers", "group": "A group", "horde": "A horde"}[wave["kind"]]
+		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
+				Director.EDGES[Director.EDGE_NAMES.find(wave["edge"])])
+	_radio()
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
+
+
+## M15: the base log's new entries that happened more than radio "far" metres from you go to the HUD as
+## "Radio: ..." lines, if you carry a radio.
+func _radio() -> void:
+	if base_log.fresh.is_empty():
+		return
+	var cfg: Dictionary = data.defense["radio"]
+	var carried := carries_radio()
+	for e: Dictionary in base_log.fresh:
+		if carried and e["radio"] and _flat_dist(e["pos"], player_pos) > float(cfg["far"]):
+			radio_lines.append(e["text"])
+			add_message("Radio: " + e["text"], float(cfg["seconds"]))
+	base_log.fresh = []
+	if radio_lines.size() > 20:
+		radio_lines = radio_lines.slice(radio_lines.size() - 20)
+
+
+func carries_radio() -> bool:
+	return inventory.count(str(data.defense["radio"]["item"])) > 0
+
+
+func _zombies_near(at: Vector3) -> String:
+	var n := 0
+	var r := float(data.defense["log"]["attack_radius"])
+	for id: int in horde.zombies:
+		if not horde.zombies[id].is_dead() and _flat_dist(horde.zombies[id].pos, at) <= r:
+			n += 1
+	return "1 zombie" if n == 1 else "%d zombies" % n
+
+
+## M15: the base log notes Old Pete leaving his spot (chasing, investigating or breaking something).
+func _watch_pete() -> void:
+	var busy := false
+	var at := Vector3.ZERO
+	for id: int in horde.zombies:
+		var z: ZombieBrain = horde.zombies[id]
+		if z.type == "old_pete" and not z.is_dead() and z.state in [ZombieBrain.State.CHASE, ZombieBrain.State.INVESTIGATE,
+				ZombieBrain.State.BREAK, ZombieBrain.State.ATTACK]:
+			busy = true
+			at = z.pos
+	if busy and not _pete_busy:
+		base_log.add_once("pete", 120.0, "Old Pete is on the move", at)
+	_pete_busy = busy
 
 
 func add_message(text: String, seconds: float = 6.0) -> void:
@@ -391,6 +462,7 @@ func _place_start_stash(cell: Vector2i) -> String:
 		return ""
 	var key := build.key_for("storage", cell)
 	storages[key].give_all(_counts_of(kit))
+	storages[key].add(str(data.defense["radio"]["item"]), 1)  # M15: the handheld radio
 	return key
 
 
@@ -541,6 +613,8 @@ func _is_supply(item: String) -> bool:
 func toggle_door(key: String) -> String:
 	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "door":
 		return ""
+	if automation.is_locked(key):
+		return "Locked by a sensor until it clears"
 	var open := build.toggle_door(key)
 	noise.emit_kind(build.piece_center(key), "door")
 	return "Door opened" if open else "Door closed"
@@ -560,6 +634,59 @@ func repair(key: String) -> String:
 ## What repairing piece `key` costs you now (Building makes it cheaper).
 func repair_cost(key: String) -> Dictionary:
 	return build.repair_cost(key, skills.bonus("repair_discount"))
+
+
+# --- Automated defense (M15) ------------------------------------------------------
+
+## E on a turret: loads its ammo (pockets and nearby crates), then attaches a suppressor or scope from your
+## pockets to an empty slot. Returns a message.
+func turret_interact(cell: Vector2i, at: Vector3) -> String:
+	var t: Factory.Turret = factory.turrets.get(cell)
+	if t == null:
+		return ""
+	var said := PackedStringArray()
+	var moved := factory.hand_interact(cell, stock_at(at))
+	if not moved["fed"].is_empty():
+		said.append("Loaded " + _list(moved["fed"]))
+	for slot: String in data.defense["turret_parts"]:
+		if t.parts.has(slot):
+			continue
+		for p: Dictionary in gear.pieces:
+			if gear.slot_of(p) == "part" and str(gear.part_def(p).get("slot", "")) == slot:
+				t.parts[slot] = gear.take(int(p["uid"]))
+				said.append("Fitted the " + String(p["name"]))
+				break
+	if said.is_empty():
+		return "Nothing to load (needs %s)" % String(data.item_name(t.ammo_item)).to_lower()
+	return " · ".join(said)
+
+
+## Picks the action a sensor runs. "" or why not.
+func set_sensor_action(key: String, action: String) -> String:
+	return automation.set_action(key, action)
+
+
+## E on a floodlight: only when a sensor says, or every night.
+func toggle_floodlight(key: String) -> String:
+	return automation.toggle_floodlight(key)
+
+
+## E on a noisemaker: sets it off by hand (if it's charged and has power).
+func fire_noisemaker(key: String) -> String:
+	if not automation.noisemakers.has(key):
+		return ""
+	var n: Dictionary = automation.noisemakers[key]
+	if n["blare"] > 0.0:
+		return "It's already going"
+	if n["recharge"] > 0.0:
+		return "Recharging: %d s" % ceili(n["recharge"])
+	return "Noisemaker going off" if automation.fire_noisemaker(key) else "No power for it"
+
+
+## E on a sprung bear trap: sets it again.
+func reset_trap(key: String) -> String:
+	var why := defense.reset_trap(key)
+	return "Bear trap set" if why == "" else why
 
 
 ## E on a machine: take what it made and load it from your pockets and nearby crates (Factory.hand_interact).
@@ -1021,6 +1148,8 @@ func _on_piece_added(key: String) -> void:
 			factory.add_machine(piece["id"], piece["cell"], piece["side"])
 		"belt":
 			factory.add_belt(piece["cell"], piece["side"])
+		"hopper", "repair_station":
+			factory.add_bin(piece["id"], piece["cell"], piece["side"])
 
 
 ## Removing one hands back whatever it was holding, on top of the build refund.
@@ -1034,7 +1163,18 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 		storages.erase(key)
 		if not held.is_empty():
 			drop_bag(build.center_for(piece["id"], piece["cell"], piece["side"]) * Vector3(1, 0, 1), held)
-	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt", "turret"]:
+	if piece.get("destroyed", false) and build.player_placeable(piece["id"]) and build.kind_of(piece["id"]) != "foundation":
+		var at := build.center_for(piece["id"], piece["cell"], piece["side"])
+		var dir := base_log.direction(at)
+		var what: String = String(data.buildables[piece["id"]]["name"]).to_lower()
+		base_log.add("%s destroyed" % ((dir.substr(0, 1).to_upper() + dir.substr(1) + " " + what) if dir != "middle"
+				else String(data.buildables[piece["id"]]["name"])), at)
+	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) == "turret" and factory.turrets.has(piece["cell"]):
+		var parts: Dictionary = factory.turrets[piece["cell"]].parts
+		if not piece.get("destroyed", false):
+			for slot: String in parts:
+				gear.pieces.append(parts[slot])  # M15: a suppressor or scope comes back with the turret
+	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt", "turret", "hopper", "repair_station"]:
 		var m: Factory.Machine = factory.machines.get(piece["cell"])
 		var muffled := m != null and m.muffled
 		var held := factory.remove_at(piece["cell"])

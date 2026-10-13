@@ -130,7 +130,7 @@
 		"watts": 30,
 		"size": [1.7, 1.4, 1.7],
 		"recipe": "press_nails",
-		"recipes": ["press_nails", "repair_kit", "press_casings"],
+		"recipes": ["press_nails", "repair_kit", "press_casings", "press_bolts", "press_wall_panel"],
 		"cost": { "plank": 10, "metal_plate": 10 }
 	},
 	"rain_collector": {
@@ -240,5 +240,109 @@
 		"ammo_cap": 200,
 		"size": [1.0, 1.4, 1.0],
 		"cost": { "metal_plate": 10, "nails": 20 }
+	},
+	"crossbow_turret": {
+		"name": "Crossbow turret",
+		"kind": "turret",
+		"hp": 120,
+		"loudness": 20,
+		"damage": 60,
+		"range": 20,
+		"interval": 2.0,
+		"ammo": "bolt",
+		"ammo_cap": 30,
+		"size": [1.0, 1.4, 1.0],
+		"cost": { "metal_plate": 12, "plank": 6, "nails": 20 }
+	},
+	"rifle_turret": {
+		"name": "Rifle turret",
+		"kind": "turret",
+		"hp": 150,
+		"loudness": 85,
+		"damage": 50,
+		"range": 35,
+		"interval": 1.5,
+		"watts": 20,
+		"ammo": "ammo_standard",
+		"ammo_cap": 40,
+		"size": [1.0, 1.4, 1.0],
+		"cost": { "metal_plate": 20, "scrap_metal": 10, "nails": 20 }
+	},
+	"hopper": {
+		"name": "Ammo hopper",
+		"kind": "hopper",
+		"hp": 80,
+		"size": [1.0, 1.0, 1.0],
+		"cost": { "plank": 4, "nails": 6 }
+	},
+	"motion_sensor": {
+		"name": "Motion sensor",
+		"kind": "sensor",
+		"sense": "motion",
+		"hp": 60,
+		"range": 12,
+		"size": [0.3, 1.6, 0.3],
+		"cost": { "plank": 2, "nails": 4, "metal_plate": 2 }
+	},
+	"noise_sensor": {
+		"name": "Noise sensor",
+		"kind": "sensor",
+		"sense": "noise",
+		"hp": 60,
+		"range": 20,
+		"size": [0.3, 1.6, 0.3],
+		"cost": { "plank": 2, "nails": 4, "metal_plate": 2 }
+	},
+	"floodlight": {
+		"name": "Floodlight",
+		"kind": "floodlight",
+		"hp": 60,
+		"watts": 10,
+		"size": [0.3, 3.0, 0.3],
+		"cost": { "plank": 2, "nails": 2, "metal_plate": 1 }
+	},
+	"noisemaker": {
+		"name": "Noisemaker",
+		"kind": "noisemaker",
+		"hp": 100,
+		"loudness": 90,
+		"watts": 15,
+		"size": [0.8, 1.0, 0.8],
+		"cost": { "metal_plate": 6, "nails": 10, "scrap_metal": 4 }
+	},
+	"bear_trap": {
+		"name": "Bear trap",
+		"kind": "bear_trap",
+		"hp": 60,
+		"damage": 10,
+		"size": [0.8, 0.2, 0.8],
+		"cost": { "metal_plate": 2, "nails": 4 }
+	},
+	"tripwire": {
+		"name": "Tripwire bell",
+		"kind": "tripwire",
+		"hp": 30,
+		"loudness": 60,
+		"size": [2.0, 0.4, 0.05],
+		"cost": { "nails": 2, "scrap_metal": 1 }
+	},
+	"electric_fence": {
+		"name": "Electric fence",
+		"kind": "fence",
+		"hp": 120,
+		"watts": 15,
+		"damage": 10,
+		"size": [2.0, 1.5, 0.1],
+		"cost": { "metal_plate": 4, "nails": 10 }
+	},
+	"repair_station": {
+		"name": "Repair station",
+		"kind": "repair_station",
+		"hp": 150,
+		"watts": 20,
+		"range": 12,
+		"interval": 10,
+		"size": [1.4, 1.5, 1.4],
+		"cost": { "metal_plate": 10, "nails": 10, "plank": 4 }
 	}
 }

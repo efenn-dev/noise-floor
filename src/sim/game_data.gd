@@ -4,7 +4,9 @@ extends RefCounted
 
 const DIR := "res://data/"
 const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "machine", "bed", "storage", "generator", "solar",
-		"pole", "trap", "turret", "prop", "workbench"]
+		"pole", "trap", "turret", "prop", "workbench",
+		# M15: automated defense
+		"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "tripwire", "fence", "repair_station"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -18,6 +20,7 @@ var vehicles: Dictionary = {}    # car type -> size, seat, fuel, loudness, handl
 var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, carry weight: data/survival.json
 var guns: Dictionary = {}        # M14: gun bases, parts, ammo types, gun finds: data/guns.json
 var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
+var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
@@ -35,6 +38,7 @@ static func load_default() -> GameData:
 	data.loot = _read_json(DIR + "loot.json", data)
 	data.gear = _read_json(DIR + "gear.json", data)
 	data.guns = _read_json(DIR + "guns.json", data)
+	data.defense = _read_json(DIR + "defense.json", data)
 	return data
 
 
@@ -70,6 +74,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"interval": float(b.get("interval", 0.0)),    # turret: seconds between shots
 			"ammo": b.get("ammo", ""),
 			"ammo_cap": int(b.get("ammo_cap", 0)),
+			"sense": str(b.get("sense", "")),  # M15: a sensor's kind ("motion" or "noise")
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
 			"against_wall": bool(b.get("against_wall", false)),  # W1c: stands at the back of its cell, not the middle
 		}
@@ -127,6 +132,12 @@ func validate() -> PackedStringArray:
 		if b["kind"] == "turret" and (b["damage"] <= 0.0 or b["range"] <= 0.0 or b["interval"] <= 0.0
 				or not items.has(b["ammo"]) or b["ammo_cap"] <= 0 or b["loudness"] <= 0.0):
 			errors.append("turret '%s' needs damage, range, interval, a known ammo item, ammo_cap and loudness" % id)
+		if b["kind"] == "sensor" and (not b["sense"] in ["motion", "noise"] or b["range"] <= 0.0):
+			errors.append("sensor '%s' needs sense motion or noise and a positive range" % id)
+		if b["kind"] in ["floodlight", "noisemaker", "fence", "repair_station"] and b["watts"] <= 0.0:
+			errors.append("%s '%s' needs power (watts)" % [b["kind"], id])
+		if b["kind"] == "repair_station" and (b["range"] <= 0.0 or b["interval"] <= 0.0):
+			errors.append("repair station '%s' needs a range and an interval" % id)
 		if b["kind"] == "prop" and (size.x > 1.8 or size.z > 0.9 or b["player_placeable"]):
 			errors.append("prop '%s' must fit along one wall of a cell (at most 1.8 x 0.9 m) and not be player-placeable" % id)
 		if b["kind"] == "pole" and b["reach"] <= 0.0:
@@ -200,6 +211,8 @@ func validate() -> PackedStringArray:
 		_check_guns(errors, self)
 		if not items.has("rotten_food"):
 			errors.append("spoiled food needs a 'rotten_food' item")
+	if not defense.is_empty():
+		_check_defense(errors, self)
 	return errors
 
 
@@ -240,6 +253,23 @@ static func _check_skills(errors: PackedStringArray, skills: Dictionary) -> void
 				errors.append("perk '%s' (tree %s) needs effects" % [p, t])
 			elif perks[p].has("synergy") and not trees.has(perks[p]["synergy"].get("tree", "")):
 				errors.append("perk '%s' synergy names an unknown tree" % p)
+
+
+## M15: defense.json. Every action in action_order has a name and hold; items it names exist.
+static func _check_defense(errors: PackedStringArray, d: GameData) -> void:
+	var df := d.defense
+	for a: String in df.get("action_order", []):
+		var act: Dictionary = df.get("actions", {}).get(a, {})
+		if not act.has("name") or float(act.get("hold", -1.0)) < 0.0:
+			errors.append("defense action '%s' needs a name and a hold of 0 or more" % a)
+	for item: String in df.get("hopper", {}).get("feeds", []):
+		if not d.items.has(item):
+			errors.append("hopper feeds unknown item '%s'" % item)
+	for key: String in ["repair_station", "radio"]:
+		if not d.items.has(str(df.get(key, {}).get("item", ""))):
+			errors.append("defense.json %s needs a known item" % key)
+	if int(df.get("log", {}).get("size", 0)) <= 0:
+		errors.append("defense.json log needs a size")
 
 
 ## M14: guns.json. Every gun base names a gun with its numbers; every part base names a part with a slot;

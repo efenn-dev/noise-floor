@@ -20,5 +20,8 @@
 	"ammo_casing": { "name": "Ammo casing", "color": "#c8a050", "weight": 0.005 },
 	"ammo_standard": { "name": "Standard rounds", "color": "#d8b860", "weight": 0.012 },
 	"ammo_subsonic": { "name": "Subsonic rounds", "color": "#70a0c0", "weight": 0.012 },
-	"ammo_ap": { "name": "Armour-piercing rounds", "color": "#c05050", "weight": 0.014 }
+	"ammo_ap": { "name": "Armour-piercing rounds", "color": "#c05050", "weight": 0.014 },
+	"bolt": { "name": "Crossbow bolts", "color": "#8c7a5a", "weight": 0.03 },
+	"wall_panel": { "name": "Wall panel", "color": "#9a9a92", "weight": 2.0 },
+	"radio": { "name": "Handheld radio", "color": "#404a40", "weight": 0.3 }
 }

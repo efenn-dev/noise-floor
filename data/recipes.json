@@ -47,6 +47,18 @@
 		"in": { "metal_plate": 1 },
 		"out": { "ammo_casing": 10 }
 	},
+	"press_bolts": {
+		"name": "Crossbow bolts",
+		"time": 3.0,
+		"in": { "metal_plate": 1 },
+		"out": { "bolt": 6 }
+	},
+	"press_wall_panel": {
+		"name": "Wall panel",
+		"time": 4.0,
+		"in": { "metal_plate": 2 },
+		"out": { "wall_panel": 1 }
+	},
 	"bench_standard": {
 		"name": "Standard rounds",
 		"station": "workbench",
