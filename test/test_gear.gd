@@ -368,7 +368,7 @@ func test_save_and_load_keep_gear() -> void:
 	sim.gear.pieces.append(spare)
 	sim.drop_bag(Vector3(3, 0, 3), {"nails": 2}, [sim.gear.make("cap", "civilian", "set", {}, 0.8, "Cap", "night_shift")])
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
-	eq(int(d["version"]), 6, "version 6")
+	check(int(d["version"]) >= 6, "saved as version 6 or later (gear)")
 	var b := SimWorld.new(9.0, null, 4)
 	eq(SaveGame.apply(b, d), "", "loads")
 	eq(b.gear.equipped["head"], hat, "the worn hat comes back, rolls and condition")

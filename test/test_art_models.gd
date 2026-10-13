@@ -58,6 +58,33 @@ func test_models_face_the_right_way() -> void:
 		root.free()
 
 
+## W1c: furniture has no in/out paint, so each prop names a material that must sit at its front (-Z, the
+## room) or its back (+Z, the wall). The table is symmetric: chairs at both ends.
+const PROP_FACING := {"counter": ["Cupboard Doors", -1], "couch": ["Couch Back", 1], "shelf": ["Shelf Back", 1],
+		"bathtub": ["Tap Chrome", 1], "toilet": ["Cistern", 1]}
+
+
+func test_furniture_faces_the_room() -> void:
+	for id: String in PROP_FACING:
+		var root := (load(BuildView.MODELS[id]) as PackedScene).instantiate() as Node3D
+		var z := 0.0
+		var n := 0
+		for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+			var xf := _transform_to(root, m)
+			for i in m.mesh.get_surface_count():
+				var mat := m.mesh.surface_get_material(i)
+				if mat == null or mat.resource_name != PROP_FACING[id][0]:
+					continue
+				for v: Vector3 in m.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+					z += (xf * v).z
+					n += 1
+		check(n > 0, "%s has its %s material" % [id, PROP_FACING[id][0]])
+		var mean := z / maxf(n, 1)
+		var back: bool = PROP_FACING[id][1] > 0
+		check(mean > 0.05 if back else mean < -0.05, "%s: %s is at the %s (mean z %.2f)" % [id, PROP_FACING[id][0], "back" if back else "front", mean])
+		root.free()
+
+
 func test_each_machine_gets_its_own_lamp() -> void:
 	var sim := SimWorld.new(10.0)
 	sim.give_debug_kit()

@@ -24,6 +24,7 @@ const COLORS := {
 	"barricade": Color(0.5, 0.4, 0.28),
 	"trap": Color(0.3, 0.3, 0.32),
 	"turret": Color(0.35, 0.38, 0.35),
+	"prop": Color(0.45, 0.36, 0.26),
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
@@ -46,6 +47,13 @@ const MODELS := {
 	"barricade": "res://assets/models/barricade.glb",
 	"spikes": "res://assets/models/spikes.glb",
 	"nail_turret": "res://assets/models/nail_turret.glb",
+	# W1c: house furniture, laid by the town plan (kind "prop").
+	"counter": "res://assets/models/counter.glb",
+	"table": "res://assets/models/table.glb",
+	"couch": "res://assets/models/couch.glb",
+	"shelf": "res://assets/models/shelf.glb",
+	"bathtub": "res://assets/models/bathtub.glb",
+	"toilet": "res://assets/models/toilet.glb",
 }
 const SURFACES := {"foundation": "concrete_floor", "wall": "scrap_wall"}  # piece id -> texture name (see Surfaces)
 

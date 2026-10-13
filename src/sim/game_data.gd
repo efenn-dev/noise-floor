@@ -4,7 +4,7 @@ extends RefCounted
 
 const DIR := "res://data/"
 const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "machine", "bed", "storage", "generator", "solar",
-		"pole", "trap", "turret"]
+		"pole", "trap", "turret", "prop"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -69,6 +69,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"ammo": b.get("ammo", ""),
 			"ammo_cap": int(b.get("ammo_cap", 0)),
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
+			"against_wall": bool(b.get("against_wall", false)),  # W1c: stands at the back of its cell, not the middle
 		}
 	recipes = {}
 	for id: String in raw_recipes:
@@ -122,6 +123,8 @@ func validate() -> PackedStringArray:
 		if b["kind"] == "turret" and (b["damage"] <= 0.0 or b["range"] <= 0.0 or b["interval"] <= 0.0
 				or not items.has(b["ammo"]) or b["ammo_cap"] <= 0 or b["loudness"] <= 0.0):
 			errors.append("turret '%s' needs damage, range, interval, a known ammo item, ammo_cap and loudness" % id)
+		if b["kind"] == "prop" and (size.x > 1.8 or size.z > 0.9 or b["player_placeable"]):
+			errors.append("prop '%s' must fit along one wall of a cell (at most 1.8 x 0.9 m) and not be player-placeable" % id)
 		if b["kind"] == "pole" and b["reach"] <= 0.0:
 			errors.append("pole '%s' needs a positive reach" % id)
 		if b["watts"] < 0.0:
