@@ -14,6 +14,7 @@ Owner: Emmitt. He is not very technical, so explain things in plain words, give 
 tools/test.sh                      # headless (--fixed-fps 60, so physics tests run faster than real time): run every test/test_*.gd; non-zero on any failed check or SCRIPT ERROR
 tools/shot.sh <name> [game flags]  # one frame -> .shots/<name>.png, then Read the PNG.  e.g. tools/shot.sh night --time=22
 tools/godot.sh <args>              # the pinned Godot binary
+tools/stress.sh                    # headless sim stress test (town, 50 machines, 200 / 20 zombies; ~1 min): prints ms per tick and per-call costs; not part of test.sh. Report: docs/perf/
 ```
 Session logs (since P0): each play session writes a plain-words summary (deaths and causes, builds, heat, loudest sounds, first five minutes) to `user://sessions/<YYYY-MM-DD_HHMM>.txt` on every death and at quit (on Windows `%APPDATA%/Godot/app_userdata/Noise Floor/sessions/`); the console prints `Session log: <path>`. Never in headless runs or screenshots.
 Build line (since P1): `play.bat` rewrites `version.txt` (`git log -1 --format="%h %s"`, shown on the title screen, in the session log header and the console) and `play-update.log` (what its update step did) next to itself on every run; both are git-ignored. Tests point `GameSession.version_path` at their own file.

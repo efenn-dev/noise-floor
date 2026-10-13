@@ -2,6 +2,17 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Stress test (numbers only)
+
+How expensive one sim tick is with many zombies and machines, before zombies inside houses, hordes and automated defense. No code changed outside the test; nothing optimised.
+
+- `tools/stress.sh` runs `test/stress/stress_sim.gd` (headless, not part of `tools/test.sh`): the W1a town, `power.free`, 50 smelters and presses kept crafting, 200 shamblers on the main street, `sim.step()` in a loop. A full day would take ~113 s of wall time, so it runs **4 game hours** from 19:00. Full table: `docs/perf/stress-2026-10-13.md`.
+- **Town + 200 zombies + 50 machines: 4.6 ms per tick on average, 20 ms worst** (the budget at 20 ticks per second is 50 ms). Empty map: 4.2 ms. Town + 20 zombies: 2.3 ms.
+- Where the time goes: zombies listening (`loudest_heard`, ~170 us each, every half second; it grows with zombies x machines) and the Director's `gain_now` (~10 ms once a second, which makes the worst ticks). The town itself adds ~0.4 ms. Memory +1.4 MB.
+- Not measured: zombie bodies, navmesh and physics (a sim-only run never moves zombies).
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — W1a Into the houses
 
 From Playtest #1 ("there are no doors or ways into the buildings") and the plan in `docs/plans/W1.md`.
