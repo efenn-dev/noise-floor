@@ -160,6 +160,13 @@ func test_game_lays_the_town_once() -> void:
 			break
 	s.build.damage(some_wall, 123)
 	var count := s.build.pieces.size()
+	check(s.build.pieces.has("f:0:-60"), "the factory hall is laid (W1b)")
+	var in_houses := 0
+	for z: ZombieBrain in s.horde.zombies.values():
+		if TownPlan.house_at(main.town, BuildGrid.world_to_cell(z.pos)) != -1:
+			in_houses += 1
+	eq(in_houses, main.town["zombies"].size(), "a zombie in each picked house (W1b)")
+	var zombies := s.horde.zombies.size()
 	eq(main.save_game(), "", "save")
 	main.queue_free()
 	await tree.process_frame
@@ -171,6 +178,7 @@ func test_game_lays_the_town_once() -> void:
 	check(again._loaded, "the save loaded")
 	eq(again.town_pieces, 0, "the plan didn't lay the houses a second time")
 	eq(again.sim.build.pieces.size(), count, "the same pieces came back")
+	eq(again.sim.horde.zombies.size(), zombies, "the same zombies came back, house ones not doubled")
 	check(again.sim.build.pieces[door]["open"], "the front door is still open")
 	eq(again.sim.build.pieces[some_wall]["hp"], 600 - 123, "the wall is still damaged")
 	again.queue_free()

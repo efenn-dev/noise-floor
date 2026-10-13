@@ -2,13 +2,16 @@ class_name ZombieBrain
 extends RefCounted
 ## One zombie's mind. The world body moves it around and reports what it senses (position, facing,
 ## clear line of sight to the player, what it's bumping into); the brain decides what to do.
-##   IDLE -> WANDER (random strolls near home)
+##   IDLE -> WANDER (random strolls near home; W1b: not when home is indoors, on a town floor: a zombie
+##                   that has settled inside a house or the factory stands there until something draws it)
 ##   sees you -> CHASE -> close enough -> ATTACK (hits every attack_interval)
 ##   chasing but stuck against something you built -> BREAK (hits the piece until it's gone)
 ##   loses sight -> walks to where it last saw you, waits LOSE_TIME there, then gives up (IDLE);
 ##                  it also gives up after CHASE_MEMORY if it can't get there
 ##   hears something (idle, wandering or already investigating) -> INVESTIGATE: walks to the sound;
-##                  if it was a machine, wrecks it (BREAK); otherwise looks around, then IDLE
+##                  if it was a machine, wrecks it (BREAK); otherwise looks around, then IDLE.
+##                  W1b: hear_via() gives it a few waypoints to walk first (a Director wave walks the road),
+##                  each consumed on arrival; then it heads for the sound itself
 ##   hp 0 -> DEAD (the body lies there for CORPSE_TIME)
 
 enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, INVESTIGATE, DEAD }
@@ -35,6 +38,8 @@ var target_pos: Vector3  # where it wants to walk
 var last_seen: Vector3
 var break_key := ""
 var sound_key := ""  # piece key of the machine it's walking toward, "" for other sounds
+var sound_pos: Vector3  # where the sound it's investigating came from (target_pos once the route is walked)
+var route: Array = []   # W1b: waypoints (Vector3) to walk before heading for sound_pos; target_pos = route[0]
 var dead_time := 0.0
 var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
 var _scream_cd := 0.0
@@ -55,6 +60,7 @@ var _timer := 0.0
 var _lost := 0.0     # seconds waiting at the last-seen spot
 var _unseen := 0.0   # seconds since it last saw you
 var _rng := RandomNumberGenerator.new()
+var _leg_time := INVESTIGATE_TIME  # each leg of a route gets this long before it gives up
 
 
 func _init(p_id: int, p_type: String, p_stats: Dictionary, p_pos: Vector3, seed_value: int) -> void:
@@ -113,10 +119,26 @@ func hearing(night: bool) -> float:
 func hear(at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void:
 	if not (state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE):
 		return
+	if state == State.INVESTIGATE and not route.is_empty() and _flat_dist(at, sound_pos) < 1.0:
+		_timer = maxf(_timer, time)  # the same sound it's already on its way to: keep to the route
+		return
 	state = State.INVESTIGATE
 	target_pos = at
+	sound_pos = at
 	sound_key = key
+	route = []
 	_timer = time
+
+
+## Like hear(), but walk through `via` (waypoints, in order) first. A Director wave uses it so the
+## zombies come down the road before turning toward the noise.
+func hear_via(via: Array, at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void:
+	hear(at, key, time)
+	if state != State.INVESTIGATE or via.is_empty():
+		return
+	route = via.duplicate()
+	target_pos = route[0]
+	_leg_time = time
 
 
 ## Can a zombie at `from` facing `facing` see a player at `to`? Close by, it notices you whatever way it
@@ -167,7 +189,9 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	match state:
 		State.IDLE:
 			_timer -= dt
-			if _timer <= 0.0:
+			if _timer <= 0.0 and _indoors(pieces, home):
+				_timer = _rng.randf_range(2.0, 6.0)  # settled inside: it stays put until something draws it
+			elif _timer <= 0.0:
 				var angle := _rng.randf_range(0.0, TAU)
 				var r := _rng.randf_range(2.0, WANDER_RADIUS)
 				target_pos = home + Vector3(cos(angle) * r, 0.0, sin(angle) * r)
@@ -181,6 +205,13 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 			_timer -= dt
 			if blocked_by != "" and _standing(pieces, blocked_by):
 				_start_break(blocked_by)
+			elif not route.is_empty():
+				if _flat_dist(pos, target_pos) < ARRIVE * 2.0:  # reached a waypoint: on to the next, or the sound
+					route.pop_front()
+					target_pos = route[0] if not route.is_empty() else sound_pos
+					_timer = _leg_time
+				elif _timer <= 0.0:
+					_go_idle(true)
 			elif sound_key != "" and pieces.has(sound_key) and _flat_dist(pos, target_pos) < MACHINE_REACH:
 				_start_break(sound_key)  # found the noisy machine: wreck it
 			elif _flat_dist(pos, target_pos) < ARRIVE * 2.0 or _timer <= 0.0:
@@ -225,6 +256,13 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	return events
 
 
+## W1b: is `at` on a town floor (inside a house or the factory)?
+static func _indoors(pieces: Dictionary, at: Vector3) -> bool:
+	var cell := BuildGrid.world_to_cell(at)
+	var p: Variant = pieces.get("f:%d:%d" % [cell.x, cell.y])
+	return p is Dictionary and p.get("id", "") == "town_floor"
+
+
 ## A piece still there to break: not wrecked, and not a window whose glass is already gone (W1a).
 static func _standing(pieces: Dictionary, key: String) -> bool:
 	if not pieces.has(key):
@@ -262,6 +300,7 @@ func _go_idle(new_home: bool) -> void:
 	state = State.IDLE
 	break_key = ""
 	sound_key = ""
+	route = []
 	_timer = _rng.randf_range(2.0, 6.0)
 	target_pos = pos
 	if new_home:

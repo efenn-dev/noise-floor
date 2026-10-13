@@ -5,9 +5,18 @@ extends RefCounted
 ## Every check_every seconds it may send zombies in from a road end, walking toward the loudest
 ## machine: wanderers once heat passes wanderers_at, and at night groups (group_at) or a horde (horde_at).
 ## Sending a wave spends heat. Numbers live in data/noise.json "director".
+## W1b: wanderers still come from any of the four EDGES straight at the noise, but groups and hordes come
+## from the north or south end of the road (EDGES 0 and 1) and walk down the road first: to the road point
+## nearest the noise, then they turn toward it (ZombieBrain.hear_via with road_route()).
 
 const EDGES := [Vector3(-25, 0, -145), Vector3(0, 0, 35), Vector3(-40, 0, -60), Vector3(40, 0, -60)]
 const EDGE_NAMES := ["north", "south", "west", "east"]
+const ROAD_X := 0.0
+const ROAD_NORTH_Z := -106.0  # the north end of the open road, in front of the factory's doorway
+const ROAD_SOUTH_Z := 10.0    # the south end of the asphalt
+## The north end is behind the factory: come round its west side to the road first.
+const NORTH_VIA := [Vector3(-25, 0, -106)]
+const ROAD_LEG := 40.0        # longest stretch between road waypoints (each leg gets lure_time to walk)
 
 var cfg: Dictionary
 var heat := 0.0
@@ -59,14 +68,34 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	if size <= 0:
 		return {}
 	var lure := _loudest(noise)
-	var e := _rng.randi_range(0, EDGES.size() - 1)
+	var by_road := kind != "wanderers"
+	var e := _rng.randi_range(0, 1) if by_road else _rng.randi_range(0, EDGES.size() - 1)
+	var route := road_route(EDGE_NAMES[e], lure["pos"]) if by_road else []
 	for i in size:
 		var spot: Vector3 = EDGES[e] + Vector3(_rng.randf_range(-4, 4), 0, _rng.randf_range(-4, 4))
 		var z := horde.spawn(pick_type(), spot)
-		z.facing = (lure["pos"] - spot).normalized()
-		z.hear(lure["pos"], lure["key"], float(cfg["lure_time"]))
+		var first: Vector3 = route[0] if not route.is_empty() else lure["pos"]
+		z.facing = (first - spot).normalized()
+		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
-	return {"size": size, "edge": EDGE_NAMES[e], "kind": kind}
+	return {"size": size, "edge": EDGE_NAMES[e], "kind": kind, "route": route}
+
+
+## The waypoints a wave from the `edge` road end ("north" or "south") walks before turning toward
+## `lure`: onto the road, then along it (in legs of at most ROAD_LEG) to the road point nearest the lure.
+static func road_route(edge: String, lure: Vector3) -> Array:
+	var points: Array = NORTH_VIA.duplicate() if edge == "north" else []
+	var z := ROAD_NORTH_Z if edge == "north" else ROAD_SOUTH_Z
+	var stop := clampf(lure.z, ROAD_NORTH_Z, ROAD_SOUTH_Z)
+	points.append(Vector3(ROAD_X, 0, z))
+	var legs := ceili(absf(stop - z) / ROAD_LEG)
+	for i in range(1, legs + 1):
+		points.append(Vector3(ROAD_X, 0, lerpf(z, stop, float(i) / legs)))
+	var out: Array = []
+	for p: Vector3 in points:  # drop points on top of the one before
+		if out.is_empty() or p.distance_to(out.back()) > 3.0:
+			out.append(p)
+	return out
 
 
 ## Heat per second from the machines running now: each adds gain_rate per dB it's heard over

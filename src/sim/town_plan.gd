@@ -3,7 +3,10 @@ extends RefCounted
 ## The town's houses, made of the same 2 m grid pieces the player builds with (W1a).
 ## generate() is pure: the same seed always gives the same town. It returns
 ##   {"pieces": [{id, cell, side, style}], "containers": [{id, table, cell, side}],
-##    "beds": [{cell, side}], "houses": [{name, cells, door_cell, door_side, plan, mirror, style}]}
+##    "beds": [{cell, side}], "houses": [{name, cells, door_cell, door_side, plan, mirror, style}],
+##    "zombies": [{house, cell, pos, facing}], "factory": {cells, pieces, crates, doorway, windows}}
+## W1b: "zombies" are the houses with one zombie standing inside (about one in three, never on the first
+## lot by the spawn), and "factory" is the factory hall at the road's north end, also made of pieces.
 ## Edge pieces use BuildGrid's canonical edges (NORTH or WEST of a cell). A container or bed `side`
 ## is the wall it stands against; it faces the other way, into the room.
 ## Nothing else in src/sim knows what a house is: SimWorld.place_town lays these pieces into the
@@ -45,6 +48,16 @@ const PLANS := {
 		"bed": [0, 4, "R"]},
 }
 const PLAN_IDS := ["A", "B", "C"]
+const HOUSE_ZOMBIES := 4        # of the 12 houses (W1b); the two on lot 0, by the spawn, never get one
+
+## The factory hall (W1b): FACTORY_SIZE cells from FACTORY_CELL (its north-west corner), where the old solid
+## block stood. Its south wall faces the end of the road and has a doorway FACTORY_DOOR cells wide
+## (empty edges, no door) centred on the road. A few windows down the long sides; three supply crates inside.
+const FACTORY_CELL := Vector2i(-8, -69)
+const FACTORY_SIZE := Vector2i(15, 12)
+const FACTORY_DOOR := [-1, 0]   # cell x of the doorway's two edges in the south wall
+const FACTORY_WINDOWS := [-67, -64, -61]  # cell z of the windows in the west and east walls
+const FACTORY_CRATES := [Vector2i(-5, -60), Vector2i(0, -64), Vector2i(4, -60)]
 
 
 static func generate(seed_value: int, _data: GameData = null) -> Dictionary:
@@ -58,7 +71,99 @@ static func generate(seed_value: int, _data: GameData = null) -> Dictionary:
 			# Every third house is brick, the rest painted siding (the same pattern as the old boxes).
 			var style := "brick" if (i * 2 + (1 if east else 0)) % 3 == 0 else "siding"
 			_add_house(out, "house_%d_%s" % [i, "e" if east else "w"], plan_id, mirror, east, lot_z(i), style)
+	out["zombies"] = _house_zombies(seed_value, out)
+	out["factory"] = factory()
 	return out
+
+
+## W1b: which houses have a zombie standing inside, and where. Its own random stream, so the houses
+## themselves don't change. HOUSE_ZOMBIES of the houses past lot 0; each stands next to the fridge or the
+## kitchen cabinet (in the same room, no wall between), so searching the kitchen is close enough to wake it.
+static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "house_zombies"])
+	var pick: Array = []
+	for i in town["houses"].size():
+		if not town["houses"][i]["name"].begins_with("house_0_"):
+			pick.append(i)
+	for i in range(pick.size() - 1, 0, -1):  # a seeded shuffle
+		var j := rng.randi_range(0, i)
+		var t: int = pick[i]
+		pick[i] = pick[j]
+		pick[j] = t
+	pick = pick.slice(0, HOUSE_ZOMBIES)
+	pick.sort()
+	var edges := {}
+	for p: Dictionary in town["pieces"]:
+		if p["id"] != "town_floor":
+			edges[piece_key(p)] = true
+	var out: Array = []
+	for i: int in pick:
+		var house: Dictionary = town["houses"][i]
+		var busy := {house["door_cell"]: true}
+		var kitchen: Array = []
+		for c: Dictionary in town["containers"]:
+			if c["id"].begins_with(house["name"] + "_"):
+				busy[c["cell"]] = true
+				if c["table"] != "bathroom":
+					kitchen.append(c["cell"])
+		for b: Dictionary in town["beds"]:
+			if b["cell"] in house["cells"]:
+				busy[b["cell"]] = true
+		var spots: Array = []
+		for k: Vector2i in kitchen:
+			for side in 4:
+				var n: Vector2i = k + [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]
+				if n in house["cells"] and not busy.has(n) and not spots.has(n) 						and not edges.has(BuildGrid.key_for_wall_edge(k, side)):
+					spots.append(n)
+		if spots.is_empty():  # no open cell by the kitchen: anywhere free in the house
+			for c: Vector2i in house["cells"]:
+				if not busy.has(c):
+					spots.append(c)
+		var cell: Vector2i = spots[rng.randi_range(0, spots.size() - 1)]
+		var g := BuildGrid.GRID
+		var pos := Vector3((cell.x + 0.5) * g, 0.1, (cell.y + 0.5) * g)
+		var door: Vector2i = house["door_cell"]
+		var facing := Vector3((door.x - cell.x) * g, 0, (door.y - cell.y) * g)
+		out.append({"house": i, "cell": cell, "pos": pos,
+				"facing": facing.normalized() if facing.length_squared() > 0.01 else Vector3.FORWARD})
+	return out
+
+
+## W1b: the factory hall. Floor on every cell, brick town walls all round ("factory" style) except the
+## doorway's empty edges and a few windows. Pure and seed-free: the factory is the same in every town.
+static func factory() -> Dictionary:
+	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "windows": 0}
+	var x0 := FACTORY_CELL.x
+	var z0 := FACTORY_CELL.y
+	var x1 := x0 + FACTORY_SIZE.x - 1
+	var z1 := z0 + FACTORY_SIZE.y - 1
+	for x in range(x0, x1 + 1):
+		for z in range(z0, z1 + 1):
+			out["cells"].append(Vector2i(x, z))
+			out["pieces"].append({"id": "town_floor", "cell": Vector2i(x, z), "side": BuildGrid.Side.NORTH, "style": "floor"})
+	var edge := func(cell: Vector2i, side: int, id: String) -> void:
+		var e := BuildGrid.canonical_edge(cell, side)
+		out["pieces"].append({"id": id, "cell": e[0], "side": e[1], "style": "factory"})
+	for x in range(x0, x1 + 1):
+		edge.call(Vector2i(x, z0), BuildGrid.Side.NORTH, "town_wall")
+		if x in FACTORY_DOOR:
+			out["doorway"].append(BuildGrid.key_for_wall_edge(Vector2i(x, z1), BuildGrid.Side.SOUTH))
+		else:
+			edge.call(Vector2i(x, z1), BuildGrid.Side.SOUTH, "town_wall")
+	for z in range(z0, z1 + 1):
+		var id := "window" if z in FACTORY_WINDOWS else "town_wall"
+		edge.call(Vector2i(x0, z), BuildGrid.Side.WEST, id)
+		edge.call(Vector2i(x1, z), BuildGrid.Side.EAST, id)
+		if id == "window":
+			out["windows"] += 2
+	return out
+
+
+## The factory's footprint on the ground (x, z) in metres.
+static func factory_rect() -> Rect2:
+	var g := BuildGrid.GRID
+	return Rect2(FACTORY_CELL.x * g, FACTORY_CELL.y * g, FACTORY_SIZE.x * g, FACTORY_SIZE.y * g)
 
 
 ## Where lot `i` is centred along the road (metres).
