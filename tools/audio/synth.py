@@ -7,6 +7,7 @@ Zombie voices are CC0 recordings instead (assets/CREDITS.md): made-up moans soun
 
 Usage:
     python tools/audio/synth.py            -> assets/sounds/*.wav
+    python tools/audio/synth.py --only shot_pistol reload   -> just those (M14 added the guns this way)
 """
 
 import argparse
@@ -331,24 +332,60 @@ def click() -> np.ndarray:
     return fade_edges(normalize(oneshot_noise(n, bp(3500, 0.8)) * decay(n, 0.003), -10), ms=1)
 
 
+def gunshot(rifle: bool, suppressed: bool) -> np.ndarray:
+    """A gunshot (M14). Open: a hard crack, a low boom and a long rolling tail off the houses (the rifle
+    deeper and longer). Suppressed: no crack, a muffled thump and a short puff of gas with the action's clack."""
+    length = 1.6 if rifle else 1.1
+    n = seconds(length)
+    if suppressed:
+        puff = oneshot_noise(n, bp(900 if rifle else 1300, 1.2)) * decay(n, 0.05 if rifle else 0.035, attack=0.002)
+        clack = clank(length, [(2400, 1.0, 0.012), (3900, 0.6, 0.008)])
+        out = normalize(puff, 0) + 0.8 * thump(length, 160 if rifle else 220, 60, 0.05) + 0.35 * normalize(clack, 0)
+        return fade_edges(normalize(out, -6))
+    crack = oneshot_noise(n, hp(1800)) * decay(n, 0.006, attack=0.0005)
+    boom = thump(length, 110 if rifle else 150, 38 if rifle else 50, 0.16 if rifle else 0.1)
+    tail = oneshot_noise(n, lp(700 if rifle else 1000, 2)) * decay(n, 0.45 if rifle else 0.3, attack=0.02)
+    out = normalize(crack, 0) + 1.2 * boom + 0.45 * normalize(tail, 0)
+    return fade_edges(normalize(out, -1))
+
+
+def reload_click() -> np.ndarray:
+    """A magazine going in and the slide racking: two metal clicks."""
+    n = seconds(0.45)
+    out = np.zeros(n)
+    place(out, clank(0.12, [(1800, 1.0, 0.015), (3100, 0.5, 0.01)]), 0.02, wrap=False)
+    place(out, clank(0.15, [(1200, 1.0, 0.02), (2600, 0.7, 0.012)]) + 0.4 * thump(0.15, 300, 150, 0.02), 0.27, wrap=False)
+    return fade_edges(normalize(out, -8))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.parse_args()
+    parser.add_argument("--only", nargs="*", default=None, help="make only these sounds (by file name)")
+    only = parser.parse_args().only
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     OUT.mkdir(parents=True, exist_ok=True)
     loops = {"hum_smelter": smelter, "hum_press": press, "hum_purifier": purifier, "hum_canner": canner,
              "engine_generator": generator, "engine_car": car_engine, "wind_day": lambda: wind(False),
              "wind_night": lambda: wind(True)}
     shots = {"swing": swing, "hit_body": hit_body, "bash": bash, "turret_shot": turret_shot, "door": door,
-             "build_place": build_place, "click": click, "horn": horn}
+             "build_place": build_place, "click": click, "horn": horn,
+             "shot_pistol": lambda: gunshot(False, False), "shot_rifle": lambda: gunshot(True, False),
+             "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
+             "reload": reload_click}
     global rng
     for name, make in loops.items():
+        if only is not None and name not in only:
+            continue
         rng = np.random.default_rng(zlib.crc32(name.encode()))
         write_wav(name, make(), loop=True)
     for i in range(4):
+        if only is not None and f"step_{i + 1}" not in only:
+            continue
         rng = np.random.default_rng(zlib.crc32(f"step_{i + 1}".encode()))
         write_wav(f"step_{i + 1}", footstep(i), loop=False)
     for name, make in shots.items():
+        if only is not None and name not in only:
+            continue
         rng = np.random.default_rng(zlib.crc32(name.encode()))
         write_wav(name, make(), loop=False)
 

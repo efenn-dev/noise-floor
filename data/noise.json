@@ -14,7 +14,8 @@
 		"zombie_bash": 50,
 		"wreck": 65,
 		"door": 25,
-		"horn": 95
+		"horn": 95,
+		"reload": 15
 	},
 	"director": {
 		"listen_distance": 50,

@@ -130,7 +130,7 @@
 		"watts": 30,
 		"size": [1.7, 1.4, 1.7],
 		"recipe": "press_nails",
-		"recipes": ["press_nails", "repair_kit"],
+		"recipes": ["press_nails", "repair_kit", "press_casings"],
 		"cost": { "plank": 10, "metal_plate": 10 }
 	},
 	"rain_collector": {
@@ -184,6 +184,13 @@
 		"hp": 100,
 		"size": [1.4, 1.0, 1.0],
 		"cost": { "plank": 8, "nails": 8 }
+	},
+	"workbench": {
+		"name": "Workbench",
+		"kind": "workbench",
+		"hp": 80,
+		"size": [1.6, 0.9, 0.8],
+		"cost": { "plank": 6, "nails": 10 }
 	},
 	"generator": {
 		"name": "Generator",

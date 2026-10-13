@@ -6,6 +6,7 @@ extends Node3D
 ## entered_car fires), G siphons, R pours in gas cans, T repairs.
 
 signal entered_car(id: String)
+signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
 
 const REACH := 4.0
 
@@ -73,13 +74,17 @@ func siphon() -> String:
 	return last_message
 
 
-## R on a car: pour the gas cans you carry into its tank. R on a Press: switch nails / repair kits (M13).
+## R on a car: pour the gas cans you carry into its tank. R on a Press: switch nails / repair kits /
+## casings (M13). Otherwise, with a gun in your hands: reload (M14).
 func refuel() -> String:
 	update_target()
 	if target_car == "" and has_target and sim.factory.machines.has(target_cell):
 		last_message = sim.cycle_recipe(target_cell)
 		return last_message
 	if target_car == "":
+		if sim.guns.in_hand():
+			last_message = sim.reload()
+			return last_message
 		return ""
 	last_message = sim.refuel_car(target_car)
 	return last_message
@@ -185,6 +190,9 @@ func interact() -> String:
 			return last_message
 		"solar", "pole":
 			return ""
+		"workbench":
+			opened_workbench.emit(target_key)
+			return ""
 	# Machines load from your pockets and nearby crates; what they made goes in your pockets.
 	var moved: Dictionary = sim.machine_interact(target_cell, sim.build.piece_center(target_key))
 	var parts := PackedStringArray()
@@ -255,6 +263,9 @@ func status_text() -> String:
 	elif kind == "pole":
 		lines.append("Power pole · links anything within %d m" % int(sim.data.buildables["power_pole"]["reach"]))
 		lines.append(_network_line(sim.power.network_of(target_key)))
+	elif kind == "workbench":
+		lines.append("Workbench · gun parts and ammo by hand")
+		lines.append("[E] use it")
 	elif kind == "bed":
 		lines.append("Bed · energy %d" % roundi(sim.player.energy))
 		lines.append("[E] sleep here (you'll respawn here)")

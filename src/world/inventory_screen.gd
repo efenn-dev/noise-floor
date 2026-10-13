@@ -15,7 +15,8 @@ const POCKETS := "pockets"
 const CRATE := "crate"
 const WORN := "worn"
 const GEAR := "gear:"  # a selected gear piece is "gear:<uid>"
-const SLOT_NAMES := {"weapon": "Weapon", "head": "Head", "body": "Body", "hands": "Hands", "light": "Light"}
+const SLOT_NAMES := {"weapon": "Weapon", "head": "Head", "body": "Body", "hands": "Hands", "light": "Light",
+		"gun": "Gun", "part": "Gun part"}
 
 static var _icons: Dictionary = {}
 
@@ -306,6 +307,8 @@ func _show_gear(piece: Dictionary) -> void:
 	_details.add_theme_color_override("font_color", g.color(piece))
 	if _selected_side == WORN:
 		_action("Unequip", unequip_selected)
+	elif g.slot_of(piece) == "part":
+		_action("Drop", drop_gear_selected)  # M14: parts go on a gun at a workbench, not on you
 	else:
 		_action("Equip", equip_selected)
 		_action("Drop", drop_gear_selected)

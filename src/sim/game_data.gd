@@ -4,7 +4,7 @@ extends RefCounted
 
 const DIR := "res://data/"
 const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "machine", "bed", "storage", "generator", "solar",
-		"pole", "trap", "turret", "prop"]
+		"pole", "trap", "turret", "prop", "workbench"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -16,6 +16,7 @@ var noise: Dictionary = {}       # muffler, sounds, director tuning: see data/no
 var skills: Dictionary = {}      # levels, xp per action, hotwiring: data/skills.json
 var vehicles: Dictionary = {}    # car type -> size, seat, fuel, loudness, handling: data/vehicles.json
 var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, carry weight: data/survival.json
+var guns: Dictionary = {}        # M14: gun bases, parts, ammo types, gun finds: data/guns.json
 var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
@@ -33,6 +34,7 @@ static func load_default() -> GameData:
 	data.skills = _read_json(DIR + "skills.json", data)
 	data.loot = _read_json(DIR + "loot.json", data)
 	data.gear = _read_json(DIR + "gear.json", data)
+	data.guns = _read_json(DIR + "guns.json", data)
 	return data
 
 
@@ -75,7 +77,9 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 	for id: String in raw_recipes:
 		var r: Dictionary = raw_recipes[id]
 		recipes[id] = {"name": r.get("name", id), "time": float(r.get("time", 0.0)),
-				"in": _int_counts(r.get("in", {})), "out": _int_counts(r.get("out", {}))}
+				"in": _int_counts(r.get("in", {})), "out": _int_counts(r.get("out", {})),
+				# M14: made by hand at a "station" (the workbench), maybe gated by a "perk", maybe making a gear piece
+				"station": str(r.get("station", "")), "perk": str(r.get("perk", "")), "gear": str(r.get("gear", ""))}
 	debug_kit = {}
 	for item: String in raw_kit:
 		debug_kit[item] = int(raw_kit[item])
@@ -135,7 +139,7 @@ func validate() -> PackedStringArray:
 		var r: Dictionary = recipes[id]
 		if r["time"] <= 0.0:
 			errors.append("recipe '%s' needs a positive time" % id)
-		if r["out"].is_empty():
+		if r["out"].is_empty() and r["gear"] == "":
 			errors.append("recipe '%s' needs outputs" % id)  # no inputs is fine (rain collector)
 		for part in ["in", "out"]:
 			for item: String in r[part]:
@@ -193,6 +197,7 @@ func validate() -> PackedStringArray:
 			if not zombies.has(u.get("type", "")):
 				errors.append("infamy unlocks unknown zombie '%s'" % u.get("type", ""))
 		_check_gear(errors, self)
+		_check_guns(errors, self)
 		if not items.has("rotten_food"):
 			errors.append("spoiled food needs a 'rotten_food' item")
 	return errors
@@ -237,6 +242,44 @@ static func _check_skills(errors: PackedStringArray, skills: Dictionary) -> void
 				errors.append("perk '%s' synergy names an unknown tree" % p)
 
 
+## M14: guns.json. Every gun base names a gun with its numbers; every part base names a part with a slot;
+## ammo types are items; finds name loot tables; workbench recipes make known gear and gate on known perks.
+static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
+	var gn := d.guns
+	if gn.is_empty():
+		errors.append("no gun data")
+		return
+	for id: String in gn.get("guns", {}):
+		var gun: Dictionary = gn["guns"][id]
+		for key: String in ["damage", "range", "spread", "recoil", "settle", "handling", "magazine", "loudness",
+				"cooldown", "reload", "wear_per_shot"]:
+			if float(gun.get(key, 0)) <= 0.0:
+				errors.append("gun '%s' needs a positive '%s'" % [id, key])
+		if float(gun.get("loudness", 0)) > 100.0:
+			errors.append("gun '%s' is louder than 100" % id)
+	for id: String in gn.get("parts", {}):
+		if not gn["parts"][id].get("slot", "") in gn.get("part_slots", []):
+			errors.append("gun part '%s' needs a slot in part_slots" % id)
+	for a: String in gn.get("ammo", {}):
+		if not d.items.has(a):
+			errors.append("ammo '%s' needs an item" % a)
+	for b: String in d.gear.get("bases", {}):
+		var base: Dictionary = d.gear["bases"][b]
+		if base.get("slot", "") == "gun" and not gn.get("guns", {}).has(base.get("gun", "")):
+			errors.append("gear base '%s' needs a gun in guns.json" % b)
+		if base.get("slot", "") == "part" and not gn.get("parts", {}).has(base.get("part", "")):
+			errors.append("gear base '%s' needs a part in guns.json" % b)
+	for table: String in gn.get("finds", {}):
+		if not d.loot.has(table):
+			errors.append("gun finds name unknown loot table '%s'" % table)
+	for id: String in d.recipes:
+		var r: Dictionary = d.recipes[id]
+		if r["gear"] != "" and not d.gear.get("bases", {}).has(r["gear"]):
+			errors.append("recipe '%s' makes unknown gear '%s'" % [id, r["gear"]])
+		if r["perk"] != "" and not d.skills.get("perks", {}).has(r["perk"]):
+			errors.append("recipe '%s' needs unknown perk '%s'" % [id, r["perk"]])
+
+
 ## M13: gear.json. Rarity colours, tiers, bases (a slot, a weight, a weapon in weapons.json for
 ## weapons), stat ranges (min <= max), uniques and sets naming real bases and stats, drop chances in 0..1.
 static func _check_gear(errors: PackedStringArray, d: GameData) -> void:
@@ -258,7 +301,7 @@ static func _check_gear(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("gear tier '%s' needs base_mult and chance" % t)
 	for b: String in g.get("bases", {}):
 		var base: Dictionary = g["bases"][b]
-		if not base.get("slot", "") in slots or float(base.get("weight", 0)) <= 0.0:
+		if not (base.get("slot", "") in slots or base.get("slot", "") == "part") or float(base.get("weight", 0)) <= 0.0:
 			errors.append("gear base '%s' needs a slot and a weight" % b)
 		if base.get("slot", "") == "weapon" and not d.weapons.has(base.get("weapon", "")):
 			errors.append("gear base '%s' needs a weapon in weapons.json" % b)

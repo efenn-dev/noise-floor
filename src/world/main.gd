@@ -49,6 +49,8 @@ var interactor: Interactor
 var nav: NavBaker
 var zombie_view: ZombieView
 var melee: Melee
+var shooter: Shooter  # M14: the gun in your hands
+var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
 var session_log: SessionLog
@@ -127,6 +129,10 @@ func _ready() -> void:
 	add_child(skills_screen)
 	skills_screen.setup(sim)
 	skills_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	workbench_screen = WorkbenchScreen.new()
+	add_child(workbench_screen)
+	workbench_screen.setup(sim)
+	workbench_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
 	if _wants_hints(args):
 		hints = Hints.new()
 		hints.setup(sim, inventory_screen, noise_overlay)
@@ -161,7 +167,12 @@ func _ready() -> void:
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
 		skills_screen.open()  # --skills, for screenshots
-	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open():
+	if args.has("gun") or args.has("workbench") or args.has("shoot"):
+		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("shoot"):
+		shooter.fire.call_deferred()  # --shoot: fire once (screenshots of the HUD line after a shot)
+	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
+			and not workbench_screen.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	sim.stats.muted = false
 
@@ -184,6 +195,39 @@ func _give_rolled_gear(rarity: String) -> void:
 	if not inventory_screen.is_open():
 		inventory_screen.open()
 	inventory_screen.select_gear(piece["uid"])
+
+
+## --gun[=pistol|rifle|pete]: a gun (pistol by default; pete = Old Pete's Deer Rifle) in your gun slot,
+## loaded, raised and in your hands, with 30 standard rounds. --workbench also gives the parts and casings
+## the bench uses, fits a crude suppressor and opens the workbench screen (for screenshots and trying it).
+func _give_gun(which: String, bench: bool) -> void:
+	var piece := {}
+	if which == "pete":
+		piece = sim.gear.roll_unique(RandomNumberGenerator.new(), "petes_deer_rifle")
+	else:
+		piece = sim.gear.make("hunting_rifle" if which == "rifle" else "pistol", "civilian", "white")
+	sim.gear.equipped["gun"] = piece
+	piece["loaded"] = int(sim.gear.gun_stats(piece)["magazine"])
+	sim.inventory.add("ammo_standard", 30)
+	if sim.guns.hands != "gun":
+		sim.swap_hands()
+	sim.guns.raising = 0.0
+	if bench:
+		for base: String in ["oil_filter_suppressor", "scope", "extended_mag", "padded_stock"]:
+			sim.gear.pieces.append(sim.gear.make(base, "civilian", "blue" if base == "scope" else "white",
+					{"accuracy": 0.1} if base == "scope" else {}))
+		sim.attach_part(sim.gear.pieces[sim.gear.pieces.size() - 4]["uid"])
+		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 6, "nails": 12, "plank": 4})
+		sim.player_pos = player.global_position
+		_open_workbench("")
+
+
+func _open_workbench(key: String) -> void:
+	if inventory_screen.is_open():
+		inventory_screen.close()
+	if skills_screen.is_open():
+		skills_screen.close()
+	workbench_screen.open(key)
 
 
 ## First-game hints: a new game only (no save loaded, no --demo-*/--cam/--no-hints, not a screenshot).
@@ -277,8 +321,10 @@ func _sync_player() -> void:
 		inventory_screen.close()
 	if skills_screen.is_open() and (p.dead or p.asleep):
 		skills_screen.close()
-	# no walking while sorting your pockets or spending perk points
-	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open()
+	if workbench_screen.is_open() and (p.dead or p.asleep):
+		workbench_screen.close()
+	# no walking while sorting your pockets, spending perk points or at the workbench
+	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open()
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -340,6 +386,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.is_action_pressed("inventory") or event.is_action_pressed("skills"):
 			return  # no rummaging while driving
+	if workbench_screen.is_open():
+		return  # it closes itself on E, Tab or Esc
+	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
+		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("inventory") and not sim.player.dead:
 		sim.player_pos = player.global_position
 		if skills_screen.is_open():
@@ -473,9 +525,9 @@ func _on_respawned() -> void:
 
 func _update_hud(delta: float) -> void:
 	_build_label.text = builder.status_text()
-	_materials_hud.text = builder.materials_text() + "\nWeapon: %s" % sim.gear.weapon_name()  # M13
+	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
-	_interact_label.text = use if use != "" else melee.last_message
+	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
 	var notes := PackedStringArray()
 	for m: Dictionary in sim.messages:
 		notes.append(m["text"])
@@ -668,6 +720,7 @@ func _build_building(args: Dictionary) -> void:
 	add_child(interactor)
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
 	interactor.entered_car.connect(_enter_car)
+	interactor.opened_workbench.connect(_open_workbench)
 	if args.has("demo-base"):
 		_place_demo_base()
 	if args.has("demo-factory"):
@@ -721,6 +774,9 @@ func _build_zombies(args: Dictionary) -> void:
 	melee = Melee.new()
 	add_child(melee)
 	melee.setup(sim, player.camera, builder, [player.get_rid()])
+	shooter = Shooter.new()
+	add_child(shooter)
+	shooter.setup(sim, player.camera, builder, [player.get_rid()])
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
@@ -849,7 +905,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB attack · Q gun · R reload · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -973,6 +1029,8 @@ func _enter_car(id: String) -> void:
 		inventory_screen.close()
 	if skills_screen.is_open():
 		skills_screen.close()
+	if workbench_screen.is_open():
+		workbench_screen.close()
 	builder.set_active(false)
 	driving = cars[id]
 	_set_walker(false)
@@ -994,7 +1052,7 @@ func _exit_car() -> void:
 func _set_walker(on: bool) -> void:
 	player.visible = on
 	player.collision_layer = Layers.WORLD if on else 0
-	for node: Node in [player, interactor, melee, builder]:
+	for node: Node in [player, interactor, melee, shooter, builder]:
 		node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
 

@@ -36,12 +36,13 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active:
+	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active and not sim.guns.in_hand():
 		swing()
 
 
 func _process(delta: float) -> void:
-	_pipe.visible = not builder.active and not sim.player.dead and sim.gear.equipped.has("weapon")  # bare fists: no pipe
+	_pipe.visible = not builder.active and not sim.player.dead and sim.gear.equipped.has("weapon") \
+			and not sim.guns.in_hand()  # bare fists: no pipe; M14: not while the gun is out
 	_swing = minf(1.0, _swing + delta / SWING_TIME)
 	_pose(_swing)
 	_message_time -= delta

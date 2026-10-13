@@ -28,7 +28,7 @@ func test_gear_data_is_valid() -> void:
 	var data := GameData.load_default()
 	var gear_errors := Array(data.validate()).filter(func(e: String) -> bool: return "gear" in e or "unique" in e or "set " in e)
 	eq(gear_errors, [], "gear.json validates")
-	eq(data.gear["slots"], ["weapon", "head", "body", "hands", "light"], "five slots")
+	eq(data.gear["slots"], ["weapon", "head", "body", "hands", "light", "gun"], "five slots, and the gun (M14)")
 	for r: String in ["white", "blue", "yellow", "gold", "set", "orange"]:
 		check(data.gear["rarities"].has(r), "rarity " + r)
 	var bad := GameData.load_default()
@@ -70,7 +70,8 @@ func test_rolled_stats_stay_in_their_ranges() -> void:
 		if p["condition"] < 0.4 or p["condition"] > 1.0:
 			bad += 1
 	eq(bad, 0, "every rolled stat and condition inside gear.json's ranges")
-	eq(seen.size(), table.size(), "every stat turns up")
+	eq(seen.size(), table.keys().filter(func(s: String) -> bool: return not table[s].has("slots")).size(),
+			"every stat turns up (but no gun-only stats on ordinary gear, M14)")
 	var u: Dictionary = sim.data.gear["uniques"]["petes_fire_axe"]
 	for i in 50:
 		var axe := sim.gear.roll_unique(rng, "petes_fire_axe")
@@ -245,8 +246,10 @@ func test_press_makes_repair_kits() -> void:
 	sim.factory.hand_interact(Vector2i(0, 0), sim.inventory)
 	check(sim.inventory.count("repair_kit") >= 1, "out comes a repair kit")
 	sim.cycle_recipe(Vector2i(0, 0))
-	eq(m.recipe_id, "press_nails", "and back to nails")
+	eq(m.recipe_id, "press_casings", "on to ammo casings (M14)")
 	eq(m.input.get("nails", 0), 0, "the nails it held came back to you")
+	sim.cycle_recipe(Vector2i(0, 0))
+	eq(m.recipe_id, "press_nails", "and back to nails")
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
 	sim.cycle_recipe(Vector2i(0, 0))
 	var again: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
@@ -276,7 +279,7 @@ func test_old_pete_drops_his_axe() -> void:
 	sim.player_pos = pete.pos
 	var took := sim.take_bag(sim.bags[0]["id"])
 	check(took.has("Pete's Fire Axe"), "picking up the bag says what you took")
-	eq(sim.gear.pieces.size(), 1, "the axe is in your pockets")
+	eq(sim.gear.pieces.size(), 2, "the axe (and, since M14, his deer rifle) are in your pockets")
 	eq(sim.equip_gear(axe["uid"]), "Equipped Pete's Fire Axe", "equip it")
 	eq(sim.gear.weapon_name(), "Pete's Fire Axe", "it's your weapon now")
 	check(sim.skills.bonus("melee_damage") >= 0.15, "its damage stat counts")

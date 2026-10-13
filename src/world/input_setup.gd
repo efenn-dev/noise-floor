@@ -37,6 +37,7 @@ const KEYS := {
 	"upgrade": [KEY_U],
 	"noise_overlay": [KEY_N],
 	"skills": [KEY_K],  # the skills and perks screen (M12)
+	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
 }
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,

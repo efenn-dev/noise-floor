@@ -40,5 +40,48 @@
 		"time": 6.0,
 		"in": { "metal_plate": 1, "nails": 4 },
 		"out": { "repair_kit": 1 }
+	},
+	"press_casings": {
+		"name": "Ammo casings",
+		"time": 3.0,
+		"in": { "metal_plate": 1 },
+		"out": { "ammo_casing": 10 }
+	},
+	"bench_standard": {
+		"name": "Standard rounds",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "ammo_casing": 10, "scrap_metal": 1 },
+		"out": { "ammo_standard": 10 }
+	},
+	"bench_subsonic": {
+		"name": "Subsonic rounds",
+		"station": "workbench",
+		"perk": "gunsmith",
+		"time": 1.0,
+		"in": { "ammo_casing": 10, "scrap_metal": 2 },
+		"out": { "ammo_subsonic": 10 }
+	},
+	"bench_crude_suppressor": {
+		"name": "Oil-filter suppressor",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "scrap_metal": 3, "nails": 6 },
+		"gear": "oil_filter_suppressor"
+	},
+	"bench_machined_suppressor": {
+		"name": "Machined suppressor",
+		"station": "workbench",
+		"perk": "gunsmith",
+		"time": 1.0,
+		"in": { "metal_plate": 4, "scrap_metal": 2, "nails": 10 },
+		"gear": "machined_suppressor"
+	},
+	"bench_padded_stock": {
+		"name": "Padded stock",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "plank": 2, "nails": 6 },
+		"gear": "padded_stock"
 	}
 }
