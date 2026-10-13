@@ -13,7 +13,7 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 | S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent | Merged (#20) | PR merged; Emmitt sees the version on the title screen |
 | S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5 agent on the PC, worktree `noise-floor-w1a` (Emmitt chose local, 2026-10-13) | PR #21 open; 1546 checks green; 455 town pieces, first bake 48 ms | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
 | S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
-| S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Decided after Playtest #1 | Backlog | |
+| S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Opus 5.5 agent on the PC, worktree `noise-floor-w1b`, stacked on #22 | In progress | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
 
 ## Overnight run, night of 2026-10-12 to 13
@@ -21,8 +21,8 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 Emmitt went to bed and left the PC on. The lead runs one Opus 5.5 builder at a time, reviews each pull request, and checks the 5-hour window before every launch (no launch above 75%; wait for the reset instead). Each builder branches from the previous one, so the morning merge order is the queue order; merging the first retargets the next on GitHub. Queue:
 
 1. **W1a — into the houses**: done, PR #21 against `main`.
-2. **Stress test** (running): one headless test with 200 zombies, 50 machines and a game-day, printing the time per tick, the noise query and the navmesh bake. Branch from W1a so it measures the town pieces too. Numbers only, no fixes.
-3. **W1b — life inside**: a zombie in about one house in three, the factory as a grid interior with a roof, hordes that follow the road. Branch from W1a. Furniture props stay out (PC art).
+2. **Stress test**: done, PR #22 (numbers only: 4.6 ms per tick with 200 zombies, 50 machines and the town; the Director's once-a-second wall count spikes to 20 ms; cheap cache fix noted in docs/perf): one headless test with 200 zombies, 50 machines and a game-day, printing the time per tick, the noise query and the navmesh bake. Branch from W1a so it measures the town pieces too. Numbers only, no fixes.
+3. **W1b — life inside** (running): a zombie in about one house in three, the factory as a grid interior with a roof, hordes that follow the road. Branch from W1a. Furniture props stay out (PC art).
 4. **M12 — skills and perks**, from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
 
 Not tonight: anything needing Codex or Blender, W1 tuning (waits for Playtest #1), M11 tuning, M13+.
