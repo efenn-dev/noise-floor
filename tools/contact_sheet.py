@@ -1,4 +1,4 @@
-"""Builds .shots/tour/contact.png: a 4x3 grid of the tour's shots, each scaled to 400 px wide, labelled.
+"""Builds .shots/tour/contact.png: a grid (four across) of the tour's shots, each scaled to 400 px wide, labelled.
 
 Usage: python tools/contact_sheet.py <dir> "<name>|<label>" ...   (tools/tour.sh calls it)
 """

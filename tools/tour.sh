@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Q1 screenshot tour: twelve fixed shots with existing game flags into .shots/tour/, one Godot run at a
-# time (never two at once), then one 4x3 contact sheet .shots/tour/contact.png (tools/contact_sheet.py,
+# Q1 screenshot tour: sixteen fixed shots with existing game flags into .shots/tour/, one Godot run at a
+# time (never two at once), then one 4x4 contact sheet .shots/tour/contact.png (tools/contact_sheet.py,
 # needs Python with Pillow). Look at the sheet (and any tile) afterwards. Usage: tools/tour.sh
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -20,6 +20,10 @@ shots=(
   "10_inventory_gear|Inventory, --gear=yellow|--gear=yellow --time=12"
   "11_skills|Skills screen|--skills --time=12"
   "12_help|Help screen (F1)|--help --time=12"
+  "13_park|Park from the hall's north doorway|--park --time=12"
+  "14_warehouse|Inside a park warehouse, flashlight|--time=12 --flashlight --cam=-16,0,-152,0,-5"
+  "15_tower|The water tower|--tower --time=12"
+  "16_winter_street|Street in winter, day 16|--day=16 --time=12"
 )
 failed=0
 labels=()
