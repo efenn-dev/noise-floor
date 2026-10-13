@@ -26,7 +26,18 @@ const COLORS := {
 	"turret": Color(0.35, 0.38, 0.35),
 	"prop": Color(0.45, 0.36, 0.26),
 	"workbench": Color(0.5, 0.36, 0.2),
+	# M15
+	"hopper": Color(0.42, 0.34, 0.2),
+	"sensor": Color(0.25, 0.27, 0.3),
+	"floodlight": Color(0.4, 0.3, 0.2),
+	"noisemaker": Color(0.55, 0.2, 0.15),
+	"bear_trap": Color(0.32, 0.3, 0.28),
+	"tripwire": Color(0.55, 0.5, 0.35),
+	"fence": Color(0.5, 0.52, 0.5),
+	"repair_station": Color(0.45, 0.45, 0.3),
 }
+## M15: walk-over pieces (only rays see them): spike strips, bear traps, tripwires.
+const WALK_OVER := ["trap", "bear_trap", "tripwire"]
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
 ## Art made with Codex: models built by tools/art/<id>.py (checked by test_art_models.gd) replace the box mesh,
@@ -48,6 +59,12 @@ const MODELS := {
 	"barricade": "res://assets/models/barricade.glb",
 	"spikes": "res://assets/models/spikes.glb",
 	"nail_turret": "res://assets/models/nail_turret.glb",
+	# M15: the new turrets reuse the nail turret's body, with their own head parts added in code; the floodlight
+	# is a power pole with a lamp, the repair station a purifier body with panels on top.
+	"crossbow_turret": "res://assets/models/nail_turret.glb",
+	"rifle_turret": "res://assets/models/nail_turret.glb",
+	"floodlight": "res://assets/models/power_pole.glb",
+	"repair_station": "res://assets/models/purifier.glb",
 	# W1c: house furniture, laid by the town plan (kind "prop").
 	"counter": "res://assets/models/counter.glb",
 	"table": "res://assets/models/table.glb",
@@ -79,7 +96,7 @@ func _on_added(key: String) -> void:
 	var info: Dictionary = grid.data.buildables[id]
 	var size: Vector3 = info["size"]
 	var body := StaticBody3D.new()
-	body.collision_layer = Layers.TRAP if info["kind"] == "trap" else Layers.BUILT
+	body.collision_layer = Layers.TRAP if info["kind"] in WALK_OVER else Layers.BUILT
 	body.collision_mask = 0
 	body.set_meta("piece_key", key)
 	body.position = grid.piece_center(key)
@@ -149,6 +166,34 @@ func _on_added(key: String) -> void:
 			head.add_child(barrel)
 		"storage":
 			_add_part(body, Vector3(size.x + 0.04, 0.08, size.z + 0.04), Vector3(0, size.y / 2.0 - 0.1, 0), Color(0.3, 0.22, 0.12))
+		"hopper":  # a funnel lip on top and a chute at the front, toward the turret it feeds
+			_add_part(body, Vector3(size.x + 0.1, 0.12, size.z + 0.1), Vector3(0, size.y / 2.0, 0), Color(0.3, 0.24, 0.14))
+			_add_part(body, Vector3(0.3, 0.3, 0.3), Vector3(0, size.y / 2.0 - 0.25, -size.z / 2.0 - 0.15), Color(0.35, 0.35, 0.35))
+		"sensor":  # a small box on a pole; its Lamp goes red while it's on
+			var eye := _add_part(body, Vector3(0.36, 0.26, 0.3), Vector3(0, size.y / 2.0 + 0.1, 0), Color(0.15, 0.15, 0.16))
+			var slamp := _add_part(body, Vector3(0.1, 0.1, 0.04), Vector3(0, size.y / 2.0 + 0.1, -0.17), Color(0.2, 0.2, 0.2))
+			slamp.name = "Lamp"
+			eye.name = "Eye"
+			if id == "noise_sensor":
+				_add_part(body, Vector3(0.12, 0.12, 0.2), Vector3(0, size.y / 2.0 + 0.3, 0), Color(0.3, 0.3, 0.3))  # a mic
+		"noisemaker":  # a box with a horn on top
+			var horn := _add_part(body, Vector3(0.36, 0.36, 0.6), Vector3(0, size.y / 2.0 + 0.2, -0.1), Color(0.75, 0.7, 0.3))
+			horn.name = "Horn"
+			var nlamp := _add_part(body, Vector3(0.15, 0.15, 0.15), Vector3(0.25, size.y / 2.0 + 0.08, 0.25), Color(0.2, 0.2, 0.2))
+			nlamp.name = "Lamp"
+		"bear_trap":
+			for x in [-0.25, 0.25]:
+				_add_part(body, Vector3(0.06, 0.16, 0.7), Vector3(x, 0.08, 0), Color(0.6, 0.6, 0.62))  # jaws
+		"tripwire":
+			_add_part(body, Vector3(0.06, 0.5, 0.06), Vector3(-size.x / 2.0, 0.05, 0), Color(0.4, 0.3, 0.2))  # stakes
+			_add_part(body, Vector3(0.06, 0.5, 0.06), Vector3(size.x / 2.0, 0.05, 0), Color(0.4, 0.3, 0.2))
+			_add_part(body, Vector3(0.14, 0.16, 0.14), Vector3(size.x / 2.0, 0.35, 0), Color(0.85, 0.7, 0.25))  # the bell
+		"fence":
+			for x in [-size.x / 2.0, 0.0, size.x / 2.0]:
+				_add_part(body, Vector3(0.1, size.y + 0.1, 0.12), Vector3(x, 0.05, 0), Color(0.35, 0.33, 0.3))  # posts
+			for y in [-0.45, 0.0, 0.45]:
+				_add_part(body, Vector3(size.x, 0.03, 0.14), Vector3(0, y, 0), Color(0.85, 0.75, 0.3))  # live wires
+	_add_m15_parts(body, id, size)
 	var shape := CollisionShape3D.new()
 	var box_shape := BoxShape3D.new()
 	box_shape.size = size
@@ -225,6 +270,26 @@ func _on_changed(key: String) -> void:
 	var size: Vector3 = grid.data.buildables[piece["id"]]["size"]
 	var hinge := grid.piece_center(key) - Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(size.x / 2.0, 0, 0)
 	body.position = hinge + Basis(Vector3.UP, deg_to_rad(body.rotation_degrees.y)) * Vector3(size.x / 2.0, 0, 0) if open else grid.piece_center(key)
+
+
+## M15: pieces that reuse another model get their own touches: a crossbow's bow and a rifle's long barrel on the
+## nail turret's head, a lamp on the floodlight's pole, wall panels stacked on the repair station.
+func _add_m15_parts(body: StaticBody3D, id: String, size: Vector3) -> void:
+	var head := body.get_node_or_null("Head") as Node3D
+	match id:
+		"crossbow_turret":
+			if head != null:
+				var bow := _add_part(head, Vector3(1.1, 0.06, 0.08), Vector3(0, 0.05, -0.35), Color(0.45, 0.32, 0.18))
+				bow.name = "Bow"
+		"rifle_turret":
+			if head != null:
+				var barrel := _add_part(head, Vector3(0.08, 0.08, 1.0), Vector3(0, 0.05, -0.75), Color(0.12, 0.12, 0.12))
+				barrel.name = "Barrel"
+		"floodlight":
+			var lamp := _add_part(body, Vector3(0.45, 0.3, 0.25), Vector3(0, size.y / 2.0 - 0.1, -0.2), Color(0.25, 0.25, 0.22))
+			lamp.name = "Lamp"
+		"repair_station":
+			_add_part(body, Vector3(1.0, 0.16, 0.7), Vector3(0, size.y / 2.0 + 0.08, 0), Color(0.62, 0.62, 0.55))
 
 
 func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:

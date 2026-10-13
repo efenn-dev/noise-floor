@@ -102,9 +102,12 @@ class Belt:
 		items.append({"item": item, "pos": 0.0, "prev": 0.0})
 
 
-## A nail turret's magazine: takes its ammo by hand or from a belt on any side.
+## A turret's magazine: takes its ammo by hand, from a belt on any side or from a hopper behind it (M15).
+## M15: it may also carry gun parts (a suppressor in "muzzle", a scope in "sight"), gear pieces attached by hand.
 class Turret:
 	extends RefCounted
+	var id := "nail_turret"
+	var parts: Dictionary = {}  # slot -> gear piece
 	var ammo_item: String
 	var cap: int
 	var ammo := 0
@@ -120,6 +123,39 @@ var data: GameData
 var machines: Dictionary = {}  # Vector2i -> Machine
 var turrets: Dictionary = {}   # Vector2i -> Turret
 var belts: Dictionary = {}     # Vector2i -> Belt
+var bins: Dictionary = {}      # Vector2i -> Bin (M15: hoppers and repair stations)
+
+
+## M15: a piece that holds a stack of one item: a hopper (any turret ammo; feeds the turret in front of it)
+## or a repair station (wall panels). Fed by hand or by a belt on any side.
+class Bin:
+	extends RefCounted
+	var id: String
+	var cell: Vector2i
+	var facing: int
+	var feeds: Array = []  # items it takes
+	var item := ""         # what it holds now ("" when empty)
+	var count := 0
+	var cap := 0
+	var timer := 0.0       # repair station: seconds since its last repair
+
+	func accepts(it: String) -> bool:
+		return it in feeds and count < cap and (count == 0 or it == item)
+
+	func put(it: String, n: int) -> int:
+		if n <= 0 or not (it in feeds) or (count > 0 and it != item):
+			return 0
+		var took := mini(n, cap - count)
+		if took > 0:
+			item = it
+			count += took
+		return took
+
+	func take_one() -> void:
+		count -= 1
+		if count <= 0:
+			count = 0
+			item = ""
 
 
 ## Set by SimWorld (M12): Fast Lines speeds belts, Tuned Machines speeds crafting, Farming grows more.
@@ -156,10 +192,27 @@ func add_belt(cell: Vector2i, facing: int) -> Belt:
 
 func add_turret(id: String, cell: Vector2i) -> Turret:
 	var t := Turret.new()
+	t.id = id
 	t.ammo_item = data.buildables[id]["ammo"]
 	t.cap = data.buildables[id]["ammo_cap"]
 	turrets[cell] = t
 	return t
+
+
+## M15: a hopper (feeds: the turret ammo in defense.json) or a repair station (wall panels).
+func add_bin(id: String, cell: Vector2i, facing: int) -> Bin:
+	var b := Bin.new()
+	b.id = id
+	b.cell = cell
+	b.facing = facing
+	if data.buildables[id]["kind"] == "hopper":
+		b.feeds = Array(data.defense["hopper"]["feeds"])
+		b.cap = int(data.defense["hopper"]["cap"])
+	else:
+		b.feeds = [str(data.defense["repair_station"]["item"])]
+		b.cap = int(data.defense["repair_station"]["cap"])
+	bins[cell] = b
+	return b
 
 
 ## Removes whatever is at `cell` and returns the items it held ({item: count}).
@@ -168,6 +221,7 @@ func remove_at(cell: Vector2i) -> Dictionary:
 	machines.erase(cell)
 	belts.erase(cell)
 	turrets.erase(cell)
+	bins.erase(cell)
 	return held
 
 
@@ -186,6 +240,8 @@ func contents_at(cell: Vector2i) -> Dictionary:
 			held[entry["item"]] = held.get(entry["item"], 0) + 1
 	if turrets.has(cell) and turrets[cell].ammo > 0:
 		held[turrets[cell].ammo_item] = held.get(turrets[cell].ammo_item, 0) + turrets[cell].ammo
+	if bins.has(cell) and bins[cell].count > 0:
+		held[bins[cell].item] = held.get(bins[cell].item, 0) + bins[cell].count
 	return held
 
 
@@ -213,6 +269,13 @@ func tick(dt: float) -> void:
 				if m.output[item] == 0:
 					m.output.erase(item)
 				break  # one item out per tick
+	for cell: Vector2i in _sorted(bins):  # M15: a hopper hands one round a tick to the turret in front of it
+		var bin: Bin = bins[cell]
+		if bin.count > 0 and data.buildables[bin.id]["kind"] == "hopper":
+			var t: Turret = turrets.get(cell + DIRS[bin.facing])
+			if t != null and t.accepts(bin.item):
+				t.ammo += 1
+				bin.take_one()
 
 
 ## Hand interaction: takes everything a machine has made (or everything on a belt) into `inv`,
@@ -226,6 +289,21 @@ func hand_interact(cell: Vector2i, inv: Inventory) -> Dictionary:
 		if n > 0 and inv.remove(t.ammo_item, n):
 			t.ammo += n
 			fed[t.ammo_item] = n
+	elif bins.has(cell):  # M15: a hopper loads what the turret in front of it fires (or what it holds already)
+		var bin: Bin = bins[cell]
+		var want := bin.item
+		if want == "":
+			var t: Turret = turrets.get(cell + DIRS[bin.facing])
+			want = t.ammo_item if t != null and t.ammo_item in bin.feeds else ""
+		if want == "":
+			for it: String in bin.feeds:
+				if inv.count(it) > 0:
+					want = it
+					break
+		var n := mini(inv.count(want), bin.cap - bin.count) if want != "" else 0
+		if n > 0 and inv.remove(want, n):
+			bin.put(want, n)
+			fed[want] = n
 	elif belts.has(cell):
 		took = contents_at(cell)
 		belts[cell].items.clear()
@@ -274,6 +352,12 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 		if not t.accepts(item):
 			return false
 		t.ammo += 1  # turrets take ammo from a belt on any side
+		return true
+	if bins.has(to):
+		var bin: Bin = bins[to]
+		if not bin.accepts(item):
+			return false
+		bin.put(item, 1)  # hoppers and repair stations take from a belt on any side
 		return true
 	if machines.has(to):
 		var m: Machine = machines[to]

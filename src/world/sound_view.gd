@@ -15,7 +15,9 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		# M14: guns (the sim's shot loudness sets the volume) and the reload click
 		"gunshot_pistol": ["shot_pistol"], "gunshot_rifle": ["shot_rifle"],
 		"gunshot_pistol_suppressed": ["shot_pistol_suppressed"], "gunshot_rifle_suppressed": ["shot_rifle_suppressed"],
-		"reload": ["reload"]}
+		"reload": ["reload"],
+		# M15: a decoy noisemaker is a horn; a tripwire bell borrows the click until it gets its own sound
+		"noisemaker": ["horn"], "bell": ["click"]}
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0
 ## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones

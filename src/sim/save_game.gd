@@ -21,7 +21,11 @@ extends RefCounted
 ## A save from before 7 gets the furniture laid by the town plan after it's applied (see holds_props).
 ## 8 = M14: guns. A gun piece also holds its parts, rounds loaded and ammo type (all inside "gear"), and
 ## "hands" says whether the gun or the melee weapon was in your hands. A save from before 8 has an empty gun slot.
-const VERSION := 8
+## 9 = M15: turret parts (suppressor, scope) ride in "turrets"; hoppers and repair stations ("bins": what they
+## hold); sensors with their actions, floodlights' night setting, noisemakers' blare and recharge, doors a
+## sensor holds shut ("automation"); sprung bear traps; and the base log. A save from before 9 loads with
+## none of those (it had none of the pieces), an empty base log, and every sensor on its default action.
+const VERSION := 9
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
@@ -63,7 +67,14 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	var turrets := []
 	for cell: Vector2i in sim.factory.turrets:
 		var t: Factory.Turret = sim.factory.turrets[cell]
-		turrets.append({"cell": _v2(cell), "ammo": t.ammo, "shots": t.shots})
+		var parts := {}
+		for slot: String in t.parts:
+			parts[slot] = t.parts[slot].duplicate(true)
+		turrets.append({"cell": _v2(cell), "ammo": t.ammo, "shots": t.shots, "parts": parts})
+	var bins := []
+	for cell: Vector2i in sim.factory.bins:
+		var bin: Factory.Bin = sim.factory.bins[cell]
+		bins.append({"cell": _v2(cell), "item": bin.item, "count": bin.count, "timer": bin.timer})
 	var crates := {}
 	for key: String in sim.storages:
 		crates[key] = _counts(sim.storages[key])
@@ -96,6 +107,10 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"machines": machines,
 		"belts": belts,
 		"turrets": turrets,
+		"bins": bins,
+		"automation": sim.automation.to_dict(),
+		"sprung": sim.defense.sprung.keys(),
+		"base_log": sim.base_log.to_dict(),
 		"crates": crates,
 		"generators": sim.power.generators,
 		"zombies": zombies,
@@ -164,6 +179,21 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		if t != null:
 			t.ammo = int(td["ammo"])
 			t.shots = int(td["shots"])
+			t.parts = {}
+			for slot: String in td.get("parts", {}):
+				t.parts[slot] = Gear.clean(td["parts"][slot])
+	for bd: Dictionary in d.get("bins", []):  # M15
+		var bin: Factory.Bin = sim.factory.bins.get(_to_v2(bd["cell"]))
+		if bin != null and int(bd["count"]) > 0:
+			bin.put(str(bd["item"]), int(bd["count"]))
+		if bin != null:
+			bin.timer = float(bd.get("timer", 0.0))
+	sim.automation.load_dict(d.get("automation", {}))
+	sim.defense.sprung = {}
+	for key: String in d.get("sprung", []):
+		if sim.build.pieces.has(key):
+			sim.defense.sprung[key] = true
+	sim.base_log.load_list(d.get("base_log", []))
 	for key: String in d["crates"]:
 		if sim.storages.has(key):
 			sim.storages[key].give_all(_ints(d["crates"][key]))

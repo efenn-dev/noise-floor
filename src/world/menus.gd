@@ -7,6 +7,7 @@ signal continue_game
 signal resume
 signal save_requested
 signal load_requested
+signal base_log_requested  # M15
 signal quit_to_title
 signal settings_changed
 
@@ -55,6 +56,7 @@ func _init() -> void:
 	_button(_pause, "Resume", func() -> void: resume.emit())
 	_button(_pause, "Save game", func() -> void: save_requested.emit())
 	_load_button = _button(_pause, "Load last save", func() -> void: load_requested.emit())
+	_button(_pause, "Base log (L)", func() -> void: base_log_requested.emit())
 	_button(_pause, "Settings", func() -> void: show_settings("pause"))
 	_button(_pause, "Save and quit to title", func() -> void: quit_to_title.emit())
 	_stats_label = _label("", 20)

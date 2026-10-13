@@ -29,12 +29,12 @@ func _initialize() -> void:
 	print("ticks per run: %d (%s game time from %02d:00, TICK = 1/%d s)%s" % [_ticks_total,
 			"%.0f h" % (_ticks_total * TICK / 60.0) if _shrunk else "one day", int(START_HOUR), SimWorld.TICK_RATE,
 			"  -- SHRUNK: a full day would take more than %.0f s of wall time" % WALL_BUDGET_S if _shrunk else ""])
-	print("| run | town pieces | zombies start/end alive | waves | wall s | tick avg ms | tick worst ms | loudest_heard us | gain_now us | horde.tick us | factory.tick us | noise.refresh us | static MB before/after |")
-	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	print("| run | town pieces | zombies start/end alive | waves | wall s | tick avg ms | tick worst ms | loudest_heard us | gain_now us (cached) | gain_now us (recount) | horde.tick us | factory.tick us | noise.refresh us | static MB before/after |")
+	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for r: Dictionary in rows:
-		print("| %s | %d | %d / %d | %d | %.1f | %.3f | %.2f | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f / %.1f |" % [r["name"],
+		print("| %s | %d | %d / %d | %d | %.1f | %.3f | %.2f | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f / %.1f |" % [r["name"],
 				r["pieces"], r["zombies"], r["alive"], r["waves"], r["wall_s"], r["avg_ms"], r["worst_ms"],
-				r["heard_us"], r["gain_us"], r["horde_us"], r["factory_us"], r["refresh_us"], r["mem0"], r["mem1"]])
+				r["heard_us"], r["gain_us"], r["gain_cold_us"], r["horde_us"], r["factory_us"], r["refresh_us"], r["mem0"], r["mem1"]])
 	quit(0)
 
 
@@ -122,6 +122,10 @@ func _probe_calls(sim: SimWorld, r: Dictionary) -> void:
 			calls += 1
 	r["heard_us"] = float(Time.get_ticks_usec() - t0) / maxi(calls, 1)
 	r["gain_us"] = _time(200, func() -> void: sim.director.gain_now(sim.noise, night))
+	# M15: the Director caches each source's wall count; "recount" clears it first (the cost before M15).
+	r["gain_cold_us"] = _time(20, func() -> void:
+		sim.director._walls_cache.clear()
+		sim.director.gain_now(sim.noise, night))
 	_feed(sim)
 	r["refresh_us"] = _time(1000, func() -> void: sim.noise.refresh(sim.factory, TICK, sim.power, sim.vehicles))
 	_feed(sim)

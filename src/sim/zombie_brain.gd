@@ -42,6 +42,10 @@ var sound_pos: Vector3  # where the sound it's investigating came from (target_p
 var route: Array = []   # W1b: waypoints (Vector3) to walk before heading for sound_pos; target_pos = route[0]
 var dead_time := 0.0
 var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
+## M15: seconds left pinned by a bear trap (can't walk, can still bite) and stunned by an electric fence
+## (can't walk or attack). Set by Defense.
+var pinned := 0.0
+var stunned := 0.0
 var _scream_cd := 0.0
 
 ## Senses, written by the world body (or a test) before each think.
@@ -85,7 +89,7 @@ func is_dead() -> bool:
 
 ## How fast the body should walk right now (m/s). 0 = stand still.
 func move_speed() -> float:
-	if screaming > 0.0:
+	if screaming > 0.0 or pinned > 0.0 or stunned > 0.0:
 		return 0.0
 	match state:
 		State.WANDER:
@@ -171,6 +175,10 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	_cooldown = maxf(0.0, _cooldown - dt)
 	_scream_cd = maxf(0.0, _scream_cd - dt)
 	screaming = maxf(0.0, screaming - dt)
+	pinned = maxf(0.0, pinned - dt)
+	if stunned > 0.0:
+		stunned = maxf(0.0, stunned - dt)
+		return events  # M15: shocked by a fence: it does nothing at all for a moment
 	if player_dead:
 		sees = false
 	# Screamers shriek when they spot you: a loud noise that pulls in everything within earshot.

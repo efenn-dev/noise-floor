@@ -27,6 +27,12 @@ var networks: Array = []
 ## Every connection, for drawing wires: [[key_a, key_b], ...]
 var links: Array = []
 var _network_of: Dictionary = {}  # piece key -> index into networks
+## M15: pieces a sensor's quiet mode has switched off (machines and generators): key -> true. Set by Automation.
+var switched_off: Dictionary = {}
+## M15: whether a powered piece that isn't a machine (turret, floodlight, noisemaker, fence, repair station)
+## wants power this tick: key -> bool (missing = true). Set by Defense and Automation.
+var wants: Dictionary = {}
+var _on: Dictionary = {}  # key -> it has power this tick (see is_powered)
 var _dirty := true
 var _refunds: Dictionary = {}  # key -> full cans left in a generator that was just removed
 
@@ -44,7 +50,13 @@ func is_node(key: String) -> bool:
 	if not build.pieces.has(key):
 		return false
 	var b: Dictionary = data.buildables[build.pieces[key]["id"]]
-	return b["kind"] in ["generator", "solar", "pole"] or b["watts"] > 0.0
+	return b["kind"] in ["generator", "solar", "pole", "sensor"] or b["watts"] > 0.0  # M15: sensors join a network to know it
+
+
+## M15: does this powered piece (not a machine) have power this tick? For one that wants power: its network
+## isn't browned out. For one that doesn't want any right now: its network has room for it.
+func is_powered(key: String) -> bool:
+	return free or _on.get(key, false)
 
 
 func network_of(key: String) -> Dictionary:
@@ -84,11 +96,13 @@ func tick(dt: float, daylight: float) -> void:
 	for g: Dictionary in generators.values():
 		g["running"] = false
 		g["load"] = 0.0
+	_on = {}
 	for net: Dictionary in networks:
 		var solar := 0.0
 		var gen_capacity := 0.0
 		var gens := []
 		var machines := []
+		var others := []  # M15: turrets, floodlights, noisemakers, fences, repair stations
 		var demand := 0.0
 		for key: String in net["keys"]:
 			var b: Dictionary = data.buildables[build.pieces[key]["id"]]
@@ -96,20 +110,30 @@ func tick(dt: float, daylight: float) -> void:
 				"solar":
 					solar += b["watts_out"] * daylight
 				"generator":
-					if fuel_seconds(key) > 0.0:
+					if fuel_seconds(key) > 0.0 and not switched_off.has(key):
 						gen_capacity += b["watts_out"]
 						gens.append(key)
 				"machine":
 					var m: Factory.Machine = factory.machines.get(build.pieces[key]["cell"])
-					if m != null and m.watts > 0.0:
+					if m != null and m.watts > 0.0 and not switched_off.has(key):
 						machines.append(m)
 						if m.wants_power():
 							demand += m.watts
+					elif m != null and m.watts > 0.0:
+						m.powered = false  # quiet mode
+				_:
+					if b["watts"] > 0.0:
+						others.append(key)
+						if wants.get(key, true):
+							demand += b["watts"]
 		net["supply"] = solar + gen_capacity
 		net["demand"] = demand
 		net["brownout"] = demand > net["supply"] + 1e-6
 		for m: Factory.Machine in machines:
 			m.powered = free or not net["brownout"]
+		for key: String in others:
+			var w: float = data.buildables[build.pieces[key]["id"]]["watts"]
+			_on[key] = not net["brownout"] if wants.get(key, true) else net["supply"] + 1e-6 >= demand + w
 		if net["brownout"] or gen_capacity <= 0.0:
 			continue
 		var load := maxf(0.0, demand - solar) / gen_capacity  # solar first, generators cover the rest

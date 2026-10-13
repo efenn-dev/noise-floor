@@ -17,7 +17,11 @@ signal piece_changed(key: String)  # a door opened or closed
 ## The player (or a demo) placed a piece with place(), not restore(): Building xp (M12).
 signal piece_built(key: String)
 
-const EDGE_KINDS := ["wall", "door", "barricade", "window"]
+const EDGE_KINDS := ["wall", "door", "barricade", "window", "tripwire", "fence"]
+## M15: edge pieces that stand on bare ground (no foundation needed), and never block sound or sight.
+const GROUND_EDGES := ["tripwire", "fence"]
+## M15: objects that stand on bare ground, like power poles and spike strips.
+const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap"]
 
 const GRID := 2.0
 const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
@@ -60,7 +64,8 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 ## All but power poles and traps need a foundation. Props (W1c) are town pieces like town walls: laid by
 ## the town plan, never built by the player, removable for a small refund, bashed by zombies.
 func is_object(id: String) -> bool:
-	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop", "workbench"]
+	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop", "workbench",
+			"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "repair_station"]
 
 
 func kind_of(id: String) -> String:
@@ -78,6 +83,8 @@ func edge_blocks(key: String, for_sight: bool = false) -> bool:
 	if not pieces.has(key):
 		return false
 	var kind := _kind(pieces[key]["id"])
+	if kind in GROUND_EDGES:
+		return false  # M15: a tripwire or a wire fence: sound and sight pass through
 	if kind == "door":
 		return not pieces[key].get("open", false)
 	if kind == "barricade":
@@ -148,9 +155,9 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Already built"  # (a barricade may board up a broken window)
 	if is_edge(id):
 		var edge := canonical_edge(cell, side)
-		if not _edge_supported(edge[0], edge[1], ""):
+		if not _kind(id) in GROUND_EDGES and not _edge_supported(edge[0], edge[1], ""):
 			return "Needs a foundation"
-	if is_object(id) and not _kind(id) in ["pole", "trap"] and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
+	if is_object(id) and not _kind(id) in GROUND_OBJECTS and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
 		return "Needs a foundation"
 	if not inv.has_all(data.buildables[id]["cost"]):
 		return "Not enough materials"
@@ -311,7 +318,7 @@ func _walls_touching(cell: Vector2i) -> Array:
 	var out := []
 	for side in 4:
 		var k := key_for_wall_edge(cell, side)
-		if pieces.has(k):
+		if pieces.has(k) and not _kind(pieces[k]["id"]) in GROUND_EDGES:  # M15: fences stand on their own
 			out.append(k)
 	return out
 

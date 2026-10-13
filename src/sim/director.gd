@@ -30,6 +30,12 @@ var gain := 0.0  # heat per second from noise right now (before cooling)
 var _check: float
 var _gain_timer := 0.0
 var _rng := RandomNumberGenerator.new()
+## M15 (from docs/perf/stress-2026-10-13.md): each continuous source's outdoor wall count, by where it stands.
+## Machines don't move, so this only changes when the build grid does (a piece added, removed, opened or
+## broken); watch() clears it then. Sources that move (cars) just get a new entry; entries no source used in
+## the last pass are dropped. `recounts` counts the 8-direction walks actually done (tests, the stress report).
+var _walls_cache: Dictionary = {}
+var recounts := 0
 
 
 func _init(p_data: GameData, seed_value: int = 1) -> void:
@@ -102,9 +108,35 @@ static func road_route(edge: String, lure: Vector3) -> Array:
 ## gain_floor at listen_distance, x night_multiplier after dark.
 func gain_now(noise: NoiseField, night: bool) -> float:
 	var g := 0.0
+	var dist := float(cfg["listen_distance"])
+	var used := {}
 	for s: Dictionary in noise.continuous:
-		g += maxf(0.0, noise.outdoor_level(s, float(cfg["listen_distance"])) - float(cfg["gain_floor"])) * float(cfg["gain_rate"])
+		var at: Vector3 = s["pos"]
+		var walls: int
+		if _walls_cache.has(at):
+			walls = _walls_cache[at]
+		else:
+			walls = noise.outdoor_walls(at, dist)
+			recounts += 1
+		used[at] = walls
+		g += maxf(0.0, NoiseField.heard_level(s["loudness"], dist, walls) - float(cfg["gain_floor"])) * float(cfg["gain_rate"])
+	_walls_cache = used
 	return g * (float(cfg["night_multiplier"]) if night else 1.0)
+
+
+## M15: forget the cached wall counts whenever the build grid changes.
+func watch(build: BuildGrid) -> void:
+	build.piece_added.connect(_on_grid_added)
+	build.piece_removed.connect(_on_grid_removed)
+	build.piece_changed.connect(_on_grid_added)
+
+
+func _on_grid_added(_key: String) -> void:
+	_walls_cache.clear()
+
+
+func _on_grid_removed(_key: String, _piece: Dictionary) -> void:
+	_walls_cache.clear()
 
 
 ## "wanderers" by day or night; "group" and "horde" only at night.

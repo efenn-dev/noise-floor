@@ -48,7 +48,7 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 		continuous.append_array(vehicles.noise_sources())  # running car engines
 	for cell: Vector2i in factory.machines:
 		var m: Factory.Machine = factory.machines[cell]
-		if m.crafting:
+		if m.crafting and m.powered:  # M15: a stopped machine (brownout, quiet mode) is silent
 			continuous.append({"pos": Vector3((cell.x + 0.5) * BuildGrid.GRID, 1.0, (cell.y + 0.5) * BuildGrid.GRID),
 					"loudness": machine_loudness(m), "key": "o:%d:%d" % [cell.x, cell.y], "kind": m.id})
 	var kept := []
@@ -94,11 +94,18 @@ func loudest_heard(at: Vector3, threshold: float) -> Dictionary:
 ## How loud a sound is to the world outside: the loudest it gets at `distance` in any of 8 directions,
 ## so a gap in your walls lets it out.
 func outdoor_level(s: Dictionary, distance: float) -> float:
-	var best := -INF
+	return heard_level(s["loudness"], distance, outdoor_walls(s["pos"], distance))
+
+
+## The fewest walls between `pos` and a point `distance` away, over 8 directions (the gap sound leaks out of).
+## The Director caches this per source (M15), since it only changes when the build grid does.
+func outdoor_walls(pos: Vector3, distance: float) -> int:
+	var best := 1 << 30
 	for i in 8:
 		var a := TAU * i / 8.0
-		var to: Vector3 = s["pos"] + Vector3(cos(a), 0.0, sin(a)) * distance
-		best = maxf(best, heard_level(s["loudness"], distance, walls_between(s["pos"], to)))
+		best = mini(best, walls_between(pos, pos + Vector3(cos(a), 0.0, sin(a)) * distance))
+		if best == 0:
+			break  # an open side: it can't get any lower
 	return best
 
 

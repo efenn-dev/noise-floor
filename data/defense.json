@@ -1,0 +1,25 @@
+{
+	"_about": "M15 automated defense: the numbers for hoppers, turret parts, sensors and their actions, floodlights, noisemakers, traps, the repair station, the base log and the radio. Pieces themselves (cost, hp, size, watts, turret damage/range/interval/loudness) are in buildables.json.",
+	"hopper": { "cap": 100, "feeds": ["nails", "bolt", "ammo_standard"] },
+	"turret_parts": ["muzzle", "sight"],
+	"sensors": {
+		"check_every": 0.5,
+		"noise_threshold": 30,
+		"noise_ignore": ["noisemaker"]
+	},
+	"actions": {
+		"quiet": { "name": "Quiet mode", "hold": 30, "about": "Switches off every machine and generator on this sensor's power network until it clears, plus 30 s" },
+		"floodlights": { "name": "Floodlights", "hold": 30, "radius": 20, "about": "Turns on every floodlight within 20 m (they only light at night; zombies see you further in the light)" },
+		"decoy": { "name": "Decoy", "hold": 0, "radius": 60, "about": "Sets off every charged noisemaker within 60 m, so the dead go there instead" },
+		"lock_doors": { "name": "Lock doors", "hold": 10, "radius": 12, "about": "Closes every door within 12 m and keeps them shut while it's triggered" }
+	},
+	"action_order": ["quiet", "floodlights", "decoy", "lock_doors"],
+	"floodlight": { "light_radius": 10 },
+	"noisemaker": { "blare": 20, "recharge": 60, "pulse": 0.5 },
+	"bear_trap": { "pin": 15 },
+	"tripwire": { "trigger_radius": 20 },
+	"fence": { "stun": 3, "reach": 0.7 },
+	"repair_station": { "item": "wall_panel", "cap": 20, "hp_per_panel": 50, "repairs": ["wall", "door", "barricade", "fence"] },
+	"log": { "size": 50, "attack_every": 30, "attack_radius": 8 },
+	"radio": { "item": "radio", "far": 40, "seconds": 6 }
+}

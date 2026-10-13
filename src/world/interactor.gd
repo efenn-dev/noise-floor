@@ -7,6 +7,7 @@ extends Node3D
 
 signal entered_car(id: String)
 signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
+signal opened_sensor(key: String)  # M15: E on a motion or noise sensor (main opens the sensor screen)
 
 const REACH := 4.0
 
@@ -193,6 +194,22 @@ func interact() -> String:
 		"workbench":
 			opened_workbench.emit(target_key)
 			return ""
+		# M15: automated defense
+		"turret":
+			last_message = sim.turret_interact(target_cell, sim.build.piece_center(target_key))
+			return last_message
+		"sensor":
+			opened_sensor.emit(target_key)
+			return ""
+		"floodlight":
+			last_message = sim.toggle_floodlight(target_key)
+			return last_message
+		"noisemaker":
+			last_message = sim.fire_noisemaker(target_key)
+			return last_message
+		"bear_trap":
+			last_message = sim.reset_trap(target_key)
+			return last_message
 	# Machines load from your pockets and nearby crates; what they made goes in your pockets.
 	var moved: Dictionary = sim.machine_interact(target_cell, sim.build.piece_center(target_key))
 	var parts := PackedStringArray()
@@ -227,6 +244,13 @@ func status_text() -> String:
 		var line := "%s · %d/%d hp" % [b["name"], piece["hp"], b["hp"]]
 		if b["kind"] == "door":
 			line += " · %s   [E] %s" % ["open" if piece.get("open", false) else "closed", "close" if piece.get("open", false) else "open"]
+			if sim.automation.is_locked(target_key):
+				line += " · LOCKED by a sensor"
+		elif b["kind"] == "fence":
+			line += " · %s · stuns zombies that touch it (%d W)" % ["live" if sim.power.is_powered(target_key) else "OFF: no power",
+					roundi(b["watts"])]
+		elif b["kind"] == "tripwire":
+			line += " · rings when a zombie crosses it and sets off sensors within %d m" % int(sim.data.defense["tripwire"]["trigger_radius"])
 		lines.append(line)
 		_append_repair(lines, piece, b)
 		if last_message != "":
@@ -242,10 +266,53 @@ func status_text() -> String:
 		lines.append("[E] put away building materials · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
 	elif kind == "turret":
 		var t: Factory.Turret = f.turrets[target_cell]
-		lines.append("Nail turret · %d/%d nails · %s · range %d m · loudness %d" % [t.ammo, t.cap,
-				"shooting" if t.target != -1 and t.ammo > 0 else ("out of nails" if t.ammo == 0 else "watching"),
-				int(sim.data.buildables["nail_turret"]["range"]), int(sim.data.buildables["nail_turret"]["loudness"])])
-		lines.append("[E] load nails · or feed it with a belt from any side")
+		var tb: Dictionary = sim.data.buildables[t.id]
+		var st := sim.defense.turret_stats(t)
+		var ammo_name := String(sim.data.item_name(t.ammo_item)).to_lower()
+		var unpowered: bool = tb["watts"] > 0.0 and not sim.power.is_powered(target_key)
+		lines.append("%s · %d/%d %s · %s · range %d m · loudness %d" % [tb["name"], t.ammo, t.cap, ammo_name,
+				"NO POWER (%d W)" % roundi(tb["watts"]) if unpowered else ("shooting" if t.target != -1 and t.ammo > 0
+				else ("out of " + ammo_name if t.ammo == 0 else "watching")), roundi(st["range"]), roundi(st["loudness"])])
+		var parts := PackedStringArray()
+		for slot: String in t.parts:
+			parts.append("%s (%d%%)" % [t.parts[slot]["name"], roundi(100.0 * float(t.parts[slot]["condition"]))])
+		if not parts.is_empty():
+			lines.append("fitted: " + ", ".join(parts))
+		lines.append("[E] load %s, fit a suppressor or scope from your pockets · or feed it with a belt or a hopper" % ammo_name)
+	elif kind == "hopper":
+		var bin: Factory.Bin = f.bins[target_cell]
+		lines.append("Ammo hopper · %s · feeds the turret in front of it" % ("empty" if bin.count == 0
+				else "%d/%d %s" % [bin.count, bin.cap, String(sim.data.item_name(bin.item)).to_lower()]))
+		lines.append("[E] load ammo from your pockets · or feed it with a belt")
+	elif kind == "repair_station":
+		var rs: Factory.Bin = f.bins[target_cell]
+		var rb: Dictionary = sim.data.buildables["repair_station"]
+		lines.append("Repair station · %d/%d wall panels · every %d s fixes the most damaged wall within %d m · %s" % [
+				rs.count, rs.cap, int(rb["interval"]), int(rb["range"]),
+				"powered" if sim.power.is_powered(target_key) else "NO POWER (%d W)" % roundi(rb["watts"])])
+		lines.append("[E] load wall panels (the Press makes them) · or feed it with a belt")
+	elif kind == "sensor":
+		var sen: Dictionary = sim.automation.sensors[target_key]
+		var sb: Dictionary = sim.data.buildables[sim.build.pieces[target_key]["id"]]
+		lines.append("%s · %d m · action: %s · %s" % [sb["name"], int(sb["range"]), sim.automation.action_name(sen["action"]),
+				"TRIGGERED" if sen["on"] else "watching"])
+		lines.append("[E] pick its action")
+	elif kind == "floodlight":
+		var fl: Dictionary = sim.automation.floodlights[target_key]
+		lines.append("Floodlight · %s · %s" % ["lit" if fl["lit"] else "dark",
+				"on every night" if fl["night"] else "on when a sensor's floodlights action says"])
+		lines.append("[E] %s" % ("only when a sensor says" if fl["night"] else "light it every night"))
+	elif kind == "noisemaker":
+		var nm: Dictionary = sim.automation.noisemakers[target_key]
+		lines.append("Noisemaker · loudness %d · %s" % [int(sim.data.buildables["noisemaker"]["loudness"]),
+				"BLARING %d s" % ceili(nm["blare"]) if nm["blare"] > 0.0 else ("recharging %d s" % ceili(nm["recharge"])
+				if nm["recharge"] > 0.0 else "ready")])
+		lines.append("[E] set it off now · a sensor's decoy action sets off every one within %d m" % int(sim.data.defense["actions"]["decoy"]["radius"]))
+	elif kind == "bear_trap":
+		var sprung := sim.defense.sprung.has(target_key)
+		lines.append("Bear trap · %s" % ("SPRUNG" if sprung else "set: pins the first zombie that steps in"))
+		if sprung:
+			lines.append("[E] reset it")
 	elif kind == "trap":
 		lines.append("Spike strip · slows and hurts zombies that cross it · wears out")
 	elif kind == "generator":
