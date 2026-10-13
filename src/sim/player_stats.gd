@@ -27,6 +27,8 @@ var bleeding := false
 var asleep := false
 var sprinting := false   # written by the world each frame
 var carry_ratio := 0.0   # written by SimWorld each tick
+## Stamina regen multiplier from Fitness and Second Wind (written by SimWorld each tick).
+var stamina_regen_mult := 1.0
 var dead := false
 var respawn_timer := 0.0
 var deaths := 0
@@ -120,7 +122,7 @@ func tick(dt: float) -> void:
 	else:
 		_rested += dt
 		if _rested >= _c("stamina_regen_delay"):
-			stamina = minf(100.0, stamina + _c("stamina_regen") * dt)
+			stamina = minf(100.0, stamina + _c("stamina_regen") * stamina_regen_mult * dt)
 	var hurt := 0.0
 	var cause := ""
 	if food <= 0.0 or water <= 0.0:

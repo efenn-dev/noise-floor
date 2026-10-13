@@ -22,7 +22,7 @@ var power: PowerGrid
 var defense: Defense
 ## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
 var vehicles: Vehicles
-## Skills that level by doing (just Mechanics until M12).
+## Skills that level by doing and the perks they earn (M12). Kept when you die.
 var skills: Skills
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
 var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
@@ -43,6 +43,8 @@ var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
 var player_lit := false
+## Written by the world each frame: moving while crouched (Sneaking xp near zombies that haven't noticed you).
+var player_sneaking := false
 var spawn_point := Vector3.ZERO
 ## Bags dropped where the player died: {id: int, pos: Vector3, items: {item: count}}.
 var bags: Array = []
@@ -67,6 +69,10 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	loot = Loot.new(data, seed_value)
 	vehicles = Vehicles.new(data)
 	skills = Skills.new(data)
+	factory.skills = skills  # belt speed, craft speed, planter yield
+	noise.skills = skills    # quieter machines (Dampened Gears)
+	power.skills = skills    # quieter generators
+	loot.skills = skills     # search time, Lucky Find
 	_day = clock.day
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
@@ -74,6 +80,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
 	build.piece_removed.connect(_on_piece_removed)
+	build.piece_built.connect(_on_piece_built)
 
 
 ## Starting materials for testing builds (data/debug_kit.json).
@@ -108,9 +115,16 @@ func step() -> void:
 	noise.refresh(factory, TICK, power, vehicles)
 	_note_noise()
 	player.carry_ratio = carry_ratio()
+	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
+	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.tick(TICK)
+	if sprinted:
+		_practice("fitness", "sprint_second", TICK)
+	if player_sneaking and not player.dead and _unnoticed_zombie_near():
+		_practice("sneaking", "sneak_second", TICK)
 	var found := loot.tick(TICK, player_pos)
 	if not found.is_empty():
+		_practice("scavenging", "search")
 		found["items"] = _rot_old_food(found["items"])
 		inventory.give_all(found["items"])
 		add_message(("Found " + _list(found["items"])) if not found["items"].is_empty() else "Nothing useful", 4.0)
@@ -127,8 +141,8 @@ func step() -> void:
 			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
-			player.damage(float(z.stats["damage"]), z.type)
-			if not player.dead and _rng.randf() < float(data.survival["bleed_chance"]):
+			player.damage(float(z.stats["damage"]) * maxf(0.0, 1.0 - skills.bonus("damage_cut")), z.type)
+			if not player.dead and _rng.randf() < bleed_chance():
 				if not player.bleeding:
 					add_message("You're bleeding (H to bandage)", 4.0)
 				player.bleeding = true
@@ -176,22 +190,50 @@ func _note_noise() -> void:
 
 
 ## A one-off sound from the player ("footstep_walk", "footstep_sprint", ...; see data/noise.json).
-## Footsteps get louder when you carry more than your limit.
+## Footsteps get louder when you carry more than your limit, and quieter with Sneaking and Soft Step.
+## Each step under a heavy load (over heavy_load of your limit) trains Strength.
 func make_noise(pos: Vector3, kind: String) -> void:
+	noise.emit(pos, noise_loudness(kind), kind)
+	if kind.begins_with("footstep") and carry_ratio() > float(data.skills["heavy_load"]):
+		_practice("strength", "heavy_step")
+
+
+## How loud one of your sounds is right now (footsteps depend on load, Sneaking and Soft Step).
+func noise_loudness(kind: String) -> float:
 	var loudness := float(data.noise["sounds"][kind])
 	if kind.begins_with("footstep") and carry_ratio() > 1.0:
 		loudness += float(data.survival["carry_footstep_bonus"])
-	noise.emit(pos, loudness, kind)
+	if kind == "footstep_walk":
+		loudness -= skills.bonus("walk_quiet")
+	elif kind == "footstep_sprint":
+		loudness -= skills.bonus("sprint_quiet")
+	return maxf(0.0, loudness)
+
+
+## Chance a zombie's hit makes you bleed: bleed_chance, less 2 points per First Aid level.
+func bleed_chance() -> float:
+	return maxf(0.0, float(data.survival["bleed_chance"]) - skills.bonus("bleed_cut"))
+
+
+func _unnoticed_zombie_near() -> bool:
+	var reach := float(data.skills["sneak_range"])
+	var calm := [ZombieBrain.State.IDLE, ZombieBrain.State.WANDER, ZombieBrain.State.INVESTIGATE]
+	for id: int in horde.zombies:
+		var z: ZombieBrain = horde.zombies[id]
+		if z.state in calm and _flat_dist(z.pos, player_pos) <= reach:
+			return true
+	return false
 
 
 # --- Carrying ---------------------------------------------------------------
 
-## Carry limit in kg: carry_base plus the best bag you're carrying (only one bag counts).
+## Carry limit in kg: carry_base, plus 3 kg per Strength level (skills.json), plus the best bag you're
+## carrying (only one bag counts).
 func carry_limit() -> float:
 	var best := 0.0
 	for item: String in inventory.items():
 		best = maxf(best, data.item_value(item, "bag"))
-	return float(data.survival["carry_base"]) + best
+	return float(data.survival["carry_base"]) + skills.bonus("carry_kg") + best
 
 
 func carry_ratio() -> float:
@@ -365,7 +407,10 @@ func use_bandage() -> String:
 	if not inventory.remove("bandage", 1):
 		return "No bandages"
 	player.bleeding = false
-	return "Bandaged"
+	var heal := skills.bonus("bandage_heal")
+	player.health = minf(player.max_health, player.health + heal)
+	_practice("first_aid", "bandage")
+	return "Bandaged" + ((" (+%d health)" % roundi(heal)) if heal > 0.0 else "")
 
 
 ## Sleep in the bed `key`: it becomes your respawn point. Returns "" or why not.
@@ -413,10 +458,26 @@ func toggle_door(key: String) -> String:
 func repair(key: String) -> String:
 	if not build.pieces.has(key):
 		return "Nothing to repair"
-	var why := build.repair(key, stock_at(build.piece_center(key)))
+	var why := build.repair(key, stock_at(build.piece_center(key)), skills.bonus("repair_discount"))
 	if why == "":
 		_practice("mechanics", "repair")
+		_practice("building", "repair")
 	return why
+
+
+## What repairing piece `key` costs you now (Building makes it cheaper).
+func repair_cost(key: String) -> Dictionary:
+	return build.repair_cost(key, skills.bonus("repair_discount"))
+
+
+## E on a machine: take what it made and load it from your pockets and nearby crates (Factory.hand_interact).
+## Taking a planter's vegetables trains Farming.
+func machine_interact(cell: Vector2i, at: Vector3) -> Dictionary:
+	var moved := factory.hand_interact(cell, stock_at(at))
+	var m: Factory.Machine = factory.machines.get(cell)
+	if m != null and m.id == "planter" and not moved["took"].is_empty():
+		_practice("farming", "harvest")
+	return moved
 
 
 # --- Fuel ---------------------------------------------------------------------
@@ -627,18 +688,34 @@ func fit_muffler(cell: Vector2i) -> String:
 	return ""
 
 
-## The player hits zombie `id` with their weapon (call after player.try_swing succeeds and the swing
+## Starts a melee swing if the weapon is ready and there's stamina (PlayerStats.try_swing). Swinging
+## trains Strength. Returns true if it swung.
+func swing() -> bool:
+	if not player.try_swing(float(weapon_stats()["cooldown"])):
+		return false
+	_practice("strength", "swing")
+	return true
+
+
+## Melee damage of one body hit: the weapon's, plus Strength, Melee and Heavy Swing.
+func melee_damage() -> float:
+	return float(weapon_stats()["damage"]) * (1.0 + skills.bonus("melee_damage"))
+
+
+## The player hits zombie `id` with their weapon (call after swing() succeeds and the swing
 ## connects). `head` doubles the damage. Returns true if it killed the zombie.
 func hit_zombie(id: int, head: bool) -> bool:
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null:
 		return false
 	var w: Dictionary = data.weapons[player.weapon]
-	var dmg := float(w["damage"]) * (float(w["head_multiplier"]) if head else 1.0)
+	var dmg := melee_damage() * (float(w["head_multiplier"]) if head else 1.0)
 	noise.emit_kind(z.pos, "melee_hit")
-	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]))
+	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]) * (1.0 + skills.bonus("knockback")))
 	stats.note("hit a zombie")
+	_practice("melee", "hit")
 	if killed:
+		_practice("melee", "kill")
 		stats.note_kill()
 		stats.note("killed a " + z.type)
 	return killed
@@ -737,12 +814,22 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 				inventory.give_all(data.noise["muffler"]["cost"])
 
 
-## Practising a skill; says so when it levels up. (A signal from Skills back to here would make a
-## reference cycle and leak every SimWorld.)
-func _practice(skill: String, action: String) -> void:
+## Practising a skill (`times` over, e.g. seconds of sprinting); says so when it levels up ("Strength 2")
+## and when a perk point is earned. (A signal from Skills back to here would make a reference cycle and
+## leak every SimWorld.)
+func _practice(skill: String, action: String, times: float = 1.0) -> void:
 	var before := skills.level(skill)
-	if skills.practice(skill, action) > before:
-		add_message("%s is now level %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
+	var points := skills.perk_points
+	if skills.practice(skill, action, times) > before:
+		add_message("%s %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
+	if skills.perk_points > points:
+		add_message("Perk point earned: K to spend", 6.0)
+
+
+## Placing a piece yourself trains Building (not the town, a save or a demo base being laid).
+func _on_piece_built(_key: String) -> void:
+	if not stats.muted:
+		_practice("building", "place")
 
 
 # --- The world gets worse (M11) -------------------------------------------------

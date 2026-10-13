@@ -14,6 +14,8 @@ extends RefCounted
 signal piece_added(key: String)
 signal piece_removed(key: String, piece: Dictionary)
 signal piece_changed(key: String)  # a door opened or closed
+## The player (or a demo) placed a piece with place(), not restore(): Building xp (M12).
+signal piece_built(key: String)
 
 const EDGE_KINDS := ["wall", "door", "barricade", "window"]
 
@@ -101,8 +103,9 @@ func toggle_door(key: String) -> bool:
 	return pieces[key]["open"]
 
 
-## Fully repairs a piece, paying a share of its build cost for the damage. Returns "" or why not.
-func repair(key: String, inv: Inventory) -> String:
+## Fully repairs a piece, paying a share of its build cost for the damage, less `discount` (Building).
+## Returns "" or why not.
+func repair(key: String, inv: Inventory, discount: float = 0.0) -> String:
 	if not pieces.has(key):
 		return "Nothing to repair"
 	var piece: Dictionary = pieces[key]
@@ -111,21 +114,23 @@ func repair(key: String, inv: Inventory) -> String:
 		return "Not damaged"
 	if is_broken(key):
 		return "The glass is gone: build a barricade here to board it up"
-	var cost := repair_cost(key)
+	var cost := repair_cost(key, discount)
 	if not inv.take_all(cost):
 		return "Not enough materials"
 	piece["hp"] = max_hp
 	return ""
 
 
-## What repairing a piece would cost: its build cost times the share of hp missing (at least 1 each).
-func repair_cost(key: String) -> Dictionary:
+## What repairing a piece would cost: its build cost times the share of hp missing (at least 1 each),
+## less `discount` (0.05 per Building level), rounded, and never below half.
+func repair_cost(key: String, discount: float = 0.0) -> Dictionary:
 	var piece: Dictionary = pieces[key]
 	var b: Dictionary = data.buildables[piece["id"]]
 	var missing := 1.0 - float(piece["hp"]) / float(b["hp"])
 	var cost := {}
 	for item: String in b["cost"]:
-		cost[item] = maxi(1, ceili(b["cost"][item] * missing))
+		var full := maxi(1, ceili(b["cost"][item] * missing))
+		cost[item] = maxi(1, roundi(full * maxf(0.5, 1.0 - discount)))
 	return cost
 
 
@@ -168,6 +173,7 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		piece["side"] = edge[1]
 	pieces[key] = piece
 	piece_added.emit(key)
+	piece_built.emit(key)
 	return ""
 
 

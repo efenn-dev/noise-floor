@@ -12,7 +12,9 @@ extends RefCounted
 ## Older saves still load: anything they lack gets its default, and a save from before 3 gets the
 ## houses laid fresh by the town plan (see holds_town). 4 = W1b: the factory is a hall of pieces too;
 ## a save from before 4 gets it laid fresh (see holds_factory). House zombies are ordinary saved zombies.
-const VERSION := 4
+## 5 = M12: perks and unspent perk points (skills xp was already saved). A save from before 5 gets no
+## perks and the perk points its skill levels are worth.
+const VERSION := 5
 const FIRST_WITH_TOWN := 3
 const FIRST_WITH_FACTORY := 4
 
@@ -85,6 +87,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"searched": searched,
 		"vehicles": sim.vehicles.to_dict(),
 		"skills": sim.skills.xp,
+		"perks": sim.skills.perks,
+		"perk_points": sim.skills.perk_points,
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
@@ -161,6 +165,10 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.vehicles.load_dict(d["vehicles"])
 	for s: String in d.get("skills", {}):
 		sim.skills.xp[s] = float(d["skills"][s])
+	sim.skills.perks = {}
+	for perk: String in d.get("perks", {}):
+		sim.skills.perks[perk] = int(d["perks"][perk])
+	sim.skills.perk_points = int(d.get("perk_points", sim.skills.points_earned()))
 	var st: Dictionary = d.get("stats", {})
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))

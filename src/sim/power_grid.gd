@@ -13,6 +13,8 @@ const DEVICE_REACH := 3.0
 const MAX_CANS := 10
 
 var data: GameData
+## Set by SimWorld (M12): Dampened Gears makes generators quieter.
+var skills: Skills
 var build: BuildGrid
 var factory: Factory
 ## Debug/tests: every machine is powered.
@@ -132,7 +134,8 @@ func noise_sources() -> Array:
 		var g: Dictionary = generators[key]
 		if g["running"]:
 			var id: String = build.pieces[key]["id"]
-			out.append({"pos": build.piece_center(key), "loudness": data.buildables[id]["loudness"] - (cut if g["muffled"] else 0.0),
+			var quiet := skills.bonus("machine_quiet") if skills != null else 0.0  # Dampened Gears
+			out.append({"pos": build.piece_center(key), "loudness": maxf(0.0, data.buildables[id]["loudness"] - (cut if g["muffled"] else 0.0) - quiet),
 					"key": key, "kind": id})
 	return out
 

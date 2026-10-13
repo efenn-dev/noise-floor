@@ -107,7 +107,7 @@ func test_mechanics_levels_by_doing() -> void:
 		eq(sim.repair_car("car_0"), "", "repair the car")
 	near(sim.skills.xp["mechanics"], 2.0 * float(sim.data.skills["skills"]["mechanics"]["xp"]["repair_car"]), "car repairs teach Mechanics")
 	eq(sim.skills.level("mechanics"), 1, "level 1 after two")
-	check(sim.messages.any(func(m: Dictionary) -> bool: return m["text"] == "Mechanics is now level 1"), "it says so")
+	check(sim.messages.any(func(m: Dictionary) -> bool: return m["text"] == "Mechanics 1"), "it says so")
 
 
 func test_skills_and_hotwiring_are_saved() -> void:

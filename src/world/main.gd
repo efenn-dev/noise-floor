@@ -20,6 +20,7 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --skills                        open the skills and perks screen (K in game)
 ##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
@@ -41,6 +42,7 @@ var builder: BuildController
 var factory_view: FactoryView
 var sound_view: SoundView
 var inventory_screen: InventoryScreen
+var skills_screen: SkillsScreen
 var interactor: Interactor
 var nav: NavBaker
 var zombie_view: ZombieView
@@ -118,6 +120,10 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	skills_screen = SkillsScreen.new()
+	add_child(skills_screen)
+	skills_screen.setup(sim)
+	skills_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
 	if _wants_hints(args):
 		hints = Hints.new()
 		hints.setup(sim, inventory_screen, noise_overlay)
@@ -148,7 +154,9 @@ func _ready() -> void:
 		inventory_screen.open()
 		if args["inventory"] != "":
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
-	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open():
+	if args.has("skills"):
+		skills_screen.open()  # --skills, for screenshots
+	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	sim.stats.muted = false
 
@@ -242,7 +250,10 @@ func _sync_player() -> void:
 	var p := sim.player
 	if inventory_screen.is_open() and (p.dead or p.asleep):
 		inventory_screen.close()
-	player.frozen = p.dead or p.asleep or inventory_screen.is_open()  # no walking while sorting your pockets
+	if skills_screen.is_open() and (p.dead or p.asleep):
+		skills_screen.close()
+	# no walking while sorting your pockets or spending perk points
+	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open()
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -253,6 +264,8 @@ func _sync_player() -> void:
 	if not sim.player.dead and driving == null:
 		sim.player_pos = player.global_position  # while driving, the car reports where you are
 	sim.player_lit = player.flashlight.visible
+	sim.player_sneaking = driving == null and player.crouching and player.is_on_floor() \
+			and Vector2(player.velocity.x, player.velocity.z).length() > 0.5
 
 
 ## Footsteps make noise: walking barely carries, sprinting does; crouching is silent.
@@ -300,11 +313,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			if why != "":
 				sim.add_message(why, 3.0)
 			return
-		if event.is_action_pressed("inventory"):
+		if event.is_action_pressed("inventory") or event.is_action_pressed("skills"):
 			return  # no rummaging while driving
 	if event.is_action_pressed("inventory") and not sim.player.dead:
 		sim.player_pos = player.global_position
+		if skills_screen.is_open():
+			skills_screen.close()
 		inventory_screen.open()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("skills") and not sim.player.dead and not inventory_screen.is_open():
+		skills_screen.open()
 		get_viewport().set_input_as_handled()
 		return
 	if not InputSetup.captured():
@@ -790,7 +809,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · F5 save · Esc menu"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB swing · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -912,6 +931,8 @@ func _exit_tree() -> void:
 func _enter_car(id: String) -> void:
 	if inventory_screen.is_open():
 		inventory_screen.close()
+	if skills_screen.is_open():
+		skills_screen.close()
 	builder.set_active(false)
 	driving = cars[id]
 	_set_walker(false)

@@ -1,10 +1,94 @@
 {
 	"levels": [0, 30, 80, 150, 240, 350, 480, 630, 800, 1000, 1250],
+	"order": ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "melee", "firearms", "first_aid", "farming"],
 	"skills": {
+		"strength": {
+			"name": "Strength",
+			"text": "+3 kg carry limit and +5% melee damage and knockback per level",
+			"xp": { "heavy_step": 0.5, "swing": 1 },
+			"effects": { "carry_kg": 3, "melee_damage": 0.05, "knockback": 0.05 }
+		},
+		"fitness": {
+			"name": "Fitness",
+			"text": "Stamina comes back 5% faster per level",
+			"xp": { "sprint_second": 1 },
+			"effects": { "stamina_regen": 0.05 }
+		},
+		"building": {
+			"name": "Building",
+			"text": "Repairs cost 5% less per level (never below half)",
+			"xp": { "place": 3, "repair": 6 },
+			"effects": { "repair_discount": 0.05 }
+		},
 		"mechanics": {
 			"name": "Mechanics",
-			"xp": { "repair": 8, "repair_car": 15, "muffler": 20, "hotwire": 25 }
+			"text": "Hotwire cars from level 2, quicker with each level",
+			"xp": { "repair": 8, "repair_car": 15, "muffler": 20, "hotwire": 25 },
+			"effects": {}
+		},
+		"scavenging": {
+			"name": "Scavenging",
+			"text": "Searching takes 5% less time per level",
+			"xp": { "search": 10 },
+			"effects": { "search_speed": 0.05 }
+		},
+		"sneaking": {
+			"name": "Sneaking",
+			"text": "Walking footsteps 1 quieter per level",
+			"xp": { "sneak_second": 2 },
+			"effects": { "walk_quiet": 1 }
+		},
+		"melee": {
+			"name": "Melee",
+			"text": "+4% melee damage per level",
+			"xp": { "hit": 4, "kill": 10 },
+			"effects": { "melee_damage": 0.04 }
+		},
+		"firearms": {
+			"name": "Firearms",
+			"text": "Comes with guns",
+			"disabled": true,
+			"xp": {},
+			"effects": {}
+		},
+		"first_aid": {
+			"name": "First Aid",
+			"text": "Bandages heal 5 health per level; bites bleed 2% less often per level",
+			"xp": { "bandage": 15 },
+			"effects": { "bandage_heal": 5, "bleed_cut": 0.02 }
+		},
+		"farming": {
+			"name": "Farming",
+			"text": "Planters give 1 extra vegetable per 3 levels",
+			"xp": { "harvest": 12 },
+			"effects": { "planter_extra": { "value": 1, "every": 3 } }
 		}
+	},
+	"levels_per_perk_point": 3,
+	"perk_max_rank": 5,
+	"sneak_range": 15,
+	"heavy_load": 0.5,
+	"search_time_min": 0.25,
+	"trees": {
+		"engineer": { "name": "Engineer", "perks": ["fast_lines", "dampened_gears", "tuned_machines"] },
+		"ghost": { "name": "Ghost", "perks": ["soft_step", "quick_fingers", "lucky_find"] },
+		"fighter": { "name": "Fighter", "perks": ["heavy_swing", "second_wind", "thick_skin"] }
+	},
+	"perks": {
+		"fast_lines": { "name": "Fast Lines", "text": "Belts +10% speed per rank", "effects": { "belt_speed": 0.1 } },
+		"dampened_gears": {
+			"name": "Dampened Gears",
+			"text": "Machines and generators 2 quieter per rank, +1 per 3 points in Ghost",
+			"effects": { "machine_quiet": 2 },
+			"synergy": { "tree": "ghost", "every": 3, "effects": { "machine_quiet": 1 } }
+		},
+		"tuned_machines": { "name": "Tuned Machines", "text": "Machines craft 5% faster per rank", "effects": { "craft_speed": 0.05 } },
+		"soft_step": { "name": "Soft Step", "text": "Footsteps 3 quieter per rank", "effects": { "walk_quiet": 3, "sprint_quiet": 3 } },
+		"quick_fingers": { "name": "Quick Fingers", "text": "Searching 10% faster per rank", "effects": { "search_speed": 0.1 } },
+		"lucky_find": { "name": "Lucky Find", "text": "20% chance per rank of one extra item per search", "effects": { "lucky_find": 0.2 } },
+		"heavy_swing": { "name": "Heavy Swing", "text": "Melee damage +10% per rank", "effects": { "melee_damage": 0.1 } },
+		"second_wind": { "name": "Second Wind", "text": "Stamina comes back 10% faster per rank", "effects": { "stamina_regen": 0.1 } },
+		"thick_skin": { "name": "Thick Skin", "text": "Zombies hurt you 5% less per rank", "effects": { "damage_cut": 0.05 } }
 	},
 	"hotwire_level": 2,
 	"hotwire_seconds": 12,

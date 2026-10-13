@@ -2,6 +2,52 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — M12 Skills and perks
+
+From the M12 brief by the project lead, on top of W1b.
+
+**Built:**
+- **Ten skills that level by doing** (0-10, Zomboid style), each with one effect you can feel:
+  - **Strength:** trained by swinging the pipe and by walking with more than half your carry limit. Carry limit is 20 kg + 3 kg per level (20-50 kg before bags), and melee damage and knockback go up 5% per level.
+  - **Fitness:** trained by sprinting. Stamina comes back 5% faster per level.
+  - **Building:** trained by placing pieces and repairing them. Repairs cost 5% less per level (rounded, never below half).
+  - **Mechanics:** as before (repairs, car repairs, mufflers, hotwiring; hotwiring needs level 2 and gets quicker).
+  - **Scavenging:** trained by each finished search. Searching takes 5% less time per level.
+  - **Sneaking:** trained by each second you move crouched within 15 m of a zombie that hasn't noticed you. Walking footsteps are 1 quieter per level.
+  - **Melee:** trained by each hit, more for a kill. Melee damage +4% per level (on top of Strength).
+  - **Firearms:** listed, greyed out ("Comes with guns"); nothing trains it yet.
+  - **First Aid:** trained by each bandage. A bandage also heals 5 health per level, and a zombie bite is 2 points less likely to make you bleed per level.
+  - **Farming:** trained each time you take a planter's vegetables. Planters grow one extra vegetable per three levels.
+- **Perk points:** every 3 skill levels you gain (all skills added up) earns 1 point. The HUD says "Strength 2" when a skill goes up and "Perk point earned: K to spend" when you get a point.
+- **Three perk trees, three perks each, ranks 1-5,** spent on the skills screen and never refunded:
+  - **Engineer:** Fast Lines (belts +10% speed per rank), Dampened Gears (machines and generators 2 quieter per rank, plus 1 more for every 3 points you've spent in Ghost), Tuned Machines (machines craft 5% faster per rank).
+  - **Ghost:** Soft Step (walking and sprinting footsteps 3 quieter per rank), Quick Fingers (searches 10% faster per rank), Lucky Find (20% chance per rank that a search finds one extra item).
+  - **Fighter:** Heavy Swing (melee damage +10% per rank), Second Wind (stamina back 10% faster per rank), Thick Skin (zombies hurt you 5% less per rank).
+- **The skills screen (K, Esc or K closes):** every skill with its level, a bar to the next level and what it does; your perk points; the three trees with each perk's rank and a +1 button (greyed with no points or at rank 5). The game keeps running while it's open, like the inventory, and you stand still. The HUD's key line says "K skills".
+- **You keep skills, perks and unspent points when you die.**
+
+**Rules (sim, tested):** `Skills` holds xp, `perks` (ranks) and `perk_points`; `practice(skill, action, times)` adds xp from `data/skills.json` and earns points (`points_earned` = total levels / 3); `spend(perk)`/`can_spend`; and one query, `bonus(effect)`, sums every skill level and perk rank that gives `effect` (a `{"value", "every"}` spec gives "1 per 3 levels"; a perk's `synergy` adds per `every` points in another tree once you have a rank). The rules call it: `SimWorld.carry_limit` (carry_kg), `melee_damage`/`hit_zombie` (melee_damage, knockback), `PlayerStats.stamina_regen_mult` (stamina_regen), `BuildGrid.repair_cost(key, discount)` via `SimWorld.repair_cost` (repair_discount), `Loot.search_time` (search_speed, floor `search_time_min`) and a Lucky Find roll on the container's own seeded rng after the normal roll (lucky_find), `SimWorld.noise_loudness` for footsteps (walk_quiet, sprint_quiet), `bleed_chance` and `use_bandage` (bleed_cut, bandage_heal), zombie hits (damage_cut), `Factory` (belt_speed, craft_speed, planter_extra per craft), `NoiseField.machine_loudness` and `PowerGrid.noise_sources` (machine_quiet). New sim entry points: `SimWorld.swing()` (the world's swing now goes through it, for Strength xp), `machine_interact()` (E on a machine; Farming xp), `player_sneaking` (written by the world), `BuildGrid.piece_built` (only `place`, not `restore`, so loading a save or laying the town teaches nothing; demo bases are muted too). `GameData` validates the skills, trees and perks. **Saves:** `SaveGame.VERSION` is 5 (perks and perk points). A version-4 save loads with no perks and the points its skill levels are worth; a committed fixture `test/fixtures/save_v4.json` (written by the W1b code before these changes) is tested, and the v2 and v3 fixtures still load.
+
+**Tests:** `test_skills.gd` (the ten skills in data; level thresholds; xp from swings, heavy steps, sprinting, placing and repairing, searching, sneaking near unaware zombies only, bandages, harvests; the level-up and perk-point messages; a point every 3 levels, even across a jump; spending, the rank-5 cap and no points no spend; each effect at level 0 vs 5: carry 20 -> 35 (50 at 10, bags on top), melee damage and knockback, stamina regen, repair cost and what's charged, search time and its floor, footstep loudness as zombies hear it, bandage heal and bleed chance, planter yield 3/4/4/5 at 0/3/5/6; Fast Lines, Tuned Machines, Dampened Gears with the Ghost synergy on machines and generators, Thick Skin, Lucky Find on the seeded rng; death keeps everything; save and load of xp, perks and points), `test_skills_screen.gd` (shows levels, greyed Firearms, ranks; the button spends a point and the rank shown changes; greyed with no points and at rank 5; in the real game K opens it, the player stands still, the game keeps running, Esc closes it without the pause menu, K toggles), `test_save.gd` (the version-4 fixture loads with a perk point for its Mechanics 3). `test_car_keys.gd` now expects "Mechanics 1". **2189 checks** (was 2022).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**.
+- Press **K** to see the skills screen. Or open it straight away: `play.bat --skills`.
+- Sprint for 30 seconds: "Fitness 1" pops up. Hit a zombie a few times with the pipe: Strength and Melee go up. Search a few kitchen cupboards: Scavenging. Three levels in all and the HUD says "Perk point earned: K to spend"; press K and click +1 next to a perk.
+- Strength: watch the "kg" number by your pockets (top right) go up from 20 as Strength levels.
+- Farming: `play.bat --demo-farm --time=12`, wait for the planter, then E on it to take the vegetables.
+
+**Known gaps:**
+- Not in M12, as planned: items with "+1 to perks", respec (the Clean Slate), anything Firearms does, guns (M14). The design's other perk ideas (cheaper mufflers, see noise rings, harder to spot, recoil, reload, Gunsmith) aren't in yet.
+- Every number is a first guess (xp per action in `data/skills.json`, e.g. a search 10, a bandage 15, a second of sprinting 1, level 1 at 30 xp). Tune after Playtest #1.
+- Farming xp and the extra vegetables: xp only when you take the vegetables by hand (E), not when a belt carries them off; the extra vegetables are grown either way.
+- Sneaking xp counts any zombie within 15 m that is idle, wandering or investigating (not one chasing you), with no line-of-sight check.
+- The inventory screen still shows its own Mechanics line; the skills screen is the full list.
+- No screenshot of a level-up message (no flag sets xp); the screen was checked by day and night.
+
+**Next:** Playtest #1, then M13 loot.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — W1b Life inside
 
 From the W1 plan (`docs/plans/W1.md`, "W1b — life inside"), on top of W1a and the stress test.

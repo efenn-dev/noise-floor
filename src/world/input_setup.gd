@@ -36,6 +36,7 @@ const KEYS := {
 	"interact": [KEY_E],
 	"upgrade": [KEY_U],
 	"noise_overlay": [KEY_N],
+	"skills": [KEY_K],  # the skills and perks screen (M12)
 }
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,
