@@ -52,9 +52,9 @@
 		},
 		"first_aid": {
 			"name": "First Aid",
-			"text": "Bandages heal 5 health per level; bites bleed 2% less often per level",
+			"text": "Bandages heal 5 health per level; bites bleed 2% less often per level; you heal 10% faster per level",
 			"xp": { "bandage": 15 },
-			"effects": { "bandage_heal": 5, "bleed_cut": 0.02 }
+			"effects": { "bandage_heal": 5, "bleed_cut": 0.02, "heal_rate": 0.1 }
 		},
 		"farming": {
 			"name": "Farming",

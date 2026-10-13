@@ -11,6 +11,8 @@ extends RefCounted
 ##   M16 warmth: moves by warmth_rate (per second, set by SimWorld from Climate each tick); below cold_at
 ##   stamina comes back at cold_stamina_regen speed, below freezing_at you lose freeze_damage health every
 ##   freeze_every seconds (cold_cfg is data/seasons.json "warmth"; empty = no cold effects)
+##   healing: health slowly comes back (heal_rate per second, heal_sleep_rate asleep, times heal_mult) while
+##   food and water are both at least heal_min, you aren't bleeding or cold, and nothing hurt you this tick
 
 signal died
 signal respawned
@@ -36,6 +38,8 @@ var sprinting := false   # written by the world each frame
 var carry_ratio := 0.0   # written by SimWorld each tick
 ## Stamina regen multiplier from Fitness and Second Wind (written by SimWorld each tick).
 var stamina_regen_mult := 1.0
+## Healing multiplier from First Aid (written by SimWorld each tick).
+var heal_mult := 1.0
 var dead := false
 var respawn_timer := 0.0
 var deaths := 0
@@ -102,6 +106,13 @@ func is_cold() -> bool:
 	return not cold_cfg.is_empty() and warmth < float(cold_cfg["cold_at"])
 
 
+## Whether health is coming back right now (fed, watered, not bleeding, not cold, not full).
+func is_healing() -> bool:
+	return not dead and not bleeding and not is_cold() and health < max_health \
+			and food >= _c("heal_min", 30.0) and water >= _c("heal_min", 30.0) \
+			and food > 0.0 and water > 0.0
+
+
 ## M16: below freezing_at (losing health).
 func is_freezing() -> bool:
 	return not cold_cfg.is_empty() and warmth < float(cold_cfg["freezing_at"])
@@ -163,6 +174,9 @@ func tick(dt: float) -> void:
 		damage(hurt, cause)
 		if was_asleep and not dead and not bleeding:
 			asleep = true  # hunger alone doesn't wake you; a zombie or bleeding does
+	elif is_healing():
+		var rate := _c("heal_sleep_rate") if asleep else _c("heal_rate")
+		health = minf(max_health, health + rate * heal_mult * dt)
 
 
 func _respawn() -> void:

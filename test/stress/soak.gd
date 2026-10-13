@@ -309,6 +309,9 @@ func _drive() -> String:
 	if sim.inventory.count("gas_can") == 0:  # the generator burned the siphoned can: fetch one from the crate
 		await _walk_to(Vector3(0, 0, 6))
 		_take_from_crate({"gas_can": 1})
+	var given := sim.inventory.count("gas_can") == 0
+	if given:  # nothing left to siphon or fetch: hand the bot a can so the drive step really drives
+		sim.inventory.add("gas_can", 1)
 	var keyed := sim.vehicles.can_start("car_0", sim.inventory)
 	var car: Vector3 = sim.vehicles.cars["car_0"]["pos"]
 	await _walk_to(Vector3(car.x + 2.0, 0, car.z))
@@ -317,6 +320,8 @@ func _drive() -> String:
 	if why != "":
 		return "enter: " + why
 	main._enter_car("car_0")
+	var state: Dictionary = sim.vehicles.cars["car_0"]
+	var engine := "engine %s (fuel %.1f, hp %d)" % ["on" if state["running"] else "off", state["fuel"], state["hp"]]
 	var body: CarBody = main.cars["car_0"]
 	body.use_device_input = false
 	body.wish_throttle = 1.0
@@ -329,7 +334,8 @@ func _drive() -> String:
 	main._exit_car()
 	body.use_device_input = true
 	await _frames(10)
-	return "%s; refuel: %s; moved %.1f m" % ["key found" if keyed else "no key (sat in it)", fuel, moved]
+	return "%s; refuel: %s%s; %s; moved %.1f m" % ["key found" if keyed else "no key (sat in it)",
+			fuel if fuel != "" else "ok", " (can given)" if given else "", engine, moved]
 
 
 func _sleep() -> String:

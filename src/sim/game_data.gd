@@ -242,7 +242,7 @@ const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "att
 		"hearing_night", "investigate_speed"]
 const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback"]
 const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sleep_gain", "starve_damage",
-		"respawn_minimum", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
+		"respawn_minimum", "heal_rate", "heal_sleep_rate", "heal_min", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
 		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance",
