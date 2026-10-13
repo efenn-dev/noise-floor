@@ -3,12 +3,16 @@ extends RefCounted
 ## The town's houses, made of the same 2 m grid pieces the player builds with (W1a).
 ## generate() is pure: the same seed always gives the same town. It returns
 ##   {"pieces": [{id, cell, side, style}], "containers": [{id, table, cell, side}],
-##    "beds": [{cell, side}], "houses": [{name, cells, door_cell, door_side, plan, mirror, style}],
+##    "beds": [{cell, side}], "props": [{id, cell, side, wall, house}],
+##    "houses": [{name, cells, door_cell, door_side, plan, mirror, style}],
 ##    "zombies": [{house, cell, pos, facing}], "factory": {cells, pieces, crates, doorway, windows}}
 ## W1b: "zombies" are the houses with one zombie standing inside (about one in three, never on the first
 ## lot by the spawn), and "factory" is the factory hall at the road's north end, also made of pieces.
 ## Edge pieces use BuildGrid's canonical edges (NORTH or WEST of a cell). A container or bed `side`
 ## is the wall it stands against; it faces the other way, into the room.
+## W1c: "props" are furniture pieces (data kind "prop": counter, table, couch, shelf, bathtub, toilet), laid by
+## SimWorld.place_props like any other piece. A prop's `side` is the way it faces (BuildGrid's object side,
+## into the room) and `wall` the wall behind it; "against_wall" in buildables.json stands it there.
 ## Nothing else in src/sim knows what a house is: SimWorld.place_town lays these pieces into the
 ## BuildGrid exactly as if the player had built them, so doors, damage, repair and muffling just work.
 
@@ -17,6 +21,13 @@ const FIRST_LOT_Z := -10.0      # the middle of lot 0 (z in metres); each next l
 const LOT_SPACING := 16.0
 const EAST_FIRST_CELL := 4      # east houses start at x = 8 m; west houses end at x = -8 m (cell -5)
 
+## W1c "props": [id, u, v, wall] furniture against the wall `wall` of cell (u, v). Rooms are 2 x 2 cells, so they
+## are placed by hand, not by a search: never on a door's cell or a container's or bed's cell, each with its
+## back to a wall (a counter or table may stand under a window), and each keeping the half of every cell
+## away from its wall free, so a 1 m path runs through every doorway (test_town_plan.gd walks it on half cells).
+## Kitchens get a counter, and a table where there's room (plan B's kitchen-living room, and plan C's living room
+## next to its kitchen; plan A's kitchen is full); living rooms a couch and a shelf; bedrooms a shelf;
+## bathrooms a bathtub and a toilet (plan A), or one of them where the room is two cells (B a tub, C a toilet).
 ## Floor plans in local cells: u = rows back from the road (0 = the front row), v = cells along the road.
 ## An edge is [u, v, dir]: F faces the road, B faces away, L is toward v - 1, R toward v + 1.
 ## Every outside edge of a house is a wall unless it's a door or a window. "walls" are the interior walls;
@@ -29,7 +40,9 @@ const PLANS := {
 		"windows": [[0, 3, "F"], [1, 0, "L"], [1, 3, "R"], [3, 2, "B"]],
 		"walls": [[1, 0, "B"], [0, 1, "R"], [2, 1, "R"], [1, 2, "B"], [1, 3, "B"]],
 		"containers": [["fridge", 3, 1, "B"], ["kitchen", 2, 0, "L"], ["bathroom", 3, 3, "R"]],
-		"bed": [0, 3, "R"]},
+		"bed": [0, 3, "R"],
+		"props": [["couch", 0, 1, "F"], ["shelf", 1, 0, "B"], ["counter", 2, 1, "R"], ["shelf", 0, 2, "F"],
+				["bathtub", 2, 2, "F"], ["toilet", 2, 3, "F"]]},
 	# 3 x 5 cells (6 m deep, 10 m along the road): kitchen-living room with a galley kitchen at the back,
 	# bedroom, and a bathroom off the bedroom.
 	"B": {"size": [3, 5], "missing": [],
@@ -37,7 +50,9 @@ const PLANS := {
 		"windows": [[0, 0, "F"], [0, 4, "F"], [0, 0, "L"], [2, 4, "R"]],
 		"walls": [[1, 1, "B"], [1, 2, "B"], [0, 2, "R"], [2, 2, "R"], [1, 4, "B"]],
 		"containers": [["fridge", 2, 2, "B"], ["kitchen", 2, 1, "B"], ["bathroom", 2, 4, "B"]],
-		"bed": [1, 4, "R"]},
+		"bed": [1, 4, "R"],
+		"props": [["counter", 0, 2, "F"], ["table", 1, 0, "L"], ["couch", 1, 1, "B"], ["shelf", 1, 2, "B"],
+				["shelf", 0, 3, "F"], ["bathtub", 2, 3, "B"]]},
 	# L-shape: 4 x 5 cells without the 2 x 2 back corner. Living room, kitchen and bathroom behind it,
 	# bedroom in the front wing.
 	"C": {"size": [4, 5], "missing": [[2, 3], [2, 4], [3, 3], [3, 4]],
@@ -45,7 +60,9 @@ const PLANS := {
 		"windows": [[0, 0, "F"], [0, 3, "F"], [1, 4, "B"], [2, 0, "L"]],
 		"walls": [[1, 1, "B"], [1, 2, "B"], [2, 1, "R"], [0, 2, "R"]],
 		"containers": [["fridge", 3, 1, "B"], ["kitchen", 2, 1, "R"], ["bathroom", 3, 2, "B"]],
-		"bed": [0, 4, "R"]},
+		"bed": [0, 4, "R"],
+		"props": [["counter", 2, 0, "L"], ["table", 0, 0, "L"], ["couch", 0, 2, "F"], ["shelf", 1, 0, "L"],
+				["toilet", 2, 2, "F"], ["shelf", 0, 3, "L"]]},
 }
 const PLAN_IDS := ["A", "B", "C"]
 const HOUSE_ZOMBIES := 4        # of the 12 houses (W1b); the two on lot 0, by the spawn, never get one
@@ -59,12 +76,15 @@ const FACTORY_DOOR := [-1, 0]   # cell x of the doorway's two edges in the south
 const FACTORY_WINDOWS := [-67, -64, -61]  # cell z of the windows in the west and east walls
 const FACTORY_PETE := Vector2i(-1, -62)  # M13: where Old Pete stands, between the crates
 const FACTORY_CRATES := [Vector2i(-5, -60), Vector2i(0, -64), Vector2i(4, -60)]
+## W1c: two shelves against the north wall and a table against the east wall, well away from the doorway.
+const FACTORY_PROPS := [["shelf", Vector2i(-6, -69), BuildGrid.Side.NORTH], ["shelf", Vector2i(3, -69), BuildGrid.Side.NORTH],
+		["table", Vector2i(6, -66), BuildGrid.Side.EAST]]
 
 
 static func generate(seed_value: int, _data: GameData = null) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "town"])
-	var out := {"pieces": [], "containers": [], "beds": [], "houses": []}
+	var out := {"pieces": [], "containers": [], "beds": [], "props": [], "houses": []}
 	for i in LOTS:
 		for east in [false, true]:
 			var plan_id: String = PLAN_IDS[rng.randi_range(0, PLAN_IDS.size() - 1)]
@@ -111,6 +131,9 @@ static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
 		for b: Dictionary in town["beds"]:
 			if b["cell"] in house["cells"]:
 				busy[b["cell"]] = true
+		for p: Dictionary in town["props"]:
+			if p["house"] == house["name"]:
+				busy[p["cell"]] = true  # W1c: not inside the furniture
 		var spots: Array = []
 		for k: Vector2i in kitchen:
 			for side in 4:
@@ -138,6 +161,9 @@ static func factory() -> Dictionary:
 			# M13: Old Pete stands in the middle of the hall, facing the doorway.
 			"pete": {"cell": FACTORY_PETE, "pos": Vector3((FACTORY_PETE.x + 0.5) * BuildGrid.GRID, 0.1,
 					(FACTORY_PETE.y + 0.5) * BuildGrid.GRID), "facing": Vector3(0, 0, 1)}}
+	out["props"] = []
+	for fp: Array in FACTORY_PROPS:
+		out["props"].append({"id": fp[0], "cell": fp[1], "wall": fp[2], "side": (fp[2] + 2) % 4, "house": "factory"})
 	var x0 := FACTORY_CELL.x
 	var z0 := FACTORY_CELL.y
 	var x1 := x0 + FACTORY_SIZE.x - 1
@@ -216,6 +242,10 @@ static func _add_house(out: Dictionary, house_name: String, plan_id: String, mir
 	for c: Array in plan["containers"]:
 		out["containers"].append({"id": "%s_%s" % [house_name, c[0]], "table": c[0],
 				"cell": place.call(c[1], c[2]), "side": _side(c[3], east, mirror)})
+	for pr: Array in plan["props"]:
+		var wall := _side(pr[3], east, mirror)
+		out["props"].append({"id": pr[0], "cell": place.call(pr[1], pr[2]), "side": (wall + 2) % 4, "wall": wall,
+				"house": house_name})
 	var bed: Array = plan["bed"]
 	out["beds"].append({"cell": place.call(bed[0], bed[1]), "side": _side(bed[2], east, mirror)})
 	out["houses"].append({"name": house_name, "cells": cells, "plan": plan_id, "mirror": mirror, "style": style,

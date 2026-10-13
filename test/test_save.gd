@@ -219,3 +219,53 @@ func test_town_damage_and_doors_survive_save_and_load() -> void:
 	check(b.build.is_broken(window), "the window is still broken")
 	check(not b.build.edge_blocks(window), "and still lets sound through")
 	check(not b.build.pieces.has(gone), "the wall you knocked down stays down")
+
+
+## W1c: a version-6 save (written by the M13 game, before furniture) still loads. It holds the houses and
+## the hall but no furniture, so the world furnishes it after applying it (SimWorld.place_props), skipping
+## any cell where you'd built something and any cell a zombie stands in.
+func test_version_6_save_loads_and_gets_furniture() -> void:
+	var d := SaveGame.read("res://test/fixtures/save_v6.json")
+	eq(int(d.get("version", 0)), 6, "the fixture is a version-6 save")
+	check(SaveGame.holds_town(d) and SaveGame.holds_factory(d), "it holds the houses and the hall")
+	check(not SaveGame.holds_props(d), "but no furniture")
+	var plan := TownPlan.generate(int(d["seed"]))
+	var all: int = plan["props"].size() + plan["factory"]["props"].size()
+	var sim := SimWorld.new(8.0, null, int(d["seed"]))
+	_town(sim)
+	eq(SaveGame.apply(sim, d), "", "loads cleanly")
+	eq(sim.build.pieces.size(), d["pieces"].size(), "every saved piece, once")
+	check(sim.build.pieces[sim.build.key_for("door", Vector2i(-1, -1), N)]["open"], "your door is still open")
+	eq(sim.gear.weapon_name(), "Pipe", "your gear came back")
+	eq(sim.place_props(plan), all, "then every house and the hall is furnished")
+	# Something you built in a kitchen stays; the counter that would have gone there doesn't.
+	var counter: Dictionary = plan["props"].filter(func(p: Dictionary) -> bool: return p["id"] == "counter")[0]
+	var c: Vector2i = counter["cell"]
+	var crate := {"key": "o:%d:%d" % [c.x, c.y], "id": "storage", "cell": [c.x, c.y], "side": 0, "hp": 100, "open": false, "wear": 0.0}
+	var d2 := d.duplicate(true)
+	d2["pieces"].append(crate)
+	var sim2 := SimWorld.new(8.0, null, int(d["seed"]))
+	_town(sim2)
+	eq(SaveGame.apply(sim2, d2), "", "a save with your crate in a kitchen loads")
+	eq(sim2.place_props(plan), all - 1, "furnished round it")
+	eq(sim2.build.pieces[crate["key"]]["id"], "storage", "your crate is still there")
+	var again: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
+	eq(int(again["version"]), SaveGame.VERSION, "saved again as the current version")
+	check(SaveGame.holds_props(again), "which holds its furniture")
+
+
+## Every older fixture still loads and gets furnished the same way (the v2 save gets its houses first).
+func test_older_saves_get_furniture() -> void:
+	for v in [2, 3, 4, 5]:
+		var d := SaveGame.read("res://test/fixtures/save_v%d.json" % v)
+		var sim := SimWorld.new(8.0, null, int(d["seed"]))
+		_town(sim)
+		var plan := TownPlan.generate(sim.seed_value)
+		if not SaveGame.holds_town(d):
+			sim.place_town(plan)
+		if not SaveGame.holds_factory(d):
+			sim.place_factory(plan)
+		eq(SaveGame.apply(sim, d), "", "the version-%d save loads" % v)
+		check(not SaveGame.holds_props(d), "version %d has no furniture" % v)
+		var laid := sim.place_props(plan)
+		check(laid >= plan["props"].size() - plan["zombies"].size(), "version %d gets furnished (%d pieces)" % [v, laid])

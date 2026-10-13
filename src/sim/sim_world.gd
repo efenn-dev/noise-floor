@@ -328,6 +328,29 @@ func place_factory(plan: Dictionary) -> int:
 	return n
 
 
+## W1c: lays the town's furniture (plan["props"], and plan["factory"]["props"]) as pieces, like place_town.
+## A spot is skipped if something already stands on that cell, its floor is gone, or a zombie stands in it:
+## that only happens when furnishing a loaded pre-W1c save, where the player may have built in a house.
+## Returns pieces placed.
+func place_props(plan: Dictionary) -> int:
+	var was_muted := stats.muted
+	stats.muted = true
+	var n := 0
+	for p: Dictionary in plan["props"] + plan["factory"].get("props", []):
+		var key := build.key_for(p["id"], p["cell"])
+		if build.pieces.has(key) or not build.pieces.has("f:%d:%d" % [p["cell"].x, p["cell"].y]):
+			continue
+		var taken := false
+		for z: ZombieBrain in horde.zombies.values():
+			taken = taken or BuildGrid.world_to_cell(z.pos) == p["cell"]
+		if taken:
+			continue
+		build.restore(key, {"id": p["id"], "cell": p["cell"], "side": p["side"], "hp": data.buildables[p["id"]]["hp"]})
+		n += 1
+	stats.muted = was_muted
+	return n
+
+
 ## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
 ## new game: a save keeps its zombies (house ones included) and brings them back itself.
 func spawn_house_zombies(plan: Dictionary) -> Array:

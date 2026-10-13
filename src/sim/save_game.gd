@@ -17,8 +17,11 @@ extends RefCounted
 ## 6 = M13: gear (pieces in your pockets, what you wear, each with its rolls and condition), gear in
 ## bags, and which recipe a Press is set to. A save from before 6 gets the starting pipe (white, mint,
 ## in the weapon slot) and Old Pete in the factory hall.
-const VERSION := 6
+## 7 = W1c: furniture (counters, tables, couches, shelves, bathtubs, toilets) is pieces, saved with the rest.
+## A save from before 7 gets the furniture laid by the town plan after it's applied (see holds_props).
+const VERSION := 7
 const FIRST_WITH_GEAR := 6
+const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
 const FIRST_WITH_FACTORY := 4
 
@@ -31,6 +34,13 @@ static func holds_town(d: Dictionary) -> bool:
 ## True if the save already holds the factory hall's pieces (W1b).
 static func holds_factory(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_FACTORY
+
+
+## True if the save already holds the town's furniture pieces (W1c), so the world must not lay them again.
+## Unlike the houses, furniture for an older save is laid after the save is applied (SimWorld.place_props
+## skips cells you built on), so it can't land on top of your own pieces.
+static func holds_props(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_PROPS
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:

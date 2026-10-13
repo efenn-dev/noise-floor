@@ -141,8 +141,8 @@ func update_target() -> void:
 	target_key = key  # any piece: walls, doors and floors can be repaired
 	if key != was_key:
 		last_message = ""
-	if not key.begins_with("o:"):
-		return
+	if not key.begins_with("o:") or sim.build.kind_of(sim.build.pieces[key]["id"]) == "prop":
+		return  # walls, doors, floors and furniture: hp, repair and remove only
 	target_cell = sim.build.pieces[key]["cell"]
 	has_target = true
 	if target_cell != was:

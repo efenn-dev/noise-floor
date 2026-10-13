@@ -20,6 +20,8 @@ signal piece_built(key: String)
 const EDGE_KINDS := ["wall", "door", "barricade", "window"]
 
 const GRID := 2.0
+const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
+const WALL_GAP := 0.02   # what stands "against_wall" keeps this gap to the wall's face
 enum Side { NORTH, EAST, SOUTH, WEST }
 const SIDE_NAMES := ["north", "east", "south", "west"]
 
@@ -54,10 +56,11 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 	return "f:%d:%d" % [cell.x, cell.y]
 
 
-## Machines, belts, beds, crates, power pieces, traps and turrets: one per cell, facing a side.
-## All but power poles and traps need a foundation.
+## Machines, belts, beds, crates, power pieces, traps, turrets and props: one per cell, facing a side.
+## All but power poles and traps need a foundation. Props (W1c) are town pieces like town walls: laid by
+## the town plan, never built by the player, removable for a small refund, bashed by zombies.
 func is_object(id: String) -> bool:
-	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret"]
+	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop"]
 
 
 func kind_of(id: String) -> String:
@@ -263,7 +266,11 @@ func center_for(id: String, cell: Vector2i, side: int) -> Vector3:
 	if _kind(id) == "foundation":
 		return corner + Vector3(GRID / 2.0, size.y / 2.0, GRID / 2.0)
 	if is_object(id):
-		return corner + Vector3(GRID / 2.0, foundation_top() + size.y / 2.0, GRID / 2.0)
+		var mid := corner + Vector3(GRID / 2.0, foundation_top() + size.y / 2.0, GRID / 2.0)
+		if data.buildables[id].get("against_wall", false):  # W1c: back against the wall behind it, not mid-cell
+			var facing := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][side] as Vector3
+			mid -= facing * (GRID / 2.0 - WALL_HALF - size.z / 2.0 - WALL_GAP)
+		return mid
 	var edge := canonical_edge(cell, side)
 	corner = Vector3(edge[0].x * GRID, 0.0, edge[0].y * GRID)
 	var y := foundation_top() + size.y / 2.0

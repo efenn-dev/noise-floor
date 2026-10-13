@@ -113,7 +113,8 @@ func _ready() -> void:
 	_build_environment()
 	_build_ground()
 	# A W1a+ save brings the houses back itself, and a W1b+ save the factory hall.
-	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)))
+	# W1c: a new game lays the furniture with the town; a pre-W1c save gets it after the save is applied.
+	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)), not _loaded)
 	_build_player(args)
 	_build_building(args)
 	_build_zombies(args)
@@ -453,6 +454,8 @@ func _apply_save(save: Dictionary) -> void:
 	if why != "":
 		sim.add_message(why, 6.0)
 		return
+	if not SaveGame.holds_props(save):
+		town_pieces += sim.place_props(town)  # W1c: furnish an older save's houses (not where you built)
 	player.position = sim.player_pos
 	for car: CarBody in cars.values():
 		car.place_from_sim()  # parked where you left it
@@ -515,7 +518,7 @@ func _build_ground() -> void:
 	add_child(ground)
 
 
-func _build_town(lay_houses: bool = true, lay_factory: bool = true) -> void:
+func _build_town(lay_houses: bool = true, lay_factory: bool = true, lay_props: bool = true) -> void:
 	# A road running north (-Z) with houses on both sides and the factory at the far end.
 	# Houses (W1a) are build-grid pieces from TownPlan: floors, walls, doors, windows and a bed, laid as
 	# if built (so they muffle, break and save like the player's own), plus a roof drawn by TownView.
@@ -531,6 +534,8 @@ func _build_town(lay_houses: bool = true, lay_factory: bool = true) -> void:
 		town_pieces = sim.place_town(town)
 	if lay_factory:
 		town_pieces += sim.place_factory(town)
+	if lay_props:
+		town_pieces += sim.place_props(town)  # W1c: furniture
 	for c: Dictionary in town["containers"]:
 		var fridge: bool = c["table"] == "fridge"
 		var box := _add_container(c["id"], c["table"], SimWorld.town_container_pos(c), Vector3(0.7, 1.6, 0.7),
@@ -604,7 +609,8 @@ func _build_player(args: Dictionary) -> void:
 		player.position = Vector3(v[0], v[1], v[2])
 		player.set_look(v[3], v[4])
 	if args.has("inside"):
-		_stand_inside(int(args["inside"]) if args["inside"] != "" else 0)
+		var inside := String(args["inside"]).split(",")
+		_stand_inside(inside[0].to_int(), inside[1] if inside.size() > 1 else "")
 	if args.has("flashlight"):
 		player.flashlight.visible = true
 	if _shot_path != "":
@@ -616,8 +622,17 @@ func _build_player(args: Dictionary) -> void:
 
 
 ## --inside=N: stand in house N's kitchen, across the cell from its fridge, looking at it.
-func _stand_inside(n: int) -> void:
+## --inside=N,PROP (W1c): stand in front of that house's PROP (counter, table, couch, shelf, bathtub, toilet).
+func _stand_inside(n: int, prop := "") -> void:
 	var house: Dictionary = town["houses"][clampi(n, 0, town["houses"].size() - 1)]
+	for p: Dictionary in town["props"]:
+		if p["house"] != house["name"] or p["id"] != prop:
+			continue
+		var facing := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][p["side"]] as Vector3
+		var cell_mid := Vector3((p["cell"].x + 0.5) * BuildGrid.GRID, 0.1, (p["cell"].y + 0.5) * BuildGrid.GRID)
+		player.position = cell_mid + facing * 0.75  # across the cell from it, clear of the wall opposite
+		player.set_look(rad_to_deg(atan2(facing.x, facing.z)), -20.0)
+		return
 	for c: Dictionary in town["containers"]:
 		if c["id"] != "%s_fridge" % house["name"]:
 			continue
