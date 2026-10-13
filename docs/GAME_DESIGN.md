@@ -192,6 +192,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
   - **Damage and storage:** hitting zombies hurts them and the car. The trunk is storage that shows up in the inventory screen.
   - **Saving:** cars are saved where you parked them.
   - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
+- [x] **P0 — Playtest kit.** Session log written on death and quit; first-game hints.
 
 **The long game** (see "Long game" above), in this order:
 

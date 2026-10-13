@@ -30,6 +30,8 @@ var loot: Loot
 var storages: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var player := PlayerStats.new()
+## What happened this session (deaths, builds, loudest sounds...), for the playtest session log.
+var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
 var player_lit := false
@@ -89,11 +91,13 @@ func update(real_delta: float) -> int:
 func step() -> void:
 	ticks += 1
 	clock.advance(TICK)
+	stats.tick(TICK, clock.seconds_per_day)
 	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	noise.refresh(factory, TICK, power, vehicles)
+	_note_noise()
 	player.carry_ratio = carry_ratio()
 	player.tick(TICK)
 	var found := loot.tick(TICK, player_pos)
@@ -111,7 +115,7 @@ func step() -> void:
 			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
-			player.damage(float(z.stats["damage"]))
+			player.damage(float(z.stats["damage"]), z.type)
 			if not player.dead and _rng.randf() < float(data.survival["bleed_chance"]):
 				if not player.bleeding:
 					add_message("You're bleeding (H to bandage)", 4.0)
@@ -123,7 +127,10 @@ func step() -> void:
 				noise.emit_kind(at, "wreck")
 	defense.tick(TICK, horde, noise)
 	var wave := director.tick(TICK, noise, night, horde)
+	if stats.is_peak_heat(director.heat):
+		stats.note_heat(director.heat, when_text())
 	if not wave.is_empty():
+		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
 		add_message("%s from the %s..." % [what, wave["edge"]])
 	for m: Dictionary in messages:
@@ -133,6 +140,21 @@ func step() -> void:
 
 func add_message(text: String, seconds: float = 6.0) -> void:
 	messages.append({"text": text, "time_left": seconds})
+
+
+## "day 2 21:40": game time, for the session log.
+func when_text() -> String:
+	return "day %d %s" % [clock.day, clock.clock_text()]
+
+
+## The session log keeps the loudest one-off sound (new this tick) and the loudest machine or engine.
+func _note_noise() -> void:
+	for s: Dictionary in noise.recent:
+		if s["age"] == 0.0 and stats.is_loudest_sound(s["loudness"]):
+			stats.note_sound(s["kind"], s["loudness"], when_text())
+	for s: Dictionary in noise.continuous:
+		if stats.is_loudest_continuous(s["loudness"]):
+			stats.note_continuous(s["kind"], s["loudness"], when_text())
 
 
 ## A one-off sound from the player ("footstep_walk", "footstep_sprint", ...; see data/noise.json).
@@ -172,6 +194,7 @@ func stock_at(at: Vector3) -> Stock:
 func deposit(key: String) -> Dictionary:
 	if not storages.has(key):
 		return {}
+	stats.note_crate()
 	var moved := {}
 	for item: String in inventory.items():
 		if _is_supply(item):
@@ -185,6 +208,14 @@ func deposit(key: String) -> Dictionary:
 
 ## Puts the debug kit in a new storage crate on a new foundation at `cell` (the start-of-game stash).
 func place_start_stash(cell: Vector2i) -> String:
+	var was_muted := stats.muted
+	stats.muted = true  # the game set this up, not the player
+	var key := _place_start_stash(cell)
+	stats.muted = was_muted
+	return key
+
+
+func _place_start_stash(cell: Vector2i) -> String:
 	var kit := Inventory.new()
 	kit.give_all(data.debug_kit)
 	kit.give_all({"plank": 12, "nails": 8})  # pays for the foundation and crate themselves
@@ -376,6 +407,7 @@ func siphon(id: String) -> String:
 		return "The tank is dry"
 	inventory.add("gas_can", cans)
 	noise.emit(player_pos, float(data.survival["siphon_noise"]), "siphon")
+	stats.note("siphoned gas from a " + str(vehicles.cars[id].get("type", "car")))
 	return "Siphoned %d gas can%s" % [cans, "s" if cans > 1 else ""]
 
 
@@ -390,6 +422,7 @@ func enter_car(id: String) -> String:
 		player_pos = vehicles.cars[id]["pos"]  # you're in the car now: zombies come for it
 		var c: Dictionary = vehicles.cars[id]
 		c["running"] = c["fuel"] > 0.0 and vehicles.can_start(id, inventory)  # no key, no engine
+		stats.note("got in a " + str(c.get("type", "car")))
 	return why
 
 
@@ -476,7 +509,11 @@ func car_hits_zombie(zombie_id: int, speed: float) -> bool:
 	var car: Dictionary = vehicles.cars[vehicles.driving]
 	var damage := vehicles.ram(vehicles.driving, speed)
 	noise.emit_kind(z.pos, "zombie_bash")
-	return z.take_hit(damage, car["pos"], speed * 0.6)
+	var killed := z.take_hit(damage, car["pos"], speed * 0.6)
+	if killed:
+		stats.note_kill()
+		stats.note("ran over a " + z.type)
+	return killed
 
 
 # --- Searching ----------------------------------------------------------------
@@ -486,6 +523,7 @@ func search(id: String) -> String:
 	var reason := loot.start(id, player_pos)
 	if reason == "" and loot.progress == 0.0:
 		noise.emit(loot.containers[id]["pos"], float(data.survival["search_noise"]), "search")
+		stats.note("searched " + id.replace("_", " "))
 	return reason
 
 
@@ -499,6 +537,7 @@ func fit_muffler(cell: Vector2i) -> String:
 			return "Not enough materials"
 		power.generators[gen_key]["muffled"] = true
 		_practice("mechanics", "muffler")
+		stats.note_muffler()
 		return ""
 	var m: Factory.Machine = factory.machines.get(cell)
 	if m == null:
@@ -511,6 +550,7 @@ func fit_muffler(cell: Vector2i) -> String:
 	m.muffled = true
 	m.time_scale = 1.0 + float(muffler["slowdown"])
 	_practice("mechanics", "muffler")
+	stats.note_muffler()
 	return ""
 
 
@@ -523,7 +563,12 @@ func hit_zombie(id: int, head: bool) -> bool:
 	var w: Dictionary = data.weapons[player.weapon]
 	var dmg := float(w["damage"]) * (float(w["head_multiplier"]) if head else 1.0)
 	noise.emit_kind(z.pos, "melee_hit")
-	return z.take_hit(dmg, player_pos, float(w["knockback"]))
+	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]))
+	stats.note("hit a zombie")
+	if killed:
+		stats.note_kill()
+		stats.note("killed a " + z.type)
+	return killed
 
 
 func weapon_stats() -> Dictionary:
@@ -565,6 +610,7 @@ func _on_player_respawned() -> void:
 
 ## Dying drops everything you carry in a bag where you fell.
 func _on_player_died() -> void:
+	stats.note_death(player.last_cause, when_text())
 	var items := _counts_of(inventory)
 	if not items.is_empty():
 		inventory.take_all(items)
@@ -584,6 +630,7 @@ func alpha() -> float:
 ## Building a machine or belt adds it to the factory.
 func _on_piece_added(key: String) -> void:
 	var piece: Dictionary = build.pieces[key]
+	stats.note_built(piece["id"])
 	match build.kind_of(piece["id"]):
 		"storage":
 			storages[key] = Inventory.new()

@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — P0 Playtest kit
+
+**Built:**
+- **Session log.** Every time you play, the game keeps a short plain-words diary of the session and saves it as a text file (under 40 lines): how long you played (real and game time), each death and what caused it (the zombie type, starvation, dehydration or bleeding), how hot the Director got and when, what you built (by kind), mufflers fitted, zombies killed, the loudest one-off sound and the loudest machine or engine, and a timeline of your first five real minutes (built X, searched Y, hit a zombie, died, siphoned, got in a car...). It's written when you die and again when you quit (closing the window, Quit on the title screen, or quitting to the title), to `sessions/<date_time>.txt` in the game's save folder; the console prints `Session log: <path>`. Loading a save during a sitting carries on the same log.
+- **First-game hints.** A new game shows one tip at a time above the health line: find the crate and press E, build a foundation and a smelter, press N to see how far the noise carries, then wall it in or fit a muffler (U). Each moves on when you've done it, or after 90 seconds so it never nags (the noise tip after 40). They never take input. Not after loading a save, not with `--demo-*` or `--cam`, not in screenshots; `--no-hints` turns them off and `--hints` forces them on.
+
+**Rules (sim, tested):** `RunStats` (new, in `src/sim`) records the session; `SimWorld.stats` is fed where things already happen (zombie hits and kills, deaths, builds, mufflers, searches, siphoning, getting in a car, crate use, Director waves and heat, the noise field each tick). `PlayerStats.last_cause` remembers what hurt you last, so the death cause is worked out in the sim. The game's own setup (start crate, demo bases, loading a save) is muted, so it isn't counted as yours. World: `SessionLog` (writes the file; off in headless runs and screenshots, tests use `path_override`), `Hints` (one label), `GameSession.skip_hints`, and the `--no-hints` / `--hints` flags.
+
+**Tests:** `test_run_stats.gd` (death by a zombie vs starvation, thirst, bleeding; builds by kind, not counting the start crate; the five-minute timeline cut-off and repeats; peak heat and when; loudest sounds), `test_session_log.gd` (a death writes the log with the expected lines to a test path; off unless enabled), `test_hints.gd` (hints follow the crate, the smelter, the noise timeout and a muffler; time out; a new game shows them and a loaded save doesn't). 1013 checks (was 929).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**: the first tip appears above your health. Play a while (die once if you can), then quit from the title screen. The log is in `%APPDATA%\Godot\app_userdata\Noise Floor\sessions\` (paste that into the Explorer address bar); the newest `.txt` is your session. To play without tips: `play.bat --no-hints`.
+
+**Known gaps:** the game has no version string yet, so the log's header gives the date, world seed and game clock instead of a commit. One file per sitting, rewritten each time (deaths are listed inside it, not as separate files). Kills only count your pipe and your car, not turrets or spikes. The hints restart if you start another new game in the same sitting. Session logs are never uploaded anywhere: someone has to open the folder.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-12 — M10c Wheels
 
 **Built:**

@@ -7,6 +7,7 @@ const MAIN := "res://scenes/main.tscn"
 
 func test_save_and_reload_the_game_scene() -> void:
 	GameSession.skip_menu = true
+	GameSession.skip_hints = true
 	GameSession.save_path = "user://test_world_save.json"
 	var main: Node3D = load(MAIN).instantiate()
 	tree.root.add_child(main)
@@ -57,6 +58,7 @@ func test_save_and_reload_the_game_scene() -> void:
 	again.queue_free()
 	tree.paused = false
 	GameSession.skip_menu = false
+	GameSession.skip_hints = false
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSession.save_path))
 	GameSession.save_path = GameSession.SAVE_PATH
 	await tree.process_frame
