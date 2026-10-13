@@ -7,8 +7,17 @@ extends RefCounted
 ## death bags, the cars (where they're parked, fuel, damage), and the world seed. The world (town, containers, cars) is rebuilt from code, then
 ## this is laid over it.
 
-## 2 = M11 (stats, infamy, fresh/stale gas). Older saves still load: anything they lack gets its default.
-const VERSION := 2
+## 2 = M11 (stats, infamy, fresh/stale gas). 3 = W1a: the town's houses are build pieces, saved with
+## everything else (damage, open doors, broken windows, walls you knocked down).
+## Older saves still load: anything they lack gets its default, and a save from before 3 gets the
+## houses laid fresh by the town plan (see holds_town).
+const VERSION := 3
+const FIRST_WITH_TOWN := 3
+
+
+## True if the save already holds the town's houses as pieces, so the world must not lay them again.
+static func holds_town(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_TOWN
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:

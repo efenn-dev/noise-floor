@@ -5,13 +5,17 @@ extends RefCounted
 ## one edge of a cell and needs a foundation on at least one side of that edge. Doors and barricades
 ## are edge pieces too (one per edge, same rules as walls).
 ## Edges are stored once, so "south of cell A" and "north of the cell below A" are the same wall.
+## Windows (W1a, town houses only) are edge pieces too: intact they block sound but not sight; broken
+## (hp 0) they stay as a piece but are an opening, until a barricade is built over them.
+## Town pieces (town_floor, town_wall, window) are "player_placeable": false: the town plan lays them
+## with restore(), the player can't place them, but can remove them for a small refund.
 ## Machines and belts ("objects") stand on a foundation, one per cell, facing a side.
 
 signal piece_added(key: String)
 signal piece_removed(key: String, piece: Dictionary)
 signal piece_changed(key: String)  # a door opened or closed
 
-const EDGE_KINDS := ["wall", "door", "barricade"]
+const EDGE_KINDS := ["wall", "door", "barricade", "window"]
 
 const GRID := 2.0
 enum Side { NORTH, EAST, SOUTH, WEST }
@@ -58,7 +62,7 @@ func kind_of(id: String) -> String:
 	return _kind(id)
 
 
-## Walls, doors and barricades: they stand on a cell edge.
+## Walls, doors, barricades and windows: they stand on a cell edge.
 func is_edge(id: String) -> bool:
 	return _kind(id) in EDGE_KINDS
 
@@ -73,7 +77,19 @@ func edge_blocks(key: String, for_sight: bool = false) -> bool:
 		return not pieces[key].get("open", false)
 	if kind == "barricade":
 		return not for_sight
+	if kind == "window":
+		return not for_sight and pieces[key]["hp"] > 0  # glass: you see through it; broken, it's a hole
 	return true
+
+
+## A window whose glass is gone (hp 0). It stays in `pieces` so a barricade can board it up.
+func is_broken(key: String) -> bool:
+	return pieces.has(key) and _kind(pieces[key]["id"]) == "window" and pieces[key]["hp"] <= 0
+
+
+## False for town pieces (data "player_placeable": false): the build menu never offers them.
+func player_placeable(id: String) -> bool:
+	return data.buildables.has(id) and data.buildables[id].get("player_placeable", true)
 
 
 ## Opens or closes a door. Returns the new state (true = open).
@@ -93,6 +109,8 @@ func repair(key: String, inv: Inventory) -> String:
 	var max_hp: int = data.buildables[piece["id"]]["hp"]
 	if piece["hp"] >= max_hp:
 		return "Not damaged"
+	if is_broken(key):
+		return "The glass is gone: build a barricade here to board it up"
 	var cost := repair_cost(key)
 	if not inv.take_all(cost):
 		return "Not enough materials"
@@ -115,8 +133,11 @@ func repair_cost(key: String) -> Dictionary:
 func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	if not data.buildables.has(id):
 		return "Unknown piece"
-	if pieces.has(key_for(id, cell, side)):
-		return "Already built"
+	if not player_placeable(id):
+		return "Only found in town"
+	var existing := key_for(id, cell, side)
+	if pieces.has(existing) and not (_kind(id) == "barricade" and is_broken(existing)):
+		return "Already built"  # (a barricade may board up a broken window)
 	if is_edge(id):
 		var edge := canonical_edge(cell, side)
 		if not _edge_supported(edge[0], edge[1], ""):
@@ -135,6 +156,11 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return reason
 	inv.take_all(data.buildables[id]["cost"])
 	var key := key_for(id, cell, side)
+	if pieces.has(key):  # boarding up a broken window: it goes, with no refund
+		var window: Dictionary = pieces[key]
+		pieces.erase(key)
+		window["destroyed"] = true
+		piece_removed.emit(key, window)
 	var piece := {"id": id, "cell": cell, "side": side, "hp": data.buildables[id]["hp"]}
 	if is_edge(id):
 		var edge := canonical_edge(cell, side)
@@ -173,19 +199,26 @@ func remove(key: String, inv: Inventory) -> String:
 	if reason != "":
 		return reason
 	var piece: Dictionary = pieces[key]
+	var broken := is_broken(key)
 	pieces.erase(key)
-	inv.give_all(data.buildables[piece["id"]]["cost"])
+	if not broken:  # a broken window is worth nothing
+		inv.give_all(data.buildables[piece["id"]]["cost"])
 	piece_removed.emit(key, piece)
 	return ""
 
 
-## Zombies hitting a piece. Returns true if that destroyed it (see destroy).
+## Zombies hitting a piece. Returns true if that destroyed it (see destroy) or broke a window.
+## A window at hp 0 isn't removed: it becomes an opening (piece_changed) and takes no more damage.
 func damage(key: String, amount: int) -> bool:
-	if not pieces.has(key) or amount <= 0:
+	if not pieces.has(key) or amount <= 0 or is_broken(key):
 		return false
 	pieces[key]["hp"] -= amount
 	if pieces[key]["hp"] > 0:
 		return false
+	if _kind(pieces[key]["id"]) == "window":
+		pieces[key]["hp"] = 0
+		piece_changed.emit(key)
+		return true
 	destroy(key)
 	return true
 
@@ -270,6 +303,6 @@ func _walls_touching(cell: Vector2i) -> Array:
 	return out
 
 
-func key_for_wall_edge(cell: Vector2i, side: int) -> String:
+static func key_for_wall_edge(cell: Vector2i, side: int) -> String:
 	var edge := canonical_edge(cell, side)
 	return "w:%d:%d:%s" % [edge[0].x, edge[0].y, "n" if edge[1] == Side.NORTH else "w"]

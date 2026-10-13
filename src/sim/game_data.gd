@@ -3,7 +3,7 @@ extends RefCounted
 ## Content loaded from data/*.json. validate() lists every problem so a test can fail loudly.
 
 const DIR := "res://data/"
-const KINDS := ["foundation", "wall", "door", "barricade", "belt", "machine", "bed", "storage", "generator", "solar",
+const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "machine", "bed", "storage", "generator", "solar",
 		"pole", "trap", "turret"]
 
 var items: Dictionary = {}       # id -> {name}
@@ -65,6 +65,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"interval": float(b.get("interval", 0.0)),    # turret: seconds between shots
 			"ammo": b.get("ammo", ""),
 			"ammo_cap": int(b.get("ammo_cap", 0)),
+			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
 		}
 	recipes = {}
 	for id: String in raw_recipes:
