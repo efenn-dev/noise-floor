@@ -2,11 +2,19 @@
 
 Run with Blender 5.1:
     blender.exe -b --factory-startup --python tools/art/zombie.py
+    blender.exe -b --factory-startup --python tools/art/zombie.py -- --variant=heavy
+
+A2: one script, five bodies. ``--variant=<name>`` after ``--`` (or the VARIANT environment
+variable) picks one of VARIANTS; "default" is the original body and exports zombie.glb, the
+others export zombie_<variant>.glb. Every variant is built by the same code: the same parts
+(plus its outfit's extras), reshaped bone by bone (``reshape``), on the same 17 bones with the
+same animations, so ZombieBody can swap bodies freely. ``--out=PATH`` writes somewhere else.
 
 Unlike the static prop scripts, this deliberately does not use kit.finish().
 """
 
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +26,61 @@ from kit import box, cylinder, material, reset  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "assets" / "models" / "zombie.glb"
+
+# The default outfit is the original M10 zombie: torn short-sleeved work shirt, jeans, short dark hair.
+DEFAULT_OUTFIT = {
+    "sleeves": "short",  # short | long | none (sleeveless)
+    "hem": "torn",  # torn | flared (a longer, straight-cut top)
+    "hair": "short",  # short | long
+    "hat": None,  # None | cap | hardhat
+    "vest": False,  # a hi-vis work vest over the shirt
+    "bust": False,
+    "jeans": (0.12, 0.16, 0.19),
+    "hair_colour": (0.035, 0.030, 0.027),
+}
+# body: width of shoulders/hips, torso depth, belly, limb and neck thickness, head size, and the
+# length of the legs (feet to hips) and of the torso (hips up). "default" is left exactly as built.
+VARIANTS = {
+    "default": {"body": None, "outfit": {}, "height": (1.75, 1.82)},
+    "heavy": {
+        "body": {"shoulders": 1.16, "hips": 1.18, "depth": 1.16, "belly": 1.14, "limb": 1.24, "neck": 1.2,
+                 "head": 1.03, "legs": 0.98, "torso": 1.0, "arm_out": 1.07},
+        "outfit": {"vest": True, "hat": "hardhat", "jeans": (0.27, 0.23, 0.15)},  # khaki work trousers
+        "height": (1.72, 1.90),
+    },
+    "slim": {
+        "body": {"shoulders": 0.9, "hips": 0.88, "depth": 0.88, "belly": 0.92, "limb": 0.84, "neck": 0.9,
+                 "head": 0.98, "legs": 1.06, "torso": 1.03, "arm_out": 1.0},
+        "outfit": {"sleeves": "long", "jeans": (0.075, 0.075, 0.08), "hair_colour": (0.30, 0.29, 0.27)},  # grey
+        "height": (1.80, 1.92),
+    },
+    "short": {
+        "body": {"shoulders": 0.96, "hips": 0.98, "depth": 1.02, "belly": 1.06, "limb": 0.97, "neck": 1.0,
+                 "head": 0.97, "legs": 0.87, "torso": 0.92, "arm_out": 1.0},
+        "outfit": {"hat": "cap", "jeans": (0.19, 0.12, 0.075)},  # brown work trousers, a ball cap
+        "height": (1.52, 1.68),
+    },
+    "woman": {
+        "body": {"shoulders": 0.84, "hips": 1.06, "depth": 0.92, "belly": 0.9, "limb": 0.84, "neck": 0.88,
+                 "head": 0.95, "legs": 0.98, "torso": 0.95, "arm_out": 1.02},
+        "outfit": {"sleeves": "none", "hem": "flared", "hair": "long", "bust": True, "jeans": (0.05, 0.05, 0.06),
+                   "hair_colour": (0.19, 0.11, 0.055)},
+        "height": (1.64, 1.78),
+    },
+}
+
+
+def _arg(name, default):
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    for arg in argv:
+        if arg.startswith(f"--{name}="):
+            return arg.split("=", 1)[1]
+    return os.environ.get(name.upper(), default)
+
+
+VARIANT = _arg("variant", "default")
+assert VARIANT in VARIANTS, f"unknown variant {VARIANT!r}; pick one of {sorted(VARIANTS)}"
+OUT = Path(_arg("out", str(ROOT / "assets" / "models" / ("zombie.glb" if VARIANT == "default" else f"zombie_{VARIANT}.glb"))))
 FPS = 30
 EXPECTED_ACTIONS = ("Idle", "Walk", "Run", "Punch", "HitReact", "Death", "Scream")
 
@@ -72,17 +134,28 @@ def weighted(obj, bone_name):
     return obj
 
 
-def build_materials():
+def build_materials(outfit=None):
     # Muted values keep the silhouette believable in the town's overcast lighting.
-    return {
+    o = outfit or DEFAULT_OUTFIT
+    mats = {
         "skin": material("Zombie Skin", (0.28, 0.31, 0.25), 0.0, 0.90),
         "shirt": material("Shirt", (0.43, 0.44, 0.42), 0.0, 0.91),
-        "jeans": material("Jeans", (0.12, 0.16, 0.19), 0.0, 0.94),
+        "jeans": material("Jeans", o["jeans"], 0.0, 0.94),
         "boots": material("Boots", (0.055, 0.045, 0.038), 0.0, 0.88),
-        "hair": material("Hair", (0.035, 0.030, 0.027), 0.0, 0.96),
+        "hair": material("Hair", o["hair_colour"], 0.0, 0.96),
         "eyes": material("Eyes", (0.10, 0.012, 0.006), 0.0, 0.82),
         "stain": material("Stain", (0.065, 0.010, 0.008), 0.0, 0.93),
     }
+    if outfit is not None:
+        # Variants: eye sockets and mouth get their own dark so lighter hair never tints the face.
+        mats["shadow"] = material("Shadow", (0.035, 0.030, 0.027), 0.0, 0.96)
+        if o["vest"]:
+            mats["vest"] = material("Vest", (0.60, 0.30, 0.06), 0.0, 0.85)  # faded hi-vis orange
+        if o["hat"] == "cap":
+            mats["cap"] = material("Cap", (0.10, 0.16, 0.32), 0.0, 0.92)  # faded navy, never mistaken for hair
+        elif o["hat"] == "hardhat":
+            mats["hardhat"] = material("Hard Hat", (0.55, 0.42, 0.07), 0.05, 0.6)
+    return mats
 
 
 BONES = {
@@ -106,7 +179,8 @@ BONES = {
 }
 
 
-def build_armature():
+def build_armature(bones=None):
+    bones = bones or BONES
     data = bpy.data.armatures.new("Armature")
     arm = bpy.data.objects.new("Armature", data)
     bpy.context.collection.objects.link(arm)
@@ -114,13 +188,13 @@ def build_armature():
     arm.select_set(True)
     bpy.ops.object.mode_set(mode="EDIT")
     edit = {}
-    for name, (head, tail, _parent) in BONES.items():
+    for name, (head, tail, _parent) in bones.items():
         bone = data.edit_bones.new(name)
         bone.head = head
         bone.tail = tail
         bone.use_deform = True
         edit[name] = bone
-    for name, (_head, _tail, parent) in BONES.items():
+    for name, (_head, _tail, parent) in bones.items():
         if parent:
             edit[name].parent = edit[parent]
             edit[name].use_connect = False
@@ -129,8 +203,10 @@ def build_armature():
     return arm
 
 
-def build_character(m):
+def build_character(m, outfit=None):
+    o = outfit or DEFAULT_OUTFIT
     parts = []
+    dark = m.get("shadow", m["hair"])  # sockets and mouth
 
     def add(obj, bone):
         parts.append(weighted(obj, bone))
@@ -156,21 +232,50 @@ def build_character(m):
     add(box("Pelvis", (0.315, 0.215, 0.22), (0.0, 0.0, 0.94), m["jeans"], 0.035), "Hips")
     add(box("ShirtWaist", (0.385, 0.235, 0.27), (0.0, -0.008, 1.085), m["shirt"], 0.035, rotation=(deg(2), 0, deg(-1))), "Spine")
     add(box("ShirtChest", (0.455, 0.255, 0.285), (0.0, -0.025, 1.315), m["shirt"], 0.042, rotation=(deg(4), 0, deg(-1))), "Chest")
-    add(box("Hem_Left", (0.18, 0.235, 0.12), (-0.095, -0.012, 0.965), m["shirt"], 0.018, rotation=(deg(-2), deg(3), deg(-4))), "Spine")
-    add(box("Hem_Right", (0.15, 0.235, 0.16), (0.105, -0.014, 0.945), m["shirt"], 0.018, rotation=(deg(3), deg(-2), deg(5))), "Spine")
-    add(box("Open_Collar", (0.12, 0.018, 0.10), (0.0, -0.158, 1.405), m["skin"], 0.008, rotation=(deg(-6), 0, 0)), "Chest")
+    if o["hem"] == "flared":
+        # A straight, longer top with a deep V neck instead of the torn work shirt.
+        add(box("Hem_Flare", (0.415, 0.262, 0.15), (0.0, -0.010, 0.945), m["shirt"], 0.03, rotation=(deg(1), 0, 0)), "Spine")
+        add(box("Open_Collar", (0.15, 0.018, 0.15), (0.0, -0.160, 1.385), m["skin"], 0.010, rotation=(deg(-6), 0, 0)), "Chest")
+    else:
+        add(box("Hem_Left", (0.18, 0.235, 0.12), (-0.095, -0.012, 0.965), m["shirt"], 0.018, rotation=(deg(-2), deg(3), deg(-4))), "Spine")
+        add(box("Hem_Right", (0.15, 0.235, 0.16), (0.105, -0.014, 0.945), m["shirt"], 0.018, rotation=(deg(3), deg(-2), deg(5))), "Spine")
+        add(box("Open_Collar", (0.12, 0.018, 0.10), (0.0, -0.158, 1.405), m["skin"], 0.008, rotation=(deg(-6), 0, 0)), "Chest")
     add(box("Chest_Stain", (0.090, 0.014, 0.105), (-0.095, -0.164, 1.30), m["stain"], 0.009, rotation=(deg(-3), 0, deg(-14))), "Chest")
     add(box("Chest_Stain_Smear", (0.050, 0.015, 0.060), (-0.142, -0.164, 1.245), m["stain"], 0.007, rotation=(deg(-3), 0, deg(11))), "Chest")
     add(box("Hem_Stain", (0.105, 0.014, 0.07), (0.12, -0.143, 0.97), m["stain"], 0.007, rotation=(deg(-2), 0, deg(8))), "Spine")
     add(box("Pocket", (0.105, 0.018, 0.10), (0.105, -0.163, 1.34), m["shirt"], 0.009, rotation=(deg(-4), 0, deg(2))), "Chest")
+    if o["bust"]:
+        add(ico("Bust", 1, (0.0, -0.150, 1.290), (0.150, 0.060, 0.070), m["shirt"], 2), "Chest")
+    if o["vest"]:
+        # An open hi-vis vest: two front panels and a back, split at the waist like the shirt.
+        for side, x in (("L", -0.13), ("R", 0.13)):
+            add(box(f"Vest_Front_{side}", (0.165, 0.024, 0.27), (x, -0.172, 1.315), m["vest"], 0.010, rotation=(deg(4), 0, 0)), "Chest")
+            add(box(f"Vest_Low_{side}", (0.165, 0.024, 0.17), (x, -0.135, 1.08), m["vest"], 0.010, rotation=(deg(2), 0, 0)), "Spine")
+        add(box("Vest_Back", (0.44, 0.024, 0.27), (0.0, 0.112, 1.315), m["vest"], 0.010, rotation=(deg(4), 0, 0)), "Chest")
+        add(box("Vest_Back_Low", (0.39, 0.024, 0.17), (0.0, 0.118, 1.08), m["vest"], 0.010, rotation=(deg(2), 0, 0)), "Spine")
 
     # One shoulder hangs lower. Sleeves stop above exposed, sickly forearms.
-    add(ico("Shoulder_L", 1, (-0.215, -0.02, 1.375), (0.070, 0.105, 0.105), m["shirt"], 2), "UpperArm.L")
-    add(ico("Shoulder_R", 1, (0.215, -0.015, 1.315), (0.070, 0.105, 0.105), m["shirt"], 2), "UpperArm.R")
-    add(segment("Sleeve_L", (-0.215, -0.02, 1.37), (-0.242, -0.13, 1.21), 0.075, 0.068, m["shirt"], 10), "UpperArm.L")
-    add(segment("Sleeve_R", (0.215, -0.015, 1.31), (0.245, -0.125, 1.15), 0.075, 0.068, m["shirt"], 10), "UpperArm.R")
-    add(segment("UpperArmSkin_L", (-0.242, -0.13, 1.21), (-0.245, -0.18, 1.14), 0.061, 0.060, m["skin"], 9), "UpperArm.L")
-    add(segment("UpperArmSkin_R", (0.245, -0.125, 1.15), (0.250, -0.17, 1.08), 0.061, 0.060, m["skin"], 9), "UpperArm.R")
+    if o["sleeves"] == "none":
+        # Sleeveless: bare shoulders under the shirt's edge.
+        add(ico("Shoulder_L", 1, (-0.215, -0.02, 1.37), (0.064, 0.092, 0.092), m["skin"], 2), "UpperArm.L")
+        add(ico("Shoulder_R", 1, (0.215, -0.015, 1.31), (0.064, 0.092, 0.092), m["skin"], 2), "UpperArm.R")
+        add(segment("Sleeve_L", (-0.215, -0.02, 1.37), (-0.242, -0.13, 1.21), 0.064, 0.062, m["skin"], 9), "UpperArm.L")
+        add(segment("Sleeve_R", (0.215, -0.015, 1.31), (0.245, -0.125, 1.15), 0.064, 0.062, m["skin"], 9), "UpperArm.R")
+    else:
+        add(ico("Shoulder_L", 1, (-0.215, -0.02, 1.375), (0.070, 0.105, 0.105), m["shirt"], 2), "UpperArm.L")
+        add(ico("Shoulder_R", 1, (0.215, -0.015, 1.315), (0.070, 0.105, 0.105), m["shirt"], 2), "UpperArm.R")
+        add(segment("Sleeve_L", (-0.215, -0.02, 1.37), (-0.242, -0.13, 1.21), 0.075, 0.068, m["shirt"], 10), "UpperArm.L")
+        add(segment("Sleeve_R", (0.215, -0.015, 1.31), (0.245, -0.125, 1.15), 0.075, 0.068, m["shirt"], 10), "UpperArm.R")
+    upper = (m["shirt"], 0.069) if o["sleeves"] == "long" else (m["skin"], 0.061)
+    add(segment("UpperArmSkin_L", (-0.242, -0.13, 1.21), (-0.245, -0.18, 1.14), upper[1], upper[1] - 0.001, upper[0], 9), "UpperArm.L")
+    add(segment("UpperArmSkin_R", (0.245, -0.125, 1.15), (0.250, -0.17, 1.08), upper[1], upper[1] - 0.001, upper[0], 9), "UpperArm.R")
+    if o["sleeves"] == "long":
+        # Long sleeves to just above the wrist, over the elbow.
+        for side, elbow, wrist in (("L", (-0.245, -0.18, 1.14), (-0.225, -0.405, 0.98)),
+                                   ("R", (0.250, -0.17, 1.08), (0.230, -0.420, 0.94))):
+            cuff = tuple(e + (w - e) * 0.78 for e, w in zip(elbow, wrist))
+            add(ico(f"ElbowSleeve_{side}", 1, elbow, (0.074, 0.074, 0.076), m["shirt"], 1), f"LowerArm.{side}")
+            add(segment(f"Cuff_{side}", elbow, cuff, 0.071, 0.061, m["shirt"], 9), f"LowerArm.{side}")
     add(ico("Elbow_L", 1, (-0.245, -0.18, 1.14), (0.066, 0.066, 0.070), m["skin"], 1), "LowerArm.L")
     add(ico("Elbow_R", 1, (0.250, -0.17, 1.08), (0.066, 0.066, 0.070), m["skin"], 1), "LowerArm.R")
     add(segment("Forearm_L", (-0.245, -0.18, 1.14), (-0.225, -0.405, 0.98), 0.063, 0.050, m["skin"], 9), "LowerArm.L")
@@ -193,17 +298,30 @@ def build_character(m):
     add(ico("Ear_R", 1, (0.166, -0.055, 1.64), (0.030, 0.023, 0.050), m["skin"], 1), "Head")
     # Narrow shadowed sockets and tiny dull red points avoid cartoon eyes.
     for side, x, z in (("L", -0.061, 1.675), ("R", 0.061, 1.666)):
-        add(box(f"Socket_{side}", (0.072, 0.016, 0.045), (x, -0.205, z), m["hair"], 0.010, rotation=(deg(-5), 0, deg(-3 if side == "L" else 4))), "Head")
+        add(box(f"Socket_{side}", (0.072, 0.016, 0.045), (x, -0.205, z), dark, 0.010, rotation=(deg(-5), 0, deg(-3 if side == "L" else 4))), "Head")
         add(ico(f"Eye_{side}", 1, (x, -0.216, z), (0.012, 0.008, 0.010), m["eyes"], 1), "Head")
-    add(box("Mouth_Shadow", (0.115, 0.014, 0.023), (0.008, -0.195, 1.575), m["hair"], 0.005, rotation=(deg(3), 0, deg(-5))), "Head")
+    add(box("Mouth_Shadow", (0.115, 0.014, 0.023), (0.008, -0.195, 1.575), dark, 0.005, rotation=(deg(3), 0, deg(-5))), "Head")
     add(box("Cheek_Stain", (0.052, 0.012, 0.062), (0.105, -0.191, 1.60), m["stain"], 0.006, rotation=(deg(4), 0, deg(-18))), "Head")
 
     # Asymmetric low-poly hair clumps, all dark and close to the skull.
-    add(box("Hair_Crown", (0.205, 0.210, 0.060), (-0.025, -0.035, 1.750), m["hair"], 0.018, rotation=(deg(-3), deg(2), deg(-5))), "Head")
-    add(box("Hair_Tuft", (0.085, 0.135, 0.060), (0.080, -0.085, 1.755), m["hair"], 0.015, rotation=(deg(11), deg(-8), deg(13))), "Head")
+    if not o["hat"]:
+        add(box("Hair_Crown", (0.205, 0.210, 0.060), (-0.025, -0.035, 1.750), m["hair"], 0.018, rotation=(deg(-3), deg(2), deg(-5))), "Head")
+        add(box("Hair_Tuft", (0.085, 0.135, 0.060), (0.080, -0.085, 1.755), m["hair"], 0.015, rotation=(deg(11), deg(-8), deg(13))), "Head")
     add(box("Hair_Left", (0.095, 0.195, 0.11), (-0.125, -0.030, 1.715), m["hair"], 0.018, rotation=(deg(4), deg(-6), deg(-8))), "Head")
     add(box("Hair_Right", (0.075, 0.18, 0.095), (0.130, -0.020, 1.720), m["hair"], 0.016, rotation=(deg(-5), deg(8), deg(10))), "Head")
     add(box("Hair_Back", (0.245, 0.050, 0.125), (0.0, 0.065, 1.685), m["hair"], 0.014, rotation=(deg(-4), 0, deg(2))), "Head")
+    if o["hair"] == "long":
+        # Long, lank hair: a curtain down the back to the collar and locks over the ears.
+        add(box("Hair_Long_Back", (0.30, 0.065, 0.27), (0.0, 0.092, 1.615), m["hair"], 0.020, rotation=(deg(-6), 0, deg(1))), "Head")
+        for side, x in (("L", -0.158), ("R", 0.158)):
+            add(box(f"Hair_Lock_{side}", (0.06, 0.17, 0.26), (x, -0.02, 1.61), m["hair"], 0.016, rotation=(deg(-4), 0, deg(4 if side == "L" else -4))), "Head")
+    if o["hat"] == "cap":
+        add(ico("Cap_Crown", 1, (0.0, -0.050, 1.745), (0.178, 0.168, 0.080), m["cap"], 2), "Head")
+        add(box("Cap_Bill", (0.175, 0.13, 0.018), (0.0, -0.225, 1.728), m["cap"], 0.008, rotation=(deg(-8), 0, 0)), "Head")
+    elif o["hat"] == "hardhat":
+        add(ico("Hat_Dome", 1, (0.0, -0.055, 1.755), (0.190, 0.200, 0.110), m["hardhat"], 2), "Head")
+        add(cylinder("Hat_Brim", 0.215, 0.022, (0.0, -0.060, 1.735), m["hardhat"], 14, bevel=0.006), "Head")
+        add(box("Hat_Ridge", (0.040, 0.36, 0.035), (0.0, -0.055, 1.855), m["hardhat"], 0.012), "Head")
 
     # Join while preserving the deliberately one-bone-per-part vertex groups.
     bpy.ops.object.select_all(action="DESELECT")
@@ -218,6 +336,75 @@ def build_character(m):
     for poly in zombie.data.polygons:
         poly.use_smooth = False
     return zombie
+
+
+def _zmap(z, b):
+    """Feet-to-hips height scales by b["legs"], hips-up by b["torso"]."""
+    hips = 0.93
+    return z * b["legs"] if z <= hips else hips * b["legs"] + (z - hips) * b["torso"]
+
+
+def _joint(point, bone, b):
+    """Where a joint of this bone's chain moves to: arms follow the shoulders, legs the hips."""
+    x, y, z = point
+    if "Arm" in bone or "Hand" in bone:
+        x *= b["shoulders"] * b["arm_out"]
+    elif "Leg" in bone or "Foot" in bone:
+        x *= b["hips"]
+    return Vector((x, y, _zmap(z, b)))
+
+
+def _part_scale(bone, b):
+    """(scale along the bone or None = follow the joints, (x, y, z) scale across it) for a bone's parts."""
+    limb = b["limb"]
+    if bone == "Head":
+        return b["head"], (b["head"],) * 3
+    if bone == "Neck":
+        return None, (b["neck"],) * 3
+    if bone == "Hips":
+        return None, (b["hips"], b["depth"], 1.0)
+    if bone == "Spine":
+        return None, ((b["hips"] + b["shoulders"]) / 2, b["depth"] * b["belly"], 1.0)
+    if bone == "Chest":
+        return None, (b["shoulders"], b["depth"] * (1 + (b["belly"] - 1) * 0.5), 1.0)
+    if bone.startswith("Hand"):
+        return None, (1 + (limb - 1) * 0.5,) * 3
+    if bone.startswith("Foot"):
+        return None, (1 + (limb - 1) * 0.4,) * 3
+    return None, (limb,) * 3
+
+
+def reshape(zombie, b):
+    """A2: reshape the default-proportioned mesh into another body, part by part.
+
+    Every vertex belongs to exactly one bone (rigid skinning). Each bone's joints move by
+    _joint; its parts stretch along the bone to follow, and scale across it by _part_scale (the
+    head scales evenly). Then everything is lifted so the boots stand on Z=0 again. Returns the
+    new bone table for build_armature, same names, same parents.
+    """
+    new_joints = {name: (_joint(h, name, b), _joint(t, name, b)) for name, (h, t, _p) in BONES.items()}
+    names = {g.index: g.name for g in zombie.vertex_groups}
+    for vertex in zombie.data.vertices:
+        bone = names[vertex.groups[0].group]
+        head, tail = Vector(BONES[bone][0]), Vector(BONES[bone][1])
+        new_head, new_tail = new_joints[bone]
+        axis = (tail - head).normalized()
+        new_axis = new_tail - new_head
+        along_scale, across = _part_scale(bone, b)
+        if along_scale is None:
+            along_scale = new_axis.length / (tail - head).length
+        rel = vertex.co - head
+        along = rel.dot(axis)
+        perp = rel - axis * along
+        vertex.co = new_head + new_axis.normalized() * (along * along_scale) \
+            + Vector((perp.x * across[0], perp.y * across[1], perp.z * across[2]))
+    lift = -min(v.co.z for v in zombie.data.vertices)
+    for vertex in zombie.data.vertices:
+        vertex.co.z += lift
+    up = Vector((0, 0, lift))
+    zombie.data.update()
+    return {name: (tuple(new_joints[name][0] + up), tuple(new_joints[name][1] + up), parent)
+            for name, (_h, _t, parent) in BONES.items()}
 
 
 def bind(zombie, armature):
@@ -457,7 +644,7 @@ def export(zombie, armature):
     )
 
 
-def verify_reimport():
+def verify_reimport(expected_materials=None, height=(1.75, 1.82)):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.scene.render.fps = FPS
     bpy.ops.import_scene.gltf(filepath=str(OUT))
@@ -474,7 +661,7 @@ def verify_reimport():
     assert set(armature.data.bones.keys()) == set(BONES.keys())
     assert zombie.parent == armature
     assert all(abs(value - 1.0) < 1e-6 for value in (*zombie.scale, *armature.scale))
-    expected_materials = {"Zombie Skin", "Shirt", "Jeans", "Boots", "Hair", "Eyes", "Stain"}
+    expected_materials = expected_materials or {"Zombie Skin", "Shirt", "Jeans", "Boots", "Hair", "Eyes", "Stain"}
     assert {mat.name for mat in zombie.data.materials} == expected_materials
     actions = {a.name: a for a in bpy.data.actions if a.name in EXPECTED_ACTIONS}
     assert {a.name for a in bpy.data.actions} == set(EXPECTED_ACTIONS), sorted(a.name for a in bpy.data.actions)
@@ -496,8 +683,9 @@ def verify_reimport():
     bpy.context.view_layer.update()
     _death_low, death_high = deformed_bounds(zombie)
     assert 1500 <= tris <= 4000, tris
-    assert 1.75 <= rest_height <= 1.82, rest_height
+    assert height[0] <= rest_height <= height[1], (rest_height, height)
     assert death_high < 0.5, death_high
+    print("CHECK_VARIANT", VARIANT, OUT.name)
     print("CHECK_ACTIONS", " ".join(f"{name}:{ranges[name][0]:g}-{ranges[name][1]:g}" for name in EXPECTED_ACTIONS))
     print("CHECK_TRIANGLES", tris)
     print("CHECK_REST_HEIGHT", f"{rest_height:.3f}")
@@ -507,14 +695,20 @@ def verify_reimport():
 def main():
     reset()
     bpy.context.scene.render.fps = FPS
-    mats = build_materials()
-    armature = build_armature()
-    zombie = build_character(mats)
+    spec = VARIANTS[VARIANT]
+    outfit = None if VARIANT == "default" else {**DEFAULT_OUTFIT, **spec["outfit"]}
+    mats = build_materials(outfit)
+    if spec["body"] is None:
+        armature = build_armature()
+        zombie = build_character(mats)
+    else:
+        zombie = build_character(mats, outfit)
+        armature = build_armature(reshape(zombie, spec["body"]))
     bind(zombie, armature)
     build_animations(armature)
     assert armature.scale == Vector((1, 1, 1)) and zombie.scale == Vector((1, 1, 1))
     export(zombie, armature)
-    verify_reimport()
+    verify_reimport({mat.name for mat in mats.values()}, spec["height"])
 
 
 if __name__ == "__main__":

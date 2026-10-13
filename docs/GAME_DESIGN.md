@@ -201,6 +201,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **W1b — Life inside.** A zombie in some houses, the factory floor, hordes down the road.
 - [x] **W1c — Furniture.** Counters, tables, couches, shelves, bathtubs and toilets as salvageable pieces, placed by the town plan.
 - [x] **A1 — Street dressing.** Lamp posts, mailboxes, fences, searchable trash cans, trees and road markings from the street plan.
+- [x] **A2 — Zombie variety.** Five bodies from one rigged script, picked per zombie.
 
 **The long game** (see "Long game" above), in this order:
 

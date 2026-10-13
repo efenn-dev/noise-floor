@@ -2,6 +2,44 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — A2 Zombie variety
+
+From the A2 brief by the project lead, on top of M16 (PR #36). A crowd of zombies looked like one person copied with a different shirt; now there are five different people. No new rules, animations or zombie kinds.
+
+**Built:**
+- **Five bodies from the one rigged script.** `tools/art/zombie.py` takes `-- --variant=NAME` (or a `VARIANT` environment variable; `--out=PATH` writes elsewhere). `default` is the original body, untouched, and still exports `zombie.glb`; the four new ones export `zombie_<variant>.glb`. All five are built by the same code: the same parts plus the outfit's extras, then reshaped bone by bone (joints move, each part stretches along its bone and scales across it, the head scales evenly, then the boots are put back on the floor), on the same 17 bones with the same seven animations, so any body plays any animation.
+  - **heavy**: wider shoulders and hips, deeper belly, thicker limbs and neck; a faded orange hi-vis vest, a yellow hard hat, khaki work trousers.
+  - **slim**: narrower, thinner limbs, longer legs (about 1.86 m); long sleeves to the wrist, charcoal trousers, grey hair.
+  - **short**: shorter legs and torso in proportion, not just scaled (about 1.6 m), a slightly bigger head for its size; a navy ball cap, brown trousers.
+  - **woman**: narrower shoulders, wider hips, slimmer limbs, a bust; a sleeveless, straight-cut top with a deep V neck instead of the torn shirt, long brown hair down the back and over the ears, black trousers.
+  - Each stays under the script's triangle budget (2688-3060 triangles; the default is 2652), and each passes `verify_reimport()` (bones, materials, all seven actions and their lengths, rest height in its own range, the Death pose lying down).
+- **Each zombie gets a body** from its id and kind (`ZombieBody.variant_for(id, type)`): ids come in blocks of five and each block is a hashed shuffle of the five bodies, so the same zombie always wears the same body (after a reload too) and any handful spawned together is a mix. `ZombieBody` preloads all five and swaps the body in `setup()`; the shirt colour and size jitter still apply on top.
+- **Kinds keep their look on any body:** runners stay smaller with dark skin and dark shirts, and now their trousers, vest, hard hat or cap are dimmed too; screamers stay pale with blood-red shirts; Old Pete stays 1.25x big in his red shirt.
+
+**Rules:** none (presentation only). World: `ZombieBody.BODIES`, `MODELS`, `BODY_CLOTHES`, `variant_for()`, `_set_body()`, `body_variant`, the runner's `"dim"`. Art: `tools/art/zombie.py` (`VARIANTS`, `DEFAULT_OUTFIT`, `reshape()`, outfit options in `build_character`, per-variant checks in `verify_reimport`), four new `assets/models/zombie_*.glb` with their `.import` files.
+
+**Tests:** `test_art_models.gd`: every zombie body loads and is the model `ZombieBody` uses, has exactly the default's 17 bone names, all seven animations `ZombieBody._animate` plays, one mesh with the Shirt, Zombie Skin and Jeans materials, stands on the floor and is person-sized; the short body is shorter, the slim one taller, the heavy one wider, the woman a little shorter. `test_zombie_types_world.gd`: the same id gets the same body every time; ids 1-20 wear at least three bodies (they wear all five); a real `ZombieBody` wears its picked body, a second one with the same id the same body, only one model and one AnimationPlayer remain after the swap, and it walks; runners, screamers and Old Pete each come in all five bodies and keep their skin, shirt and size, and a runner's vest, hard hat and cap are dark. The existing zombie tests pass unchanged. **5325 checks** (was 5155).
+
+**Screenshots (this PC):** eight zombies in a line facing you at noon and at 22:00 with the flashlight: a hard hat and vest, two navy caps, long hair, long sleeves and the old body side by side read as different people, in daylight and in the torch beam; idle poses look right, with no arms through bellies (the heavy body's arms sit further out). Eight runners in a line: all dark and small, still different builds and hats.
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**: the street zombies are now a mix of people. To see a line-up, in a terminal in the game folder:
+- `play.bat --time=12 --zombies=0 --cam=0,0,0,0,-4 --zombie=-3.5,-6,-2.5,-6,-1.5,-6,-0.5,-6,0.5,-6,1.5,-6,2.5,-6,3.5,-6`: eight zombies in a row by day (they'll start walking at you).
+- The same with `--time=22 --flashlight` instead of `--time=12`: the same row at night in the torch.
+- Add `--zombie-type=runner` (or `screamer`) for a row of runners (or screamers) on mixed bodies.
+
+**Known gaps:**
+- Not in A2, as planned: new animations, new zombie kinds, textures (flat colours as before).
+- The bodies share the default body's animations, so the heavy and woman bodies move exactly like the original townsperson; a heavy zombie's run looks as light as anyone's.
+- Head hits still count above 1.45 m from the feet for every body (`ZombieBody.HEAD_Y`), so on the short body the lower part of the head counts as a body hit, and on the slim body the top of the shoulders can count as the head. The collision capsule is the same 1.8 m for every body.
+- Each body has one fixed outfit (the shirt colour still varies per zombie); a second outfit per body would need more variants or tinting the extras in code.
+- Hair isn't dimmed on runners, so a slim runner's grey hair stands out.
+- Headless tests print a handful of "Parameter material is null" engine errors from the dummy renderer while the zombie-kind tests free bodies; no check fails and nothing shows in a normal run.
+- Every other gap from the M16, Q2, A1, Q1, P3, P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — M16 Seasons
 
 From the M16 brief by the project lead, on top of Q2 (PR #35). A calendar and four seasons that change the rules: winter stops crops, the cold needs heat, and sound carries farther on cold nights. Plus one rule change from the lead: zombies never break furniture.

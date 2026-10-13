@@ -155,6 +155,66 @@ func test_each_machine_gets_its_own_lamp() -> void:
 	view.free()
 
 
+## A2: every zombie body built by tools/art/zombie.py --variant=NAME loads, has the default body's bones
+## and every animation ZombieBody plays, the materials it tints, and stands on the floor; and the bodies
+## really differ (the short one is shorter, the slim one taller, the heavy one wider).
+const ZOMBIE_ANIMS := ["Idle", "Walk", "Run", "Punch", "HitReact", "Death", "Scream"]
+
+
+func test_zombie_bodies_share_bones_and_animations() -> void:
+	eq(ZombieBody.MODELS.size(), ZombieBody.BODIES.size(), "one model per zombie body")
+	check(ZombieBody.BODIES.size() >= 5, "at least five zombie bodies (%d)" % ZombieBody.BODIES.size())
+	var default_root := ZombieBody.MODEL.instantiate()
+	var bones := _zombie_bones(default_root)
+	default_root.free()
+	eq(bones.size(), 17, "the default zombie has its 17 bones")
+	var size := {}
+	for i in ZombieBody.BODIES.size():
+		var body: String = ZombieBody.BODIES[i]
+		var path := "res://assets/models/zombie.glb" if body == "default" else "res://assets/models/zombie_%s.glb" % body
+		var scene := load(path) as PackedScene
+		check(scene != null and scene == ZombieBody.MODELS[i], "%s loads (and is the model ZombieBody uses)" % path)
+		if scene == null:
+			continue
+		var root := scene.instantiate() as Node3D
+		eq(_zombie_bones(root), bones, "the %s body has the default's bones" % body)
+		var anim := root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		for a: String in ZOMBIE_ANIMS:
+			check(anim != null and anim.has_animation(a), "the %s body has the %s animation" % [body, a])
+		var meshes := root.find_children("*", "MeshInstance3D", true, false)
+		eq(meshes.size(), 1, "the %s body is one mesh" % body)
+		var names := {}
+		var box := AABB()
+		for m: MeshInstance3D in meshes:
+			box = _transform_to(root, m) * m.get_aabb()
+			for s_i in m.mesh.get_surface_count():
+				var mat := m.mesh.surface_get_material(s_i)
+				if mat != null:
+					names[mat.resource_name] = true
+		check(names.has("Shirt") and names.has("Zombie Skin") and names.has("Jeans"),
+				"the %s body has the Shirt, Zombie Skin and Jeans ZombieBody tints (%s)" % [body, names.keys()])
+		near(box.position.y, 0.0, "the %s body stands on the floor" % body, 0.03)
+		check(box.size.y > 1.5 and box.size.y < 1.95, "the %s body is person-sized (%.2f m)" % [body, box.size.y])
+		size[body] = box.size
+		root.free()
+	if size.size() == 5:
+		check(size["short"].y < size["default"].y - 0.08, "the short body is shorter (%.2f vs %.2f)" % [size["short"].y, size["default"].y])
+		check(size["slim"].y > size["default"].y + 0.03, "the slim body is taller (%.2f)" % size["slim"].y)
+		check(size["heavy"].x > size["default"].x + 0.05, "the heavy body is wider (%.2f vs %.2f)" % [size["heavy"].x, size["default"].x])
+		check(size["woman"].y < size["default"].y, "the woman's body is a little shorter (%.2f)" % size["woman"].y)
+
+
+func _zombie_bones(root: Node) -> PackedStringArray:
+	var names := PackedStringArray()
+	var skels := root.find_children("*", "Skeleton3D", true, false)
+	if skels.size() == 1:
+		var skel := skels[0] as Skeleton3D
+		for b in skel.get_bone_count():
+			names.append(skel.get_bone_name(b))
+		names.sort()
+	return names
+
+
 func _transform_to(root: Node3D, node: Node3D) -> Transform3D:
 	var t := Transform3D.IDENTITY
 	var n: Node = node

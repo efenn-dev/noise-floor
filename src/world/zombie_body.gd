@@ -10,13 +10,21 @@ const RADIUS := 0.35
 const LOS_EVERY := 3   # physics frames between line-of-sight checks
 const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
+## A2: five bodies from the same script (`zombie.py -- --variant=NAME`), with the same bones and animations;
+## each zombie gets one by variant_for(id, type), so a crowd isn't one person copied.
+const BODIES := ["default", "heavy", "slim", "short", "woman"]
+const MODELS := [MODEL, preload("res://assets/models/zombie_heavy.glb"), preload("res://assets/models/zombie_slim.glb"),
+		preload("res://assets/models/zombie_short.glb"), preload("res://assets/models/zombie_woman.glb")]
+## Clothes that come with a body rather than being tinted per zombie (the shirt is); a runner's are dimmed.
+const BODY_CLOTHES := ["Jeans", "Vest", "Hard Hat", "Cap"]
 const MODEL_SCALE := 1.0  # built at real size (about HEIGHT tall)
 const WALK_ANIM_SPEED := 1.0  # m/s the Walk animation's feet move at speed_scale 1
 const RUN_ANIM_SPEED := 3.45  # m/s the Run animation's feet move at speed_scale 1
 const RUN_ABOVE := 2.0  # m/s: faster than this, a runner runs instead of walking
 ## How each kind of zombie looks, so you can tell them apart: skin and shirt tints, size.
 const LOOKS := {
-	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92},
+	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92,
+			"dim": 0.7},  # A2: a runner's vest, hat and trousers go dark too, whichever body it got
 	"screamer": {"skin": Color(0.62, 0.62, 0.58), "shirts": [Color(0.55, 0.12, 0.1)], "scale": 1.0},
 	"old_pete": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.62, 0.16, 0.08)], "scale": 1.25},  # M13: the fireman
 }
@@ -40,6 +48,8 @@ var _frame := 0
 var _last_target := Vector3.INF
 var _fall := 0.0
 var _model: Node3D
+## A2: which of BODIES this zombie wears.
+var body_variant := ""
 var _anim: AnimationPlayer
 var _last_hp := INF
 var _flinch := 0.0  # seconds left of the hit reaction
@@ -62,6 +72,9 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 	_last_hp = brain.hp
 	_voice.pitch_scale = 0.85 + 0.06 * (brain.id % 5)
 	_next_moan = 1.5 + brain.id % 9
+	var variant := variant_for(brain.id, brain.type)
+	if BODIES[variant] != body_variant:
+		_set_body(variant)
 	var look: Dictionary = LOOKS.get(brain.type, {})
 	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4)) * float(look.get("scale", 1.0))
 	var shirts: Array = look.get("shirts", SHIRTS)
@@ -78,6 +91,28 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 				mat = mat.duplicate()
 				mat.albedo_color = look["skin"]
 				mesh.set_surface_override_material(i, mat)
+			elif mat.resource_name in BODY_CLOTHES and look.has("dim"):
+				mat = mat.duplicate()
+				mat.albedo_color = mat.albedo_color.darkened(look["dim"])
+				mesh.set_surface_override_material(i, mat)
+
+
+## A2: the body a zombie gets, from its id and kind: the same zombie always gets the same one (saves,
+## reloads and every PC agree). Ids come in blocks of five, each block a hashed shuffle of the five bodies,
+## so any handful of zombies spawned together is a mix rather than a run of the same person.
+static func variant_for(id: int, type: String) -> int:
+	var n := BODIES.size()
+	var h := (floori(float(id) / n) + 1) * 0x9E3779B1 + type.hash()
+	h = (h ^ (h >> 15)) * 0x2C1B3C6D
+	var order := range(n)
+	for i in range(n - 1, 0, -1):  # Fisher-Yates, driven by the hash's bits
+		h = h ^ (h >> 13)
+		h = h * 0x5DEECE66D + 11
+		var j := posmod(h >> 17, i + 1)
+		var t: int = order[i]
+		order[i] = order[j]
+		order[j] = t
+	return order[posmod(id, n)]
 
 
 func _init() -> void:
@@ -211,7 +246,22 @@ static func _flat(v: Vector3) -> Vector3:
 
 
 func _build_mesh() -> void:
-	_model = MODEL.instantiate() as Node3D
+	_set_body(0)  # setup() swaps in the zombie's own body
+	_voice = AudioStreamPlayer3D.new()
+	_voice.position.y = 1.6
+	_voice.max_distance = 45.0
+	_voice.unit_size = 4.0
+	_voice.volume_db = -4.0
+	add_child(_voice)
+
+
+## Put on body BODIES[index] (replacing the one it has), standing in Idle.
+func _set_body(index: int) -> void:
+	if _model != null:
+		remove_child(_model)
+		_model.queue_free()
+	body_variant = BODIES[index]
+	_model = (MODELS[index] as PackedScene).instantiate() as Node3D
 	_model.rotation.y = PI  # built facing Blender -Y, which imports as +Z; bodies walk toward -Z
 	_model.scale = Vector3.ONE * MODEL_SCALE
 	add_child(_model)
@@ -220,12 +270,6 @@ func _build_mesh() -> void:
 		if _anim.has_animation(anim_name):
 			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_anim.play("Idle")
-	_voice = AudioStreamPlayer3D.new()
-	_voice.position.y = 1.6
-	_voice.max_distance = 45.0
-	_voice.unit_size = 4.0
-	_voice.volume_db = -4.0
-	add_child(_voice)
 
 
 ## Pick the animation from what the brain is doing and how fast the body really moves.
