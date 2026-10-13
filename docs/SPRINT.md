@@ -1,3 +1,13 @@
+# Read me first (Emmitt)
+
+*Kept current by the lead while you are away. Last update: 2026-10-13 02:20Z.*
+
+**Merge these, in order, each against `main`:** #24 (brings the stress test and W1b to main; the stacked merges of #22 and #23 landed on each other's branches, so main only got W1a), then the M12 pull request when it appears, then the ones below it in the queue, then the sprint-board PR last. From now on every pull request targets `main`, so merging top to bottom always works, and merging a later one first is also safe (it just brings the earlier code with it).
+
+**Then play.** `play.bat` updates itself. Houses have doors, rooms and loot; one in three has a zombie inside; the factory is a hall you can walk into; groups come down the road. Thirty minutes and a `docs/PLAYTESTS.md` entry decide what Sprint 3 fixes.
+
+---
+
 # Sprint 2 — "Into the houses"
 
 *Started 2026-10-12, right after Sprint 1 closed: #16, #17 and #18 merged, and Emmitt's first play (on the old build, before play.bat caught up) said two things: no way into the buildings, and cars that would not drive. Lead: Claude Fable 5.1. Builders: Claude Opus 5.5. QA: Emmitt and Kaleb. Budget rule unchanged: the lead checks the 5-hour window before launching a builder, stops launching at 75%, one build agent on the PC at a time; cloud sessions on the credit don't count against it.*
@@ -23,9 +33,14 @@ Emmitt went to bed and left the PC on. The lead runs one Opus 5.5 builder at a t
 1. **W1a — into the houses**: done, PR #21 against `main`.
 2. **Stress test**: done, PR #22 (numbers only: 4.6 ms per tick with 200 zombies, 50 machines and the town; the Director's once-a-second wall count spikes to 20 ms; cheap cache fix noted in docs/perf): one headless test with 200 zombies, 50 machines and a game-day, printing the time per tick, the noise query and the navmesh bake. Branch from W1a so it measures the town pieces too. Numbers only, no fixes.
 3. **W1b — life inside**: done, PR #23 (stacked on #22; 2022 checks; a zombie in 4 of 12 houses, the factory hall with a 4 m doorway, groups and hordes come down the road): a zombie in about one house in three, the factory as a grid interior with a roof, hordes that follow the road. Branch from W1a. Furniture props stay out (PC art).
-4. **M12 — skills and perks** (running, stacked on #23), from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
+4. **M12 — skills and perks** (running; interrupted once by an app restart at 02:00Z and resumed with its work intact; PR will target main), from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
 
-Not tonight: anything needing Codex or Blender, W1 tuning (waits for Playtest #1), M11 tuning, M13+.
+Extended while Emmitt is away until the evening of 2026-10-13, in this order, one at a time, each PR against `main`, each reviewed by the lead:
+5. **M13 — loot**: rarity colours, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set (`GAME_DESIGN.md` "Loot"). Branch from M12.
+6. **W1c — furniture**: Blender-kit props (table, counter, couch, shelves, bathtub) placed by TownPlan, existing surfaces, no Codex. Branch from M13.
+7. **M14 — guns**: firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk. Branch from W1c.
+8. **M15 — automated defense**: turrets fed by belts, traps, sensors and actions, the repair station, attacks that play out while you are away, radio alerts and the base log. Includes the cheap Director cache from docs/perf. Branch from M14.
+Not in this run: tuning of any kind (waits for Playtest #1), M16, M17, anything needing Codex image generation.
 
 ## What Emmitt tests, and when
 
