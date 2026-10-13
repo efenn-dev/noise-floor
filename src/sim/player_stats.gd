@@ -30,6 +30,9 @@ var carry_ratio := 0.0   # written by SimWorld each tick
 var dead := false
 var respawn_timer := 0.0
 var deaths := 0
+## What hurt you last: a zombie type ("shambler"), "starvation", "dehydration", "bleeding" or "unknown".
+## When health hits 0 this is what killed you.
+var last_cause := "unknown"
 var weapon := "pipe"
 var swing_cooldown := 0.0
 var _rested := 0.0  # seconds since stamina was last used
@@ -39,9 +42,10 @@ func _c(key: String, fallback: float = 0.0) -> float:
 	return float(cfg.get(key, fallback))
 
 
-func damage(amount: float) -> void:
+func damage(amount: float, cause: String = "unknown") -> void:
 	if dead or amount <= 0.0:
 		return
+	last_cause = cause
 	if asleep:
 		wake()
 	health = maxf(0.0, health - amount)
@@ -118,13 +122,16 @@ func tick(dt: float) -> void:
 		if _rested >= _c("stamina_regen_delay"):
 			stamina = minf(100.0, stamina + _c("stamina_regen") * dt)
 	var hurt := 0.0
+	var cause := ""
 	if food <= 0.0 or water <= 0.0:
 		hurt += _c("starve_damage") * dt
+		cause = "starvation" if food <= 0.0 else "dehydration"
 	if bleeding:
 		hurt += _c("bleed_damage") * dt
+		cause = "bleeding"
 	if hurt > 0.0:
 		var was_asleep := asleep
-		damage(hurt)
+		damage(hurt, cause)
 		if was_asleep and not dead and not bleeding:
 			asleep = true  # hunger alone doesn't wake you; a zombie or bleeding does
 

@@ -2,6 +2,49 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — P0 Playtest kit
+
+**Built:**
+- **Session log.** Every time you play, the game keeps a short plain-words diary of the session and saves it as a text file (under 40 lines): how long you played (real and game time), each death and what caused it (the zombie type, starvation, dehydration or bleeding), how hot the Director got and when, what you built (by kind), mufflers fitted, zombies killed, the loudest one-off sound and the loudest machine or engine, and a timeline of your first five real minutes (built X, searched Y, hit a zombie, died, siphoned, got in a car...). It's written when you die and again when you quit (closing the window, Quit on the title screen, or quitting to the title), to `sessions/<date_time>.txt` in the game's save folder; the console prints `Session log: <path>`. Loading a save during a sitting carries on the same log.
+- **First-game hints.** A new game shows one tip at a time above the health line: find the crate and press E, build a foundation and a smelter, press N to see how far the noise carries, then wall it in or fit a muffler (U). Each moves on when you've done it, or after 90 seconds so it never nags (the noise tip after 40). They never take input. Not after loading a save, not with `--demo-*` or `--cam`, not in screenshots; `--no-hints` turns them off and `--hints` forces them on.
+
+**Rules (sim, tested):** `RunStats` (new, in `src/sim`) records the session; `SimWorld.stats` is fed where things already happen (zombie hits and kills, deaths, builds, mufflers, searches, siphoning, getting in a car, crate use, Director waves and heat, the noise field each tick). `PlayerStats.last_cause` remembers what hurt you last, so the death cause is worked out in the sim. The game's own setup (start crate, demo bases, loading a save) is muted, so it isn't counted as yours. World: `SessionLog` (writes the file; off in headless runs and screenshots, tests use `path_override`), `Hints` (one label), `GameSession.skip_hints`, and the `--no-hints` / `--hints` flags.
+
+**Tests:** `test_run_stats.gd` (death by a zombie vs starvation, thirst, bleeding; builds by kind, not counting the start crate; the five-minute timeline cut-off and repeats; peak heat and when; loudest sounds), `test_session_log.gd` (a death writes the log with the expected lines to a test path; off unless enabled), `test_hints.gd` (hints follow the crate, the smelter, the noise timeout and a muffler; time out; a new game shows them and a loaded save doesn't). 1013 checks (was 929).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**: the first tip appears above your health. Play a while (die once if you can), then quit from the title screen. The log is in `%APPDATA%\Godot\app_userdata\Noise Floor\sessions\` (paste that into the Explorer address bar); the newest `.txt` is your session. To play without tips: `play.bat --no-hints`.
+
+**Known gaps:** the game has no version string yet, so the log's header gives the date, world seed and game clock instead of a commit. One file per sitting, rewritten each time (deaths are listed inside it, not as separate files). Kills only count your pipe and your car, not turrets or spikes. The hints restart if you start another new game in the same sitting. Session logs are never uploaded anywhere: someone has to open the folder.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
+## 2026-10-12 — M11 The world gets worse
+
+**Built:**
+- **Loot never comes back:** a searched container stays empty for good (it already worked that way; now there's a test).
+- **Food spoils:** vegetables keep about 5 days (`spoil_days` in items.json), in your pockets and in crates, and rot into **rotten food**, which you can't eat. Fresh food you find in town from day 7 on is already rotten. Canned food, chips and soda keep forever, which is what the canner is for.
+- **Stale gas:** on day 21 the gas left in the town's cars goes stale. Only gas you poured in yourself stays good, so siphoning dries up and generators eventually need another fuel source or solar.
+- **Infamy:** a permanent score of all the noise you've made that the dead could hear: machine and generator noise reaching 50 m out, plus loud one-offs like the horn. It never cools off the way heat does; zombies' own bangs don't count. As it climbs, waves bring new kinds of zombie. **Runners** come at 3000 infamy (about a quarter of the wave), roughly a quarter of an hour of an unmuffled generator in the open. **Screamers** come at 8000 (about 1 in 8). Each one arrives with a warning message.
+- **Runners:** they sprint at 3.6 m/s (shamblers do 1.3) but have 60 hp. They're smaller, dark-skinned and dark-clothed, and have a new **Run** animation.
+- **Screamers:** when one spots you it stops and shrieks (a loudness-88 noise, then 25 s before it can again), and everything within earshot comes to investigate. They're pale with blood-red shirts, and have a new **Scream** animation and a high, warped moan.
+- **Stats:** the pause menu shows the day, your deaths, zombies killed (by you, your turrets, traps or your car) and total noise made. Saved with the game.
+
+**Rules (sim, tested):** `Director.infamy`/`unlocked`/`pick_type`, screamers in `ZombieBrain` (`screaming`), spoilage (`SimWorld._spoil`, `Inventory.spoil_debt`), `_rot_old_food`, `Vehicles.go_stale` (cars track the `fresh` gas you poured in), and kill and death `stats`. Data: runner and screamer in `zombies.json`, `infamy` in `noise.json`, `spoil_days` and `rotten_food` in items.json, and `gas_stale_day` and `found_food_rots_day` in survival.json. World: zombie looks and the Run/Scream animations in `ZombieBody`, the scream sound in `SoundView`, stats in the pause menu, and a new `--zombie-type=` flag.
+
+**Tests:** `test_world_worse.gd` (loot stays gone, vegetables rot and canned food keeps, in crates too, late-found food is rotten, stale gas, infamy builds and never cools (the horn counts, wrecks don't), runners then screamers unlock, a screamer pulls in a zombie that couldn't see you, stats add up and are saved) and `test_zombie_types_world.gd` (runners run, screamers scream, the kinds look different). 978 checks.
+
+**Try it on the PC:** merge, then double-click `play.bat`. To meet the new zombies straight away, run `play.bat --zombie=0,-10,2,-12 --zombie-type=runner` or `play.bat --zombie=0,-8 --zombie-type=screamer`. Press **Esc** to see your stats.
+
+**Saves:** the save version is now 2. Saves from M9-M10c still load, and whatever they lack starts at its default (no stats, no infamy, fresh gas); a save from a newer game is refused.
+
+**Known gaps:** rotten food has no use yet (compost for the planter would be a good one); only vegetables spoil; gas cans in pockets and crates never go stale; there's no infamy meter apart from the stats line; brutes, crawlers and listeners come later.
+
+**Next:** M12, skills and carry weight (Mechanics already exists).
+
+Built by Claude Opus 5.5.
+
 ## 2026-10-12 — M10c Wheels
 
 **Built:**

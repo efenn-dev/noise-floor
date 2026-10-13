@@ -33,5 +33,14 @@
 		"horde": 8,
 		"heat_per_zombie": 5,
 		"lure_time": 120
+	},
+	"infamy": {
+		"one_off_floor": 40,
+		"one_off_rate": 0.05,
+		"ignore": ["zombie_bash", "wreck", "scream"],
+		"unlocks": [
+			{ "type": "runner", "at": 3000, "chance": 0.25, "message": "You've been heard far away. Something fast is out there now" },
+			{ "type": "screamer", "at": 8000, "chance": 0.12, "message": "Something out there screams when it sees you" }
+		]
 	}
 }

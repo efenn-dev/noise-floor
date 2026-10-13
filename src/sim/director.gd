@@ -11,6 +11,12 @@ const EDGE_NAMES := ["north", "south", "west", "east"]
 
 var cfg: Dictionary
 var heat := 0.0
+## Permanent: every bit of noise you've made that the dead could hear. It never cools off, and as it
+## climbs new kinds of zombie join the waves (data/noise.json "infamy").
+var infamy := 0.0
+var data: GameData
+var unlocked: Array = []  # zombie types infamy has let in so far
+var newly_unlocked: Dictionary = {}  # the unlock that happened this tick ({} if none), for a message
 var gain := 0.0  # heat per second from noise right now (before cooling)
 var _check: float
 var _gain_timer := 0.0
@@ -18,6 +24,7 @@ var _rng := RandomNumberGenerator.new()
 
 
 func _init(p_data: GameData, seed_value: int = 1) -> void:
+	data = p_data
 	cfg = p_data.noise["director"]
 	_check = float(cfg["check_every"])
 	_rng.seed = hash([seed_value, "director"])
@@ -40,6 +47,7 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		_gain_timer = 1.0  # the 8-direction wall count is costly; once a second is plenty
 		gain = gain_now(noise, night)
 	heat = clampf(heat + (gain - float(cfg["decay"])) * dt, 0.0, float(cfg["max_heat"]))
+	_add_infamy(dt, noise)
 	_check -= dt
 	if _check > 0.0:
 		return {}
@@ -54,7 +62,7 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	var e := _rng.randi_range(0, EDGES.size() - 1)
 	for i in size:
 		var spot: Vector3 = EDGES[e] + Vector3(_rng.randf_range(-4, 4), 0, _rng.randf_range(-4, 4))
-		var z := horde.spawn("shambler", spot)
+		var z := horde.spawn(pick_type(), spot)
 		z.facing = (lure["pos"] - spot).normalized()
 		z.hear(lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
@@ -87,3 +95,26 @@ func _loudest(noise: NoiseField) -> Dictionary:
 		if s["loudness"] > best["loudness"]:
 			best = s
 	return best
+
+
+## Infamy grows with the heat your machines make (before it cools) and with loud one-offs you make
+## (horn, gunfire, crashes); zombies' own bangs and screams don't count.
+func _add_infamy(dt: float, noise: NoiseField) -> void:
+	var inf: Dictionary = data.noise["infamy"]
+	infamy += gain * dt
+	for s: Dictionary in noise.recent:
+		if s["age"] == 0.0 and not (s["kind"] in inf["ignore"]):
+			infamy += maxf(0.0, float(s["loudness"]) - float(inf["one_off_floor"])) * float(inf["one_off_rate"])
+	newly_unlocked = {}
+	for u: Dictionary in inf["unlocks"]:
+		if infamy >= float(u["at"]) and not unlocked.has(u["type"]):
+			unlocked.append(u["type"])
+			newly_unlocked = u
+
+
+## Which kind of zombie the next one in a wave is: mostly shamblers, plus whatever infamy has unlocked.
+func pick_type() -> String:
+	for u: Dictionary in data.noise["infamy"]["unlocks"]:
+		if unlocked.has(u["type"]) and _rng.randf() < float(u["chance"]):
+			return u["type"]
+	return "shambler"

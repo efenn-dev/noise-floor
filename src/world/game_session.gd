@@ -11,5 +11,7 @@ static var pending_load := ""
 static var started := false
 ## Tests and command-line flags skip the title screen.
 static var skip_menu := false
+## Tests that load the main scene skip the first-game hints (like --no-hints).
+static var skip_hints := false
 ## Where saves go (tests point this somewhere else).
 static var save_path := SAVE_PATH

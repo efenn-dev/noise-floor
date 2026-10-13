@@ -5,6 +5,8 @@ extends RefCounted
 signal changed
 
 var _counts: Dictionary = {}  # item id (String) -> int > 0
+## Part-items of food that have started to rot (item -> fraction), carried from day to day.
+var spoil_debt: Dictionary = {}
 
 
 func count(item: String) -> int:

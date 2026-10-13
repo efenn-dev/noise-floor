@@ -22,6 +22,10 @@ var defense: Defense
 var vehicles: Vehicles
 ## Skills that level by doing (just Mechanics until M12).
 var skills: Skills
+## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
+var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
+var _counted_dead: Dictionary = {}
+var _day := 1
 var director: Director
 ## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
 var messages: Array = []
@@ -30,6 +34,8 @@ var loot: Loot
 var storages: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var player := PlayerStats.new()
+## What happened this session (deaths, builds, loudest sounds...), for the playtest session log.
+var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
 var player_lit := false
@@ -57,6 +63,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	loot = Loot.new(data, seed_value)
 	vehicles = Vehicles.new(data)
 	skills = Skills.new(data)
+	_day = clock.day
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
 	player.died.connect(_on_player_died)
@@ -89,15 +96,18 @@ func update(real_delta: float) -> int:
 func step() -> void:
 	ticks += 1
 	clock.advance(TICK)
+	stats.tick(TICK, clock.seconds_per_day)
 	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	noise.refresh(factory, TICK, power, vehicles)
+	_note_noise()
 	player.carry_ratio = carry_ratio()
 	player.tick(TICK)
 	var found := loot.tick(TICK, player_pos)
 	if not found.is_empty():
+		found["items"] = _rot_old_food(found["items"])
 		inventory.give_all(found["items"])
 		add_message(("Found " + _list(found["items"])) if not found["items"].is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
@@ -107,11 +117,13 @@ func step() -> void:
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
 		if z == null:
 			continue
-		if e["target"] == "player" and vehicles.driving != "":
+		if e["target"] == "scream":
+			noise.emit(z.pos, float(z.stats["scream_loudness"]), "scream")  # pulls in everything nearby
+		elif e["target"] == "player" and vehicles.driving != "":
 			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
-			player.damage(float(z.stats["damage"]))
+			player.damage(float(z.stats["damage"]), z.type)
 			if not player.dead and _rng.randf() < float(data.survival["bleed_chance"]):
 				if not player.bleeding:
 					add_message("You're bleeding (H to bandage)", 4.0)
@@ -123,7 +135,16 @@ func step() -> void:
 				noise.emit_kind(at, "wreck")
 	defense.tick(TICK, horde, noise)
 	var wave := director.tick(TICK, noise, night, horde)
+	if stats.is_peak_heat(director.heat):
+		stats.note_heat(director.heat, when_text())
+	if not director.newly_unlocked.is_empty():
+		add_message(director.newly_unlocked["message"], 8.0)
+	_count_kills()
+	if clock.day != _day:
+		_day = clock.day
+		_new_day()
 	if not wave.is_empty():
+		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
 		add_message("%s from the %s..." % [what, wave["edge"]])
 	for m: Dictionary in messages:
@@ -133,6 +154,21 @@ func step() -> void:
 
 func add_message(text: String, seconds: float = 6.0) -> void:
 	messages.append({"text": text, "time_left": seconds})
+
+
+## "day 2 21:40": game time, for the session log.
+func when_text() -> String:
+	return "day %d %s" % [clock.day, clock.clock_text()]
+
+
+## The session log keeps the loudest one-off sound (new this tick) and the loudest machine or engine.
+func _note_noise() -> void:
+	for s: Dictionary in noise.recent:
+		if s["age"] == 0.0 and stats.is_loudest_sound(s["loudness"]):
+			stats.note_sound(s["kind"], s["loudness"], when_text())
+	for s: Dictionary in noise.continuous:
+		if stats.is_loudest_continuous(s["loudness"]):
+			stats.note_continuous(s["kind"], s["loudness"], when_text())
 
 
 ## A one-off sound from the player ("footstep_walk", "footstep_sprint", ...; see data/noise.json).
@@ -172,6 +208,7 @@ func stock_at(at: Vector3) -> Stock:
 func deposit(key: String) -> Dictionary:
 	if not storages.has(key):
 		return {}
+	stats.note_crate()
 	var moved := {}
 	for item: String in inventory.items():
 		if _is_supply(item):
@@ -185,6 +222,14 @@ func deposit(key: String) -> Dictionary:
 
 ## Puts the debug kit in a new storage crate on a new foundation at `cell` (the start-of-game stash).
 func place_start_stash(cell: Vector2i) -> String:
+	var was_muted := stats.muted
+	stats.muted = true  # the game set this up, not the player
+	var key := _place_start_stash(cell)
+	stats.muted = was_muted
+	return key
+
+
+func _place_start_stash(cell: Vector2i) -> String:
 	var kit := Inventory.new()
 	kit.give_all(data.debug_kit)
 	kit.give_all({"plank": 12, "nails": 8})  # pays for the foundation and crate themselves
@@ -376,6 +421,7 @@ func siphon(id: String) -> String:
 		return "The tank is dry"
 	inventory.add("gas_can", cans)
 	noise.emit(player_pos, float(data.survival["siphon_noise"]), "siphon")
+	stats.note("siphoned gas from a " + str(vehicles.cars[id].get("type", "car")))
 	return "Siphoned %d gas can%s" % [cans, "s" if cans > 1 else ""]
 
 
@@ -390,6 +436,7 @@ func enter_car(id: String) -> String:
 		player_pos = vehicles.cars[id]["pos"]  # you're in the car now: zombies come for it
 		var c: Dictionary = vehicles.cars[id]
 		c["running"] = c["fuel"] > 0.0 and vehicles.can_start(id, inventory)  # no key, no engine
+		stats.note("got in a " + str(c.get("type", "car")))
 	return why
 
 
@@ -476,7 +523,11 @@ func car_hits_zombie(zombie_id: int, speed: float) -> bool:
 	var car: Dictionary = vehicles.cars[vehicles.driving]
 	var damage := vehicles.ram(vehicles.driving, speed)
 	noise.emit_kind(z.pos, "zombie_bash")
-	return z.take_hit(damage, car["pos"], speed * 0.6)
+	var killed := z.take_hit(damage, car["pos"], speed * 0.6)
+	if killed:
+		stats.note_kill()
+		stats.note("ran over a " + z.type)
+	return killed
 
 
 # --- Searching ----------------------------------------------------------------
@@ -486,6 +537,7 @@ func search(id: String) -> String:
 	var reason := loot.start(id, player_pos)
 	if reason == "" and loot.progress == 0.0:
 		noise.emit(loot.containers[id]["pos"], float(data.survival["search_noise"]), "search")
+		stats.note("searched " + id.replace("_", " "))
 	return reason
 
 
@@ -499,6 +551,7 @@ func fit_muffler(cell: Vector2i) -> String:
 			return "Not enough materials"
 		power.generators[gen_key]["muffled"] = true
 		_practice("mechanics", "muffler")
+		stats.note_muffler()
 		return ""
 	var m: Factory.Machine = factory.machines.get(cell)
 	if m == null:
@@ -511,6 +564,7 @@ func fit_muffler(cell: Vector2i) -> String:
 	m.muffled = true
 	m.time_scale = 1.0 + float(muffler["slowdown"])
 	_practice("mechanics", "muffler")
+	stats.note_muffler()
 	return ""
 
 
@@ -523,7 +577,12 @@ func hit_zombie(id: int, head: bool) -> bool:
 	var w: Dictionary = data.weapons[player.weapon]
 	var dmg := float(w["damage"]) * (float(w["head_multiplier"]) if head else 1.0)
 	noise.emit_kind(z.pos, "melee_hit")
-	return z.take_hit(dmg, player_pos, float(w["knockback"]))
+	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]))
+	stats.note("hit a zombie")
+	if killed:
+		stats.note_kill()
+		stats.note("killed a " + z.type)
+	return killed
 
 
 func weapon_stats() -> Dictionary:
@@ -565,6 +624,8 @@ func _on_player_respawned() -> void:
 
 ## Dying drops everything you carry in a bag where you fell.
 func _on_player_died() -> void:
+	stats.note_death(player.last_cause, when_text())
+	tally["deaths"] += 1
 	var items := _counts_of(inventory)
 	if not items.is_empty():
 		inventory.take_all(items)
@@ -584,6 +645,7 @@ func alpha() -> float:
 ## Building a machine or belt adds it to the factory.
 func _on_piece_added(key: String) -> void:
 	var piece: Dictionary = build.pieces[key]
+	stats.note_built(piece["id"])
 	match build.kind_of(piece["id"]):
 		"storage":
 			storages[key] = Inventory.new()
@@ -622,3 +684,58 @@ func _practice(skill: String, action: String) -> void:
 	var before := skills.level(skill)
 	if skills.practice(skill, action) > before:
 		add_message("%s is now level %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
+
+
+# --- The world gets worse (M11) -------------------------------------------------
+
+## Each new day: fresh food rots, and about three weeks in the town's gas goes stale.
+func _new_day() -> void:
+	var rotted := _spoil(inventory)
+	for key: String in storages:
+		_spoil(storages[key])
+	if rotted > 0:
+		add_message("%d of your vegetables rotted" % rotted, 5.0)
+	if clock.day >= int(data.survival["gas_stale_day"]) and vehicles.go_stale() > 0:
+		add_message("The gas left in the town's cars has gone stale", 6.0)
+
+
+## Fresh food (items.json "spoil_days" = how long it keeps, on average) rots into rotten food.
+## Returns how many rotted.
+func _spoil(inv: Inventory) -> int:
+	var rotted := 0
+	for item: String in inv.items():
+		var days := data.item_value(item, "spoil_days")
+		if days <= 0.0:
+			continue
+		var debt: float = float(inv.spoil_debt.get(item, 0.0)) + inv.count(item) / days
+		var n := mini(floori(debt), inv.count(item))
+		inv.spoil_debt[item] = debt - n
+		if n > 0:
+			inv.remove(item, n)
+			inv.add("rotten_food", n)
+			rotted += n
+	return rotted
+
+
+## Fresh food you find in the town has been sitting there since the outbreak: after a week it's rotten.
+func _rot_old_food(items: Dictionary) -> Dictionary:
+	if clock.day < int(data.survival["found_food_rots_day"]):
+		return items
+	var out := {}
+	for item: String in items:
+		var key := "rotten_food" if data.item_value(item, "spoil_days") > 0.0 else item
+		out[key] = int(out.get(key, 0)) + int(items[item])
+	return out
+
+
+func _count_kills() -> void:
+	for id: int in horde.zombies:
+		if horde.zombies[id].is_dead() and not _counted_dead.has(id):
+			_counted_dead[id] = true
+			tally["kills"] += 1
+
+
+## Days survived, deaths, kills and noise made (infamy), for the pause menu.
+func stats_text() -> String:
+	return "Day %d    Deaths %d    Zombies killed %d    Noise made %d" % [clock.day, tally["deaths"], tally["kills"],
+			roundi(director.infamy)]

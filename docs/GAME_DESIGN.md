@@ -192,10 +192,11 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
   - **Damage and storage:** hitting zombies hurts them and the car. The trunk is storage that shows up in the inventory screen.
   - **Saving:** cars are saved where you parked them.
   - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
+- [x] **P0 — Playtest kit.** Session log written on death and quit; first-game hints.
 
 **The long game** (see "Long game" above), in this order:
 
-- [ ] **M11 — The world gets worse.** Finite loot, stale gas, food spoilage, the infamy score, the first evolved zombies (runner, screamer), the stats screen.
+- [x] **M11 — The world gets worse.** Finite loot, stale gas, food spoilage, the infamy score, the first evolved zombies (runner, screamer), the stats screen.
 - [ ] **M12 — Skills and carry weight.** (Mechanics and the skill table already exist, since M10c.) Skills that level by doing, the Strength-based carry limit and bags, perk points, the three trees with a few perks each, synergies.
 - [ ] **M13 — Loot.** Rarity colors, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set.
 - [ ] **M14 — Guns.** Firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk.

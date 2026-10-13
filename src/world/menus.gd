@@ -12,6 +12,7 @@ signal settings_changed
 
 var _title: Control
 var _heading: Label
+var _stats_label: Label
 var _flicker := 0.0
 var _pause: Control
 var _settings: Control
@@ -47,6 +48,9 @@ func _init() -> void:
 	_load_button = _button(_pause, "Load last save", func() -> void: load_requested.emit())
 	_button(_pause, "Settings", func() -> void: show_settings("pause"))
 	_button(_pause, "Save and quit to title", func() -> void: quit_to_title.emit())
+	_stats_label = _label("", 20)
+	_stats_label.modulate = Color(1, 1, 1, 0.75)
+	_pause.get_child(0).add_child(_stats_label)
 	_status = _label("", 20)
 	_pause.get_child(0).add_child(_status)
 
@@ -224,3 +228,8 @@ func _process(delta: float) -> void:
 	if _flicker <= 0.0:
 		_flicker = randf_range(0.04, 0.12) if randf() < 0.3 else randf_range(0.8, 3.0)
 		_heading.modulate.a = randf_range(0.55, 0.85) if randf() < 0.5 else 1.0
+
+
+## The stats line under the pause menu: days, deaths, kills, noise made.
+func set_stats(text: String) -> void:
+	_stats_label.text = text

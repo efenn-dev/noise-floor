@@ -20,7 +20,10 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
+##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
+##   --hints                         show the first-game hints anyway (for screenshots)
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
 const SHOT_DELAY_FRAMES := 30
@@ -43,6 +46,8 @@ var zombie_view: ZombieView
 var melee: Melee
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
+var session_log: SessionLog
+var hints: Hints  # first-game hints; null after a load, with --demo-*/--cam/--no-hints, or in screenshots
 var cars: Dictionary = {}  # car id -> CarBody
 var driving: CarBody = null  # the car you're in, or null when walking
 
@@ -86,6 +91,13 @@ func _ready() -> void:
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
+	session_log = SessionLog.new()
+	session_log.enabled = _shot_path == "" and DisplayServer.get_name() != "headless"
+	if session_log.enabled and SessionLog.carried != null:
+		sim.stats = SessionLog.carried  # loading a save or quitting to the title is still the same sitting
+	sim.stats.muted = true  # building the town, a save or a demo base isn't the player's doing
+	add_child(session_log)
+	session_log.setup(sim)
 	_build_environment()
 	_build_ground()
 	_build_town()
@@ -97,6 +109,13 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	if _wants_hints(args):
+		hints = Hints.new()
+		hints.setup(sim, inventory_screen, noise_overlay)
+		hints.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE)
+		hints.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		hints.position.y -= 110
+		_hud.get_parent().add_child(hints)  # the HUD layer, so the title screen hides it too
 	if _loaded:
 		_apply_save(save)
 	_build_menus(args)
@@ -122,6 +141,19 @@ func _ready() -> void:
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	sim.stats.muted = false
+
+
+## First-game hints: a new game only (no save loaded, no --demo-*/--cam/--no-hints, not a screenshot).
+func _wants_hints(args: Dictionary) -> bool:
+	if args.has("hints"):
+		return true
+	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or GameSession.skip_hints:
+		return false
+	for key: String in args:
+		if key.begins_with("demo"):
+			return false
+	return true
 
 
 func _process(delta: float) -> void:
@@ -136,6 +168,8 @@ func _process(delta: float) -> void:
 		_footsteps(delta)
 	_update_hud(delta)
 	if _shot_path == "":
+		if not sim.paused:
+			sim.stats.add_real_time(delta / maxf(Engine.time_scale, 1.0))  # sleeping speeds time up
 		if sim.update(delta) > 0:
 			_apply_time()
 		return
@@ -302,6 +336,7 @@ func _build_menus(args: Dictionary) -> void:
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
 	elif args.has("pause"):
+		menus.set_stats(sim.stats_text())
 		menus.show_pause(has_save)
 	elif args.has("settings"):
 		menus.show_settings("pause")
@@ -318,6 +353,7 @@ func _start_playing() -> void:
 
 
 func _open_pause() -> void:
+	menus.set_stats(sim.stats_text())
 	menus.show_pause(FileAccess.file_exists(GameSession.save_path))
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -580,7 +616,7 @@ func _build_zombies(args: Dictionary) -> void:
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):
-			var z := sim.horde.spawn("shambler", Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
+			var z := sim.horde.spawn(args.get("zombie-type", "shambler"), Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
 			z.facing = (player.position - z.pos).normalized()
 	zombie_view = ZombieView.new()
 	add_child(zombie_view)
