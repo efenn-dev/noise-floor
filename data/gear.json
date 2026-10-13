@@ -1,0 +1,58 @@
+{
+	"slots": ["weapon", "head", "body", "hands", "light"],
+	"rarities": {
+		"white": {"name": "Common", "color": "#e6e6e6", "weight": 70, "stats": [0, 0]},
+		"blue": {"name": "Magic", "color": "#6f86ff", "weight": 20, "stats": [1, 2]},
+		"yellow": {"name": "Rare", "color": "#ffe85a", "weight": 8, "stats": [3, 5]},
+		"set": {"name": "Set", "color": "#3fd94a", "weight": 2},
+		"gold": {"name": "Unique", "color": "#c9a24a"},
+		"orange": {"name": "Crafted", "color": "#ff9a2e", "reserved": true}
+	},
+	"tiers": {
+		"civilian": {"name": "Civilian", "chance": 0.85, "base_mult": 1.0, "extra_stats": 0},
+		"police": {"name": "Police", "chance": 0.15, "base_mult": 1.25, "extra_stats": 1},
+		"military": {"name": "Military", "chance": 0.0, "base_mult": 1.5, "extra_stats": 2, "reserved": true}
+	},
+	"bases": {
+		"pipe": {"name": "Pipe", "slot": "weapon", "weapon": "pipe", "weight": 1.5},
+		"bat": {"name": "Baseball bat", "slot": "weapon", "weapon": "bat", "weight": 1.0},
+		"axe": {"name": "Axe", "slot": "weapon", "weapon": "axe", "weight": 2.0},
+		"machete": {"name": "Machete", "slot": "weapon", "weapon": "machete", "weight": 0.8},
+		"hard_hat": {"name": "Hard hat", "slot": "head", "weight": 0.4, "base": {"damage_cut": 0.05}},
+		"cap": {"name": "Cap", "slot": "head", "weight": 0.1, "base": {"walk_quiet": 1}},
+		"hi_vis_vest": {"name": "Hi-vis vest", "slot": "body", "weight": 0.3, "base": {"carry_kg": 3}},
+		"jacket": {"name": "Jacket", "slot": "body", "weight": 1.5, "base": {"damage_cut": 0.08}},
+		"work_gloves": {"name": "Work gloves", "slot": "hands", "weight": 0.2, "base": {"melee_damage": 0.05}},
+		"headlamp": {"name": "Headlamp", "slot": "light", "weight": 0.2, "base": {"search_speed": 0.05}}
+	},
+	"stats": {
+		"melee_damage": {"text": "+%d%% melee damage", "min": 0.10, "max": 0.25},
+		"fighter_perks": {"text": "+%d to Fighter perks", "min": 1, "max": 2, "int": true, "tree": "fighter"},
+		"ghost_perks": {"text": "+%d to Ghost perks", "min": 1, "max": 2, "int": true, "tree": "ghost"},
+		"engineer_perks": {"text": "+%d to Engineer perks", "min": 1, "max": 2, "int": true, "tree": "engineer"},
+		"strength": {"text": "+%d Strength", "min": 1, "max": 3, "int": true},
+		"gear_quiet": {"text": "%d quieter footsteps and swings", "min": 5, "max": 15, "int": true},
+		"carry_kg": {"text": "+%d kg carry", "min": 5, "max": 15, "int": true},
+		"durability": {"text": "+%d%% durability", "min": 0.10, "max": 0.30},
+		"search_speed": {"text": "+%d%% search speed", "min": 0.10, "max": 0.25}
+	},
+	"uniques": {
+		"petes_fire_axe": {"name": "Pete's Fire Axe", "base": "axe", "tier": "civilian",
+			"stats": {"melee_damage": [0.15, 0.30], "fighter_perks": [1, 2], "gear_quiet": [5, 10]}}
+	},
+	"sets": {
+		"night_shift": {"name": "Night Shift",
+			"pieces": {"hard_hat": "Night Shift Hard Hat", "hi_vis_vest": "Night Shift Vest",
+				"work_gloves": "Night Shift Gloves", "headlamp": "Night Shift Headlamp"},
+			"bonuses": {"2": {"search_speed": 0.15}, "3": {"carry_kg": 10}, "4": {"quiet_all": 3}},
+			"sources": ["factory_crate"]}
+	},
+	"containers": {"kitchen": 0.05, "bathroom": 0.05, "factory_crate": 0.25, "car_trunk": 0.15},
+	"zombie_drop": {"default": 0.10, "runner": 0.20},
+	"zombie_uniques": {"old_pete": "petes_fire_axe"},
+	"found_condition": [0.4, 1.0],
+	"wear_per_hit": 0.004,
+	"wear_per_day": 0.03,
+	"broken_below": 0.25,
+	"start_weapon": "pipe"
+}

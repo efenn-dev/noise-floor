@@ -213,7 +213,7 @@ func materials_text() -> String:
 	var stock: Inventory = _stock() if active else sim.inventory
 	for item: String in stock.items():
 		parts.append("%s %d" % [sim.data.item_name(item), stock.count(item)])
-	var kg := "%.1f / %d kg" % [sim.inventory.weight(sim.data), roundi(sim.carry_limit())]
+	var kg := "%.1f / %d kg" % [sim.carried_kg(), roundi(sim.carry_limit())]
 	var label := "Pockets + nearby crates: " if active else ""
 	return label + ("  ·  ".join(parts) if not parts.is_empty() else "Nothing carried") + "\n" + kg
 

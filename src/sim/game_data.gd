@@ -16,6 +16,7 @@ var noise: Dictionary = {}       # muffler, sounds, director tuning: see data/no
 var skills: Dictionary = {}      # levels, xp per action, hotwiring: data/skills.json
 var vehicles: Dictionary = {}    # car type -> size, seat, fuel, loudness, handling: data/vehicles.json
 var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, carry weight: data/survival.json
+var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
@@ -31,6 +32,7 @@ static func load_default() -> GameData:
 	data.vehicles = _read_json(DIR + "vehicles.json", data)
 	data.skills = _read_json(DIR + "skills.json", data)
 	data.loot = _read_json(DIR + "loot.json", data)
+	data.gear = _read_json(DIR + "gear.json", data)
 	return data
 
 
@@ -52,6 +54,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"size": Vector3(size[0], size[1], size[2]) if size.size() == 3 else Vector3.ZERO,
 			"cost": cost,
 			"recipe": b.get("recipe", ""),
+			"recipes": Array(b.get("recipes", [])),  # M13: a machine that can switch (the Press)
 			"hp": int(b.get("hp", 0)),
 			"loudness": float(b.get("loudness", 0.0)),
 			"watts": float(b.get("watts", 0.0)),          # power a machine draws while working
@@ -107,6 +110,9 @@ func validate() -> PackedStringArray:
 			errors.append("buildable '%s' needs positive hp" % id)
 		if b["kind"] == "machine" and not recipes.has(b["recipe"]):
 			errors.append("machine '%s' has unknown recipe '%s'" % [id, b["recipe"]])
+		for r: String in b["recipes"]:
+			if not recipes.has(r):
+				errors.append("machine '%s' can switch to unknown recipe '%s'" % [id, r])
 		if b["kind"] in ["generator", "solar"] and b["watts_out"] <= 0.0:
 			errors.append("%s '%s' needs a positive watts_out" % [b["kind"], id])
 		if b["kind"] == "generator" and (not items.has(b["fuel"]) or b["burn_time"] <= 0.0):
@@ -183,6 +189,7 @@ func validate() -> PackedStringArray:
 		for u: Dictionary in inf.get("unlocks", []):
 			if not zombies.has(u.get("type", "")):
 				errors.append("infamy unlocks unknown zombie '%s'" % u.get("type", ""))
+		_check_gear(errors, self)
 		if not items.has("rotten_food"):
 			errors.append("spoiled food needs a 'rotten_food' item")
 	return errors
@@ -225,6 +232,63 @@ static func _check_skills(errors: PackedStringArray, skills: Dictionary) -> void
 				errors.append("perk '%s' (tree %s) needs effects" % [p, t])
 			elif perks[p].has("synergy") and not trees.has(perks[p]["synergy"].get("tree", "")):
 				errors.append("perk '%s' synergy names an unknown tree" % p)
+
+
+## M13: gear.json. Rarity colours, tiers, bases (a slot, a weight, a weapon in weapons.json for
+## weapons), stat ranges (min <= max), uniques and sets naming real bases and stats, drop chances in 0..1.
+static func _check_gear(errors: PackedStringArray, d: GameData) -> void:
+	var g := d.gear
+	if g.is_empty():
+		errors.append("no gear data")
+		return
+	var slots: Array = g.get("slots", [])
+	for r: String in ["white", "blue", "yellow", "gold", "set", "orange"]:
+		if not g.get("rarities", {}).has(r) or Color.from_string(str(g["rarities"][r].get("color", "")), Color(0, 0, 0, 0)).a == 0.0:
+			errors.append("gear rarity '%s' needs a colour" % r)
+	for r: String in ["white", "blue", "yellow"]:
+		var span: Array = g.get("rarities", {}).get(r, {}).get("stats", [])
+		if span.size() != 2 or int(span[0]) > int(span[1]):
+			errors.append("gear rarity '%s' needs stats [min, max]" % r)
+	for t: String in ["civilian", "police"]:
+		var tier: Dictionary = g.get("tiers", {}).get(t, {})
+		if float(tier.get("base_mult", 0)) <= 0.0 or float(tier.get("chance", -1)) < 0.0:
+			errors.append("gear tier '%s' needs base_mult and chance" % t)
+	for b: String in g.get("bases", {}):
+		var base: Dictionary = g["bases"][b]
+		if not base.get("slot", "") in slots or float(base.get("weight", 0)) <= 0.0:
+			errors.append("gear base '%s' needs a slot and a weight" % b)
+		if base.get("slot", "") == "weapon" and not d.weapons.has(base.get("weapon", "")):
+			errors.append("gear base '%s' needs a weapon in weapons.json" % b)
+	for s: String in g.get("stats", {}):
+		var st: Dictionary = g["stats"][s]
+		if float(st.get("min", 0)) <= 0.0 or float(st.get("max", 0)) < float(st.get("min", 0)) or not "%d" in str(st.get("text", "")):
+			errors.append("gear stat '%s' needs 0 < min <= max and a text with %%d" % s)
+	for u: String in g.get("uniques", {}):
+		var un: Dictionary = g["uniques"][u]
+		if not g.get("bases", {}).has(un.get("base", "")) or un.get("stats", {}).is_empty():
+			errors.append("unique '%s' needs a base and stats" % u)
+		for s: String in un.get("stats", {}):
+			if not g.get("stats", {}).has(s) or float(un["stats"][s][1]) < float(un["stats"][s][0]):
+				errors.append("unique '%s' has a bad stat '%s'" % [u, s])
+	for s: String in g.get("sets", {}):
+		for b: String in g["sets"][s].get("pieces", {}):
+			if not g.get("bases", {}).has(b):
+				errors.append("set '%s' names unknown base '%s'" % [s, b])
+		if g["sets"][s].get("bonuses", {}).is_empty():
+			errors.append("set '%s' needs bonuses" % s)
+	for table: String in g.get("containers", {}):
+		if not d.loot.has(table) or float(g["containers"][table]) < 0.0 or float(g["containers"][table]) > 1.0:
+			errors.append("gear chance for '%s' needs a loot table and a chance in 0..1" % table)
+	for z: String in g.get("zombie_uniques", {}):
+		if not d.zombies.has(z) or not g.get("uniques", {}).has(g["zombie_uniques"][z]):
+			errors.append("zombie unique '%s' needs a zombie and a unique" % z)
+	if not g.get("bases", {}).has(g.get("start_weapon", "")):
+		errors.append("gear needs a start_weapon base")
+	for key: String in ["wear_per_hit", "wear_per_day", "broken_below"]:
+		if float(g.get(key, 0)) <= 0.0:
+			errors.append("gear needs a positive '%s'" % key)
+	if not d.weapons.has("fists"):
+		errors.append("weapons.json needs 'fists' (no weapon equipped)")
 
 
 static func _check_stats(errors: PackedStringArray, what: String, table: Dictionary, keys: Array) -> void:

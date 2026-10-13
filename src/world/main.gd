@@ -21,6 +21,8 @@ extends Node3D
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
 ##   --skills                        open the skills and perks screen (K in game)
+##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
+##                                   shown in the inventory screen (M13)
 ##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
@@ -154,11 +156,33 @@ func _ready() -> void:
 		inventory_screen.open()
 		if args["inventory"] != "":
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
+	if args.has("gear"):
+		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
 		skills_screen.open()  # --skills, for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	sim.stats.muted = false
+
+
+## --gear=RARITY (white, blue, yellow, gold, set): puts a rolled piece of that rarity in your pockets and
+## opens the inventory screen with it selected, for screenshots and trying gear out.
+func _give_rolled_gear(rarity: String) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 13
+	var piece := {}
+	if rarity == "gold":
+		piece = sim.gear.roll_unique(rng, "petes_fire_axe")
+	else:
+		for i in 2000:
+			piece = sim.gear.roll_piece(rng, "factory_crate")
+			if piece["rarity"] == (rarity if rarity != "" else "yellow"):
+				break
+	sim.gear.pieces.append(piece)
+	sim.player_pos = player.global_position
+	if not inventory_screen.is_open():
+		inventory_screen.open()
+	inventory_screen.select_gear(piece["uid"])
 
 
 ## First-game hints: a new game only (no save loaded, no --demo-*/--cam/--no-hints, not a screenshot).
@@ -446,7 +470,7 @@ func _on_respawned() -> void:
 
 func _update_hud(delta: float) -> void:
 	_build_label.text = builder.status_text()
-	_materials_hud.text = builder.materials_text()
+	_materials_hud.text = builder.materials_text() + "\nWeapon: %s" % sim.gear.weapon_name()  # M13
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else melee.last_message
 	var notes := PackedStringArray()
@@ -670,6 +694,7 @@ func _build_zombies(args: Dictionary) -> void:
 		sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
 		if args.get("zombies", "") != "0":
 			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
+			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):

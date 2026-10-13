@@ -477,7 +477,7 @@ func test_save_and_load_xp_perks_and_points() -> void:
 	a.skills.perks = {"soft_step": 2, "fast_lines": 1}
 	a.skills.perk_points = 3
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(d["version"]), 5, "a version-5 save")
+	eq(int(d["version"]), SaveGame.VERSION, "saved as the current version")
 	var b := SimWorld.new(10.0, null, 5)
 	eq(SaveGame.apply(b, d), "", "loads")
 	near(b.skills.xp["sneaking"], 41.5, "xp back")

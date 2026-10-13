@@ -6,5 +6,9 @@
 		"range": 2.2,
 		"cooldown": 0.7,
 		"knockback": 3.0
-	}
+	},
+	"bat": { "name": "Baseball bat", "damage": 30, "head_multiplier": 2.0, "range": 2.3, "cooldown": 0.6, "knockback": 4.0 },
+	"axe": { "name": "Axe", "damage": 48, "head_multiplier": 2.0, "range": 2.1, "cooldown": 0.95, "knockback": 2.5 },
+	"machete": { "name": "Machete", "damage": 38, "head_multiplier": 2.2, "range": 2.0, "cooldown": 0.55, "knockback": 1.5 },
+	"fists": { "name": "Fists", "damage": 10, "head_multiplier": 1.5, "range": 1.6, "cooldown": 0.5, "knockback": 1.0 }
 }

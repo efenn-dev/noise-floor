@@ -34,5 +34,11 @@
 		"time": 5.0,
 		"in": { "vegetable": 2, "metal_plate": 1 },
 		"out": { "canned_food": 2 }
+	},
+	"repair_kit": {
+		"name": "Repair kit",
+		"time": 6.0,
+		"in": { "metal_plate": 1, "nails": 4 },
+		"out": { "repair_kit": 1 }
 	}
 }

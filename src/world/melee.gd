@@ -41,7 +41,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	_pipe.visible = not builder.active and not sim.player.dead
+	_pipe.visible = not builder.active and not sim.player.dead and sim.gear.equipped.has("weapon")  # bare fists: no pipe
 	_swing = minf(1.0, _swing + delta / SWING_TIME)
 	_pose(_swing)
 	_message_time -= delta

@@ -16,6 +16,9 @@ var xp: Dictionary = {}     # skill -> total xp
 var perks: Dictionary = {}  # perk -> rank (1-5); missing = 0
 ## Points earned and not yet spent. Never refunded (respec is a later milestone).
 var perk_points := 0
+## M13: what you wear. bonus() adds its stats in, Strength levels from gear count for Strength's
+## effects, and "+N to <tree> perks" raises every perk you have a rank in, in that tree (past 5 too).
+var gear: Gear
 
 
 func _init(p_data: GameData) -> void:
@@ -133,9 +136,9 @@ func bonus(effect: String) -> float:
 	for s: String in data.skills["skills"]:
 		var effects: Dictionary = data.skills["skills"][s].get("effects", {})
 		if effects.has(effect):
-			total += _amount(effects[effect], level(s))
+			total += _amount(effects[effect], effective_level(s))
 	for perk: String in perks:
-		var r := rank(perk)
+		var r := effective_rank(perk)
 		var p: Dictionary = data.skills["perks"].get(perk, {})
 		if r <= 0 or p.is_empty():
 			continue
@@ -144,7 +147,30 @@ func bonus(effect: String) -> float:
 		var syn: Dictionary = p.get("synergy", {})
 		if syn.get("effects", {}).has(effect):
 			total += float(syn["effects"][effect]) * (tree_points(syn["tree"]) / int(syn["every"]))
+	if gear != null:
+		total += gear.bonus(effect)
 	return total
+
+
+## A skill's level for its effects: the level you earned plus any "+N <skill>" on your gear (M13).
+func effective_level(skill: String) -> int:
+	return level(skill) + (roundi(gear.bonus(skill)) if gear != null else 0)
+
+
+## A perk's rank for its effects: the ranks you bought plus "+N to <tree> perks" from gear, but only
+## if you bought at least one rank. Can go past perk_max_rank.
+func effective_rank(perk: String) -> int:
+	var r := rank(perk)
+	if r <= 0 or gear == null:
+		return r
+	return r + roundi(gear.bonus(tree_of(perk) + "_perks"))
+
+
+func tree_of(perk: String) -> String:
+	for t: String in data.skills["trees"]:
+		if perk in data.skills["trees"][t]["perks"]:
+			return t
+	return ""
 
 
 static func _amount(spec: Variant, n: int) -> float:

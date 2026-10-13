@@ -80,7 +80,8 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	rng.seed = hash([seed_value, active])
 	var table: Dictionary = data.loot[c["table"]]
 	var items := roll(table, rng)
-	if skills != null and rng.randf() < skills.bonus("lucky_find"):  # one more pick from the same table
+	var lucky := skills != null and rng.randf() < skills.bonus("lucky_find")
+	if lucky:  # one more pick from the same table
 		var one := table.duplicate()
 		one["rolls"] = [1, 1]
 		for item: String in (roll(one, rng) as Dictionary):
@@ -88,7 +89,7 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	for item: String in c.get("extra", {}):
 		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
-	var done := {"id": active, "items": items}
+	var done := {"id": active, "items": items, "table": c["table"], "lucky": lucky}
 	active = ""
 	return done
 
