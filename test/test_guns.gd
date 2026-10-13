@@ -399,16 +399,20 @@ func test_old_pete_carries_his_deer_rifle() -> void:
 	var pete := sim.spawn_old_pete()
 	pete.take_hit(1000.0, Vector3.ZERO, 0.0)
 	sim.step()
-	var rifle: Dictionary = sim.bags[0]["gear"][1]
-	eq(rifle["name"], "Old Pete's Deer Rifle", "his deer rifle is in the bag too")
+	var cid := SimWorld.CORPSE + str(pete.id)  # S4: he carries it; his body is searched, not a bag
+	var rifle: Dictionary = sim.loot.containers[cid]["gear"][1]
+	eq(rifle["name"], "Old Pete's Deer Rifle", "his deer rifle is on his body too")
 	eq(rifle["rarity"], "gold", "gold")
-	eq(sim.bags[0]["items"].get("ammo_standard", 0), 10, "with 10 rounds")
+	eq(sim.loot.containers[cid]["extra"].get("ammo_standard", 0), 10, "with 10 rounds")
 	var st := sim.gear.gun_stats(rifle)
 	var base := float(sim.data.guns["guns"]["hunting_rifle"]["damage"])
 	check(st["damage"] >= base * 1.15 - 0.01 and st["damage"] <= base * 1.30 + 0.01, "+15-30% damage")
 	check(st["loudness"] >= 85.0 and st["loudness"] <= 90.0, "5-10 quieter (%d)" % st["loudness"])
 	sim.player_pos = pete.pos
-	sim.take_bag(sim.bags[0]["id"])
+	eq(sim.search(cid), "", "search the body")
+	for i in roundi(sim.loot.search_time() / SimWorld.TICK) + 2:
+		sim.step()
+	eq(sim.inventory.count("ammo_standard"), 10, "the rounds are in your pockets")
 	sim.equip_gear(rifle["uid"])
 	sim.skills.perks["steady_hands"] = 1
 	check(sim.skills.effective_rank("steady_hands") >= 2, "+1-2 to Fighter perks counts while it's equipped")

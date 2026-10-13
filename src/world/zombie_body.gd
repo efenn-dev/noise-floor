@@ -45,6 +45,8 @@ var _last_good := Vector3.ZERO  # Q1: the last finite position after a move (see
 ## Q1: how many times a move came back NaN and was undone (for tests and the soak).
 var nan_recoveries := 0
 var _frame := 0
+var _shape: CollisionShape3D
+var _corpse_shape: CollisionShape3D
 var _last_target := Vector3.INF
 var _fall := 0.0
 var _model: Node3D
@@ -126,10 +128,19 @@ func _init() -> void:
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = RADIUS
 	capsule.height = HEIGHT
-	var shape := CollisionShape3D.new()
-	shape.shape = capsule
-	shape.position.y = HEIGHT / 2.0
-	add_child(shape)
+	_shape = CollisionShape3D.new()
+	_shape.shape = capsule
+	_shape.position.y = HEIGHT / 2.0
+	add_child(_shape)
+	# S4: once it's dead the capsule goes and this low slab takes over, so the look ray finds the body on the
+	# ground (E searches it, like a bag) and nothing trips over a standing ghost.
+	_corpse_shape = CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(1.3, 0.4, 1.3)
+	_corpse_shape.shape = slab
+	_corpse_shape.position.y = 0.2
+	_corpse_shape.disabled = true
+	add_child(_corpse_shape)
 	_build_mesh()
 	agent = NavigationAgent3D.new()
 	agent.path_desired_distance = 0.6
@@ -233,9 +244,12 @@ func _blocking_piece(dir: Vector3) -> String:
 
 
 func _lie_down(delta: float) -> void:
-	if collision_layer != 0:
-		collision_layer = 0
+	if collision_layer != Layers.BAG:
+		collision_layer = Layers.BAG  # S4: only the look ray sees a corpse (like a dropped bag)
 		collision_mask = Layers.WORLD
+		_shape.disabled = true
+		_corpse_shape.disabled = false
+		set_meta("container_id", SimWorld.CORPSE + str(brain.id))  # the Interactor offers to search it
 	_fall = minf(1.0, _fall + delta * 2.5)  # the Death animation does the falling
 	velocity = Vector3(0, velocity.y - _gravity * delta, 0) if not is_on_floor() else Vector3.ZERO
 	move_and_slide()

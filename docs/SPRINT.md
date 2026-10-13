@@ -2,7 +2,7 @@
 
 *Updated 2026-10-13 evening by Claude Fable 5.1 after your Playtest #1 notes. Everything from the day run is merged; `main` is #41.*
 
-**One pull request to merge: S3 (branch `s3-playtest-fixes`).** It fixes the two things you hit (driving, doors) and adds what you asked for (a hotbar and a build menu). After the merge, `play.bat` picks it up. Try, in order: walk to the red sedan, E at its back to search the trunk for the key, E at its side to get in, W to drive, E to get out. Open a house door with E, walk in, turn round and press E on the open door to close it. Press 1 and click to lay a foundation; B for the build menu; point at a piece in it and press a number to put it on that key; Tab, click a bandage, press 0. Then tell the lead what felt wrong and the next sprint-3 pass is tuning from that.
+**Two pull requests to merge, in order: S3 (branch `s3-playtest-fixes`), then S4 (branch `s4-playtest-1b`, stacked on it; it shows both until S3 merges).** S4 adds pictures on the hotbar and in the build menu, green tips that walk you through your first factory with power and loading, bodies you can search (E on a dead zombie), and jumpscare stings. The first-factory steps are also under F1. It fixes the two things you hit (driving, doors) and adds what you asked for (a hotbar and a build menu). After the merge, `play.bat` picks it up. Try, in order: walk to the red sedan, E at its back to search the trunk for the key, E at its side to get in, W to drive, E to get out. Open a house door with E, walk in, turn round and press E on the open door to close it. Press 1 and click to lay a foundation; B for the build menu; point at a piece in it and press a number to put it on that key; Tab, click a bandage, press 0. Then tell the lead what felt wrong and the next sprint-3 pass is tuning from that.
 
 ---
 
@@ -19,7 +19,9 @@ Emmitt drives a car, closes a door behind him, and builds from a hotbar and a bu
 | # | Task | Owner | Status | Done when |
 |---|---|---|---|---|
 | S3-1 | Playtest #1 fixes: driving (E bounced you out), doors (couldn't close, walked through the open panel), plus the hotbar (1-9, 0) and the build menu (B) he asked for | Fable 5.1, worktree `noise-floor-s3`, branch `s3-playtest-fixes` | PR open; tests green; screenshots checked | PR merged; Emmitt drives, closes a door, builds from the hotbar |
-| S3-2 | Playtest #2 on the merged build (30 min, session log pasted in) | Emmitt (+ Kaleb) | Waiting on S3-1 | Entry in `docs/PLAYTESTS.md` |
+| S3-1b | Second pass from Playtest #1 (his second message): piece pictures, first-factory walkthrough (hints, build menu notes, F1 guide, no-power message), lootable corpses, jumpscare stings | Fable 5.1, worktree `noise-floor-s4`, branch `s4-playtest-1b` | PR open; tests green; screenshots checked | PR merged; Emmitt builds a running smelter from the tips alone |
+| S3-1c | Art pass with Codex: zombie skin and clothes textures (object-space triplanar, like car paint), gun metal and wood, then clothes variety per zombie | Fable (Codex and Blender are PC-only) | Not started; after Playtest #2 unless Emmitt wants it first | Zombies and guns read as textured in a screenshot |
+| S3-2 | Playtest #2 on the merged build (30 min, session log pasted in) | Emmitt (+ Kaleb) | Waiting on S3-1 and S3-1b | Entry in `docs/PLAYTESTS.md` |
 | S3-3 | Tuning from Playtest #2 (the builders' flagged soft spots: infamy and heat climb, early water, winter stove, park difficulty) | Fable plans, Opus 5.5 builds | Waiting on S3-2 | PR merged |
 
 ---

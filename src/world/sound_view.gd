@@ -41,6 +41,10 @@ var sim: SimWorld
 var _hums: Dictionary = {}  # noise key -> AudioStreamPlayer3D
 var _heard: Array = []  # noise events already played (by reference)
 var _shots: Array = []  # turret shots already played (by reference)
+var _scares: Array = []  # S4: jumpscare stings already played (by reference)
+var scares_played := 0  # for tests
+## S4: the stings, not positional: they're in your head, not in the world.
+const STINGS := {"close": ["sting_close", -3.0], "horde": ["sting_horde", -1.0]}
 var _wind_day: AudioStreamPlayer
 var _wind_night: AudioStreamPlayer
 var _step := 0
@@ -96,6 +100,7 @@ func _process(_delta: float) -> void:
 	_update_hums()
 	_play_new_events()
 	_play_new_shots()
+	_play_new_scares()
 	var light := sim.clock.daylight()
 	_wind_day.volume_db = linear_to_db(maxf(light, 0.001)) - 6.0
 	_wind_night.volume_db = linear_to_db(maxf(1.0 - light, 0.001)) - 4.0
@@ -151,6 +156,28 @@ func _play_new_events() -> void:
 			boost = GUN_BOOST
 		play_at(self, options[_step % options.size()], s["pos"], volume_for(s["loudness"]) + boost, randf_range(0.92, 1.08))
 	_heard = now.duplicate()
+
+
+## S4: a sting for each new jumpscare the sim's Scares fired (a zombie in your face round a corner, a mob
+## turning on you).
+func _play_new_scares() -> void:
+	for e: Dictionary in sim.scares.fired:
+		if _seen(_scares, e) or not STINGS.has(e["kind"]):
+			continue
+		_scares.append(e)
+		scares_played += 1
+		var s := stream(STINGS[e["kind"]][0])
+		if s == null:
+			continue
+		var p := AudioStreamPlayer.new()
+		p.stream = s
+		p.volume_db = float(STINGS[e["kind"]][1])
+		add_child(p)
+		p.finished.connect(p.queue_free)
+		if audible:
+			p.play()
+	while _scares.size() > Scares.KEEP:
+		_scares.pop_front()
 
 
 func _play_new_shots() -> void:

@@ -62,6 +62,9 @@ var player_pos := Vector3.ZERO
 ## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
 var house_cells: Dictionary = {}
 var player_lit := false
+var player_facing := Vector3(0, 0, -1)  # S4: where you look (flat), for the jumpscare rules
+var scares: Scares  # S4: jumpscare stings (SoundView plays scares.fired)
+var _told_corpse := false  # S4: "dead zombies can be searched", once
 ## Written by the world each frame: moving while crouched (Sneaking xp near zombies that haven't noticed you).
 var player_sneaking := false
 var spawn_point := Vector3.ZERO
@@ -92,6 +95,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	loot = Loot.new(data, seed_value)
 	vehicles = Vehicles.new(data)
 	hotbar = Hotbar.new(data)
+	scares = Scares.new()
 	base_log = BaseLog.new(data, build)
 	automation = Automation.new(data, build, power, noise)
 	automation.base_log = base_log
@@ -186,11 +190,15 @@ func step() -> void:
 		var names := PackedStringArray()
 		if not found["items"].is_empty():
 			names.append(_list(found["items"]))
-		for piece: Dictionary in _search_gear(found):
+		for piece: Dictionary in found.get("gear", []) + _search_gear(found):  # S4: a corpse's pieces first
 			gear.pieces.append(piece)
 			stats.note_gear(piece.get("rarity", "white"))
 			names.append(piece["name"])
 			_announce(piece, "You find")
+		if found["id"].begins_with(CORPSE):
+			var zid := int(found["id"].trim_prefix(CORPSE))
+			if horde.zombies.has(zid):
+				horde.zombies[zid].searched = true  # S4: a looted corpse is cleared sooner
 		var armoury := _search_guns(found)  # M14: guns, parts and ammo, on their own seeded stream
 		if not armoury["items"].is_empty():
 			inventory.give_all(armoury["items"])
@@ -227,6 +235,7 @@ func step() -> void:
 						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
 			if build.damage(target, int(z.stats["structure_damage"])):
 				noise.emit_kind(at, "wreck")
+	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.tick(TICK, horde, noise)
 	automation.tick(TICK, horde, night, defense.bells)
 	base_log.tick(TICK)
@@ -1398,9 +1407,16 @@ func know_houses(plan: Dictionary) -> void:
 
 
 ## Placing a piece yourself trains Building (not the town, a save or a demo base being laid).
-func _on_piece_built(_key: String) -> void:
+func _on_piece_built(key: String) -> void:
 	if not stats.muted:
 		_practice("building", "place")
+	# S4 (Playtest #1: "not able to figure out the building and machines"): a machine placed with no power
+	# says so at once, instead of standing there silent.
+	if build.pieces.has(key) and build.kind_of(build.pieces[key]["id"]) == "machine" and not power.free:
+		var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+		if float(b.get("watts", 0.0)) > 0.0 and power.network_of(key).is_empty():
+			add_message("%s placed. It needs power: a generator (E loads gas cans) or a solar panel, and a power pole within %d m"
+					% [b["name"], int(data.buildables["power_pole"]["reach"])], 8.0)
 
 
 # --- The world gets worse (M11) -------------------------------------------------
@@ -1447,12 +1463,29 @@ func _rot_old_food(items: Dictionary) -> Dictionary:
 	return out
 
 
+const CORPSE := "corpse_"  # S4: loot container id prefix for a dead zombie
+
+
 func _count_kills() -> void:
 	for id: int in horde.zombies:
 		if horde.zombies[id].is_dead() and not _counted_dead.has(id):
 			_counted_dead[id] = true
 			tally["kills"] += 1
-			_zombie_drop(horde.zombies[id])
+			_add_corpse(horde.zombies[id])
+	for cid: String in loot.containers.keys():  # a cleared corpse takes its container with it
+		if cid.begins_with(CORPSE) and not horde.zombies.has(int(cid.trim_prefix(CORPSE))):
+			loot.remove(cid)
+
+
+## S4: a dead zombie becomes a searchable container where it fell (Zomboid-style): the "zombie" loot table,
+## plus whatever it carried (_zombie_drop).
+func _add_corpse(z: ZombieBrain) -> void:
+	var cid := CORPSE + str(z.id)
+	loot.add(cid, "zombie", z.pos)
+	_zombie_drop(z, cid)
+	if not _told_corpse:
+		_told_corpse = true
+		add_message("Dead zombies can be searched (E on the body)", 5.0)
 
 
 # --- Loot (M13) --------------------------------------------------------------------
@@ -1472,9 +1505,9 @@ func _search_gear(found: Dictionary) -> Array:
 	return out
 
 
-## A dead zombie may drop a piece into a bag where it fell: zombie_drop chance by type (runners more),
-## and a named zombie always drops its unique (Old Pete: Pete's Fire Axe).
-func _zombie_drop(z: ZombieBrain) -> void:
+## A dead zombie may carry a piece (S4: in its corpse, searched with E; it used to drop a bag): zombie_drop
+## chance by type (runners more), and a named zombie always carries its unique (Old Pete: Pete's Fire Axe).
+func _zombie_drop(z: ZombieBrain, cid: String) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "drop", z.id])
 	var piece := {}
@@ -1488,14 +1521,13 @@ func _zombie_drop(z: ZombieBrain) -> void:
 	stats.note_gear(piece.get("rarity", "white"))
 	var extra: Dictionary = data.guns["zombie_extra_uniques"].get(z.type, {})
 	if not extra.is_empty():  # M14: Old Pete also carries his deer rifle and some rounds
-		drop_bag(z.pos, extra.get("ammo", {}).duplicate(), [piece, gear.roll_unique(rng, extra["unique"])])
+		loot.add_extra(cid, extra.get("ammo", {}).duplicate())
+		loot.add_gear(cid, [piece, gear.roll_unique(rng, extra["unique"])])
 	else:
-		drop_bag(z.pos, {}, [piece])
-	var who: String = data.zombies[z.type]["name"] if unique != "" else "The zombie"
-	if piece["rarity"] in ["gold", "set"]:
-		add_message("%s drops something %s" % [who, Gear.rarity_word(piece["rarity"])], 6.0)
-	else:
-		add_message("%s dropped something" % who, 3.0)
+		loot.add_gear(cid, [piece])
+	if unique != "" or piece["rarity"] in ["gold", "set"]:
+		add_message("%s is carrying something %s: search the body" % [data.zombies[z.type]["name"] if unique != "" else "That one",
+				Gear.rarity_word(piece["rarity"])], 6.0)
 
 
 ## A message when you find a unique or set piece in a search.

@@ -24,6 +24,7 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Wanted: **a hotbar for items like Satisfactory, and a build menu**, where anything from the build menu or any usable item can be put on a hotbar key.
 - Fix first: driving, then doors, then the hotbar and build menu (all three in S3, the first Sprint 3 pull request).
 - Session log: not supplied.
+- **Second message, same evening (after S3 was up):** "give the hotbar pictures and work on better textures for the gun and zombies. Zombies look great but I want them to be lootable like in Zomboid and we will eventually add clothes so each one can be unique. There is a lot of work to do and I don't want to get crazy on you. I'd like jumpscare sounds when a zombie surprises you around a corner or a large mob gets aggroed like in Zomboid. I was also not able to figure out the building and machines." → S4: pictures, lootable corpses, the two stings, and a first-factory walkthrough in the hints, the build menu and F1. Textures and clothes: an art pass with Codex, next.
 
 ## 2026-10-12 — Emmitt, length not recorded (verbal, relayed by the lead), build 15f2c95 (M10c: play.bat had not picked up PRs #16–#18)
 - First five minutes: looked for a way into the houses; there is none. The houses are closed boxes.

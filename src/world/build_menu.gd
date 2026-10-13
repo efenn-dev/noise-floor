@@ -16,6 +16,13 @@ const GROUPS := [
 	["Defense", ["spikes", "nail_turret", "crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor",
 			"floodlight", "noisemaker", "bear_trap", "tripwire", "electric_fence", "repair_station"]],
 ]
+## S4: one line under each group's title saying how its pieces work (Playtest #1).
+const GROUP_NOTES := {
+	"Base": "Lay foundations first (key 1): walls, doors and machines stand on them.",
+	"Factory": "Machines stand on a foundation and most need power. E on a machine loads it and takes what it made.",
+	"Power": "A generator (E loads gas cans) or a solar panel, plus a power pole within reach of what it feeds.",
+	"Defense": "Turrets need ammo (E, a belt or a hopper). Sensors pick an action with E.",
+}
 ## One plain line per piece (test_build_menu.gd checks every piece has one).
 const BLURBS := {
 	"foundation": "A 2 m floor square. Walls and machines stand on it.",
@@ -236,6 +243,13 @@ func _build() -> void:
 		gt.add_theme_font_size_override("font_size", 20)
 		gt.add_theme_color_override("font_color", GOLD)
 		box.add_child(gt)
+		var note := Label.new()
+		note.text = String(GROUP_NOTES.get(g[0], ""))
+		note.add_theme_font_size_override("font_size", 13)
+		note.modulate = Color(1, 1, 1, 0.7)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		note.custom_minimum_size = Vector2(250, 0)
+		box.add_child(note)
 		for id: String in g[1]:
 			if not sim.data.buildables.has(id):
 				continue
@@ -247,6 +261,11 @@ func _build() -> void:
 			b.toggle_mode = true
 			b.custom_minimum_size = Vector2(250, 30)
 			b.add_theme_font_size_override("font_size", 15)
+			var pic := InventoryScreen.icon_for("piece_" + id)  # S4: tools/art/piece_icons.gd
+			if pic != null:
+				b.icon = pic
+				b.expand_icon = true
+				b.add_theme_constant_override("icon_max_width", 26)
 			b.mouse_entered.connect(highlight.bind(id))
 			b.pressed.connect(pick.bind(id))
 			box.add_child(b)

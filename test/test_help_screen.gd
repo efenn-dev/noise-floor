@@ -51,6 +51,10 @@ func test_f1_opens_and_closes_it_in_game() -> void:
 	for row: Array in HelpScreen.ROWS:
 		check(("%s:  %s" % [HelpScreen.keys_for(row), row[3]]) in text, "it shows '%s'" % row[3])
 	check(not main.get_tree().paused, "the game keeps running underneath")
+	var guide := help.guide_text()  # S4
+	for step: String in HelpScreen.GUIDE:
+		check(step in guide, "the first-factory guide shows '%s'" % step.left(30))
+	check("power" in guide and "E on the smelter" in guide, "it covers power and loading")
 	_key(vp, KEY_F1)
 	check(not help.is_open(), "F1 closes it")
 	_key(vp, KEY_F1)

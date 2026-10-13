@@ -30,7 +30,7 @@ The world ended a few weeks ago. You're alone on the edge of a dead factory town
 Health, hunger, thirst, fatigue, and stamina (sprinting, swinging). Simple injuries: bleeding, fixed with bandages. Death respawns you at your bed with your skills kept. Everything you carried stays where you died until you go back and loot it, and nothing despawns if you die again first. M4 does this with a bag; later it becomes your body. A permadeath hardcore mode comes later as an option.
 
 ### Scavenging
-Searchable containers in houses, cars and shops (cabinets, fridges, car trunks), each with a loot table. Searching takes time and makes a little noise.
+Searchable containers in houses, cars and shops (cabinets, fridges, car trunks), each with a loot table. Searching takes time and makes a little noise. **S4 (2026-10-13):** dead zombies are containers too (E on the body): a small table plus whatever the zombie carried; the body lies there four game-hours, thirty seconds once searched. Later: clothes on each zombie, so they look different and give different things.
 
 **Storage (added in M6):** storage crates hold what you can't carry. Building and hand-feeding machines draw from your pockets first, then from any crate within 30 m, and build refunds go back into the crate. The starting kit begins in a crate next to the spawn point.
 

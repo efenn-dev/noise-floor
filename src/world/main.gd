@@ -539,6 +539,9 @@ func _sync_player() -> void:
 	if not sim.player.dead and driving == null:
 		sim.player_pos = player.global_position  # while driving, the car reports where you are
 	sim.player_lit = player.flashlight.visible
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		sim.player_facing = -cam.global_basis.z  # S4: for the jumpscare rules
 	sim.player_sneaking = driving == null and player.crouching and player.is_on_floor() \
 			and Vector2(player.velocity.x, player.velocity.z).length() > 0.5
 
@@ -1102,6 +1105,8 @@ func _build_zombies(args: Dictionary) -> void:
 		for i in range(0, v.size() - 1, 2):
 			var z := sim.horde.spawn(args.get("zombie-type", "shambler"), Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
 			z.facing = (player.position - z.pos).normalized()
+			if args.has("dead-zombies"):  # S4: a corpse to look at (with --advance so the sim registers it)
+				z.take_hit(1000.0, Vector3.ZERO, 0.0)
 	zombie_view = ZombieView.new()
 	add_child(zombie_view)
 	zombie_view.setup(sim, player)
