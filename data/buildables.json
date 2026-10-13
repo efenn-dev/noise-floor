@@ -18,7 +18,8 @@
 		"kind": "door",
 		"hp": 150,
 		"size": [2.0, 2.4, 0.12],
-		"cost": { "plank": 6, "nails": 8 }
+		"cost": { "plank": 6, "nails": 8 },
+		"salvage": { "plank": 2 }
 	},
 	"barricade": {
 		"name": "Barricade",
@@ -176,7 +177,8 @@
 		"kind": "bed",
 		"hp": 60,
 		"size": [1.0, 0.5, 1.9],
-		"cost": { "plank": 6, "nails": 10 }
+		"cost": { "plank": 6, "nails": 10 },
+		"salvage": { "plank": 3, "scrap_metal": 1 }
 	},
 	"storage": {
 		"name": "Storage crate",

@@ -5,7 +5,7 @@ extends Control
 ## a shot, closes as the recoil settles, and is tighter with a scope, Firearms levels or zoomed in. HUD only:
 ## it never catches the mouse (see test_main_input.gd).
 
-const ARM := Vector2(10, 2)  # length and thickness of each tick, in pixels
+const ARM := Vector2(12, 3)  # length and thickness of each tick, in pixels (P3: was 10 x 2, too thin in fog)
 const MIN_GAP := 3.0
 const MAX_GAP := 220.0
 
@@ -18,13 +18,13 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for i in 4:
 		var sh := ColorRect.new()
-		sh.color = Color(0, 0, 0, 0.45)
+		sh.color = Color(0, 0, 0, 0.8)  # P3: was 0.45, lost in bright fog
 		sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(sh)
 		_shadows.append(sh)
 	for i in 4:
 		var r := ColorRect.new()
-		r.color = Color(1, 1, 1, 0.85)
+		r.color = Color(1, 1, 1, 0.95)
 		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(r)
 		_arms.append(r)

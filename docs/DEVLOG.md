@@ -2,6 +2,40 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — P3 Playtest readiness
+
+From the P3 brief by the project lead, on top of P2 (PR #31). No new content, no tuning: the game explains itself, and the session log says what happened.
+
+**Built:**
+- **A controls screen.** **F1** (or **Controls** on the title screen and in the pause menu) lists every control in seven groups: Move and look, Use and search, Build, Fight (pipe and guns), Cars, Screens, Game. The keys come from the actions the game registers, and every description lives in one table, so a new key without a description fails a test. F1 or Esc closes it. Opened in play the game keeps running underneath, like the other screens; opened from the title or the pause menu it goes back there. It fits a 1280x720 window.
+- **A key hint line that fits the moment.** The crowded line of twenty keys at the bottom is now one short line of what applies: on foot WASD, E use, B build, Tab gear, K skills, L log, F light and F1 help; with a gun in hand LMB fire, R reload, RMB zoom (only with a scope fitted, since without one right click does nothing) and Q pipe; with the pipe in hand LMB swing (and Q gun if you own one); in build mode the piece keys, R rotate, LMB place, RMB remove, B leave; in a car its keys; looking at a machine, crate, door, turret, sensor or car, that thing's keys come first (E search, U fit muffler, T repair, R make...). It never goes past 110 characters: the least useful keys drop off the end, and F1 help is always last.
+- **A fuller session log** (now under 55 lines, was 40). New lines: gear found by rarity (searches and zombie drops) and what you wore at the end; skill levels gained and perk points earned and spent (and on what); shots, hits and kills for each gun (the three you fired most); the five base-log events that mattered most while you were more than 40 m from them (destroyed, then under attack, waves, out of ammo, Old Pete, worn suppressors, traps and tripwires, then kills), with how many there were in all; and the houses you went into. The first-five-minutes timeline stays, and now also shows levels, perks and houses.
+- **Town pieces salvage, they don't refund.** Pulling down a door the town put in gave its full build cost (6 planks and 8 nails, across 24 doors), a bed 6 planks and 10 nails (12 beds). Now every piece the town laid (houses, beds, the factory hall, furniture) is marked as the town's, and pulling one down gives its salvage: **2 planks** for a town door, **3 planks and 1 scrap** for a town bed; town walls, floors, windows and furniture give what W1a and W1c set (a plank, or a plank and a scrap). Pieces you build still give everything back.
+- **A crosshair you can see in fog.** The ticks are 12 x 3 px (were 10 x 2) with a darker edge (80%, was 45%). Checked against the noon fog and at 22:00.
+
+**Rules (sim, tested):** `data/buildables.json`: door `"salvage": {"plank": 2}`, bed `"salvage": {"plank": 3, "scrap_metal": 1}`; `GameData` loads and checks `salvage`. `BuildGrid.refund_for(piece)` (the salvage for a `"town": true` piece that has one, else the cost); `remove()` uses it. `SimWorld.place_town`, `place_factory` and `place_props` mark their pieces `"town": true`. **Saves:** `SaveGame.VERSION` is 10: pieces carry `"town"`. A version 3-9 save gets the flag on every piece standing where the seed's town plan puts one of the same kind (`_mark_town`); older ones get the town laid fresh, already flagged. `test/fixtures/save_v9.json` was written by the P2 code before these changes (the seed-1 town plus a door the player built at cell 0,0). `RunStats`: `note_gear`, `worn`, `note_level`, `note_perk_points`, `note_perk`, `note_shot`, `note_gun_hit`, `note_away` (keeps the five heaviest by `AWAY_WEIGHTS`), `note_house`, and the new summary lines. `SimWorld` feeds them from searches, zombie drops, practice, `spend_perk()` (new: the skills screen spends through it), `fire()`, `shoot_zombie()`, the base log's new entries (radio or not) and `know_houses(plan)` (checked every half second). World: `HelpScreen` (new, `src/world/help_screen.gd`), the `help` action (F1) in `InputSetup`, "Controls" buttons in `Menus`, `main.gd` (`key_hint_text()`, `fit_key_hint()`, `KEY_HINT_MAX`, F1, `--help`), `Interactor.keys()`, `SessionLog` fills in what you wear, `Crosshair` sizes.
+
+**Tests:** `test_help_screen.gd` (new: every registered action has a row with a description and every row's actions are registered, every group has a column, keys come from `InputSetup`; in the real game F1 opens it with every row on screen and the game running, F1 and Esc close it without opening the pause menu, Controls on the title and in the pause menu go back there; the key hint line on foot, with a gun drawn and in build mode changes and holds only that moment's keys, stays one line under 110 characters, and a crowded line is cut to fit with F1 help last). `test_town_salvage.gd` (new: every town piece is flagged, 24 doors and 12 beds; a town door gives 2 planks and no nails, a town bed 3 planks and a scrap, a town wall its 1 plank and 1 scrap; your door gives back 6 and 8, your bed 6 and 10; the flag survives save and load and a loaded town door still salvages; the version-9 fixture loads with its 24 town doors flagged and the player's door not, and the older fixtures still load). `test_run_stats.gd` (gear by rarity, nothing counted while muted; levels and perk points from practice, a perk spent; shots and hits per gun; seven far events kept as the right five in order, a near one not counted; a house entered twice counts once, by a plain name). `test_session_log.gd` (the log is under 55 lines and shows the new lines; with every list at its longest it is still at most 55 and keeps the timeline). `test_automated_defense.gd` checks the current save version instead of 9. **4706 checks** (was 4371).
+
+**Try it on the PC:** merge, then in a terminal in the game folder:
+- `play.bat`, then **Controls** on the title screen. Start a new game and press **F1**; F1 or Esc closes it.
+- `play.bat --gun --time=12`: the key line at the bottom shows the gun's keys; press **Q** for the pipe and it changes; press **B** and it shows the build keys. Look at the bright fog through the crosshair.
+- `play.bat --inside=0 --time=12`: you're in a house. Press **B**, look at its front door and right-click: you get 2 planks, not 6 planks and 8 nails.
+- Play a while, quit to the title, and open the newest file in `%APPDATA%\Godot\app_userdata\Noise Floor\sessions\`: the new lines are under the loudest sounds.
+
+**Known gaps:**
+- "Gear found" counts a zombie's drop when it drops, whether or not you pick up the bag.
+- How much a base-log event matters is read from its words (`RunStats.AWAY_WEIGHTS`), so a new kind of event counts as 1 until it gets a weight.
+- The house check is the cell you stand in, so standing in a doorway can count as going in.
+- In a car the key line doesn't show R hotwire; the car's own prompt above it still does.
+- Build mode's top-left line still lists the build keys too.
+- In a pre-P3 save, a town door you pulled down and rebuilt yourself in the same spot counts as the town's (only its refund changes).
+- Every other gap from the P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — P2 Gun feel and screens
 
 From the P2 brief by the project lead, on top of M15 (PR #30). A small polish pass: no new content, no tuning.

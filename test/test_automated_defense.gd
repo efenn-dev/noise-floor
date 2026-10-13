@@ -498,7 +498,7 @@ func test_save_and_load_keeps_sensors_hoppers_parts_traps_and_the_log() -> void:
 	check(hopper_count > 0, "the hopper holds nails")
 	check(a.defense.sprung.has(trap), "the trap is sprung")
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(d["version"]), 9, "version 9")
+	eq(int(d["version"]), SaveGame.VERSION, "the current version (9 when M15 came in)")
 	var b := SimWorld.new()
 	eq(SaveGame.apply(b, d), "", "loads")
 	eq(b.automation.sensors[ms]["action"], "decoy", "the motion sensor's action")

@@ -2,7 +2,9 @@ class_name RunStats
 extends RefCounted
 ## What happened in one play session, for the session log (src/world/session_log.gd) that playtests
 ## leave behind: time played, deaths and what caused them, the Director's peak heat, what got built,
-## kills, the loudest sounds, and a timeline of the first few real minutes.
+## kills, the loudest sounds, and a timeline of the first few real minutes. Since P3 also gear found by
+## rarity and what you wore at the end, skill levels and perk points, shots per gun, the base-log events that
+## mattered most while you were away, and the houses you went into.
 ## SimWorld calls the note_* functions where the events already happen; the world adds real time.
 ## While `muted` (the world building the town, a save or a demo base) nothing is recorded.
 
@@ -10,6 +12,11 @@ extends RefCounted
 const TIMELINE_SECONDS := 300.0
 const TIMELINE_MAX := 15
 const DEATHS_SHOWN := 8
+const AWAY_SHOWN := 5  # P3: the most important base-log events while you were far from your base
+const GUNS_SHOWN := 3
+## P3: how much a base-log event matters, by what its text says (first match wins; anything else is 1).
+const AWAY_WEIGHTS := [["destroyed", 6], ["under attack", 5], ["coming from", 4], [" out of ", 4],
+		["Old Pete", 3], ["worn out", 3], ["caught", 2], ["rang", 2], ["went off", 2]]
 
 var muted := false
 ## Real seconds of play (the world adds frame time while the game runs; not paused or in menus).
@@ -31,6 +38,23 @@ var loudest_sound: Dictionary = {}
 var loudest_continuous: Dictionary = {}
 ## [real seconds, text, repeats]
 var timeline: Array = []
+## P3: rarity ("white", "blue", "yellow", "gold", "set") -> pieces found in searches and zombie drops.
+var gear_found: Dictionary = {}
+## P3: what you wore at the end ("Pipe (white)", ...); the session log fills it in just before writing.
+var worn: PackedStringArray = []
+## P3: skill id -> levels gained this sitting.
+var levels_gained: Dictionary = {}
+var perk_points_earned := 0
+## P3: perk id -> ranks bought this sitting.
+var perks_spent: Dictionary = {}
+## P3: gun name -> {"shots", "hits", "kills"}.
+var guns: Dictionary = {}
+## P3: the most important base-log events that happened more than the radio's range from you:
+## [{"text", "when", "weight"}], best first, at most AWAY_SHOWN. away_total counts them all.
+var away: Array = []
+var away_total := 0
+## P3: house names you walked into, in order.
+var houses: Array = []
 
 
 func add_real_time(seconds: float) -> void:
@@ -96,6 +120,84 @@ func note_wave(kind: String, edge: String) -> void:
 	note("the Director sent %s from the %s" % [kind, edge])
 
 
+## P3: a gear piece of `rarity` turned up (a search or a zombie's drop).
+func note_gear(rarity: String) -> void:
+	if not muted:
+		gear_found[rarity] = int(gear_found.get(rarity, 0)) + 1
+
+
+## P3: `skill` reached `level` by practice.
+func note_level(skill: String, level: int) -> void:
+	if muted:
+		return
+	levels_gained[skill] = int(levels_gained.get(skill, 0)) + 1
+	note("%s reached level %d" % [_words(skill), level])
+
+
+func note_perk_points(n: int) -> void:
+	if not muted:
+		perk_points_earned += n
+
+
+func note_perk(perk: String) -> void:
+	if muted:
+		return
+	perks_spent[perk] = int(perks_spent.get(perk, 0)) + 1
+	note("took the perk " + _words(perk))
+
+
+## P3: a shot from `gun` (its name); then note_gun_hit if the ray met a zombie.
+func note_shot(gun: String) -> void:
+	if not muted:
+		_gun(gun)["shots"] += 1
+
+
+func note_gun_hit(gun: String, killed: bool) -> void:
+	if muted:
+		return
+	var g := _gun(gun)
+	g["hits"] += 1
+	if killed:
+		g["kills"] += 1
+
+
+func _gun(gun: String) -> Dictionary:
+	if not guns.has(gun):
+		guns[gun] = {"shots": 0, "hits": 0, "kills": 0}
+	return guns[gun]
+
+
+## P3: a base-log event far from you (the radio's "far"). Keeps the AWAY_SHOWN that matter most,
+## the earliest first among equals.
+func note_away(text: String, when: String) -> void:
+	if muted:
+		return
+	away_total += 1
+	var w := away_weight(text)
+	var i := 0
+	while i < away.size() and int(away[i]["weight"]) >= w:
+		i += 1
+	if i < AWAY_SHOWN:
+		away.insert(i, {"text": text, "when": when, "weight": w})
+		if away.size() > AWAY_SHOWN:
+			away.pop_back()
+
+
+static func away_weight(text: String) -> int:
+	for pair: Array in AWAY_WEIGHTS:
+		if pair[0] in text:
+			return pair[1]
+	return 1
+
+
+## P3: you walked into house `house` (counted once each).
+func note_house(house: String) -> void:
+	if muted or house in houses:
+		return
+	houses.append(house)
+	note("went into " + _words(house))
+
+
 ## True if `heat` beats the peak so far (so the caller only builds the time text when it matters).
 func is_peak_heat(heat: float) -> bool:
 	return not muted and heat > peak_heat
@@ -137,7 +239,7 @@ static func stamp(seconds: float) -> String:
 	return "%d:%02d" % [floori(seconds / 60.0), int(seconds) % 60]
 
 
-## The plain-words summary the session log writes (under 30 lines; the log adds a short header).
+## The plain-words summary the session log writes (under 50 lines; the log adds a short header).
 func summary_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	var days := floori(game_hours / 24.0)
@@ -163,11 +265,53 @@ func summary_lines() -> PackedStringArray:
 	out.append("Mufflers fitted: %d. Zombies killed: %d." % [mufflers, kills])
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))
 	out.append(_loud_line("Loudest machine or engine", loudest_continuous))
+	out.append_array(_p3_lines())
 	out.append("First five minutes:")
 	if timeline.is_empty():
 		out.append("  (nothing notable)")
 	for e: Array in timeline:
 		out.append("  %s %s%s" % [stamp(e[0]), e[1], (" x%d" % e[2]) if e[2] > 1 else ""])
+	return out
+
+
+## P3: gear, skills and perks, guns, events at the base while you were away, houses (at most 13 lines).
+func _p3_lines() -> PackedStringArray:
+	var out := PackedStringArray()
+	var found := PackedStringArray()
+	for rarity: String in ["white", "blue", "yellow", "gold", "set"]:
+		if gear_found.has(rarity):
+			found.append("%d %s" % [gear_found[rarity], rarity])
+	out.append(("Gear found: " + ", ".join(found) + ".") if not found.is_empty() else "Gear found: none.")
+	out.append(("Wearing at the end: " + ", ".join(worn) + ".") if not worn.is_empty() else "Wearing at the end: nothing.")
+	var lv := PackedStringArray()
+	for skill: String in levels_gained:
+		lv.append("%s +%d" % [_words(skill), levels_gained[skill]])
+	out.append(("Skill levels gained: " + ", ".join(lv) + ".") if not lv.is_empty() else "Skill levels gained: none.")
+	var spent := 0
+	var pk := PackedStringArray()
+	for perk: String in perks_spent:
+		spent += int(perks_spent[perk])
+		pk.append(_words(perk) + ((" x%d" % perks_spent[perk]) if int(perks_spent[perk]) > 1 else ""))
+	out.append("Perk points earned: %d, spent: %d%s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else ""])
+	if guns.is_empty():
+		out.append("Guns: never fired.")
+	else:
+		out.append("Guns (shots, hits, kills):")
+		var names := guns.keys()
+		names.sort_custom(func(a: String, b: String) -> bool: return int(guns[a]["shots"]) > int(guns[b]["shots"]))
+		for i in mini(names.size(), GUNS_SHOWN):
+			var g: Dictionary = guns[names[i]]
+			out.append("  %s: %d, %d, %d" % [names[i], g["shots"], g["hits"], g["kills"]])
+	if away_total == 0:
+		out.append("At your base while you were away: nothing logged.")
+	else:
+		out.append("At your base while you were away (%d events, the %d that mattered most):" % [away_total, away.size()])
+		for e: Dictionary in away:
+			out.append("  %s: %s" % [e["when"], e["text"]])
+	var hs := PackedStringArray()
+	for h: String in houses:
+		hs.append(_words(h))
+	out.append(("Houses entered: %d (%s)." % [houses.size(), ", ".join(hs)]) if not hs.is_empty() else "Houses entered: 0.")
 	return out
 
 

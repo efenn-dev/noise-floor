@@ -53,6 +53,7 @@ var shooter: Shooter  # M14: the gun in your hands
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
+var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
 var defense_view: DefenseView
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
@@ -74,6 +75,9 @@ var _build_label: Label
 var _materials_hud: Label
 var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
 var _dot: ColorRect      # the centre dot, shown otherwise
+var _keys_label: Label   # P3: the one-line key hint at the bottom, for what you're doing now
+## P3: the key hint line never gets longer than this (it drops its least useful keys first).
+const KEY_HINT_MAX := 110
 var _interact_label: Label
 var _health_label: Label
 var _hurt_flash: ColorRect
@@ -145,6 +149,9 @@ func _ready() -> void:
 	base_log_screen = BaseLogScreen.new()
 	add_child(base_log_screen)
 	base_log_screen.setup(sim)
+	help_screen = HelpScreen.new()
+	add_child(help_screen)
+	help_screen.setup()
 	if _wants_hints(args):
 		hints = Hints.new()
 		hints.setup(sim, inventory_screen, noise_overlay)
@@ -197,6 +204,8 @@ func _ready() -> void:
 	if args.has("base-log"):
 		_fill_demo_log()
 		base_log_screen.open()  # M15: --base-log, for screenshots
+	if args.has("help"):
+		help_screen.open()  # P3: --help, the controls screen (F1 in game), for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
 			and not workbench_screen.is_open() and not _m15_screen_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -268,7 +277,7 @@ func _open_sensor(key: String) -> void:
 
 
 func _m15_screen_open() -> bool:
-	return sensor_screen.is_open() or base_log_screen.is_open()
+	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open()  # P3: and help
 
 
 ## The demo base's first sensor (--sensor-screen), or any sensor.
@@ -425,6 +434,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if menus.is_open():
 		return
+	if event.is_action_pressed("help") and not help_screen.is_open() and not inventory_screen.is_open() 			and not skills_screen.is_open() and not workbench_screen.is_open() and not _m15_screen_open():
+		help_screen.open()  # P3: F1; it closes itself on F1 or Esc
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("quicksave"):
 		var why := save_game()
 		sim.add_message("Game saved (F9 loads it)" if why == "" else why, 3.0)
@@ -505,6 +518,15 @@ func _build_menus(args: Dictionary) -> void:
 		GameSession.started = false
 		_reload_with(""))
 	menus.settings_changed.connect(_apply_settings)
+	menus.help_requested.connect(func(from: String) -> void:
+		menus.hide_all()
+		help_screen.open(from))
+	help_screen.closed.connect(func(from: String) -> void:  # back to the menu it was opened from
+		var saved := FileAccess.file_exists(GameSession.save_path)
+		if from == "title":
+			menus.show_title(saved)
+		elif from == "pause":
+			menus.show_pause(saved))
 	var has_save := FileAccess.file_exists(GameSession.save_path)
 	var flags := not args.is_empty() and not (args.size() == 1 and args.has("title"))
 	if args.has("title") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
@@ -596,6 +618,7 @@ func _on_respawned() -> void:
 
 
 func _update_hud(delta: float) -> void:
+	_keys_label.text = key_hint_text()
 	_build_label.text = builder.status_text()
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
@@ -659,6 +682,7 @@ func _build_town(lay_houses: bool = true, lay_factory: bool = true, lay_props: b
 	for i in 48:
 		rng.randf()  # the twelve old box houses drew 4 numbers each: keep the draws so the cars don't move
 	town = TownPlan.generate(sim.seed_value, sim.data)
+	sim.know_houses(town)  # P3: which houses you go into, for the session log
 	if lay_houses:
 		town_pieces = sim.place_town(town)
 	if lay_factory:
@@ -1003,14 +1027,14 @@ func _build_hud() -> void:
 	_death_label.visible = false
 	layer.add_child(_death_label)
 
-	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB attack · RMB scope · Q gun · R reload · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
-	hint.add_theme_font_size_override("font_size", 16)
-	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	hint.add_theme_color_override("font_outline_color", Color.BLACK)
-	hint.add_theme_constant_override("outline_size", 4)
-	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
-	layer.add_child(hint)
+	_keys_label = Label.new()  # P3: filled in by key_hint_text() every frame
+	_keys_label.add_theme_font_size_override("font_size", 16)
+	_keys_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+	_keys_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_keys_label.add_theme_constant_override("outline_size", 4)
+	_keys_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
+	_keys_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	layer.add_child(_keys_label)
 
 	_dot = ColorRect.new()
 	_dot.color = Color(1, 1, 1, 0.8)
@@ -1027,6 +1051,48 @@ func _build_hud() -> void:
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
+
+
+## P3: the one-line key hint at the bottom: only the keys that fit what you're doing. In a car its keys; in
+## build mode the piece keys; otherwise the keys of what you look at (Interactor.keys()), the gun's or the
+## pipe's, then walking about. F1 help is always last, and the least useful keys drop off to fit KEY_HINT_MAX.
+func key_hint_text() -> String:
+	var parts := PackedStringArray()
+	if sim.player.dead:
+		pass
+	elif driving != null:
+		parts.append_array(["WASD drive", "Space handbrake", "E get out", "H horn", "F lights"])
+	elif builder.active:
+		parts.append_array(["1-9, 0 or wheel: pick", "R rotate", "LMB place", "RMB remove", "B leave"])
+	else:
+		parts.append_array(interactor.keys())
+		if sim.guns.in_hand():
+			parts.append_array(["LMB fire", "R reload"])
+			if sim.guns.scoped():
+				parts.append("RMB zoom")
+			parts.append("Q pipe")
+		else:
+			parts.append("LMB swing")
+			if not sim.gear.gun().is_empty():
+				parts.append("Q gun")
+		parts.append_array(["WASD move", "E use", "B build", "Tab gear", "K skills", "L log", "F light"])
+	return fit_key_hint(parts)
+
+
+## One key per part (the first part naming a key wins), then " · " between them, "F1 help" last, dropping
+## parts from the end until the line fits KEY_HINT_MAX.
+static func fit_key_hint(parts: PackedStringArray) -> String:
+	var out := PackedStringArray()
+	var keys := {}
+	for p: String in parts:
+		var key := p.split(" ")[0]
+		if not keys.has(key):
+			keys[key] = true
+			out.append(p)
+	while not out.is_empty() and (" · ".join(out) + " · F1 help").length() > KEY_HINT_MAX:
+		out.remove_at(out.size() - 1)
+	out.append("F1 help")
+	return " · ".join(out)
 
 
 func _outlined_label(font_size: int) -> Label:

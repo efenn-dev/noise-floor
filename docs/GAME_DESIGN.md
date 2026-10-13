@@ -194,6 +194,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
   - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
 - [x] **P0 — Playtest kit.** Session log written on death and quit; first-game hints.
 - [x] **P1 — Playtest fixes.** Car prompts explain keys and wrecks; play.bat logs its update and the title screen shows the build.
+- [x] **P3 — Playtest readiness.** F1 controls screen, a key hint line that fits the moment, a fuller session log, town pieces salvage instead of refunding.
 - [x] **W1a — Into the houses.** Houses are grid pieces: doors, windows, rooms with loot, roofs, and walls that muffle.
 - [x] **W1b — Life inside.** A zombie in some houses, the factory floor, hordes down the road.
 - [x] **W1c — Furniture.** Counters, tables, couches, shelves, bathtubs and toilets as salvageable pieces, placed by the town plan.

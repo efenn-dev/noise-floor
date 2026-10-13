@@ -63,7 +63,7 @@ func _process(_delta: float) -> void:
 
 ## A button press (tests call this directly): one point into `perk`.
 func spend(perk: String) -> void:
-	var why := sim.skills.spend(perk)
+	var why := sim.spend_perk(perk)
 	message.emit(why if why != "" else "%s rank %d" % [sim.skills.perk_name(perk), sim.skills.rank(perk)])
 	refresh()
 

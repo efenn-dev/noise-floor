@@ -8,6 +8,7 @@ signal resume
 signal save_requested
 signal load_requested
 signal base_log_requested  # M15
+signal help_requested(from: String)  # P3: "Controls" on the title ("title") or the pause menu ("pause")
 signal quit_to_title
 signal settings_changed
 
@@ -40,6 +41,7 @@ func _init() -> void:
 	_continue_button = _button(_title, "Continue", func() -> void: continue_game.emit())
 	_button(_title, "New game", func() -> void: new_game.emit())
 	_button(_title, "Settings", func() -> void: show_settings("title"))
+	_button(_title, "Controls", func() -> void: help_requested.emit("title"))
 	_button(_title, "Quit", func() -> void: get_tree().quit())
 	_version = Label.new()
 	_version.add_theme_font_size_override("font_size", 15)
@@ -58,6 +60,7 @@ func _init() -> void:
 	_load_button = _button(_pause, "Load last save", func() -> void: load_requested.emit())
 	_button(_pause, "Base log (L)", func() -> void: base_log_requested.emit())
 	_button(_pause, "Settings", func() -> void: show_settings("pause"))
+	_button(_pause, "Controls (F1)", func() -> void: help_requested.emit("pause"))
 	_button(_pause, "Save and quit to title", func() -> void: quit_to_title.emit())
 	_stats_label = _label("", 20)
 	_stats_label.modulate = Color(1, 1, 1, 0.75)
