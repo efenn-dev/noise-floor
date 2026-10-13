@@ -1,8 +1,8 @@
 # Read me first (Emmitt)
 
-*Kept current by the lead while you are away. Last update: 2026-10-13 02:40Z.*
+*Kept current by the lead while you are away. Last update: 2026-10-13 03:10Z.*
 
-**Merge these, in order, each against `main`:** #24 (brings the stress test and W1b to main; the stacked merges of #22 and #23 landed on each other's branches, so main only got W1a), then #26 (M12 skills and perks, 2189 checks), then the ones below it in the queue as they appear, then this sprint-board PR (#25) last. From now on every pull request targets `main`, so merging top to bottom always works, and merging a later one first is also safe (it just brings the earlier code with it).
+**Merge these, in order, each against `main`:** #24 (brings the stress test and W1b to main; the stacked merges of #22 and #23 landed on each other's branches, so main only got W1a), then #26 (M12 skills and perks, 2189 checks), then #27 (M13 loot, 2367 checks), then the ones below it in the queue as they appear, then this sprint-board PR (#25) last. From now on every pull request targets `main`, so merging top to bottom always works, and merging a later one first is also safe (it just brings the earlier code with it).
 
 **Then play.** `play.bat` updates itself. Houses have doors, rooms and loot; one in three has a zombie inside; the factory is a hall you can walk into; groups come down the road. Thirty minutes and a `docs/PLAYTESTS.md` entry decide what Sprint 3 fixes.
 
@@ -36,8 +36,8 @@ Emmitt went to bed and left the PC on. The lead runs one Opus 5.5 builder at a t
 4. **M12 — skills and perks**: done, PR #26 against main (2189 checks; ten skills with effects, Strength carry, three perk trees, K screen; interrupted once by an app restart and resumed), from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
 
 Extended while Emmitt is away until the evening of 2026-10-13, in this order, one at a time, each PR against `main`, each reviewed by the lead:
-5. **M13 — loot** (running): rarity colours, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set (`GAME_DESIGN.md` "Loot"). Branch from M12.
-6. **W1c — furniture**: Blender-kit props (table, counter, couch, shelves, bathtub) placed by TownPlan, existing surfaces, no Codex. Branch from M13.
+5. **M13 — loot**: done, PR #27 against main (2367 checks; gear instances with rarity colours and rolled stats, five slots, condition and repair kits from the Press, Old Pete and his axe in the factory hall, the Night Shift set; `--gear` flag): rarity colours, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set (`GAME_DESIGN.md` "Loot"). Branch from M12.
+6. **W1c — furniture** (running): Blender-kit props (table, counter, couch, shelves, bathtub) placed by TownPlan, existing surfaces, no Codex. Branch from M13.
 7. **M14 — guns**: firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk. Branch from W1c.
 8. **M15 — automated defense**: turrets fed by belts, traps, sensors and actions, the repair station, attacks that play out while you are away, radio alerts and the base log. Includes the cheap Director cache from docs/perf. Branch from M14.
 Not in this run: tuning of any kind (waits for Playtest #1), M16, M17, anything needing Codex image generation.
