@@ -16,6 +16,9 @@ extends RefCounted
 ##                  W1b: hear_via() gives it a few waypoints to walk first (a Director wave walks the road),
 ##                  each consumed on arrival; then it heads for the sound itself
 ##   hp 0 -> DEAD (the body lies there for CORPSE_TIME)
+##   Q4: a guardian (Old Pete; TownPlan gives his hall as guard_area) never leaves its home area: it only
+##                  hears sounds made inside it, only sees (and chases) a player inside it, gives up the moment
+##                  the player steps out (at the doorway) and walks back to guard_spot, its place in the hall.
 
 enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, INVESTIGATE, DEAD }
 const STATE_NAMES := ["idle", "wander", "chase", "attack", "break", "investigate", "dead"]
@@ -51,6 +54,9 @@ var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
 var pinned := 0.0
 var stunned := 0.0
 var _scream_cd := 0.0
+## Q4: a guardian's home area (x, z in metres; empty = not a guardian) and its spot in it. Saved.
+var guard_area := Rect2()
+var guard_spot := Vector3.ZERO
 
 ## Senses, written by the world body (or a test) before each think.
 var pos: Vector3
@@ -125,6 +131,8 @@ func hearing(night: bool) -> float:
 ## Heard a sound at `at` (`key` = the machine making it, if any). Only idle, wandering or already
 ## investigating zombies follow sounds; chasing or fighting ones are busy.
 func hear(at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void:
+	if not in_guard(at):
+		return  # Q4: a guardian ignores sounds from outside its home area
 	if not (state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE):
 		return
 	if state == State.INVESTIGATE and not route.is_empty() and _flat_dist(at, sound_pos) < 1.0:
@@ -142,8 +150,10 @@ func hear(at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void
 ## Like hear(), but walk through `via` (waypoints, in order) first. A Director wave uses it so the
 ## zombies come down the road before turning toward the noise.
 func hear_via(via: Array, at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void:
+	if not in_guard(at):
+		return
 	hear(at, key, time)
-	if state != State.INVESTIGATE or via.is_empty():
+	if state != State.INVESTIGATE or via.is_empty() or is_guardian():
 		return
 	route = via.duplicate()
 	target_pos = route[0]
@@ -186,6 +196,11 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 		return events  # M15: shocked by a fence: it does nothing at all for a moment
 	if player_dead:
 		sees = false
+	# Q4: a guardian takes no notice of a player outside its home area, and gives up at once if it was after one.
+	if not in_guard(player_pos):
+		sees = false
+		if state == State.CHASE or state == State.ATTACK or (state == State.BREAK and break_from == State.CHASE):
+			_go_back()
 	# Screamers shriek when they spot you: a loud noise that pulls in everything within earshot.
 	if sees and stats.has("scream_loudness") and _scream_cd <= 0.0:
 		events.append({"target": "scream"})
@@ -204,12 +219,14 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	match state:
 		State.IDLE:
 			_timer -= dt
-			if _timer <= 0.0 and _indoors(pieces, home):
+			if _timer <= 0.0 and is_guardian() and _flat_dist(pos, guard_spot) > ARRIVE * 2.0:
+				_go_back()  # Q4: a guardian away from its spot walks back to it
+			elif _timer <= 0.0 and _indoors(pieces, home):
 				_timer = _rng.randf_range(2.0, 6.0)  # settled inside: it stays put until something draws it
 			elif _timer <= 0.0:
 				var angle := _rng.randf_range(0.0, TAU)
 				var r := _rng.randf_range(2.0, WANDER_RADIUS)
-				target_pos = home + Vector3(cos(angle) * r, 0.0, sin(angle) * r)
+				target_pos = _clamp_guard(home + Vector3(cos(angle) * r, 0.0, sin(angle) * r))
 				state = State.WANDER
 				_timer = WANDER_TIMEOUT
 		State.WANDER:
@@ -270,6 +287,45 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 					events.append({"target": break_key})
 					_cooldown = float(stats["attack_interval"])
 	return events
+
+
+## Q4: is this zombie a guardian (it has a home area it never leaves)?
+func is_guardian() -> bool:
+	return guard_area.has_area()
+
+
+## Q4: make it a guardian of `area` (x, z in metres), standing at `spot`.
+func set_guard(area: Rect2, spot: Vector3) -> void:
+	guard_area = area
+	guard_spot = spot
+	home = spot
+
+
+## Q4: is `at` inside its home area? Always true for an ordinary zombie.
+func in_guard(at: Vector3) -> bool:
+	return not is_guardian() or guard_area.has_point(Vector2(at.x, at.z))
+
+
+func _clamp_guard(at: Vector3) -> Vector3:
+	if not is_guardian():
+		return at
+	var lo := guard_area.position + Vector2.ONE
+	var hi := guard_area.end - Vector2.ONE
+	return Vector3(clampf(at.x, lo.x, hi.x), at.y, clampf(at.z, lo.y, hi.y))
+
+
+## Q4: a guardian drops what it was doing and walks back to its spot (WANDER toward it, then IDLE there).
+func _go_back() -> void:
+	state = State.WANDER
+	break_key = ""
+	sound_key = ""
+	blocked_by = ""
+	route = []
+	home = guard_spot
+	target_pos = guard_spot
+	_timer = 120.0
+	_lost = 0.0
+	_unseen = 0.0
 
 
 ## W1b: is `at` on a town floor (inside a house or the factory)?
@@ -366,7 +422,7 @@ func _go_idle(new_home: bool) -> void:
 	route = []
 	_timer = _rng.randf_range(2.0, 6.0)
 	target_pos = pos
-	if new_home:
+	if new_home and not is_guardian():  # Q4: a guardian's home stays its spot
 		home = pos
 
 

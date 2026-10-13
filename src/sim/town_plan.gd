@@ -161,9 +161,10 @@ static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
 ## onto the park road. Pure and seed-free: the factory is the same in every town.
 static func factory() -> Dictionary:
 	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "north_doorway": [], "windows": 0,
-			# M13: Old Pete stands in the middle of the hall, facing the doorway.
+			# M13: Old Pete stands in the middle of the hall, facing the doorway. Q4: he guards the hall ("guard":
+			# his home area, the hall's footprint), so he never leaves it (ZombieBrain.set_guard).
 			"pete": {"cell": FACTORY_PETE, "pos": Vector3((FACTORY_PETE.x + 0.5) * BuildGrid.GRID, 0.1,
-					(FACTORY_PETE.y + 0.5) * BuildGrid.GRID), "facing": Vector3(0, 0, 1)}}
+					(FACTORY_PETE.y + 0.5) * BuildGrid.GRID), "facing": Vector3(0, 0, 1), "guard": factory_rect()}}
 	out["props"] = []
 	for fp: Array in FACTORY_PROPS:
 		out["props"].append({"id": fp[0], "cell": fp[1], "wall": fp[2], "side": (fp[2] + 2) % 4, "house": "factory"})

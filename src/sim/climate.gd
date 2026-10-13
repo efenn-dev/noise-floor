@@ -2,8 +2,10 @@ class_name Climate
 extends RefCounted
 ## M16: the cold, and what keeps it off. Numbers in data/seasons.json.
 ##   warmth (on PlayerStats, 0..100) drains outdoors by the season's cold (per game-hour, more at night),
-##   slower with Skills.bonus("warmth") (the jacket); it refills under a roof (a town floor under you) and
-##   fast within reach of a heat source. Asleep in a bed it never falls.
+##   slower with Skills.bonus("warmth") (the jacket), and comes back fast within reach of a heat source.
+##   Q4: a roof (a town floor under you) only slows the cold: indoors it drains at indoor_cold (a third) of the
+##   outdoor rate, and asleep indoors at asleep_indoor_cold (half) of that again; only heat warms you up.
+##   Asleep outdoors (a bed you built in the open) it never falls, as since M16.
 ##   stove: E loads planks (pockets, then crates); it burns one per hours_per_fuel game-hours while it has
 ##   any, lit, heating radius m and making a quiet continuous noise (its loudness in buildables.json).
 ##   electric heater: a 40 W consumer on the power grid; heats radius m while powered. Silent.
@@ -83,16 +85,18 @@ func heat_near(at: Vector3) -> bool:
 	return false
 
 
-## Warmth per game-hour for someone at a spot: + near heat, + under a roof, else - the season's cold
-## (cold_night after dark), cut by `bonus` (capped at bonus_cap). Never below 0 while asleep.
+## Warmth per game-hour for someone at a spot: + near heat, else - the season's cold (cold_night after dark),
+## cut by `bonus` (capped at bonus_cap). Q4: under a roof the cold is cut to indoor_cold of that (and asleep
+## there, by asleep_indoor_cold again); a roof no longer warms you. Asleep outdoors it never falls.
 func warmth_rate(season: Dictionary, night: bool, near_heat: bool, indoors: bool, asleep: bool, bonus: float) -> float:
 	var w: Dictionary = cfg()["warmth"]
 	if near_heat:
 		return float(w["heat_gain"])
-	if indoors:
-		return float(w["indoor_gain"])
 	var cold := float(season.get("cold_night" if night else "cold_day", 0.0))
 	var rate := -cold * (1.0 - clampf(bonus, 0.0, float(w["bonus_cap"])))
+	if indoors:
+		rate *= float(w["indoor_cold"])
+		return rate * float(w["asleep_indoor_cold"]) if asleep else rate
 	return maxf(0.0, rate) if asleep else rate
 
 
