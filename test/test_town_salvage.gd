@@ -102,7 +102,7 @@ func test_version_9_save_gets_the_flag() -> void:
 	eq(int(d.get("version", 0)), 9, "the fixture is a version-9 save (written by the P2 code)")
 	var sim := SimWorld.new(8.0, null, int(d["seed"]))
 	eq(SaveGame.apply(sim, d), "", "loads cleanly")
-	eq(sim.build.pieces.size(), d["pieces"].size(), "every piece, once")
+	eq(sim.build.pieces.size(), d["pieces"].size() - 2, "every piece, once (less the hall's two north-doorway walls, M17a)")
 	var flagged := 0
 	for key: String in sim.build.pieces:
 		if sim.build.pieces[key]["id"] == "door" and sim.build.pieces[key].get("town", false):

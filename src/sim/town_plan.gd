@@ -73,6 +73,8 @@ const HOUSE_ZOMBIES := 4        # of the 12 houses (W1b); the two on lot 0, by t
 const FACTORY_CELL := Vector2i(-8, -69)
 const FACTORY_SIZE := Vector2i(15, 12)
 const FACTORY_DOOR := [-1, 0]   # cell x of the doorway's two edges in the south wall
+## M17a: the same two cells are open in the north wall too, onto the park road (ParkPlan).
+const FACTORY_NORTH_DOOR := [-1, 0]
 const FACTORY_WINDOWS := [-67, -64, -61]  # cell z of the windows in the west and east walls
 const FACTORY_PETE := Vector2i(-1, -62)  # M13: where Old Pete stands, between the crates
 const FACTORY_CRATES := [Vector2i(-5, -60), Vector2i(0, -64), Vector2i(4, -60)]
@@ -155,9 +157,10 @@ static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
 
 
 ## W1b: the factory hall. Floor on every cell, brick town walls all round ("factory" style) except the
-## doorway's empty edges and a few windows. Pure and seed-free: the factory is the same in every town.
+## doorway's empty edges and a few windows. M17a: a second doorway in the north wall ("north_doorway") opens
+## onto the park road. Pure and seed-free: the factory is the same in every town.
 static func factory() -> Dictionary:
-	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "windows": 0,
+	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "north_doorway": [], "windows": 0,
 			# M13: Old Pete stands in the middle of the hall, facing the doorway.
 			"pete": {"cell": FACTORY_PETE, "pos": Vector3((FACTORY_PETE.x + 0.5) * BuildGrid.GRID, 0.1,
 					(FACTORY_PETE.y + 0.5) * BuildGrid.GRID), "facing": Vector3(0, 0, 1)}}
@@ -176,7 +179,10 @@ static func factory() -> Dictionary:
 		var e := BuildGrid.canonical_edge(cell, side)
 		out["pieces"].append({"id": id, "cell": e[0], "side": e[1], "style": "factory"})
 	for x in range(x0, x1 + 1):
-		edge.call(Vector2i(x, z0), BuildGrid.Side.NORTH, "town_wall")
+		if x in FACTORY_NORTH_DOOR:
+			out["north_doorway"].append(BuildGrid.key_for_wall_edge(Vector2i(x, z0), BuildGrid.Side.NORTH))
+		else:
+			edge.call(Vector2i(x, z0), BuildGrid.Side.NORTH, "town_wall")
 		if x in FACTORY_DOOR:
 			out["doorway"].append(BuildGrid.key_for_wall_edge(Vector2i(x, z1), BuildGrid.Side.SOUTH))
 		else:

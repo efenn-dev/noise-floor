@@ -1,0 +1,20 @@
+{
+	"_about": "M17a: big projects. Each has a site (placed by the world), phases done in order, and a reward. A phase needs its items delivered (from your pockets or a storage crate within deliver_range of the site), then work_hours of game-time work while you stand within work_radius of the site; the work is a continuous noise source at loudness while it runs. A phase with watts also needs that much spare power on a network the site is on (a pole within reach). Projects.gd reads this; GameData checks it.",
+	"water_tower": {
+		"name": "Water tower",
+		"deliver_range": 30,
+		"work_radius": 6,
+		"phases": [
+			{"name": "Patch the tank", "needs": {"metal_plate": 10}, "work_hours": 1, "loudness": 70, "sound": "tower_hammer",
+				"start": "You start patching the tank. The hammering rings across the park.",
+				"done": "The tank is patched."},
+			{"name": "Fix the pipes", "needs": {"wall_panel": 6, "nails": 20}, "work_hours": 1, "loudness": 75, "sound": "tower_hammer",
+				"start": "You start on the pipes. Metal on metal, loud.",
+				"done": "The pipes are fixed."},
+			{"name": "Run the pump", "needs": {}, "watts": 60, "work_hours": 1, "loudness": 85, "sound": "tower_pump",
+				"start": "The tower pump is running. Everything can hear it.",
+				"done": "The water tower is running: rain collectors fill three times as fast, and you can build a water tap."}
+		],
+		"reward": {"rain_mult": 3.0, "unlocks": ["water_tap"]}
+	}
+}

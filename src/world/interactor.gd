@@ -7,6 +7,7 @@ extends Node3D
 
 signal entered_car(id: String)
 signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
+signal opened_project(id: String)  # M17a: E on the water tower (main opens the project screen)
 signal opened_sensor(key: String)  # M15: E on a motion or noise sensor (main opens the sensor screen)
 
 const REACH := 4.0
@@ -22,6 +23,7 @@ var target_bag := -1  # id of the death bag being looked at, -1 if none
 var target_container := ""  # id of the loot container being looked at, "" if none
 var target_key := ""  # piece key of the machine/belt/bed/crate being looked at
 var target_car := ""  # id of the car being looked at, "" if none
+var target_project := ""  # M17a: id of the project (the water tower) being looked at, "" if none
 var target_trunk := false  # looking at the car's back (or it's a wreck): E searches instead of getting in
 var last_message := ""
 
@@ -113,6 +115,7 @@ func update_target() -> void:
 	target_key = ""
 	target_car = ""
 	target_trunk = false
+	target_project = ""
 	if builder.active:
 		return
 	var from := camera.global_position
@@ -133,6 +136,9 @@ func update_target() -> void:
 			target_container = car.id
 		if target_car != was_car:
 			last_message = ""
+		return
+	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("project_id"):
+		target_project = hit["collider"].get_meta("project_id")
 		return
 	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("container_id"):
 		target_container = hit["collider"].get_meta("container_id")
@@ -167,6 +173,9 @@ func interact() -> String:
 		if car_why == "":
 			entered_car.emit(target_car)
 		return car_why
+	if target_project != "":
+		opened_project.emit(target_project)
+		return ""
 	if target_container != "":
 		var why := sim.search(target_container)
 		last_message = why
@@ -229,6 +238,8 @@ func status_text() -> String:
 		return "Your bag\n[E] pick it up"
 	if target_car != "":
 		return _car_status()
+	if target_project != "":
+		return project_status(target_project)
 	if target_container != "":
 		var c: Dictionary = sim.loot.containers.get(target_container, {})
 		var name := sim.loot.display_name(target_container)
@@ -384,6 +395,23 @@ func status_text() -> String:
 ## "[U] fit muffler (...)" -> "U fit muffler", "[E] pick it up" -> "E pick".
 const _FILLER := ["it", "the", "a", "an", "here", "now", "from", "your", "something", "building", "every", "when"]
 var _keys_re := RegEx.create_from_string("\\[([A-Z]+)\\] ([a-z]+)(?: ([a-z]+))?")
+
+
+## M17a: the look-at line for a project (the water tower): its phase and what it's waiting for.
+func project_status(id: String) -> String:
+	var p := sim.projects
+	var cfg := p.cfg(id)
+	if p.is_done(id):
+		return "%s · running\n[E] look" % cfg.get("name", id)
+	var ph := p.current(id)
+	var line := "%s · phase %d of %d: %s" % [cfg.get("name", id), p.phase(id) + 1, p.phases(id).size(), ph.get("name", "")]
+	if p.is_running(id):
+		line += " · working %d%%" % floori(100.0 * float(p.state[id]["progress"]))
+	elif p.is_working(id):
+		line += " · paused %d%%" % floori(100.0 * float(p.state[id]["progress"]))
+	elif not p.missing(id).is_empty():
+		line += " · needs " + _list(p.missing(id))
+	return line + "\n[E] open the project"
 
 
 func keys() -> PackedStringArray:

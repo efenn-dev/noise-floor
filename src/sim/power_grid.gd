@@ -33,6 +33,14 @@ var switched_off: Dictionary = {}
 ## wants power this tick: key -> bool (missing = true). Set by Defense and Automation.
 var wants: Dictionary = {}
 var _on: Dictionary = {}  # key -> it has power this tick (see is_powered)
+## M17a: loads that aren't build pieces (the water tower's pump): id -> {pos: Vector3, watts: float, on: bool}.
+## One joins the network of the nearest powered piece that reaches it (a pole within its reach, anything else
+## within DEVICE_REACH + EXTERNAL_SIZE). It runs only if that network has its watts spare after everything
+## else; then it counts in the demand, so generators run and burn for it. Set `on` to say it wants power.
+const EXTERNAL_SIZE := 3.0  # half the tower's footprint: a pole by any leg counts
+var external: Dictionary = {}
+var external_on: Dictionary = {}     # id -> powered this tick
+var external_spare: Dictionary = {}  # id -> spare watts on its network before it (-1 = on no network)
 var _dirty := true
 var _refunds: Dictionary = {}  # key -> full cans left in a generator that was just removed
 
@@ -97,7 +105,18 @@ func tick(dt: float, daylight: float) -> void:
 		g["running"] = false
 		g["load"] = 0.0
 	_on = {}
-	for net: Dictionary in networks:
+	external_on = {}
+	external_spare = {}
+	var ext_net := {}  # network index -> [external ids]
+	for id: String in external:
+		var ni := _network_reaching(external[id]["pos"])
+		external_spare[id] = -1.0
+		if ni >= 0:
+			if not ext_net.has(ni):
+				ext_net[ni] = []
+			ext_net[ni].append(id)
+	for ni in networks.size():
+		var net: Dictionary = networks[ni]
 		var solar := 0.0
 		var gen_capacity := 0.0
 		var gens := []
@@ -126,6 +145,12 @@ func tick(dt: float, daylight: float) -> void:
 						others.append(key)
 						if wants.get(key, true):
 							demand += b["watts"]
+		for id: String in ext_net.get(ni, []):
+			var spare := solar + gen_capacity - demand
+			external_spare[id] = spare
+			if external[id]["on"] and spare + 1e-6 >= float(external[id]["watts"]):
+				demand += float(external[id]["watts"])
+				external_on[id] = true
 		net["supply"] = solar + gen_capacity
 		net["demand"] = demand
 		net["brownout"] = demand > net["supply"] + 1e-6
@@ -216,6 +241,21 @@ func _rebuild() -> void:
 			networks.append({"keys": [], "supply": 0.0, "demand": 0.0, "brownout": false})
 		networks[index[root]]["keys"].append(k)
 		_network_of[k] = index[root]
+
+
+## M17a: the network (index) of the nearest powered piece that reaches `pos`, or -1.
+func _network_reaching(pos: Vector3) -> int:
+	var best := -1
+	var best_d := INF
+	for key: String in _network_of:
+		var c := build.piece_center(key)
+		var d := Vector2(c.x - pos.x, c.z - pos.z).length()
+		var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+		var reach: float = b["reach"] if b["kind"] == "pole" else DEVICE_REACH + EXTERNAL_SIZE
+		if d <= reach + 1e-3 and d < best_d:
+			best_d = d
+			best = _network_of[key]
+	return best
 
 
 func _reach(key: String) -> float:

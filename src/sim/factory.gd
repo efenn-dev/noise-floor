@@ -44,6 +44,8 @@ class Machine:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP
 
 	func status() -> String:
+		if frozen and id == "water_tap":
+			return "Dry: the water tower isn't running"
 		if frozen:
 			return "Frozen: nothing grows in winter"
 		if not powered:
@@ -167,6 +169,10 @@ var skills: Skills
 ## set by SimWorld every tick.
 var crop_speed := 1.0
 var rain_speed := 1.0
+## M17a: set by SimWorld from the projects done: the water tower running fills rain collectors faster
+## (rain_boost, its reward's rain_mult) and lets water taps run (tap_on); a tap is dry otherwise.
+var rain_boost := 1.0
+var tap_on := false
 
 
 func _init(p_data: GameData) -> void:
@@ -341,7 +347,9 @@ func season_speed(m: Machine) -> float:
 		"planter":
 			return crop_speed
 		"rain_collector":
-			return rain_speed
+			return rain_speed * rain_boost
+		"water_tap":
+			return 1.0 if tap_on else 0.0
 	return 1.0
 
 

@@ -30,7 +30,13 @@ extends RefCounted
 ## the town plan put one of the same kind (see _mark_town); one from before 3 gets the town laid fresh, flagged.
 ## 11 = M16: the player's warmth ("player" "warmth") and each stove's planks and burning fuel ("stoves"). A save from
 ## before 11 loads with full warmth and every stove (it had none) empty; the season follows from the saved day.
-const VERSION := 11
+## 12 = M17a: the industrial park's warehouses are pieces (saved like the houses), its zombies are ordinary saved
+## zombies, the factory hall has a north doorway, and the projects ("projects": each one's phase, items delivered,
+## work progress and whether work was started; "projects_done"). A save from before 12 gets the park laid fresh
+## (see holds_park; main.gd also spawns its zombies after applying it), the hall's north doorway opened, and every
+## project at phase 0.
+const VERSION := 12
+const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
@@ -41,6 +47,11 @@ const FIRST_WITH_FACTORY := 4
 ## True if the save already holds the town's houses as pieces, so the world must not lay them again.
 static func holds_town(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_TOWN
+
+
+## M17a: true if the save already holds the industrial park's warehouse pieces (and its zombies).
+static func holds_park(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_PARK
 
 
 ## True if the save already holds the factory hall's pieces (W1b).
@@ -121,6 +132,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"crates": crates,
 		"generators": sim.power.generators,
 		"stoves": sim.climate.to_dict(),
+		"projects": sim.projects.to_dict(),
+		"projects_done": sim.projects.done.duplicate(),
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
@@ -169,6 +182,10 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.build.restore(pd["key"], piece)
 	if version >= FIRST_WITH_TOWN and version < FIRST_WITH_TOWN_FLAG:
 		_mark_town(sim)
+	if version >= FIRST_WITH_FACTORY and version < FIRST_WITH_PARK:
+		for key: String in TownPlan.factory()["north_doorway"]:  # M17a: open the hall's north doorway
+			if sim.build.pieces.has(key) and sim.build.pieces[key]["id"] == "town_wall":
+				sim.build.remove(key, Inventory.new())
 	for md: Dictionary in d["machines"]:
 		var m: Factory.Machine = sim.factory.machines.get(_to_v2(md["cell"]))
 		if m == null:
@@ -217,6 +234,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			sim.power.generators[key] = {"cans": int(g["cans"]), "fuel": float(g["fuel"]), "running": false,
 					"load": 0.0, "muffled": bool(g["muffled"])}
 	sim.climate.from_dict(d.get("stoves", {}))  # M16: none before 11
+	sim.projects.load_dict(d.get("projects", {}), d.get("projects_done", []))  # M17a: phase 0 before 12
 	for zd: Dictionary in d["zombies"]:
 		var z := sim.horde.restore(int(zd["id"]), zd["type"], _to_v3(zd["pos"]))
 		z.home = _to_v3(zd["home"])

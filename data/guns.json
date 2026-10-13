@@ -28,7 +28,8 @@
 	"ray_range": 150,
 	"finds": {
 		"car_trunk": {"gun": 0.05, "part": 0.02, "ammo": 0.25},
-		"factory_crate": {"gun": 0.0, "part": 0.15, "ammo": 0.3}
+		"factory_crate": {"gun": 0.0, "part": 0.15, "ammo": 0.3},
+		"industrial": {"gun": 0.08, "part": 0.25, "ammo": 0.45}
 	},
 	"police_find": 0.02,
 	"gun_weights": {"pistol": 3, "hunting_rifle": 1},

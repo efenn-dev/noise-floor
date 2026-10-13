@@ -24,6 +24,8 @@ var climate: Climate
 var defense: Defense
 ## M15: sensors and their actions, floodlights, noisemakers, locked doors.
 var automation: Automation
+## M17a: big projects (the water tower), their sites, phases and what's done
+var projects: Projects
 ## M15: what happened at your base (the last 50 events with game time). L opens it.
 var base_log: BaseLog
 ## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
@@ -93,6 +95,8 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	automation.base_log = base_log
 	defense.power = power
 	defense.base_log = base_log
+	projects = Projects.new(data)
+	build.projects = projects  # M17a: the water tap can't be built until the tower runs
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
 	factory.skills = skills  # belt speed, craft speed, planter yield
@@ -151,11 +155,13 @@ func step() -> void:
 	noise.carry_bonus = float(season.get("hearing_night", 0.0)) if night_now else 0.0  # M16: cold, still nights
 	power.tick(TICK, clock.daylight())
 	climate.tick(TICK, clock.seconds_per_hour())
+	_tick_projects()
 	factory.tick(TICK)
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
+	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
 	_note_noise()
 	player.carry_ratio = carry_ratio()
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
@@ -243,6 +249,64 @@ func step() -> void:
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
+
+
+## M17a: the projects' work, their rewards (rain collectors, water taps) and what they say.
+func _tick_projects() -> void:
+	var can_work := not player.dead and not player.asleep and vehicles.driving == ""
+	for e: Dictionary in projects.tick(TICK, player_pos, can_work, clock.seconds_per_hour(), power):
+		var name: String = projects.cfg(e["id"]).get("name", e["id"])
+		var site: Vector3 = projects.sites.get(e["id"], player_pos)
+		var ph: Dictionary = projects.phases(e["id"])[e["phase"]]
+		match e["kind"]:
+			"started":
+				add_message(e["text"], 8.0)
+				base_log.add("%s: phase %d started (%s)" % [name, e["phase"] + 1, str(ph["name"]).to_lower()], site, false)
+				stats.note("started %s on the %s" % [str(ph["name"]).to_lower(), name.to_lower()])
+			"finished":
+				add_message(e["text"], 8.0)
+				base_log.add("%s: phase %d of %d done (%s)" % [name, e["phase"] + 1, projects.phases(e["id"]).size(),
+						str(ph["name"]).to_lower()], site, false)
+			"done":
+				base_log.add("%s is running" % name, site, false)
+				stats.note("got the %s running" % name.to_lower())
+			"paused", "no_power":
+				add_message(e["text"], 5.0)
+	factory.rain_boost = projects.rain_mult()
+	factory.tap_on = projects.is_done("water_tower")
+
+
+## Delivers what project `id`'s current phase still needs, from your pockets and storage crates within its
+## deliver_range of the site. Returns a message.
+func project_deliver(id: String) -> String:
+	if not projects.sites.has(id):
+		return "Nothing here"
+	if projects.is_done(id):
+		return "Nothing more to deliver"
+	if projects.missing(id).is_empty():
+		return "It has everything this phase needs: start the work"
+	var cfg := projects.cfg(id)
+	var site: Vector3 = projects.sites[id]
+	var crates := []
+	for key: String in storages:
+		if build.pieces.has(key) and _flat_dist(build.piece_center(key), site) <= float(cfg["deliver_range"]):
+			crates.append(storages[key])
+	var moved := projects.deliver(id, Stock.new(inventory, crates))
+	if moved.is_empty():
+		return "You have none of what it needs (pockets, or a crate within %d m)" % int(cfg["deliver_range"])
+	var left := projects.missing(id)
+	return "Delivered %s%s" % [_list(moved), (" · still needs " + _list(left)) if not left.is_empty() else " · ready: start the work"]
+
+
+## Starts the work on project `id`'s current phase. Returns a message.
+func project_start(id: String) -> String:
+	var why := projects.start_work(id)
+	if why != "":
+		return why
+	var r := float(projects.cfg(id)["work_radius"])
+	if _flat_dist(projects.sites.get(id, player_pos), player_pos) > r:
+		return "Work started: stand within %d m of it to keep it going" % int(r)
+	return "Work started: stay within %d m. It's loud." % int(r)
 
 
 ## M16: "You're cold" / "You're freezing", at most once per game-hour while it lasts.
@@ -498,6 +562,50 @@ func place_street(street: Dictionary) -> int:
 			loot.add(item["id"], "trash", item["pos"] + Vector3(0, 0.5, 0))
 			n += 1
 	return n
+
+
+## M17a: the industrial park (ParkPlan.generate). Lays the warehouses' pieces like place_factory unless
+## `lay_pieces` is false (a save that already holds them), and always registers what isn't a piece: the
+## warehouse crates (loot table "industrial"), the wrecked cars on the park road (searchable trunks, gas to
+## siphon, never drivable) and the water tower's project site. Returns pieces laid.
+func place_park(plan: Dictionary, lay_pieces: bool = true) -> int:
+	var was_muted := stats.muted
+	stats.muted = true
+	var n := 0
+	if lay_pieces:
+		for p: Dictionary in plan["pieces"]:
+			build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
+					"hp": data.buildables[p["id"]]["hp"], "town": true})
+			n += 1
+	for c: Dictionary in plan["crates"]:
+		loot.add(c["id"], c["table"], park_crate_pos(c))
+	for w: Dictionary in plan["wrecks"]:
+		var size: Array = data.vehicles[w["type"]]["size"]
+		var pos: Vector3 = w["pos"] + Vector3(0, float(size[1]) / 2.0, 0)
+		loot.add(w["id"], "car_trunk", pos)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([seed_value, w["id"], "fuel"])
+		vehicles.add(w["id"], w["type"], pos, w["yaw"], rng.randi_range(0, 2), "Burned out: nothing left to drive", "lost")
+		loot.containers[w["id"]]["pos"] = vehicles.trunk_pos(w["id"])
+	projects.add_site("water_tower", plan["tower"]["pos"])
+	stats.muted = was_muted
+	return n
+
+
+## Where a park crate stands: against its wall, like a town container (a 1.2 x 1.0 x 1.0 crate).
+static func park_crate_pos(c: Dictionary) -> Vector3:
+	return town_container_pos(c, 1.0, 1.0)
+
+
+## M17a: the park's zombies (plan["zombies"]: shamblers and runners inside and between the warehouses).
+## Only for a new game, or a save from before the park; a save brings its own back.
+func spawn_park_zombies(plan: Dictionary) -> Array:
+	var ids: Array = []
+	for pz: Dictionary in plan["zombies"]:
+		var z := horde.spawn(pz["type"], pz["pos"])
+		z.facing = pz["facing"]
+		ids.append(z.id)
+	return ids
 
 
 ## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
@@ -1122,7 +1230,7 @@ func _search_guns(found: Dictionary) -> Dictionary:
 	rng.seed = hash([seed_value, found.get("id", ""), "guns"])
 	for kind: String in ["gun", "part"]:
 		if rng.randf() < float(table.get(kind, 0.0)):
-			out["pieces"].append(_found_gun(rng, kind, false))
+			out["pieces"].append(_found_gun(rng, kind, false, found.get("table", "")))
 	if rng.randf() < float(data.guns["police_find"]):
 		out["pieces"].append(_found_gun(rng, "gun" if rng.randf() < 0.5 else "part", true))
 	if rng.randf() < float(table.get("ammo", 0.0)):
@@ -1131,8 +1239,8 @@ func _search_guns(found: Dictionary) -> Dictionary:
 	return out
 
 
-func _found_gun(rng: RandomNumberGenerator, kind: String, police: bool) -> Dictionary:
-	var piece := gear.roll_gun_piece(rng, kind, police)
+func _found_gun(rng: RandomNumberGenerator, kind: String, police: bool, source: String = "") -> Dictionary:
+	var piece := gear.roll_gun_piece(rng, kind, police, source)
 	if kind == "gun":
 		var span: Array = data.guns["loaded_when_found"]
 		piece["loaded"] = mini(rng.randi_range(int(span[0]), int(span[1])) * int(gear.gun_stats(piece)["magazine"]) / 2,

@@ -26,7 +26,8 @@ func test_factory_pieces_doorway_and_crates() -> void:
 			odd_style += 1
 	eq(odd_style, 0, "walls drawn in the factory's brick, floors as floor")
 	eq(floors, 15 * 12, "a 15 x 12-cell floor")
-	eq(walls + windows, 2 * (15 + 12) - 2, "walls and windows all round, less the two-cell doorway")
+	eq(walls + windows, 2 * (15 + 12) - 4, "walls and windows all round, less the two-cell doorways (M17a: north and south)")
+	eq(f["north_doorway"].size(), 2, "M17a: the north doorway onto the park road is two edges")
 	eq(windows, f["windows"], "with a few windows")
 	var r := TownPlan.factory_rect()
 	check(r.has_point(Vector2(0, -125)), "where the old factory block stood")

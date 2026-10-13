@@ -8,7 +8,9 @@ extends Node3D
 ## Zombie voices live on ZombieBody. Sounds come from tools/audio/synth.py and assets/sounds/zombie/.
 
 const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum_purifier",
-		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car"}
+		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car",
+		# M17a: work on the water tower (hammering borrows the press, the pump the generator's engine)
+		"tower_hammer": "hum_press", "tower_pump": "engine_generator"}
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
 		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"],

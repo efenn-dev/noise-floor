@@ -143,6 +143,16 @@
 		"recipe": "collect_rain",
 		"cost": { "plank": 6, "metal_plate": 2 }
 	},
+	"water_tap": {
+		"name": "Water tap",
+		"kind": "machine",
+		"hp": 60,
+		"loudness": 5,
+		"size": [0.8, 1.2, 0.8],
+		"recipe": "tap_water",
+		"needs_project": "water_tower",
+		"cost": { "scrap_metal": 4, "nails": 6 }
+	},
 	"purifier": {
 		"name": "Purifier",
 		"kind": "machine",

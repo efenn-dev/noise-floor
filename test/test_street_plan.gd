@@ -260,7 +260,7 @@ func test_real_game_street() -> void:
 		for it: Dictionary in main.street["items"]:
 			if StreetPlan.footprint(it).intersects(car_rect):
 				on_car.append("%s by %s" % [it["kind"], car_id])
-	check(main.cars.size() == 4 and on_car.is_empty(), "nothing stands on a car %s" % [on_car])
+	check(main.cars.size() == 4 + main.park["wrecks"].size() and on_car.is_empty(), "nothing stands on a car %s" % [on_car])
 	var trash := 0
 	for id: String in main.sim.loot.containers:
 		trash += 1 if main.sim.loot.containers[id]["table"] == "trash" else 0

@@ -72,6 +72,7 @@ const MODELS := {
 	# the electric heater the purifier's body painted cream.
 	"stove": "res://assets/models/generator.glb",
 	"electric_heater": "res://assets/models/purifier.glb",
+	"water_tap": "res://assets/models/water_tap.glb",  # M17a
 	# W1c: house furniture, laid by the town plan (kind "prop").
 	"counter": "res://assets/models/counter.glb",
 	"table": "res://assets/models/table.glb",
@@ -223,6 +224,10 @@ static func town_material(style: String) -> StandardMaterial3D:
 			return Surfaces.material("brick", 3.0, Color(0.6, 0.6, 0.62))  # the old factory block's grey brick
 		"plaster":
 			return Surfaces.material("concrete_floor", 3.0, Color(0.86, 0.84, 0.78))  # pale inside walls
+		"park_brick":  # M17a: the industrial park's warehouses, a darker red-brown brick
+			return Surfaces.material("brick", 3.0, Color(0.62, 0.48, 0.42))
+		"corrugated":  # M17a: corrugated-metal warehouses (the scrap-wall texture in steel grey)
+			return Surfaces.material("scrap_wall", 2.0, Color(0.62, 0.66, 0.7))
 	return Surfaces.material("concrete_floor", 2.0, Color(0.62, 0.5, 0.4))  # a warm, worn floor
 
 

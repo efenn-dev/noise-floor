@@ -519,7 +519,7 @@ func test_version_8_save_loads_with_no_m15_pieces() -> void:
 	eq(int(d.get("version", 0)), 8, "the fixture is a version-8 save")
 	var sim := SimWorld.new(8.0, null, int(d["seed"]))
 	eq(SaveGame.apply(sim, d), "", "loads cleanly")
-	eq(sim.build.pieces.size(), d["pieces"].size(), "every piece, once")
+	eq(sim.build.pieces.size(), d["pieces"].size() - 2, "every piece, once (less the two walls of the hall's north doorway, opened by M17a)")
 	eq(sim.automation.sensors.size(), 0, "no sensors")
 	eq(sim.factory.bins.size(), 0, "no hoppers")
 	eq(sim.base_log.entries.size(), 0, "an empty base log")

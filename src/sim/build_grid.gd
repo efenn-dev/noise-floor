@@ -32,6 +32,8 @@ const SIDE_NAMES := ["north", "east", "south", "west"]
 var data: GameData
 ## key -> {id, cell: Vector2i, side: int}. Walls: canonical NORTH or WEST edge. Objects: the way it faces.
 var pieces: Dictionary = {}
+## M17a: set by SimWorld, so pieces with a data "needs_project" (the water tap) wait for that project.
+var projects: Projects
 
 
 func _init(p_data: GameData) -> void:
@@ -151,6 +153,8 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Unknown piece"
 	if not player_placeable(id):
 		return "Only found in town"
+	if projects != null and not projects.unlocked(id):
+		return "Needs the %s running" % String(data.projects.get(data.buildables[id]["needs_project"], {}).get("name", "project")).to_lower()
 	var existing := key_for(id, cell, side)
 	if pieces.has(existing) and not (_kind(id) == "barricade" and is_broken(existing)):
 		return "Already built"  # (a barricade may board up a broken window)
