@@ -321,11 +321,15 @@ static func _check_seasons(errors: PackedStringArray, d: GameData) -> void:
 			if not def.has(key) or float(def[key]) < 0.0:
 				errors.append("season '%s' needs '%s' of 0 or more" % [s, key])
 	var w: Dictionary = se.get("warmth", {})
-	for key: String in ["indoor_gain", "heat_gain", "cold_at", "freezing_at", "freeze_damage", "freeze_every", "cold_stamina_regen"]:
+	for key: String in ["heat_gain", "cold_at", "freezing_at", "freeze_damage", "freeze_every", "cold_stamina_regen"]:
 		if float(w.get(key, 0.0)) <= 0.0:
 			errors.append("seasons.json warmth needs a positive '%s'" % key)
 	if float(w.get("freezing_at", 0.0)) >= float(w.get("cold_at", 0.0)):
 		errors.append("seasons.json warmth: freezing_at must be below cold_at")
+	for key: String in ["indoor_cold", "asleep_indoor_cold"]:  # Q4: share of the outdoor cold under a roof
+		var f := float(w.get(key, -1.0))
+		if f < 0.0 or f > 1.0:
+			errors.append("seasons.json warmth needs a '%s' in 0..1" % key)
 	var bc := float(w.get("bonus_cap", -1.0))
 	if bc < 0.0 or bc > 1.0:
 		errors.append("seasons.json warmth needs a bonus_cap in 0..1")

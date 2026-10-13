@@ -344,3 +344,108 @@ func test_q2_a_bump_from_a_stroll_is_not_in_the_way_to_a_sound() -> void:
 	c.blocked_by = "o:0:-1"
 	_think(c, TICK, Vector3(0, 0, 10), true, pieces)  # it spots you behind it
 	eq(c.state, S.CHASE, "spotted you: chasing, not breaking the counter it strolled into")
+
+
+## Q4: the one list of what zombies may break. Structure and noise-makers yes; furniture, beds, crates,
+## stoves, heaters, workbenches, poles, the water tap, hoppers and the repair station never.
+func test_q4_what_zombies_may_break() -> void:
+	var horde := Horde.new(data, 1)
+	var yes := ["wall", "town_wall", "door", "window", "barricade", "smelter", "press", "generator", "nail_turret",
+			"motion_sensor", "noise_sensor", "noisemaker", "floodlight"]
+	var no := ["bed", "storage", "stove", "electric_heater", "workbench", "power_pole", "water_tap", "hopper",
+			"repair_station", "counter", "table", "couch", "shelf", "bathtub", "toilet"]
+	for id: String in yes:
+		check(horde.breakable({"k": {"id": id}}, "k"), "zombies may break a %s" % id)
+	for id: String in no:
+		check(not horde.breakable({"k": {"id": id}}, "k"), "zombies never break a %s" % id)
+	check(not horde.breakable({}, "gone"), "nor something that isn't there")
+
+
+func _first(sim: SimWorld, id: String) -> String:
+	var keys := sim.build.pieces.keys()
+	keys.sort()
+	for key: String in keys:
+		if sim.build.pieces[key]["id"] == id:
+			return key
+	return ""
+
+
+## Q4: a chaser blocked by a bed goes on round it and never breaks it (the soak lost a town bed every run);
+## blocked by a wall, it breaks the wall.
+func test_q4_a_chaser_leaves_a_bed_alone_but_breaks_a_wall() -> void:
+	var t := _town_sim()
+	var sim: SimWorld = t[0]
+	var plan: Dictionary = t[1]
+	var bed := _first(sim, "bed")
+	check(bed != "", "a town bed")
+	if bed == "":
+		return
+	var hp: int = sim.build.pieces[bed]["hp"]
+	var at := sim.build.piece_center(bed)
+	var z := sim.horde.spawn("shambler", Vector3(at.x + 0.9, 0, at.z))
+	z.think(TICK, Vector3(at.x - 3.0, 0, at.z), true, false, sim.build.pieces)  # it saw you behind the bed
+	eq(z.state, S.CHASE, "chasing")
+	var broke := 0
+	var chasing := 0
+	for i in roundi(15.0 / TICK):
+		z.blocked_by = bed  # walking into the bed the whole time
+		sim.step()
+		if z.state == S.BREAK:
+			broke += 1
+		if z.state == S.CHASE:
+			chasing += 1
+	eq(broke, 0, "it never starts breaking the bed")
+	eq(chasing, roundi(15.0 / TICK), "it keeps after you (its path goes round the bed)")
+	eq(sim.build.pieces[bed]["hp"], hp, "the bed keeps every hit point")
+	var wall := _piece_in(sim, plan, 1, "town_wall")
+	var whp: int = sim.build.pieces[wall]["hp"]
+	var w := sim.horde.spawn("shambler", sim.build.piece_center(wall) * Vector3(1, 0, 1))
+	w.think(TICK, w.pos + Vector3(3, 0, 0), true, false, sim.build.pieces)
+	eq(w.state, S.CHASE, "a second one chasing")
+	var hit := false
+	for i in roundi(10.0 / TICK):
+		w.blocked_by = wall
+		sim.step()
+		hit = hit or w.state == S.BREAK
+	check(hit, "blocked by a wall, it breaks it")
+	check(not sim.build.pieces.has(wall) or sim.build.pieces[wall]["hp"] < whp, "the wall is hurt")
+
+
+## Q4: a zombie beside a lit stove, investigating a sound past it (or the stove's own crackle), leaves the
+## stove whole (the soak lost house 1's stove once).
+func test_q4_an_investigator_leaves_a_stove_whole() -> void:
+	var sim := SimWorld.new(22.5, null, 1)
+	sim.clock.day = 16
+	sim.player_pos = Vector3(0, 0, 500)
+	sim.inventory.give_all({"plank": 20, "nails": 20, "scrap_metal": 20})
+	var cell := Vector2i(2, 250)
+	sim.build.place("foundation", cell, 0, sim.inventory)
+	eq(sim.build.place("stove", cell, BuildGrid.Side.EAST, sim.inventory), "", "a stove")
+	var key := sim.build.key_for("stove", cell)
+	sim.stove_interact(key)
+	var hp: int = sim.build.pieces[key]["hp"]
+	var at := sim.build.piece_center(key)
+	var z := sim.horde.spawn("shambler", Vector3(at.x + 1.0, 0, at.z))
+	z.hear(Vector3(at.x - 8.0, 0, at.z))  # a noise on the far side of the stove
+	eq(z.state, S.INVESTIGATE, "investigating")
+	var broke := 0
+	for i in roundi(30.0 / TICK):
+		z.blocked_by = key
+		sim.step()
+		if z.state == S.BREAK:
+			broke += 1
+	eq(broke, 0, "walking into the stove, it never starts breaking it")
+	var y := sim.horde.spawn("shambler", Vector3(at.x + 1.0, 0, at.z))
+	y.hear(at, key)  # the stove's own crackle, as if it were a machine to wreck
+	var hits := 0
+	for i in roundi(30.0 / TICK):
+		sim.step()
+		if y.state == S.BREAK:
+			broke += 1
+		if y.break_key == key:
+			hits += 1
+	check(hits <= 1, "it doesn't stay on the stove (%d ticks)" % hits)
+	check(y.state != S.BREAK, "it isn't breaking anything (%s)" % y.state_name())
+	check(sim.build.pieces.has(key), "the stove is still there")
+	eq(sim.build.pieces[key]["hp"], hp, "with every hit point")
+	check(sim.climate.stoves[key]["lit"], "and still burning")

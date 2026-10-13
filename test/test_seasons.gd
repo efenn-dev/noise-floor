@@ -157,21 +157,61 @@ func test_warmth_drains_outdoors_by_season() -> void:
 					sim.clock.season(), "night" if night == 1 else "day", want[d][night]], 0.05)
 
 
-func test_warmth_refills_under_a_roof() -> void:
-	var sim := _sim(16, 22.5)
-	var plan := TownPlan.generate(1)
-	sim.place_town(plan)
-	var floor_key := ""
+## Q4: a sim in the seed-1 town with the player on a house floor cell that has nothing standing on it.
+func _indoor_sim(day: int, hour: float) -> SimWorld:
+	var sim := _sim(day, hour)
+	sim.place_town(TownPlan.generate(1))
 	for key: String in sim.build.pieces:
-		if sim.build.pieces[key]["id"] == "town_floor":
-			floor_key = key
-			break
-	sim.player_pos = sim.build.piece_center(floor_key) * Vector3(1, 0, 1)
+		var p: Dictionary = sim.build.pieces[key]
+		if p["id"] == "town_floor" and not sim.build.pieces.has("o:%d:%d" % [p["cell"].x, p["cell"].y]):
+			sim.player_pos = sim.build.piece_center(key) * Vector3(1, 0, 1)
+			return sim
+	return sim
+
+
+## Q4 (was M16's "warmth refills under a roof"): a roof only slows the cold; heat warms you.
+func test_indoors_without_heat_the_cold_drains_slowly() -> void:
+	var sim := _indoor_sim(16, 22.5)
 	check(sim.is_indoors(sim.player_pos), "on a house floor counts as under a roof")
 	check(not sim.is_indoors(OUT), "out in the open doesn't")
+	check(not sim.climate.heat_near(sim.player_pos), "no heat source in reach")
 	sim.player.warmth = 50.0
 	_run(sim, 60.0)
-	near(sim.player.warmth, 70.0, "a winter night indoors: +20 a game-hour", 0.05)
+	near(sim.player.warmth, 50.0 - 20.0 / 3.0, "a winter night indoors without a stove: a third of the outdoor 20 a game-hour", 0.05)
+	var day := _indoor_sim(16, 12.0)
+	day.player.warmth = 50.0
+	_run(day, 60.0)
+	near(day.player.warmth, 46.0, "a winter day indoors: a third of 12", 0.05)
+	var sleeper := _indoor_sim(16, 22.5)
+	sleeper.player.energy = 10.0
+	sleeper.player.warmth = 50.0
+	sleeper.player.sleep()
+	_run(sleeper, 60.0)
+	check(sleeper.player.asleep, "still asleep")
+	near(sleeper.player.warmth, 50.0 - 10.0 / 3.0, "asleep indoors on a winter night: the indoor drain halves again", 0.05)
+	var summer := _indoor_sim(3, 22.5)
+	summer.player.warmth = 50.0
+	_run(summer, 60.0)
+	near(summer.player.warmth, 50.0, "summer indoors: warmth stays flat (no refill, no drain)", 1e-6)
+	var autumn := _indoor_sim(9, 22.5)
+	autumn.player.warmth = 50.0
+	_run(autumn, 60.0)
+	near(autumn.player.warmth, 50.0 - 5.0 / 3.0, "an autumn night indoors: a third of 5", 0.05)
+
+
+func test_indoors_a_lit_stove_warms_you() -> void:
+	var sim := _indoor_sim(16, 22.5)
+	var cell := BuildGrid.world_to_cell(sim.player_pos)
+	eq(sim.build.place("stove", cell, E, sim.inventory), "", "a stove on the house floor")
+	var key := sim.build.key_for("stove", cell)
+	sim.player.warmth = 20.0
+	_run(sim, 30.0)
+	near(sim.player.warmth, 20.0 - 20.0 / 6.0, "an unlit stove does nothing: still the indoor drain", 0.05)
+	eq(sim.stove_interact(key), "Loaded 10 planks", "load it")
+	var w := sim.player.warmth
+	_run(sim, 30.0)
+	check(sim.climate.stoves[key]["lit"], "it's burning")
+	near(sim.player.warmth, w + 30.0, "a winter night indoors by a lit stove: +60 a game-hour", 0.1)
 
 
 func test_a_lit_stove_warms_you_and_burns_planks() -> void:

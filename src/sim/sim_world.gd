@@ -316,7 +316,7 @@ func _cold_messages() -> void:
 	var hour := clock.day * 24 + int(clock.time_of_day)
 	if hour != _cold_hour:
 		_cold_hour = hour
-		add_message("You're freezing: find a roof or a fire" if player.is_freezing() else "You're cold", 5.0)
+		add_message("You're freezing: get to a fire or a heater" if player.is_freezing() else "You're cold", 5.0)
 
 
 ## M16: under a roof: standing on a town floor (a house or the factory hall), as the zombies' "indoors" and
@@ -1505,6 +1505,7 @@ func spawn_old_pete() -> ZombieBrain:
 	var at: Dictionary = TownPlan.factory()["pete"]
 	var z := horde.spawn("old_pete", at["pos"])
 	z.facing = at["facing"]
+	z.set_guard(at["guard"], at["pos"])  # Q4: he never leaves the hall
 	return z
 
 

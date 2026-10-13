@@ -99,8 +99,12 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for id: int in sim.horde.zombies:
 		var z: ZombieBrain = sim.horde.zombies[id]
 		if not z.is_dead():
-			zombies.append({"id": id, "type": z.type, "pos": _v3(z.pos), "home": _v3(z.home), "hp": z.hp,
-					"facing": _v3(z.facing)})
+			var zd := {"id": id, "type": z.type, "pos": _v3(z.pos), "home": _v3(z.home), "hp": z.hp,
+					"facing": _v3(z.facing)}
+			if z.is_guardian():  # Q4: a guardian's home area and spot
+				var g := z.guard_area
+				zd["guard"] = {"area": [g.position.x, g.position.y, g.size.x, g.size.y], "spot": _v3(z.guard_spot)}
+			zombies.append(zd)
 	var searched := []
 	for id: String in sim.loot.containers:
 		if sim.loot.containers[id]["searched"]:
@@ -240,6 +244,13 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		z.home = _to_v3(zd["home"])
 		z.hp = float(zd["hp"])
 		z.facing = _to_v3(zd["facing"])
+		if zd.has("guard"):  # Q4
+			var ga: Array = zd["guard"]["area"]
+			z.set_guard(Rect2(float(ga[0]), float(ga[1]), float(ga[2]), float(ga[3])), _to_v3(zd["guard"]["spot"]))
+			z.home = _to_v3(zd["home"])
+		elif z.type == "old_pete":  # a save from before Q4: Old Pete guards the hall from now on
+			var at: Dictionary = TownPlan.factory()["pete"]
+			z.set_guard(at["guard"], at["pos"])
 	sim.horde._next_id = int(d["next_zombie"])
 	sim.director.heat = float(d["heat"])
 	for id: String in d["searched"]:

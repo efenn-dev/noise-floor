@@ -13,7 +13,8 @@
 			"cold_day": 1.0, "cold_night": 2.0, "hearing_night": 0}
 	},
 	"warmth": {
-		"indoor_gain": 20.0,
+		"indoor_cold": 0.3333,
+		"asleep_indoor_cold": 0.5,
 		"heat_gain": 60.0,
 		"bonus_cap": 0.8,
 		"cold_at": 30,
