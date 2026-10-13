@@ -8,8 +8,10 @@ extends Node3D
 const WALL_TOP := 2.8   # foundation top (0.1) + town_wall height (2.7)
 const ROOF := 0.25
 const OVERHANG := 0.35
+const FACTORY_TOP := 6.0  # W1b: the factory hall's roof; brick runs up from the wall pieces to here
 
 var roofs := 0  # roof slabs drawn, for tests
+var factory_cells := 0  # W1b: cells under the factory roof, for tests
 
 
 func setup(plan: Dictionary, grid: BuildGrid) -> void:
@@ -36,6 +38,8 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 			_box(Vector3(g, 0.04, (rows[x][1] - rows[x][0] + 1) * g), Vector3((x + 0.5) * g, WALL_TOP - 0.02, mid.z),
 					ceiling_mat, false)
 			roofs += 1
+	if plan.has("factory"):
+		_factory(plan["factory"], roof_mat, ceiling_mat)
 	var door_top: float = grid.foundation_top() + grid.data.buildables["door"]["size"].y
 	var wall_mat := {}
 	for p: Dictionary in plan["pieces"]:
@@ -48,6 +52,24 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 		var lintel := _box(Vector3(g, WALL_TOP - door_top, 0.2), Vector3(center.x, (WALL_TOP + door_top) / 2.0, center.z),
 				wall_mat[style])
 		lintel.rotation_degrees.y = grid.yaw_for("town_wall", p["cell"], p["side"])
+
+
+## W1b: the factory hall's roof and ceiling at FACTORY_TOP, and the brick band from the top of its wall
+## pieces up to the roof all round (over the doorway too, as a lintel). No colliders, like the houses' roofs.
+func _factory(f: Dictionary, roof_mat: Material, ceiling_mat: Material) -> void:
+	var r := TownPlan.factory_rect()
+	var mid := Vector3(r.get_center().x, 0.0, r.get_center().y)
+	_box(Vector3(r.size.x + 2 * OVERHANG, ROOF, r.size.y + 2 * OVERHANG), mid + Vector3(0, FACTORY_TOP + ROOF / 2.0, 0), roof_mat)
+	_box(Vector3(r.size.x, 0.04, r.size.y), mid + Vector3(0, FACTORY_TOP - 0.02, 0), ceiling_mat, false)
+	roofs += 1
+	var brick := BuildView.town_material("factory")
+	var h := FACTORY_TOP - WALL_TOP
+	var y := WALL_TOP + h / 2.0
+	_box(Vector3(r.size.x + 0.2, h, 0.2), Vector3(mid.x, y, r.position.y), brick)  # north
+	_box(Vector3(r.size.x + 0.2, h, 0.2), Vector3(mid.x, y, r.end.y), brick)       # south, over the doorway
+	_box(Vector3(0.2, h, r.size.y), Vector3(r.position.x, y, mid.z), brick)       # west
+	_box(Vector3(0.2, h, r.size.y), Vector3(r.end.x, y, mid.z), brick)            # east
+	factory_cells = f["cells"].size()
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material, shadows := true) -> MeshInstance3D:

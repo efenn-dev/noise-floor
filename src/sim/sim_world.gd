@@ -252,6 +252,31 @@ func place_town(plan: Dictionary) -> int:
 	return n
 
 
+## W1b: lays the factory hall (TownPlan.factory, in plan["factory"]) the same way: floor, walls, windows,
+## and an open doorway on the road end. Returns pieces placed.
+func place_factory(plan: Dictionary) -> int:
+	var was_muted := stats.muted
+	stats.muted = true
+	var n := 0
+	for p: Dictionary in plan["factory"]["pieces"]:
+		build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
+				"hp": data.buildables[p["id"]]["hp"]})
+		n += 1
+	stats.muted = was_muted
+	return n
+
+
+## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
+## new game: a save keeps its zombies (house ones included) and brings them back itself.
+func spawn_house_zombies(plan: Dictionary) -> Array:
+	var ids: Array = []
+	for hz: Dictionary in plan["zombies"]:
+		var z := horde.spawn("shambler", hz["pos"])
+		z.facing = hz["facing"]
+		ids.append(z.id)
+	return ids
+
+
 ## Where a town container stands: against its wall in its cell, on the floor (y = its middle).
 static func town_container_pos(c: Dictionary, height: float = 1.6, depth: float = 0.7) -> Vector3:
 	var g := BuildGrid.GRID

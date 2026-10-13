@@ -5,7 +5,7 @@ extends Node3D
 
 var grid: BuildGrid
 var _bodies: Dictionary = {}  # key -> StaticBody3D
-## Town pieces (W1a): piece key -> "brick", "siding", "plaster" (inside walls) or "floor", from the
+## Town pieces (W1a): piece key -> "brick", "siding", "plaster" (inside walls), "factory" or "floor", from the
 ## town plan. Set by main.gd before setup(). Town pieces without an entry get siding / floor.
 var styles: Dictionary = {}
 
@@ -158,6 +158,8 @@ static func town_material(style: String) -> StandardMaterial3D:
 			return Surfaces.material("brick", 2.5, Color(0.78, 0.7, 0.66))
 		"siding":
 			return Surfaces.material("siding", 2.5, Color(0.72, 0.74, 0.78))
+		"factory":
+			return Surfaces.material("brick", 3.0, Color(0.6, 0.6, 0.62))  # the old factory block's grey brick
 		"plaster":
 			return Surfaces.material("concrete_floor", 3.0, Color(0.86, 0.84, 0.78))  # pale inside walls
 	return Surfaces.material("concrete_floor", 2.0, Color(0.62, 0.5, 0.4))  # a warm, worn floor

@@ -13,7 +13,7 @@ extends Node3D
 ##   --demo-farm           pre-build rain collector -> purifier and planter -> canner north of spawn
 ##   --demo-defense        pre-build a walled square north of spawn: door, barricades, nail turret, spikes
 ##   --advance=SECONDS     run the sim this long before starting (e.g. so a screenshot shows items moving)
-##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none)
+##   --zombies=N           how many zombies roam the street at start (default 8; 0 for none, house zombies included)
 ##   --zombie=X,Z[,X,Z...] add a zombie at each point, facing the player (for framing screenshots)
 ##   --hurt=N              start with N damage taken (--hurt=100 shows the death screen)
 ##   --noise-overlay       start with the noise overlay (N) on
@@ -108,7 +108,8 @@ func _ready() -> void:
 		print("Noise Floor build: " + GameSession.version_line())
 	_build_environment()
 	_build_ground()
-	_build_town(not (_loaded and SaveGame.holds_town(save)))  # a W1a+ save brings the houses back itself
+	# A W1a+ save brings the houses back itself, and a W1b+ save the factory hall.
+	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)))
 	_build_player(args)
 	_build_building(args)
 	_build_zombies(args)
@@ -471,11 +472,12 @@ func _build_ground() -> void:
 	add_child(ground)
 
 
-func _build_town(lay_houses: bool = true) -> void:
+func _build_town(lay_houses: bool = true, lay_factory: bool = true) -> void:
 	# A road running north (-Z) with houses on both sides and the factory at the far end.
 	# Houses (W1a) are build-grid pieces from TownPlan: floors, walls, doors, windows and a bed, laid as
 	# if built (so they muffle, break and save like the player's own), plus a roof drawn by TownView.
-	# Searchable things: fridges and cabinets inside the houses, every car's trunk, crates by the factory.
+	# Searchable things: fridges and cabinets inside the houses, every car's trunk, crates in the factory.
+	# The factory (W1b) is a hall of the same pieces: brick walls, a wide open doorway on the road, windows.
 	_add_block(Vector3(0, 0.01, -55), Vector3(8, 0.02, 130), Color(0.17, 0.17, 0.19), false, Surfaces.material("asphalt", 4.0, Color(0.55, 0.55, 0.55)))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
@@ -484,6 +486,8 @@ func _build_town(lay_houses: bool = true) -> void:
 	town = TownPlan.generate(sim.seed_value, sim.data)
 	if lay_houses:
 		town_pieces = sim.place_town(town)
+	if lay_factory:
+		town_pieces += sim.place_factory(town)
 	for c: Dictionary in town["containers"]:
 		var fridge: bool = c["table"] == "fridge"
 		var box := _add_container(c["id"], c["table"], SimWorld.town_container_pos(c), Vector3(0.7, 1.6, 0.7),
@@ -493,10 +497,11 @@ func _build_town(lay_houses: bool = true) -> void:
 	town_view = TownView.new()
 	add_child(town_view)
 	town_view.setup(town, sim.build)
-	_add_block(Vector3(0, 6, -125), Vector3(30, 12, 24), Color(0.45, 0.47, 0.5), true, Surfaces.material("brick", 3.0, Color(0.6, 0.6, 0.62)))
 	for i in 3:
-		var crate := _add_container("factory_crate_%d" % i, "factory_crate", Vector3(-8.0 + i * 8.0, 0.5, -111.8),
-				Vector3(1.2, 1.0, 1.0), Color(0.45, 0.4, 0.25))
+		var cell: Vector2i = town["factory"]["crates"][i]
+		var at := Vector3((cell.x + 0.5) * BuildGrid.GRID, 0.6, (cell.y + 0.5) * BuildGrid.GRID)  # on the hall's floor
+		var crate := _add_container("factory_crate_%d" % i, "factory_crate", at, Vector3(1.2, 1.0, 1.0),
+				Color(0.45, 0.4, 0.25))
 		_dress(crate, "storage", 0.0, Color.WHITE, Vector3(1.2 / 1.4, 1.0, 1.0))  # the player's crate model, a bit narrower
 	for i in 4:
 		var car_color := Color(0.5, 0.2, 0.15).lerp(Color(0.2, 0.3, 0.45), rng.randf())
@@ -589,8 +594,8 @@ func _build_building(args: Dictionary) -> void:
 		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
-	for p: Dictionary in town["pieces"]:
-		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster or floor
+	for p: Dictionary in town["pieces"] + town["factory"]["pieces"]:
+		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster, factory or floor
 	build_view.setup(sim.build)
 	builder = BuildController.new()
 	add_child(builder)
@@ -638,12 +643,14 @@ func _build_zombies(args: Dictionary) -> void:
 	nav.bake_now()
 	first_bake_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	if DisplayServer.get_name() != "headless":
-		print("Town: %d house pieces laid, first navmesh bake %.0f ms" % [town_pieces, first_bake_ms])
+		print("Town: %d town pieces laid (houses and factory), first navmesh bake %.0f ms" % [town_pieces, first_bake_ms])
 	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
 	if not _loaded:
 		sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
+		if args.get("zombies", "") != "0":
+			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):

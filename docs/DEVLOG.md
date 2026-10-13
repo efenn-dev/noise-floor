@@ -2,6 +2,37 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — W1b Life inside
+
+From the W1 plan (`docs/plans/W1.md`, "W1b — life inside"), on top of W1a and the stress test.
+
+**Built:**
+- **A zombie inside some houses.** In every town, 4 of the 12 houses have one shambler standing inside (never the two houses by the spawn). The world seed picks which houses and where, so the same seed always has them in the same places; in a new game (seed 1) they're in the 2nd house up on each side, the 4th on the left and the 6th on the right. Each one stands in the kitchen, next to the fridge or the kitchen cabinet, facing the front door. It just stands there: a zombie whose home is on a house floor doesn't go for strolls (my call: idle without wandering, rather than wandering inside the house's cells; it can't drift out and it's simpler). It's an ordinary zombie otherwise: it sees you through doorways and windows, hears you, and comes for you. Searching the fridge or cabinet next to it is loud enough to wake it by day.
+- **The factory is a hall you can walk into.** The solid grey block at the north end of the road is gone. In its place: a 15 x 12-cell floor (30 x 24 m), walls in the old factory's grey brick, a 4 m wide open doorway (two empty edges, no door) where the road ends, three windows down each long side, and a roof with a dark ceiling about 6 m up (the brick carries on above the wall pieces up to the roof, and over the doorway). The three supply crates are inside now. It's built from the same grid pieces as the houses, so the walls muffle sound, zombies can bash them, and the navmesh runs in through the doorway.
+- **Hordes come down the road.** Wanderers still come from any of the four edges, straight at the noise. Groups and hordes now come from the north or south end of the road only. From the north they appear behind the factory, come round its west side onto the road, and walk down it; from the south they walk up from the end of the asphalt. They follow the road to the point nearest the noise, then turn off toward it. The HUD still says "A horde is coming from the north...".
+
+**Rules (sim, tested):** `TownPlan.generate` also returns `"zombies"` (house, cell, pos, facing; its own random stream, so the houses themselves don't change) and `"factory"` (`TownPlan.factory()`: cells, pieces, crates, doorway edges, windows; the same in every town). `SimWorld.place_factory(plan)` lays the hall like `place_town`; `SimWorld.spawn_house_zombies(plan)` spawns them through the horde. `ZombieBrain`: an idle zombie whose home is on a `town_floor` doesn't wander (`_indoors`); `hear_via(via, at, key, time)` gives it a short waypoint list (`route`) walked during INVESTIGATE, each waypoint consumed on arrival (each leg gets the full lure time), then `target_pos` becomes `sound_pos`; hearing the same sound again on the way keeps the route, a different sound drops it. `hear()` is still the entry point. `Director`: group and horde waves pick EDGES 0 or 1 (north or south) and call `hear_via(Director.road_route(edge, lure), ...)`; `road_route` is the corner behind the factory (north only), the road end, then road points at most 40 m apart down to the road point nearest the lure. The wave dict also carries its `route`. **Saves:** `SaveGame.VERSION` is 4 (`FIRST_WITH_FACTORY`, `holds_factory`). House zombies are ordinary saved zombies, and a loaded game doesn't spawn them again. A version-3 save (W1a) loads with the factory hall laid fresh under it; a committed fixture `test/fixtures/save_v3.json` (written by the W1a code) is tested. World: `main.gd` lays the hall, puts the crates on its floor and spawns the house zombies in a new game (not with `--zombies=0`); `TownView` draws the hall's roof, ceiling and upper brick; `BuildView` has a "factory" wall style.
+
+**Tests:** `test_house_zombies.gd` (same seed same houses, 4 of 12, never lot 0, inside and not on a container or the doorway; one spawned per picked house; with no noise they stay idle and inside for five minutes while a street zombie wanders; searching the kitchen next to each one makes it investigate; a save brings them back once), `test_factory_hall.gd` (15 x 12 floor, walls and windows all round less the two-cell doorway, the doorway edges empty and on the road in the south wall, crates inside, no overlap with houses, sound gets out through the doorway but not the side walls; physics: you walk in through the doorway and the wall beside it stops you; a zombie on the road follows you in without breaking anything), `test_road_hordes.gd` (`road_route` from both ends; a north wave zombie with a smelter east of the road reaches the road point first, keeps to the asphalt, then reaches the smelter; same sound keeps the route, a new one replaces it; over six seeds the HUD's edge matches where the horde spawned and both ends get used; wanderers come straight), `test_save.gd` (the version-3 fixture loads with the hall added), `test_town_world.gd` (the whole game lays the hall and a zombie in each picked house, and a save brings the same zombies back, not doubled). **2022 checks** (was 1546).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**.
+- House zombie: walk up the street to the second house on the right (east side), open the front door (E) and look left through the doorway into the kitchen. Or start there: `play.bat --cam=9,0.1,-22.6,-63,-3 --time=12`.
+- Factory: walk north to the end of the road and go in through the big doorway; the three crates are inside. Or: `play.bat --cam=0,0,-98,0,6 --time=12`.
+- Hordes: `play.bat --demo-factory --time=21 --heat=100 --noise-overlay` and wait up to 30 seconds for "A horde is coming from the north (or south)...". Press N to see them: they walk the road toward you before turning off it.
+
+**Known gaps:**
+- Not in W1b, as planned: furniture props (table, couch, shelves need Blender art on the PC), a fifth house plan, the shop, any zombie tuning, and no change to infamy or heat numbers.
+- With today's numbers a house zombie mostly finds you by sight, not sound: a search (30) is only heard within about 3 m by day, footsteps (22) and a door opening (25) barely at all. That's why they stand next to the kitchen. Tune hearing after the playtest if they feel deaf.
+- Any zombie that ends up idle on a house or factory floor stays there (e.g. one that chased you in and lost you), not only the planted ones.
+- A wave's road route isn't saved: a zombie that was walking the road when you saved stands where it was after loading (as every investigating zombie already did).
+- The north road end is behind the factory, so northern hordes come round its west side; there's no road there. Hordes don't avoid the houses' lawns other than by the waypoints, and nothing makes the road a preferred lane on the navmesh.
+- The factory is empty apart from the crates: no machines, shelves or props, and the brick above the wall pieces has a faint seam line at 2.8 m. Its roof has no collider (like the houses').
+- Town pieces go from 455 to 687 with the hall; the first navmesh bake is about 49 ms headless (the console line now says "town pieces").
+
+**Next:** Playtest #1, then M12.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — Stress test (numbers only)
 
 How expensive one sim tick is with many zombies and machines, before zombies inside houses, hordes and automated defense. No code changed outside the test; nothing optimised.

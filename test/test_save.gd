@@ -141,6 +141,26 @@ func test_version_2_save_still_loads() -> void:
 	eq(sim.tally, {"kills": 0, "deaths": 0}, "defaults for what version 2 didn't save")
 
 
+## W1b: a version-3 save (made by the W1a game, houses as pieces but the factory a solid block) still
+## loads. It holds the houses but not the factory hall, so main.gd lays only the hall before applying it.
+func test_version_3_save_still_loads() -> void:
+	var d := SaveGame.read("res://test/fixtures/save_v3.json")
+	eq(int(d.get("version", 0)), 3, "the fixture is a version-3 save")
+	check(SaveGame.holds_town(d), "it holds the houses")
+	check(not SaveGame.holds_factory(d), "but not the factory hall")
+	var sim := SimWorld.new(8.0, null, int(d["seed"]))
+	_town(sim)
+	var plan := TownPlan.generate(sim.seed_value)
+	var laid := sim.place_factory(plan)
+	eq(SaveGame.apply(sim, d), "", "loads cleanly")
+	eq(sim.build.pieces.size(), laid + d["pieces"].size(), "the hall plus the saved houses and your base")
+	var h: Dictionary = plan["houses"][3]
+	check(sim.build.pieces[BuildGrid.key_for_wall_edge(h["door_cell"], h["door_side"])]["open"], "the house door you opened is still open")
+	check(sim.build.pieces[sim.build.key_for("door", Vector2i(-1, -1), N)]["open"], "and your own door")
+	eq(sim.horde.zombies.size(), d["zombies"].size(), "its zombies, once")
+	check(not sim.build.pieces.has(plan["factory"]["doorway"][0]), "the hall's doorway is open")
+
+
 ## W1a: the town is saved like your own pieces: damage, open doors and broken windows come back,
 ## and a version-3 save says it holds the town, so it isn't laid twice.
 func test_town_damage_and_doors_survive_save_and_load() -> void:
@@ -167,7 +187,7 @@ func test_town_damage_and_doors_survive_save_and_load() -> void:
 			break
 	eq(a.build.remove(gone, a.inventory), "", "knock an inside wall down")
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(d["version"]), 3, "saved as version 3")
+	eq(int(d["version"]), SaveGame.VERSION, "saved as the current version")
 	check(SaveGame.holds_town(d), "it holds the town")
 	var b := SimWorld.new(8.0, null, 42)
 	_town(b)

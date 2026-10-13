@@ -195,6 +195,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **P0 — Playtest kit.** Session log written on death and quit; first-game hints.
 - [x] **P1 — Playtest fixes.** Car prompts explain keys and wrecks; play.bat logs its update and the title screen shows the build.
 - [x] **W1a — Into the houses.** Houses are grid pieces: doors, windows, rooms with loot, roofs, and walls that muffle.
+- [x] **W1b — Life inside.** A zombie in some houses, the factory floor, hordes down the road.
 
 **The long game** (see "Long game" above), in this order:
 
