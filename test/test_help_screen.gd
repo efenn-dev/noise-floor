@@ -96,7 +96,7 @@ func test_key_hints_fit_the_moment() -> void:
 	check(not "RMB zoom" in gun, "no zoom without a scope")
 	main.builder.set_active(true)
 	var build: String = main.key_hint_text()
-	check("R rotate" in build and "LMB place" in build and "RMB remove" in build and "B leave" in build, "build keys (%s)" % build)
+	check("R rotate" in build and "LMB place" in build and "RMB remove" in build and "B menu" in build and "Esc stop" in build, "build keys (%s)" % build)
 	check(not "WASD move" in build and not "LMB fire" in build, "and only those")
 	main.builder.set_active(false)
 	for line: String in [foot, gun, build]:

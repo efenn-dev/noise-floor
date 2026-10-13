@@ -43,7 +43,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not InputSetup.captured():
 		return
 	if event.is_action_pressed("interact"):
+		var was_driving := sim.vehicles.driving
 		interact()
+		if was_driving == "" and sim.vehicles.driving != "":
+			# S3: this same E press would reach main.gd next (parents get _unhandled_input after their
+			# children), where "E while driving" means get out: you got in and straight back out again.
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("upgrade"):
 		upgrade()
 	elif event.is_action_pressed("siphon"):
@@ -181,7 +186,10 @@ func interact() -> String:
 		last_message = why
 		return why
 	if target_key != "" and sim.build.kind_of(sim.build.pieces[target_key]["id"]) == "door":
-		last_message = sim.toggle_door(target_key)
+		if door_blocked(target_key):
+			last_message = "Something's in the way of the door"
+			return last_message
+		last_message = sim.toggle_door(target_key, camera.global_position)  # S3: it swings away from you
 		return last_message
 	if not has_target:
 		return ""
@@ -231,6 +239,27 @@ func interact() -> String:
 		parts.append("Loaded " + _list(moved["fed"]))
 	last_message = " · ".join(parts) if not parts.is_empty() else "Nothing to take or load"
 	return last_message
+
+
+## S3: true if the door at `key`, moved to where E would put it (shut, or swung open away from you), would
+## land on you or a zombie. A door shut on someone standing in the doorway would wedge them in the panel.
+func door_blocked(key: String) -> bool:
+	var piece: Dictionary = sim.build.pieces[key]
+	var was_open: bool = piece.get("open", false)
+	var was_swing: int = piece.get("swing", 1)
+	piece["open"] = not was_open
+	if piece["open"]:
+		piece["swing"] = sim.build.swing_away_from(key, camera.global_position)
+	var pose := sim.build.door_pose(key)
+	piece["open"] = was_open
+	piece["swing"] = was_swing
+	var box := BoxShape3D.new()
+	box.size = Vector3(sim.data.buildables[piece["id"]]["size"]) - Vector3(0.1, 0.1, 0.0)
+	var params := PhysicsShapeQueryParameters3D.new()
+	params.shape = box
+	params.transform = pose
+	params.collision_mask = Layers.WORLD | Layers.ZOMBIE  # the player stands on WORLD, and is not excluded
+	return not get_world_3d().direct_space_state.intersect_shape(params, 1).is_empty()
 
 
 func status_text() -> String:

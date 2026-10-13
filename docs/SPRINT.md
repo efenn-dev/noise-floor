@@ -1,5 +1,31 @@
 # Read me first (Emmitt)
 
+*Updated 2026-10-13 evening by Claude Fable 5.1 after your Playtest #1 notes. Everything from the day run is merged; `main` is #41.*
+
+**One pull request to merge: S3 (branch `s3-playtest-fixes`).** It fixes the two things you hit (driving, doors) and adds what you asked for (a hotbar and a build menu). After the merge, `play.bat` picks it up. Try, in order: walk to the red sedan, E at its back to search the trunk for the key, E at its side to get in, W to drive, E to get out. Open a house door with E, walk in, turn round and press E on the open door to close it. Press 1 and click to lay a foundation; B for the build menu; point at a piece in it and press a number to put it on that key; Tab, click a bandage, press 0. Then tell the lead what felt wrong and the next sprint-3 pass is tuning from that.
+
+---
+
+# Sprint 3 — "Tuning from Playtest #1"
+
+*Started 2026-10-13 evening, after Emmitt's first playtest on the merged build (docs/PLAYTESTS.md, 2026-10-13). Lead and builder for S3: Claude Fable 5.1 in one local session (no agents: the fixes needed the real scene and a careful read of input order). Rule from DIRECTION.md: the next task comes from a playtest entry, not the checklist.*
+
+## Sprint goal
+
+Emmitt drives a car, closes a door behind him, and builds from a hotbar and a build menu without reading anything.
+
+## Board
+
+| # | Task | Owner | Status | Done when |
+|---|---|---|---|---|
+| S3-1 | Playtest #1 fixes: driving (E bounced you out), doors (couldn't close, walked through the open panel), plus the hotbar (1-9, 0) and the build menu (B) he asked for | Fable 5.1, worktree `noise-floor-s3`, branch `s3-playtest-fixes` | PR open; tests green; screenshots checked | PR merged; Emmitt drives, closes a door, builds from the hotbar |
+| S3-2 | Playtest #2 on the merged build (30 min, session log pasted in) | Emmitt (+ Kaleb) | Waiting on S3-1 | Entry in `docs/PLAYTESTS.md` |
+| S3-3 | Tuning from Playtest #2 (the builders' flagged soft spots: infamy and heat climb, early water, winter stove, park difficulty) | Fable plans, Opus 5.5 builds | Waiting on S3-2 | PR merged |
+
+---
+
+*Below: the day run's read-me and the earlier sprints, kept for the record.*
+
 *Final update of the day run: 2026-10-13 15:45Z. Nothing is running. The lead has stopped.*
 
 **Merge these on GitHub, top to bottom, each against `main`:** #24, then #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, then #25 (this board) last. Every one targets `main`; the order only keeps the diffs readable. After the last merge `play.bat` updates itself and shows the build in the title screen's corner.

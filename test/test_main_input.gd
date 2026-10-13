@@ -43,7 +43,9 @@ func test_mouse_turns_the_view_and_swings() -> void:
 	kb.physical_keycode = KEY_B
 	kb.pressed = true
 	vp.push_input(kb)
-	check(main.builder.active, "B opens build mode")
+	check(main.build_menu.is_open(), "B opens the build menu")
+	main.build_menu.pick("foundation")  # S3: a click in the menu starts building that piece
+	check(main.builder.active, "a click in it starts build mode")
 	await tree.process_frame
 	var planks: int = main.sim.stock_at(player.global_position).count("plank")
 	player.set_look(0, -20)  # about 4.5 m ahead: clear of the player's own feet
@@ -58,8 +60,11 @@ func test_mouse_turns_the_view_and_swings() -> void:
 	eq(main.builder.piece(), "wall", "mouse wheel picks the next piece")
 	kb.pressed = false
 	vp.push_input(kb)
-	kb.pressed = true
-	vp.push_input(kb)  # B again: leave build mode
+	var esc := InputEventKey.new()
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	vp.push_input(esc)  # S3: Esc leaves build mode
+	check(not main.builder.active and not main.menus.is_open(), "Esc leaves build mode without pausing")
 	main.sim.player.food = 50.0
 	main.sim.inventory.add("canned_food", 1)
 	var z := InputEventKey.new()

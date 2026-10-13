@@ -42,7 +42,36 @@ func test_heat_warning_materials_and_messages_do_not_overlap() -> void:
 			check(not h.intersects(n), "heat warning clear of the messages (%s)" % where)
 			check(not m.intersects(n), "materials block clear of the messages (%s)" % where)
 			check(h.position.y >= m.end.y, "heat warning on its own line under the materials (%s)" % where)
+			# S3: the hotbar along the bottom keeps clear of the health line, the key hints and the look-at text.
+			var bar: Rect2 = main.hotbar_view.get_global_rect()
+			var health := _rect(main._health_label)
+			var keys := _rect(main._keys_label)
+			var look := _rect(main._interact_label)
+			check(bar.size.x > 600.0 and bar.size.y > 50.0, "the hotbar is drawn (%s)" % bar)
+			check(not bar.intersects(health), "hotbar clear of the health line (%s vs %s at %s)" % [bar, health, size])
+			check(not bar.intersects(keys), "hotbar clear of the key hints (%s vs %s at %s)" % [bar, keys, size])
+			check(not bar.intersects(look), "hotbar clear of the look-at text (%s vs %s at %s)" % [bar, look, size])
+			check(bar.end.y <= main.get_viewport().get_visible_rect().size.y, "hotbar on screen at %s" % size)
 	main.get_window().size = was_size
+	main.queue_free()
+	GameSession.skip_menu = false
+	GameSession.skip_hints = false
+	await tree.process_frame
+
+
+## S3: a new game's first hints sit above the hotbar, not on it.
+func test_first_game_hints_sit_above_the_hotbar() -> void:
+	GameSession.skip_menu = true
+	GameSession.skip_hints = false
+	var main: Node3D = load(MAIN).instantiate()
+	tree.root.add_child(main)
+	for i in 3:
+		await tree.process_frame
+	check(main.hints != null and main.hints.visible, "a new game shows its hints")
+	var hints: Rect2 = main.hints.get_global_rect()
+	var bar: Rect2 = main.hotbar_view.get_global_rect()
+	check(not hints.intersects(bar), "hints clear of the hotbar (%s vs %s)" % [hints, bar])
+	check(hints.end.y <= bar.position.y, "hints above the hotbar (%s vs %s)" % [hints, bar])
 	main.queue_free()
 	GameSession.skip_menu = false
 	GameSession.skip_hints = false

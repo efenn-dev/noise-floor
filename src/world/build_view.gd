@@ -261,8 +261,10 @@ func _add_window(body: StaticBody3D, key: String, size: Vector3) -> void:
 	body.set_meta("see_through", true)
 
 
-## A door opened or closed: swing it and stop it blocking (layer 0 = nothing collides, and the
-## navmesh baker skips it, so zombies can path through an open door).
+## A door opened or closed: swing it round its hinge (BuildGrid.door_pose). S3: an open door stays a solid
+## body in its swung pose, so the look ray still finds it (to close it) and nobody walks through the panel;
+## the doorway itself is clear, and the navmesh rebake routes zombies through it round the open panel.
+## (It used to go on no layer at all when open: you could not close it again, and walked through it.)
 func _on_changed(key: String) -> void:
 	var body: StaticBody3D = _bodies.get(key)
 	if body == null or not grid.pieces.has(key):
@@ -274,14 +276,8 @@ func _on_changed(key: String) -> void:
 		if glass != null:
 			glass.visible = not broken
 		return
-	var open: bool = grid.pieces[key].get("open", false)
-	body.collision_layer = 0 if open else Layers.BUILT
-	var piece: Dictionary = grid.pieces[key]
-	var yaw := grid.yaw_for(piece["id"], piece["cell"], piece["side"])
-	body.rotation_degrees.y = yaw + (90.0 if open else 0.0)
-	var size: Vector3 = grid.data.buildables[piece["id"]]["size"]
-	var hinge := grid.piece_center(key) - Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(size.x / 2.0, 0, 0)
-	body.position = hinge + Basis(Vector3.UP, deg_to_rad(body.rotation_degrees.y)) * Vector3(size.x / 2.0, 0, 0) if open else grid.piece_center(key)
+	body.collision_layer = Layers.BUILT
+	body.transform = grid.door_pose(key)
 
 
 ## M15: pieces that reuse another model get their own touches: a crossbow's bow and a rifle's long barrel on the

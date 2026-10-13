@@ -71,9 +71,25 @@ func crate() -> Inventory:
 
 
 func _input(event: InputEvent) -> void:
-	if is_open() and (event.is_action_pressed("inventory") or event.is_action_pressed("free_mouse")):
+	if not is_open():
+		return
+	if event.is_action_pressed("inventory") or event.is_action_pressed("free_mouse"):
 		close()
 		get_viewport().set_input_as_handled()
+		return
+	var slot := InputSetup.hotbar_slot(event)
+	if slot != -1:
+		message.emit(assign_hotbar(slot))  # S3: 1-9, 0 puts the picked item on that key
+		get_viewport().set_input_as_handled()
+
+
+## S3: puts the selected pocket item on hotbar key `i` (0-9). Returns the message shown.
+func assign_hotbar(i: int) -> String:
+	if _selected == "" or _selected_side != POCKETS or _selected.begins_with(GEAR):
+		return "Click an item in your pockets first"
+	var why := sim.hotbar.assign(i, Hotbar.item_entry(_selected))
+	refresh()
+	return why if why != "" else "%s is on key %s" % [_name(_selected), Hotbar.key_name(i)]
 
 
 # --- What the clicks do (tests call these directly) ---------------------------
@@ -368,6 +384,9 @@ func _show_details(held: Inventory) -> void:
 		effects.append("Bag: +%d kg carrying while in your pockets (the best bag counts)" % d.item_value(_selected, "bag"))
 	if not effects.is_empty():
 		lines.append(", ".join(effects))
+	if _selected_side == POCKETS and sim.hotbar.usable(_selected):  # S3
+		var slot := sim.hotbar.find(Hotbar.item_entry(_selected))
+		lines.append(("On key %s. " % Hotbar.key_name(slot) if slot != -1 else "") + "Press 1-9 or 0 to put it on that hotbar key.")
 	_details.text = "\n".join(lines)
 
 	var arrow := "->" if _selected_side == POCKETS else "<-"
@@ -406,6 +425,11 @@ func _best_bag() -> String:
 		if sim.data.item_value(item, "bag") > (sim.data.item_value(best, "bag") if best != "" else 0.0):
 			best = item
 	return best
+
+
+## S3: an item's picture, for the hotbar too (null when there is none yet).
+static func icon_for(item: String) -> Texture2D:
+	return _icon(item)
 
 
 static func _icon(item: String) -> Texture2D:
@@ -485,7 +509,7 @@ func _build() -> void:
 	_actions.custom_minimum_size = Vector2(0, 44)
 	column.add_child(_actions)
 	var hint := Label.new()
-	hint.text = "Tab or Esc: close    The game keeps running while this is open"
+	hint.text = "Tab or Esc: close    1-9, 0: put the picked item on that hotbar key    The game keeps running while this is open"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.modulate = Color(1, 1, 1, 0.6)
 	column.add_child(hint)
