@@ -14,7 +14,11 @@ extends RefCounted
 ## a save from before 4 gets it laid fresh (see holds_factory). House zombies are ordinary saved zombies.
 ## 5 = M12: perks and unspent perk points (skills xp was already saved). A save from before 5 gets no
 ## perks and the perk points its skill levels are worth.
-const VERSION := 5
+## 6 = M13: gear (pieces in your pockets, what you wear, each with its rolls and condition), gear in
+## bags, and which recipe a Press is set to. A save from before 6 gets the starting pipe (white, mint,
+## in the weapon slot) and Old Pete in the factory hall.
+const VERSION := 6
+const FIRST_WITH_GEAR := 6
 const FIRST_WITH_TOWN := 3
 const FIRST_WITH_FACTORY := 4
 
@@ -39,7 +43,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
 		machines.append({"cell": _v2(cell), "input": m.input, "output": m.output, "progress": m.progress,
-				"crafting": m.crafting, "crafted": m.crafted, "muffled": m.muffled, "time_scale": m.time_scale})
+				"crafting": m.crafting, "crafted": m.crafted, "muffled": m.muffled, "time_scale": m.time_scale,
+				"recipe": m.recipe_id})
 	var belts := []
 	for cell: Vector2i in sim.factory.belts:
 		belts.append({"cell": _v2(cell), "items": sim.factory.belts[cell].items})
@@ -62,7 +67,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 			searched.append(id)
 	var bags := []
 	for b: Dictionary in sim.bags:
-		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"]})
+		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"], "gear": b.get("gear", []).duplicate(true)})
 	var p := sim.player
 	return {
 		"version": VERSION,
@@ -89,6 +94,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"skills": sim.skills.xp,
 		"perks": sim.skills.perks,
 		"perk_points": sim.skills.perk_points,
+		"gear": sim.gear.to_dict(),
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
@@ -132,6 +138,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		m.crafted = int(md["crafted"])
 		m.muffled = bool(md["muffled"])
 		m.time_scale = float(md["time_scale"])
+		if sim.data.recipes.has(md.get("recipe", "")):
+			sim.factory.set_recipe(m, md["recipe"])
 	for bd: Dictionary in d["belts"]:
 		var belt: Factory.Belt = sim.factory.belts.get(_to_v2(bd["cell"]))
 		if belt != null:
@@ -169,6 +177,13 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for perk: String in d.get("perks", {}):
 		sim.skills.perks[perk] = int(d["perks"][perk])
 	sim.skills.perk_points = int(d.get("perk_points", sim.skills.points_earned()))
+	if d.has("gear"):
+		sim.gear.load_dict(d["gear"])
+	else:  # before M13: the pipe you always had becomes a white piece in the weapon slot
+		sim.gear.load_dict({})
+		sim.gear.give_start()
+	if version < FIRST_WITH_GEAR:
+		sim.spawn_old_pete()  # he wasn't in the hall before M13
 	var st: Dictionary = d.get("stats", {})
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))
@@ -179,7 +194,10 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			sim.vehicles.cars[id]["fuel"] = float(d["car_fuel"][id])
 	sim.bags = []
 	for b: Dictionary in d["bags"]:
-		sim.bags.append({"id": int(b["id"]), "pos": _to_v3(b["pos"]), "items": _ints(b["items"])})
+		var pieces := []
+		for gp: Dictionary in b.get("gear", []):
+			pieces.append(Gear.clean(gp))
+		sim.bags.append({"id": int(b["id"]), "pos": _to_v3(b["pos"]), "items": _ints(b["items"]), "gear": pieces})
 	sim._next_bag = int(d["next_bag"])
 	sim._rng.state = int(d["rng_state"])
 	return ""

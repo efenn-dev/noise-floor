@@ -73,9 +73,12 @@ func siphon() -> String:
 	return last_message
 
 
-## R on a car: pour the gas cans you carry into its tank.
+## R on a car: pour the gas cans you carry into its tank. R on a Press: switch nails / repair kits (M13).
 func refuel() -> String:
 	update_target()
+	if target_car == "" and has_target and sim.factory.machines.has(target_cell):
+		last_message = sim.cycle_recipe(target_cell)
+		return last_message
 	if target_car == "":
 		return ""
 	last_message = sim.refuel_car(target_car)
@@ -266,6 +269,8 @@ func status_text() -> String:
 		for item: String in m.recipe["in"]:
 			names.append(sim.data.item_name(item))
 		var hint := "[E] take output, load %s" % ", ".join(names)
+		if sim.data.buildables[m.id]["recipes"].size() > 1:
+			hint += "   [R] make something else"
 		if not m.muffled:
 			hint += "   [U] fit muffler (%s)" % _list(sim.data.noise["muffler"]["cost"])
 		lines.append(hint)

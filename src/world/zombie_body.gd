@@ -18,6 +18,7 @@ const RUN_ABOVE := 2.0  # m/s: faster than this, a runner runs instead of walkin
 const LOOKS := {
 	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92},
 	"screamer": {"skin": Color(0.62, 0.62, 0.58), "shirts": [Color(0.55, 0.12, 0.1)], "scale": 1.0},
+	"old_pete": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.62, 0.16, 0.08)], "scale": 1.25},  # M13: the fireman
 }
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
 const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)

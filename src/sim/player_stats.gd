@@ -35,7 +35,7 @@ var deaths := 0
 ## What hurt you last: a zombie type ("shambler"), "starvation", "dehydration", "bleeding" or "unknown".
 ## When health hits 0 this is what killed you.
 var last_cause := "unknown"
-var weapon := "pipe"
+
 var swing_cooldown := 0.0
 var _rested := 0.0  # seconds since stamina was last used
 

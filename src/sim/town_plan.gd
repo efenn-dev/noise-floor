@@ -57,6 +57,7 @@ const FACTORY_CELL := Vector2i(-8, -69)
 const FACTORY_SIZE := Vector2i(15, 12)
 const FACTORY_DOOR := [-1, 0]   # cell x of the doorway's two edges in the south wall
 const FACTORY_WINDOWS := [-67, -64, -61]  # cell z of the windows in the west and east walls
+const FACTORY_PETE := Vector2i(-1, -62)  # M13: where Old Pete stands, between the crates
 const FACTORY_CRATES := [Vector2i(-5, -60), Vector2i(0, -64), Vector2i(4, -60)]
 
 
@@ -133,7 +134,10 @@ static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
 ## W1b: the factory hall. Floor on every cell, brick town walls all round ("factory" style) except the
 ## doorway's empty edges and a few windows. Pure and seed-free: the factory is the same in every town.
 static func factory() -> Dictionary:
-	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "windows": 0}
+	var out := {"cells": [], "pieces": [], "crates": FACTORY_CRATES.duplicate(), "doorway": [], "windows": 0,
+			# M13: Old Pete stands in the middle of the hall, facing the doorway.
+			"pete": {"cell": FACTORY_PETE, "pos": Vector3((FACTORY_PETE.x + 0.5) * BuildGrid.GRID, 0.1,
+					(FACTORY_PETE.y + 0.5) * BuildGrid.GRID), "facing": Vector3(0, 0, 1)}}
 	var x0 := FACTORY_CELL.x
 	var z0 := FACTORY_CELL.y
 	var x1 := x0 + FACTORY_SIZE.x - 1

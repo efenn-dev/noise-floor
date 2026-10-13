@@ -157,7 +157,7 @@ func test_version_3_save_still_loads() -> void:
 	var h: Dictionary = plan["houses"][3]
 	check(sim.build.pieces[BuildGrid.key_for_wall_edge(h["door_cell"], h["door_side"])]["open"], "the house door you opened is still open")
 	check(sim.build.pieces[sim.build.key_for("door", Vector2i(-1, -1), N)]["open"], "and your own door")
-	eq(sim.horde.zombies.size(), d["zombies"].size(), "its zombies, once")
+	eq(sim.horde.zombies.size(), d["zombies"].size() + 1, "its zombies, once, plus Old Pete (M13)")
 	check(not sim.build.pieces.has(plan["factory"]["doorway"][0]), "the hall's doorway is open")
 
 

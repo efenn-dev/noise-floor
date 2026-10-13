@@ -166,6 +166,11 @@ func test_game_lays_the_town_once() -> void:
 		if TownPlan.house_at(main.town, BuildGrid.world_to_cell(z.pos)) != -1:
 			in_houses += 1
 	eq(in_houses, main.town["zombies"].size(), "a zombie in each picked house (W1b)")
+	var petes := s.horde.zombies.values().filter(func(z: ZombieBrain) -> bool: return z.type == "old_pete")
+	eq(petes.size(), 1, "Old Pete is in the game (M13)")
+	check(petes.size() == 1 and TownPlan.factory_rect().has_point(Vector2(petes[0].pos.x, petes[0].pos.z)),
+			"standing in the factory hall")
+	eq(s.gear.weapon_name(), "Pipe", "you start with the pipe in your hand (M13)")
 	var zombies := s.horde.zombies.size()
 	eq(main.save_game(), "", "save")
 	main.queue_free()
@@ -179,6 +184,8 @@ func test_game_lays_the_town_once() -> void:
 	eq(again.town_pieces, 0, "the plan didn't lay the houses a second time")
 	eq(again.sim.build.pieces.size(), count, "the same pieces came back")
 	eq(again.sim.horde.zombies.size(), zombies, "the same zombies came back, house ones not doubled")
+	eq(again.sim.horde.zombies.values().filter(func(z: ZombieBrain) -> bool: return z.type == "old_pete").size(), 1,
+			"Old Pete once")
 	check(again.sim.build.pieces[door]["open"], "the front door is still open")
 	eq(again.sim.build.pieces[some_wall]["hp"], 600 - 123, "the wall is still damaged")
 	again.queue_free()

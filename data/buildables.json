@@ -76,6 +76,7 @@
 		"watts": 30,
 		"size": [1.7, 1.4, 1.7],
 		"recipe": "press_nails",
+		"recipes": ["press_nails", "repair_kit"],
 		"cost": { "plank": 10, "metal_plate": 10 }
 	},
 	"rain_collector": {

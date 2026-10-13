@@ -21,6 +21,7 @@ class Machine:
 	var cell: Vector2i
 	var facing: int
 	var recipe: Dictionary  # {name, time, in, out}
+	var recipe_id := ""     # M13: which one, for machines with a choice (the Press: nails or repair kits)
 	var input: Dictionary = {}
 	var output: Dictionary = {}
 	var progress := 0.0  # seconds into the current craft
@@ -134,10 +135,15 @@ func add_machine(id: String, cell: Vector2i, facing: int) -> Machine:
 	m.id = id
 	m.cell = cell
 	m.facing = facing
-	m.recipe = data.recipes[data.buildables[id]["recipe"]]
+	set_recipe(m, data.buildables[id]["recipe"])
 	m.watts = data.buildables[id]["watts"]
 	machines[cell] = m
 	return m
+
+
+func set_recipe(m: Machine, recipe_id: String) -> void:
+	m.recipe_id = recipe_id
+	m.recipe = data.recipes[recipe_id]
 
 
 func add_belt(cell: Vector2i, facing: int) -> Belt:

@@ -95,3 +95,55 @@ func test_bag_raises_the_limit_shown() -> void:
 	near(sim.carry_limit(), float(sim.data.survival["carry_base"]) + sim.data.item_value("hiking_pack", "bag"),
 			"the hiking pack adds to what you can carry")
 	_teardown()
+
+
+## M13: a gear piece shows in your pockets in its rarity colour; clicking it shows its stats, and the
+## Equip button puts it on (the Wearing column then shows it, in colour).
+func test_gear_piece_in_colour_and_equip_on_click() -> void:
+	_setup()
+	var piece := sim.gear.make("hard_hat", "civilian", "yellow", {"carry_kg": 8.0, "strength": 1.0, "durability": 0.2}, 0.7, "Grim Lid")
+	sim.gear.pieces.append(piece)
+	screen.open()
+	var tile: Button = screen.find_child("Gear%d" % piece["uid"], true, false)
+	check(tile != null, "the piece has a tile in your pockets")
+	var icon: Panel = tile.get_child(0)
+	var style: StyleBoxFlat = icon.get_theme_stylebox("panel")
+	eq(style.border_color, sim.gear.color(piece), "drawn in its rarity colour")
+	eq((icon.get_child(0) as Label).text, "H", "with its base's first letter")
+	eq((tile.get_child(1) as Label).text, "70%", "and its condition")
+	tile.pressed.emit()
+	var details := screen.find_children("*", "Label", true, false).filter(
+			func(l: Label) -> bool: return l.text.begins_with("Grim Lid"))
+	eq(details.size(), 1, "clicking shows its details")
+	eq(details[0].get_theme_color("font_color"), Color.from_string("#ffe85a", Color.WHITE), "the name in yellow")
+	check("+8 kg carry" in details[0].text and "Rare" in details[0].text and "Good 70%" in details[0].text,
+			"its rarity, condition and stats")
+	var limit := sim.carry_limit()
+	var equip: Button = _button("Equip")
+	check(equip != null and _button("Drop") != null, "Equip and Drop buttons")
+	check(_button("Repair (1 kit)") == null, "no Repair without a kit")
+	equip.pressed.emit()
+	eq(sim.gear.equipped.get("head", {}).get("uid"), piece["uid"], "Equip puts it on")
+	near(sim.carry_limit(), limit + 8.0 + 3.0, "+8 kg and +1 Strength (3 kg) now count")
+	var row: Button = screen.find_child("Wear_head", true, false)
+	eq(row.text, "Head: Grim Lid", "the Wearing column shows it")
+	eq(row.get_theme_color("font_color"), sim.gear.color(piece), "in colour")
+	sim.inventory.add("repair_kit", 1)
+	screen.refresh()
+	_button("Repair (1 kit)").pressed.emit()
+	near(piece["condition"], 1.0, "Repair with a kit")
+	_button("Unequip").pressed.emit()
+	check(not sim.gear.equipped.has("head"), "Unequip takes it off")
+	(screen.find_child("Gear%d" % piece["uid"], true, false) as Button).pressed.emit()
+	_button("Drop").pressed.emit()
+	eq(sim.bags.size(), 1, "Drop puts it in a bag at your feet")
+	var weapon: Button = screen.find_child("Wear_weapon", true, false)
+	eq(weapon.text, "Weapon: Pipe", "you hold the pipe")
+	_teardown()
+
+
+func _button(text: String) -> Button:
+	for b: Button in screen.find_children("*", "Button", true, false):
+		if b.text == text and not b.is_queued_for_deletion():
+			return b
+	return null

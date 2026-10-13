@@ -24,6 +24,8 @@ var defense: Defense
 var vehicles: Vehicles
 ## Skills that level by doing and the perks they earn (M12). Kept when you die.
 var skills: Skills
+## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
+var gear: Gear
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
 var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
 var _counted_dead: Dictionary = {}
@@ -73,6 +75,9 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	noise.skills = skills    # quieter machines (Dampened Gears)
 	power.skills = skills    # quieter generators
 	loot.skills = skills     # search time, Lucky Find
+	gear = Gear.new(data)
+	skills.gear = gear       # M13: every bonus(effect) query includes what you wear
+	gear.give_start()        # the pipe, white, in the weapon slot
 	_day = clock.day
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
@@ -127,7 +132,14 @@ func step() -> void:
 		_practice("scavenging", "search")
 		found["items"] = _rot_old_food(found["items"])
 		inventory.give_all(found["items"])
-		add_message(("Found " + _list(found["items"])) if not found["items"].is_empty() else "Nothing useful", 4.0)
+		var names := PackedStringArray()
+		if not found["items"].is_empty():
+			names.append(_list(found["items"]))
+		for piece: Dictionary in _search_gear(found):
+			gear.pieces.append(piece)
+			names.append(piece["name"])
+			_announce(piece, "You find")
+		add_message(("Found " + ", ".join(names)) if not names.is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
 			"player_lit": player_lit, "pieces": build.pieces, "noise": noise}
@@ -207,6 +219,9 @@ func noise_loudness(kind: String) -> float:
 		loudness -= skills.bonus("walk_quiet")
 	elif kind == "footstep_sprint":
 		loudness -= skills.bonus("sprint_quiet")
+	if kind.begins_with("footstep") or kind == "melee_hit":
+		loudness -= skills.bonus("gear_quiet")  # M13: "N quieter" on gear: your footsteps and swings
+	loudness -= skills.bonus("quiet_all")  # M13: the whole Night Shift set: every noise you make
 	return maxf(0.0, loudness)
 
 
@@ -237,7 +252,12 @@ func carry_limit() -> float:
 
 
 func carry_ratio() -> float:
-	return inventory.weight(data) / carry_limit()
+	return carried_kg() / carry_limit()
+
+
+## What you carry in kg: your pockets' items plus the gear pieces in them (worn gear doesn't count).
+func carried_kg() -> float:
+	return inventory.weight(data) + gear.weight()
 
 
 ## Your pockets plus every storage crate within storage_range of `at`: what building and hand-feeding use.
@@ -361,12 +381,50 @@ func drop_items(item: String, amount: int) -> String:
 		return "Nothing to drop"
 	inventory.remove(item, n)
 	var msg := "Dropped %d %s" % [n, data.item_name(item)]
+	var bag := _bag_at_feet()
+	bag["items"][item] = int(bag["items"].get(item, 0)) + n
+	return msg
+
+
+## M13: drops a gear piece from your pockets into the bag at your feet. Returns a message.
+func drop_gear(uid: int) -> String:
+	var piece := gear.take(uid)
+	if piece.is_empty():
+		return "Nothing to drop"
+	_bag_at_feet()["gear"].append(piece)
+	return "Dropped " + piece["name"]
+
+
+## The bag lying within 1 m of you, or a new empty one there.
+func _bag_at_feet() -> Dictionary:
 	for bag: Dictionary in bags:
 		if _flat_dist(bag["pos"], player_pos) <= 1.0:
-			bag["items"][item] = int(bag["items"].get(item, 0)) + n
-			return msg
-	drop_bag(player_pos, {item: n})
-	return msg
+			if not bag.has("gear"):
+				bag["gear"] = []
+			return bag
+	drop_bag(player_pos, {})
+	return bags.back()
+
+
+func equip_gear(uid: int) -> String:
+	var piece := gear.find(uid)
+	var why := gear.equip(uid)
+	return why if why != "" else "Equipped " + piece["name"]
+
+
+func unequip_gear(slot: String) -> String:
+	var piece: Dictionary = gear.equipped.get(slot, {})
+	var why := gear.unequip(slot)
+	return why if why != "" else "Took off " + piece["name"]
+
+
+## Repairs a piece (carried or worn) to mint with one repair kit from your pockets. Trains Mechanics.
+func repair_gear(uid: int) -> String:
+	var why := gear.repair(uid, inventory)
+	if why != "":
+		return why
+	_practice("mechanics", "repair")
+	return "Repaired " + gear.find(uid)["name"]
 
 
 # --- Eating, drinking, first aid, sleep -----------------------------------------
@@ -708,9 +766,11 @@ func hit_zombie(id: int, head: bool) -> bool:
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null:
 		return false
-	var w: Dictionary = data.weapons[player.weapon]
+	var w := weapon_stats()
 	var dmg := melee_damage() * (float(w["head_multiplier"]) if head else 1.0)
-	noise.emit_kind(z.pos, "melee_hit")
+	noise.emit(z.pos, noise_loudness("melee_hit"), "melee_hit")
+	if gear.wear_weapon():
+		add_message("Your %s is worn out: its bonuses stop until you repair it" % gear.weapon_name(), 5.0)
 	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]) * (1.0 + skills.bonus("knockback")))
 	stats.note("hit a zombie")
 	_practice("melee", "hit")
@@ -721,8 +781,9 @@ func hit_zombie(id: int, head: bool) -> bool:
 	return killed
 
 
+## The equipped weapon's stats (M13: from its gear base and tier; fists with nothing equipped).
 func weapon_stats() -> Dictionary:
-	return data.weapons[player.weapon]
+	return gear.weapon_stats()
 
 
 func _list(items: Dictionary) -> String:
@@ -747,8 +808,11 @@ static func _counts_of(inv: Inventory) -> Dictionary:
 func take_bag(id: int) -> Dictionary:
 	for i in bags.size():
 		if bags[i]["id"] == id:
-			var items: Dictionary = bags[i]["items"]
+			var items: Dictionary = bags[i]["items"].duplicate()
 			inventory.give_all(items)
+			for piece: Dictionary in bags[i].get("gear", []):
+				gear.pieces.append(piece)
+				items[piece["name"]] = 1  # so the "Took ..." message names it
 			bags.remove_at(i)
 			return items
 	return {}
@@ -758,18 +822,21 @@ func _on_player_respawned() -> void:
 	player_pos = spawn_point
 
 
-## Dying drops everything you carry in a bag where you fell.
+## Dying drops everything you carry in a bag where you fell, gear in your pockets too.
+## What you're wearing stays on you (M13).
 func _on_player_died() -> void:
 	stats.note_death(player.last_cause, when_text())
 	tally["deaths"] += 1
 	var items := _counts_of(inventory)
-	if not items.is_empty():
+	var pieces := gear.pieces.duplicate()
+	if not items.is_empty() or not pieces.is_empty():
 		inventory.take_all(items)
-		drop_bag(player_pos, items)
+		gear.pieces.clear()
+		drop_bag(player_pos, items, pieces)
 
 
-func drop_bag(at: Vector3, items: Dictionary) -> void:
-	bags.append({"id": _next_bag, "pos": at, "items": items})
+func drop_bag(at: Vector3, items: Dictionary, pieces: Array = []) -> void:
+	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces})
 	_next_bag += 1
 
 
@@ -836,6 +903,8 @@ func _on_piece_built(_key: String) -> void:
 
 ## Each new day: fresh food rots, and about three weeks in the town's gas goes stale.
 func _new_day() -> void:
+	for piece: Dictionary in gear.wear_day():
+		add_message("Your %s is worn out: its bonuses stop until you repair it" % piece["name"], 5.0)
 	var rotted := _spoil(inventory)
 	for key: String in storages:
 		_spoil(storages[key])
@@ -879,6 +948,81 @@ func _count_kills() -> void:
 		if horde.zombies[id].is_dead() and not _counted_dead.has(id):
 			_counted_dead[id] = true
 			tally["kills"] += 1
+			_zombie_drop(horde.zombies[id])
+
+
+# --- Loot (M13) --------------------------------------------------------------------
+
+## Gear a finished search turns up: the container's chance (gear.json "containers"), rolled again on
+## a Lucky Find. Its own seeded stream, so the same seed finds the same gear.
+func _search_gear(found: Dictionary) -> Array:
+	var chance := float(data.gear["containers"].get(found.get("table", ""), 0.0))
+	var out := []
+	if chance <= 0.0:
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, found["id"], "gear"])
+	for i in (2 if found.get("lucky", false) else 1):
+		if rng.randf() < chance:
+			out.append(gear.roll_piece(rng, found["table"]))
+	return out
+
+
+## A dead zombie may drop a piece into a bag where it fell: zombie_drop chance by type (runners more),
+## and a named zombie always drops its unique (Old Pete: Pete's Fire Axe).
+func _zombie_drop(z: ZombieBrain) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "drop", z.id])
+	var piece := {}
+	var unique: String = data.gear["zombie_uniques"].get(z.type, "")
+	if unique != "":
+		piece = gear.roll_unique(rng, unique)
+	elif rng.randf() < float(data.gear["zombie_drop"].get(z.type, data.gear["zombie_drop"]["default"])):
+		piece = gear.roll_piece(rng, "zombie")
+	if piece.is_empty():
+		return
+	drop_bag(z.pos, {}, [piece])
+	var who: String = data.zombies[z.type]["name"] if unique != "" else "The zombie"
+	if piece["rarity"] in ["gold", "set"]:
+		add_message("%s drops something %s" % [who, Gear.rarity_word(piece["rarity"])], 6.0)
+	else:
+		add_message("%s dropped something" % who, 3.0)
+
+
+## A message when you find a unique or set piece in a search.
+func _announce(piece: Dictionary, who: String) -> void:
+	if piece["rarity"] in ["gold", "set"]:
+		add_message("%s something %s: %s" % [who, Gear.rarity_word(piece["rarity"]), piece["name"]], 6.0)
+
+
+## M13: Old Pete, the named zombie, standing in the factory hall (TownPlan.factory()["pete"]).
+func spawn_old_pete() -> ZombieBrain:
+	var at: Dictionary = TownPlan.factory()["pete"]
+	var z := horde.spawn("old_pete", at["pos"])
+	z.facing = at["facing"]
+	return z
+
+
+## R on a machine that can make more than one thing (the Press: nails or repair kits): switches to the
+## next recipe. What's waiting in its input, and a craft in progress, go back in your pockets.
+## Returns a message ("" if the machine has only one recipe).
+func cycle_recipe(cell: Vector2i) -> String:
+	var m: Factory.Machine = factory.machines.get(cell)
+	if m == null:
+		return ""
+	var ids: Array = data.buildables[m.id].get("recipes", [])
+	if ids.size() < 2:
+		return ""
+	var back := m.input.duplicate()
+	if m.crafting:
+		for item: String in m.recipe["in"]:
+			back[item] = int(back.get(item, 0)) + int(m.recipe["in"][item])
+	inventory.give_all(back)
+	m.input = {}
+	m.crafting = false
+	m.progress = 0.0
+	factory.set_recipe(m, ids[(ids.find(m.recipe_id) + 1) % ids.size()])
+	return "%s now makes %s" % [data.buildables[m.id]["name"], m.recipe["name"]]
 
 
 ## Days survived, deaths, kills and noise made (infamy), for the pause menu.
