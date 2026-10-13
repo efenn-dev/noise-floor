@@ -1,4 +1,32 @@
-# Sprint 1 — "Someone plays it"
+# Sprint 2 — "Into the houses"
+
+*Started 2026-10-12, right after Sprint 1 closed: #16, #17 and #18 merged, and Emmitt's first play (on the old build, before play.bat caught up) said two things: no way into the buildings, and cars that would not drive. Lead: Claude Fable 5.1. Builders: Claude Opus 5.5. QA: Emmitt and Kaleb. Budget rule unchanged: the lead checks the 5-hour window before launching a builder, stops launching at 75%, one build agent on the PC at a time; cloud sessions on the credit don't count against it.*
+
+## Sprint goal
+
+Emmitt opens a front door, loots a kitchen in the dark, closes the door and hears the street go quiet. Then writes Playtest #1.
+
+## Board
+
+| # | Task | Owner | Status | Done when |
+|---|---|---|---|---|
+| S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent, worktree `noise-floor-p1` | In progress | PR merged; Emmitt sees the version on the title screen |
+| S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5, cloud session on the credit (recommended) or a PC agent after S2-1 | Ready to start after S2-1 merges | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
+| S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
+| S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Decided after Playtest #1 | Backlog | |
+| S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
+
+## What Emmitt tests, and when
+
+**Now, on the merged build:** `play.bat`, New game. The green tip line should be there. Play thirty minutes. Cars: the first car up the street (red sedan) has its key in the trunk: look at its back, press E to search, then look at its side and press E to get in. Note when the first runner shows up. Quit from the title screen and check `%APPDATA%/Godot/app_userdata/Noise Floor/sessions/` for the log. Write the `PLAYTESTS.md` entry.
+
+**After S2-1 merges:** the title screen shows a short build line in a corner; `play-update.log` next to play.bat says what the updater did; looking at a car tells you about its key or wreck before you press E.
+
+**After S2-2 merges:** open a front door, go in, find the fridge, close the door, run a smelter indoors with `--noise-overlay` and compare the rings to outdoors.
+
+---
+
+# Sprint 1 — "Someone plays it" (closed 2026-10-12)
 
 *Started 2026-10-12. Ends when the first entry lands in `docs/PLAYTESTS.md`. Lead: Claude Fable 5.1 (plans, review, this board). Builders: Claude Opus 5.5 sessions and agents, one milestone per worktree. QA: Emmitt, with Kaleb when he's willing. Update the Status column as things move; keep the table honest.*
 
