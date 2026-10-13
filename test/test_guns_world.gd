@@ -165,3 +165,94 @@ func test_workbench_screen_attaches_a_part() -> void:
 	check(s.gear.pieces.has(part), "back in your pockets")
 	screen.queue_free()
 	await tree.process_frame
+
+
+func _right_click(pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.position = player.get_viewport().get_visible_rect().size / 2.0
+	ev.button_index = MOUSE_BUTTON_RIGHT
+	ev.pressed = pressed
+	player.get_viewport().push_input(ev)
+
+
+func _frames(n: int) -> void:
+	for i in n:
+		await tree.process_frame
+
+
+func test_scope_zoom_on_right_click() -> void:
+	# P2: holding right click with a scoped gun narrows the view; letting go puts it back. No scope, no zoom.
+	_setup()
+	InputSetup.register()
+	InputSetup.assume_captured = true
+	_arm("hunting_rifle")
+	await _run(1.0)
+	var base := player.camera.fov
+	near(base, 75.0, "the normal view: 75 degrees")
+	_right_click(true)
+	await _frames(20)
+	near(player.camera.fov, base, "right click without a scope does nothing")
+	check(not shooter.aiming(), "not aiming")
+	_right_click(false)
+	var scope := sim.gear.make("scope", "civilian", "white")
+	sim.gear.pieces.append(scope)
+	sim.attach_part(scope["uid"])
+	_right_click(true)
+	await _frames(20)
+	check(shooter.aiming(), "aiming down the scope")
+	near(player.camera.fov, Shooter.AIM_FOV, "holding it zooms in to 35 degrees")
+	await _frames(10)
+	near(player.camera.fov, Shooter.AIM_FOV, "and stays zoomed while held")
+	_right_click(false)
+	await _frames(20)
+	near(player.camera.fov, base, "letting go restores the view")
+	shooter.hold_aim = true  # --aim
+	await _frames(20)
+	near(player.camera.fov, Shooter.AIM_FOV, "--aim holds the zoom for screenshots")
+	sim.swap_hands()
+	await _frames(20)
+	near(player.camera.fov, base, "the pipe in hand: no zoom")
+	InputSetup.assume_captured = false
+	await _teardown()
+
+
+func test_crosshair_shows_the_spread() -> void:
+	# P2: a gun in hand shows the crosshair (the pipe shows the old centre dot); a shot opens its gap.
+	InputSetup.assume_captured = true
+	GameSession.skip_menu = true
+	GameSession.skip_hints = true
+	var old_size := tree.root.size
+	tree.root.size = Vector2i(1600, 900)  # headless windows start tiny
+	var main: Node3D = load("res://scenes/main.tscn").instantiate()
+	tree.root.add_child(main)
+	await _frames(5)
+	var cross: Crosshair = main.crosshair
+	check(not cross.visible, "the pipe in hand: no crosshair")
+	check(main._dot.visible, "the centre dot instead")
+	eq(cross.mouse_filter, Control.MOUSE_FILTER_IGNORE, "the crosshair never catches the mouse")
+	check(cross.get_children().all(func(c: Node) -> bool: return (c as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE),
+			"nor do its ticks")
+	main._give_gun("pistol", false)
+	await _frames(3)
+	check(cross.visible, "a gun in hand: the crosshair shows")
+	check(not main._dot.visible, "and the dot hides")
+	var settled := cross.gap
+	var expect := Crosshair.gap_for(main.sim.guns.spread_deg(), main.player.camera.fov, main.get_viewport().get_visible_rect().size.y)
+	near(settled, expect, "its gap is the cone's size on screen", 0.5)
+	main.sim.guns.raising = 0.0
+	check(main.shooter.fire() != -2, "a shot")
+	await _frames(2)
+	check(cross.gap > settled * 1.5, "the gap opens after a shot (%.1f -> %.1f px, screen %s)" % [settled, cross.gap, main.get_viewport().get_visible_rect().size])
+	for i in 150:
+		main.sim.step()
+	await _frames(2)
+	near(cross.gap, settled, "and closes as it settles", 0.5)
+	main.sim.swap_hands()
+	await _frames(2)
+	check(not cross.visible and main._dot.visible, "back to the pipe: the dot again")
+	InputSetup.assume_captured = false
+	GameSession.skip_menu = false
+	GameSession.skip_hints = false
+	main.queue_free()
+	tree.root.size = old_size
+	await _frames(2)

@@ -154,11 +154,11 @@ func tick(dt: float, daylight: float) -> void:
 func noise_sources() -> Array:
 	var out := []
 	var cut := float(data.noise["muffler"]["cut"])
+	var quiet := skills.bonus("machine_quiet") if skills != null else 0.0  # Dampened Gears (once, not per generator)
 	for key: String in generators:
 		var g: Dictionary = generators[key]
 		if g["running"]:
 			var id: String = build.pieces[key]["id"]
-			var quiet := skills.bonus("machine_quiet") if skills != null else 0.0  # Dampened Gears
 			out.append({"pos": build.piece_center(key), "loudness": maxf(0.0, data.buildables[id]["loudness"] - (cut if g["muffled"] else 0.0) - quiet),
 					"key": key, "kind": id})
 	return out

@@ -78,3 +78,50 @@ func test_k_opens_it_in_the_game_and_esc_closes() -> void:
 	GameSession.skip_menu = false
 	GameSession.skip_hints = false
 	await tree.process_frame
+
+
+func test_fits_a_1280x720_window_with_six_perks_a_tree() -> void:
+	# P2: with six Fighter perks the trees sit side by side, each wrapping its text to its column and
+	# scrolling if the window is short, so nothing overlaps or runs off a 1280x720 window.
+	var old_size := tree.root.size
+	tree.root.size = Vector2i(1280, 720)
+	var sim := SimWorld.new(10.0)
+	var screen := SkillsScreen.new()
+	tree.root.add_child(screen)
+	screen.setup(sim)
+	screen.open()
+	for i in 3:
+		await tree.process_frame
+	var trees: Dictionary = sim.data.skills["trees"]
+	check(trees["fighter"]["perks"].size() >= 6, "Fighter has six perks (%d)" % trees["fighter"]["perks"].size())
+	var view := Rect2(Vector2.ZERO, Vector2(1280, 720))
+	var panel := screen.panel_rect()
+	check(view.encloses(panel), "the panel fits the window (%s)" % panel)
+	var columns: Array[Rect2] = []
+	for t: String in trees:
+		var sc := screen.tree_scroll(t)
+		var r := sc.get_global_rect()
+		check(panel.encloses(r), "the %s column sits inside the panel" % t)
+		for other: Rect2 in columns:
+			check(not r.intersects(other), "the %s column doesn't overlap another tree" % t)
+		columns.append(r)
+		var rows: Array[Rect2] = []
+		for p: String in trees[t]["perks"]:
+			var row := screen.perk_row(p)
+			check(row.size.x <= sc.size.x + 0.5, "%s fits its column's width (%.0f <= %.0f)" % [p, row.size.x, sc.size.x])
+			check(screen.perk_button(p).size.y >= 30.0, "%s has a full-size button" % p)
+			var rr := row.get_global_rect()
+			for other: Rect2 in rows:
+				check(not rr.grow(-1.0).intersects(other.grow(-1.0)), "%s doesn't overlap the perk above" % p)
+			rows.append(rr)
+	var skills_rect := screen._skills_scroll.get_global_rect()
+	check(panel.encloses(skills_rect), "the skills column sits inside the panel")
+	for r: Rect2 in columns:
+		check(not skills_rect.intersects(r), "the skills column doesn't overlap the trees")
+	tree.root.size = Vector2i(1600, 900)
+	await tree.process_frame
+	await tree.process_frame
+	check(screen.tree_scroll("fighter").size.y > columns[0].size.y, "a taller window gives the trees more room")
+	screen.queue_free()
+	tree.root.size = old_size
+	await tree.process_frame

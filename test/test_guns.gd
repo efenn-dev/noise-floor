@@ -108,23 +108,50 @@ func test_suppressor_subsonic_and_gunsmith_loudness() -> void:
 	eq(rifle.guns.shot_kind(), "gunshot_rifle_suppressed", "suppressed sound")
 
 
-func test_hit_chance_falls_with_distance_and_rises_with_firearms_and_a_scope() -> void:
+func test_the_ray_is_the_only_roll() -> void:
+	# P2: no hit-chance roll after the ray. A shot the world's ray put on a zombie hits, near or far;
+	# distance acts through the cone, which covers more ground further out.
+	var sim := _armed("pistol", 30)
+	_load_full(sim)
+	var hits := 0
+	for i in 200:
+		var t := sim.horde.spawn("shambler", Vector3(0, 0, -40))
+		t.hp = 10000.0
+		if sim.shoot_zombie(t.id, false)["hit"]:
+			hits += 1
+	eq(hits, 200, "every shot the ray lands at 40 m hits")
+	near(sim.guns.cone_radius(40.0), 4.0 * sim.guns.cone_radius(10.0), "the same cone is 4x as wide at 40 m as at 10 m")
+	near(sim.guns.cone_radius(18.0), tan(deg_to_rad(sim.guns.spread_deg())) * 18.0, "the cone's radius at 18 m (about 0.3-0.4 m for a pistol)")
+	var dead := sim.horde.spawn("shambler", Vector3(0, 0, -5))
+	dead.hp = 0.0
+	dead.take_hit(1.0, Vector3.ZERO, 0.0)
+	check(not sim.shoot_zombie(dead.id, false)["hit"], "a dead zombie can't be hit")
+	check(not sim.shoot_zombie(99999, false)["hit"], "nor one that isn't there")
+
+
+func test_firearms_and_a_scope_shrink_the_cone_and_recoil_grows_it() -> void:
 	var sim := _armed()
-	var near_c := sim.guns.hit_chance(3.0)
-	var mid := sim.guns.hit_chance(18.0)
-	var far := sim.guns.hit_chance(30.0)
-	check(near_c > 0.95, "close up nearly always (%.2f)" % near_c)
-	near(mid, 0.5, "at the pistol's range, half the time")
-	check(far < mid, "further, less (%.2f)" % far)
-	near(sim.guns.hit_chance(500.0), 0.05, "never below 5%")
+	_load_full(sim)
+	var rest := sim.guns.spread_deg()
 	sim.skills.xp["firearms"] = float(sim.data.skills["levels"][5])
-	check(sim.guns.hit_chance(18.0) > mid, "Firearms 5 raises it (%.2f)" % sim.guns.hit_chance(18.0))
+	var trained := sim.guns.spread_deg()
+	check(trained < rest, "Firearms 5: a smaller cone than Firearms 0 (%.3f < %.3f)" % [trained, rest])
+	near(trained, rest * 0.85, "15% smaller (3% a level)")
 	sim.skills.xp["firearms"] = 0.0
+	check(not sim.guns.scoped(), "no scope yet")
 	sim.attach_part(_part(sim, "scope")["uid"])
-	check(sim.guns.hit_chance(18.0) > mid + 0.2, "a scope raises it at range (%.2f)" % sim.guns.hit_chance(18.0))
+	check(sim.guns.scoped(), "scoped")
+	var scoped := sim.guns.spread_deg()
+	near(scoped, rest / 1.6, "a scope (+60% range) makes the cone 1/1.6 as wide")
+	eq(sim.fire(), "", "fires")
+	check(sim.guns.spread_deg() > scoped * 1.5, "a shot's recoil grows the scoped cone (%.3f)" % sim.guns.spread_deg())
+	_run(sim, 2.0)
+	near(sim.guns.spread_deg(), scoped, "and it settles back")
 	var rifle := _armed("hunting_rifle")
-	check(rifle.guns.hit_chance(40.0) > sim.guns.hit_chance(40.0) - 0.2 and rifle.guns.hit_chance(40.0) > 0.6,
-			"a rifle reaches further")
+	check(rifle.guns.spread_deg() < sim.guns.spread_deg() * 0.6, "a rifle's cone is far tighter than a pistol's")
+	rifle.swap_hands()
+	near(rifle.guns.spread_deg(), 0.35, "the cone is the gun's, whichever hand")
+	check(not rifle.guns.scoped(), "a holstered gun is never scoped")
 
 
 func test_recoil_spread_grows_and_settles() -> void:
@@ -255,28 +282,22 @@ func test_shooting_hurts_and_trains_firearms() -> void:
 	var hp := z.hp
 	sim.fire()
 	near(sim.skills.xp.get("firearms", 0.0), 1.0, "a shot: 1 Firearms xp")
-	var r := sim.shoot_zombie(z.id, false, 5.0)
-	check(r["hit"], "a 5 m shot hits (97%, seeded)")
+	var r := sim.shoot_zombie(z.id, false)
+	check(r["hit"], "a shot the ray put on it hits")
 	near(z.hp, hp - float(sim.data.guns["guns"]["pistol"]["damage"]), "for the pistol's damage")
 	near(sim.skills.xp["firearms"], 4.0, "a hit: 3 more")
 	_run(sim, 0.3)
 	sim.fire()
 	z.hp = 300.0
 	var hp2 := z.hp
-	sim.shoot_zombie(z.id, true, 5.0)
+	sim.shoot_zombie(z.id, true)
 	near(hp2 - z.hp, 2.0 * float(sim.data.guns["guns"]["pistol"]["damage"]), "a headshot doubles")
 	z.hp = 50.0
 	_run(sim, 0.3)
 	sim.fire()
-	check(sim.shoot_zombie(z.id, true, 5.0)["killed"], "a headshot kills a hurt one")
+	check(sim.shoot_zombie(z.id, true)["killed"], "a headshot kills a hurt one")
 	check(z.is_dead(), "dead")
 	check(sim.skills.xp["firearms"] >= 14.0, "a kill: 6 more")
-	var misses := 0
-	for i in 200:
-		var t := sim.horde.spawn("shambler", Vector3(0, 0, -40))
-		if not sim.shoot_zombie(t.id, false, 40.0)["hit"]:
-			misses += 1
-	check(misses > 150, "at 40 m a pistol mostly misses (%d of 200)" % misses)
 
 
 func test_workbench_recipes_and_the_gunsmith_gate() -> void:

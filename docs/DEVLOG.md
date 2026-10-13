@@ -2,6 +2,38 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — P2 Gun feel and screens
+
+From the P2 brief by the project lead, on top of M15 (PR #30). A small polish pass: no new content, no tuning.
+
+**Built:**
+- **One roll, not two.** A shot used to need the ray inside the spread cone to meet a zombie *and then* a hit-chance roll by distance, which felt harsh (a scoped rifle could land the ray and still "miss"). Now the cone is the only roll: what the ray meets is hit. Everything that used to change the hit chance now changes the cone instead: **Firearms** (3% tighter a level, as before), the **scope** and "+% accuracy at range" rolls (a gun with +60% range has a cone 1/1.6 as wide), **recoil** (each shot widens it, it settles back in a second or two) and **distance** (the same cone covers more ground further out: a pistol's cone is about 0.4 m across at 10 m and 1.7 m at 40 m, so far shots still mostly miss).
+- **A crosshair.** With a gun in hand four small ticks replace the centre dot. Their gap is the cone's real size on screen, so it opens after each shot, closes as you steady, and is tighter with a scope, with Firearms levels, or zoomed in. With the pipe in hand you get the old dot back. It never catches the mouse.
+- **Scope zoom.** Hold **right click** with a scoped gun in hand to zoom in (75 to 35 degrees); let go to zoom out. Without a scope right click does nothing (in build mode it still removes pieces). The scope's tighter cone is always on, zoomed or not, so the zoom is for seeing.
+- **The skills screen fits small windows.** The three perk trees now sit side by side, each with its perks' text wrapped to its column, and each tree (and the skills list) scrolls if the window is too short. It reads at 1280x720 as well as 1600x900, with six Fighter perks.
+- **`noise.refresh` is back to its old cost.** The M15 stress run measured it at about 448 us a tick against 82 before. The cause was M12's Dampened Gears: every working machine and every running generator asked the skills for its "machine quiet" bonus, and that question walks all ten skills, every perk and (since M13) all your gear and gear sets. With 50 machines that was 50 walks a tick. It is now asked once a tick. Stress run on Emmitt's PC after the fix: **95 us** (town + 200 zombies), 94 (empty map), 96 (town + 20); average tick 3.2 ms (was 3.8), worst 11.4 ms. Turrets, furniture and the cache invalidation were not the cause (the empty map, with no town and no turrets, measured the same 446 before).
+- Two new game flags for screenshots: `--aim` (fits a scope and holds the zoom) and `--window=1280x720` (a smaller window).
+
+**Rules (sim, tested):** `Gunplay`: `hit_chance()` is gone; `sight_mult()` (base gun range / this gun's range, 0.1-1) now multiplies `spread_deg()` with `spread_mult()` (Firearms) and the recoil bloom; `cone_radius(distance)`; `scoped()` (a working sight part on the gun in hand). `SimWorld.shoot_zombie(id, head)` no longer takes a distance or rolls: a live zombie the ray met is hit. `data/guns.json` loses `hit_chance`. The Firearms skill's text no longer mentions hit chance. `NoiseField.refresh` and `PowerGrid.noise_sources` ask `Skills.bonus("machine_quiet")` once a tick (`machine_loudness(m, quiet)` takes it as an optional argument). World: `Crosshair` (new, `src/world/crosshair.gd`), `Shooter` (the `aim` action on right click, `aiming()`, `hold_aim`, the FOV zoom), `SkillsScreen` (trees in columns, scrolling, `fit()` on open and on a window resize), `InputSetup` (`aim`), `main.gd` (crosshair or dot, `--aim`, `--window`, "RMB scope" in the key hints).
+
+**Tests:** `test_guns.gd`: the hit-chance test and the "mostly misses at 40 m" roll are gone; new: every shot the ray lands at 40 m hits (200 of 200), the cone is 4x as wide at 40 m as at 10 m, a dead or missing zombie can't be hit; Firearms 5 gives a 15% smaller cone than Firearms 0, a scope makes it 1/1.6 as wide, a shot's recoil grows the scoped cone and it settles back, a rifle's cone is far tighter, a holstered gun is never scoped. `test_guns_world.gd`: right click without a scope leaves the FOV at 75, with a scope it zooms to 35 while held and comes back on release, `--aim` holds it, the pipe in hand drops it; in the real game scene the crosshair is hidden and the dot shown with the pipe, the crosshair (and its ticks) ignore the mouse, a gun shows the crosshair and hides the dot, its gap matches the cone on screen, opens after a shot and closes as it settles. `test_skills_screen.gd`: at 1280x720 with six Fighter perks the panel fits the window, the three tree columns and the skills column sit inside it without overlapping, every perk row fits its column's width and doesn't overlap the one above, and a taller window gives the trees more room. **4371 checks** (was 4285).
+
+**Try it on the PC:** merge, then in a terminal in the game folder:
+- `play.bat --gun --time=12`: the crosshair. Fire a few quick shots at the street and watch it open, then close as you steady. Press **Q** for the pipe: the dot comes back.
+- `play.bat --gun=rifle --aim --time=12`: a rifle with a scope fitted, held zoomed in (`--aim` holds the zoom for you). For the real thing, `play.bat --workbench --time=12`, fit the scope at the bench, close it, then hold **right click**.
+- `play.bat --skills --window=1280x720`: the skills screen in a small window; scroll the Fighter tree with the mouse wheel.
+
+**Known gaps:**
+- Mouse look is not slowed while zoomed, so aiming at 35 degrees feels twitchy. Worth a look at the playtest.
+- The zoom doesn't tighten the cone further: the scope's tighter cone applies whether or not you zoom. Decided so hip-firing a scoped gun didn't get worse; change it if the playtest wants "aim down sights" to matter.
+- The crosshair is a fixed white; it doesn't turn red over a zombie or show a hit marker.
+- The skills screen's columns are fixed widths (350 and 3 x 250 px), so on a very wide window it doesn't spread out, and below about 1220 px wide it would run off the sides.
+- Every other gap from the M14 and M15 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — M15 Automated defense
 
 From the M15 brief by the project lead, on top of M14 (PR #29).

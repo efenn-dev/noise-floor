@@ -967,12 +967,12 @@ func fire() -> String:
 	return ""
 
 
-## A shot that the world's ray put on zombie `id`, `distance` m away: hits with Gunplay.hit_chance
-## (falls with distance; Firearms and a scope raise it), headshots double. Trains Firearms.
+## A shot that the world's ray put on zombie `id`: it hits (P2: the ray in the spread cone is the only roll;
+## distance, Firearms, the scope and recoil act through Gunplay.spread_deg), headshots double. Trains Firearms.
 ## Returns {"hit": bool, "killed": bool}.
-func shoot_zombie(id: int, head: bool, distance: float) -> Dictionary:
+func shoot_zombie(id: int, head: bool) -> Dictionary:
 	var z: ZombieBrain = horde.zombies.get(id)
-	if z == null or z.is_dead() or _rng.randf() >= guns.hit_chance(distance):
+	if z == null or z.is_dead():
 		return {"hit": false, "killed": false}
 	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
 	var killed := z.take_hit(dmg, player_pos, float(guns.stats()["knockback"]))

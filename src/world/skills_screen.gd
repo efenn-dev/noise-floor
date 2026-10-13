@@ -14,6 +14,15 @@ var _root: Control
 var _skill_rows: Dictionary = {}  # skill -> {"label": Label, "bar": ProgressBar}
 var _perk_rows: Dictionary = {}   # perk -> {"label": Label, "button": Button}
 var _points_label: Label
+var _skills_scroll: ScrollContainer
+var _tree_scrolls: Dictionary = {}  # tree -> ScrollContainer
+
+const SKILLS_W := 350  # width of the skills column
+const TREE_W := 250    # width of each perk tree's column
+const TREE_GAP := 16
+## Height the screen leaves for its title lines, the foot and the panel's margins; the scrolling columns
+## get the rest of the window, so the screen fits a 1280x720 window as well as 1600x900.
+const CHROME_H := 150
 
 
 func setup(p_sim: SimWorld) -> void:
@@ -21,6 +30,8 @@ func setup(p_sim: SimWorld) -> void:
 	layer = 5
 	_build()
 	_root.visible = false
+	if is_inside_tree():
+		get_viewport().size_changed.connect(fit)  # P2: a resized window re-fits the scrolling columns
 
 
 func is_open() -> bool:
@@ -29,6 +40,7 @@ func is_open() -> bool:
 
 func open() -> void:
 	_root.visible = true
+	fit()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	refresh()
 
@@ -124,35 +136,41 @@ func _build() -> void:
 	sides.add_theme_constant_override("separation", 32)
 	column.add_child(sides)
 
-	# Left: the ten skills.
+	# Left: the ten skills, in a column that scrolls if the window is short (P2).
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 4)
 	sides.add_child(left)
 	left.add_child(_title("Skills"))
-	var hint := _small("Skills level by doing", 16)
-	left.add_child(hint)
+	left.add_child(_small("Skills level by doing", 16))
+	_skills_scroll = _scroller(SKILLS_W)
+	left.add_child(_skills_scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 2)
+	list.custom_minimum_size = Vector2(SKILLS_W - 14, 0)  # room for the scroll bar
+	_skills_scroll.add_child(list)
 	for s: String in sim.skills.ids():
 		var name := Label.new()
-		name.add_theme_font_size_override("font_size", 20)
+		name.add_theme_font_size_override("font_size", 19)
 		var desc := _small(sim.data.skills["skills"][s].get("text", ""), 14)
+		_wrap(desc, SKILLS_W - 14)
 		var bar := ProgressBar.new()
 		bar.show_percentage = false
-		bar.custom_minimum_size = Vector2(220, 10)
+		bar.custom_minimum_size = Vector2(170, 10)
 		if sim.skills.is_disabled(s):
 			name.modulate = GREY
 			desc.modulate = GREY
 			bar.modulate = Color(1, 1, 1, 0.3)
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 12)
-		name.custom_minimum_size = Vector2(170, 0)
+		name.custom_minimum_size = Vector2(150, 0)
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		line.add_child(name)
 		line.add_child(bar)
-		left.add_child(line)
-		left.add_child(desc)
+		list.add_child(line)
+		list.add_child(desc)
 		_skill_rows[s] = {"label": name, "bar": bar}
-
-	# Right: perk points and the three trees.
+	# Right: perk points, then the three trees side by side; each tree's perks wrap to its column and the
+	# column scrolls if the window is too short for them (P2: six Fighter perks no longer push it off screen).
 	var right := VBoxContainer.new()
 	right.add_theme_constant_override("separation", 6)
 	sides.add_child(right)
@@ -160,34 +178,82 @@ func _build() -> void:
 	_points_label = Label.new()
 	_points_label.add_theme_font_size_override("font_size", 18)
 	right.add_child(_points_label)
+	var tree_row := HBoxContainer.new()
+	tree_row.add_theme_constant_override("separation", TREE_GAP)
+	right.add_child(tree_row)
 	var trees: Dictionary = sim.data.skills["trees"]
 	for t: String in trees:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 4)
+		tree_row.add_child(col)
 		var head := Label.new()
 		head.text = trees[t]["name"]
 		head.add_theme_font_size_override("font_size", 22)
 		head.add_theme_color_override("font_color", GOLD)
-		right.add_child(head)
+		col.add_child(head)
+		var scroll := _scroller(TREE_W)
+		col.add_child(scroll)
+		_tree_scrolls[t] = scroll
+		var perks := VBoxContainer.new()
+		perks.add_theme_constant_override("separation", 8)
+		scroll.add_child(perks)
 		for p: String in trees[t]["perks"]:
 			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 10)
+			row.add_theme_constant_override("separation", 8)
 			var b := Button.new()
 			b.focus_mode = Control.FOCUS_NONE
-			b.custom_minimum_size = Vector2(64, 36)
+			b.custom_minimum_size = Vector2(56, 34)
+			b.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 			b.pressed.connect(spend.bind(p))
 			row.add_child(b)
 			var text := VBoxContainer.new()
 			text.add_theme_constant_override("separation", 0)
 			var label := Label.new()
-			label.add_theme_font_size_override("font_size", 19)
+			label.add_theme_font_size_override("font_size", 18)
 			text.add_child(label)
-			text.add_child(_small(sim.data.skills["perks"][p].get("text", ""), 14))
+			var desc := _small(sim.data.skills["perks"][p].get("text", ""), 14)
+			_wrap(desc, TREE_W - 56 - 8 - 14)
+			text.add_child(desc)
 			row.add_child(text)
-			right.add_child(row)
-			_perk_rows[p] = {"label": label, "button": b}
+			perks.add_child(row)
+			_perk_rows[p] = {"label": label, "button": b, "row": row}
 	right.add_child(_small("Points can't be taken back", 14))
-
 	var foot := _small("K or Esc: close    The game keeps running while this is open", 16)
 	column.add_child(foot)
+
+
+## Sizes the scrolling columns to the window (open() calls it; tests call it after changing the size).
+func fit() -> void:
+	var h := _root.get_viewport_rect().size.y if _root.is_inside_tree() else 900.0
+	var avail := maxf(200.0, h - CHROME_H)
+	_skills_scroll.custom_minimum_size.y = avail - 30.0  # under "Skills" and its hint line
+	for t: String in _tree_scrolls:
+		(_tree_scrolls[t] as ScrollContainer).custom_minimum_size.y = avail - 100.0  # under "Perks", the points line and the tree name
+
+
+## The perk's row (button and text), for layout tests.
+func perk_row(perk: String) -> Control:
+	return _perk_rows[perk]["row"]
+
+
+func tree_scroll(tree: String) -> ScrollContainer:
+	return _tree_scrolls[tree]
+
+
+func panel_rect() -> Rect2:
+	return (_root.get_child(0).get_child(0) as Control).get_global_rect()
+
+
+func _scroller(width: float) -> ScrollContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(width, 300)
+	return sc
+
+
+func _wrap(l: Label, width: float) -> void:
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(width, 0)
 
 
 func _title(text: String) -> Label:
