@@ -759,7 +759,7 @@ func _update_hud(delta: float) -> void:
 	_heat_label.position.y = _materials_hud.position.y + maxf(_materials_hud.size.y, _materials_hud.get_combined_minimum_size().y) + 6.0
 	var hp := sim.player.health
 	var p := sim.player
-	_health_label.text = "Health %d   Food %d   Water %d   Energy %d   Stamina %d%s%s%s" % [ceili(hp), ceili(p.food),
+	_health_label.text = "Health %d%s   Food %d   Water %d   Energy %d   Stamina %d%s%s%s" % [ceili(hp), " (healing)" if p.is_healing() else "", ceili(p.food),
 			ceili(p.water), ceili(p.energy), ceili(p.stamina), warmth_text(), "   BLEEDING (H)" if p.bleeding else "",
 			"   Sleeping... (any key wakes you)" if p.asleep else ""]
 	var low := hp <= 30.0 or p.bleeding or p.food < 15.0 or p.water < 15.0 or p.is_freezing()

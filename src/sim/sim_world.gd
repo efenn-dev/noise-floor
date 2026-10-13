@@ -165,6 +165,7 @@ func step() -> void:
 	_note_noise()
 	player.carry_ratio = carry_ratio()
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
+	player.heal_mult = 1.0 + skills.bonus("heal_rate")
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
 			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0

@@ -28,7 +28,11 @@ var mouse_sensitivity := 0.003
 var _model: Node3D
 var _head: Node3D
 var _lights: Array[SpotLight3D] = []
+const SHOVE_PUSH := 7.0   # m/s handed to a zombie the car is pushing against
+const SHOVE_EVERY := 0.2  # seconds between shoves
+
 var _hit_cooldown: Dictionary = {}  # zombie id -> seconds until it can be hit again
+var _shove_cooldown := 0.0
 var _obstacle: NavigationObstacle3D
 
 
@@ -131,6 +135,9 @@ func _physics_process(delta: float) -> void:
 		brake = float(stats["brake_force"]) * 1.5
 	if not running and absf(throttle) < 0.1:
 		brake = maxf(brake, float(stats["brake_force"]) * 0.05)  # out of gas: it rolls to a stop
+	_shove_cooldown -= delta
+	if absf(throttle) > 0.1 and _shove_cooldown <= 0.0:
+		_shove_zombies()
 	sim.car_moved(global_position, sim_yaw(), linear_velocity.length())
 	_set_lights(bool(sim.vehicles.cars[id]["lights"]))
 
@@ -170,6 +177,26 @@ func _on_body_entered(body: Node) -> void:
 	_hit_cooldown[z.brain.id] = 0.6
 	sim.car_hits_zombie(z.brain.id, speed)
 	SoundView.play_at(self, "hit_body", z.global_position, 2.0, randf_range(0.8, 0.95))
+
+
+## Zombies are solid bodies the car can't move, so a few standing against the bumper used to hold a running
+## car in place for good. While you're on the gas, any zombie touching the car is nudged aside (no damage;
+## ramming at speed is _on_body_entered's job), so a slow car can creep out through a crowd.
+func _shove_zombies() -> void:
+	for body: Node3D in get_colliding_bodies():
+		var z := body as ZombieBody
+		if z == null or z.brain == null or z.brain.is_dead():
+			continue
+		# Sideways off the bumper (pushed straight ahead they'd just stay in front), a little forward too.
+		var fwd := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+		fwd = fwd.normalized() if fwd.length_squared() > 0.01 else Vector3(global_basis.z.x, 0.0, global_basis.z.z).normalized()
+		var away := z.global_position - global_position
+		away.y = 0.0
+		var lateral := away - fwd * away.dot(fwd)
+		if lateral.length_squared() < 0.01:
+			lateral = fwd.cross(Vector3.UP) * (1.0 if z.brain.id % 2 == 0 else -1.0)
+		z.brain.knockback += lateral.normalized() * SHOVE_PUSH + fwd * signf(away.dot(fwd)) * 1.0
+		_shove_cooldown = SHOVE_EVERY
 
 
 # --- Building the car ----------------------------------------------------------

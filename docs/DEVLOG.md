@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Fix-up before Playtest #1: healing, cars stuck in zombies, the soak drives
+
+Built by Opus 5.5 from a PR review Emmitt asked for (no lead brief). Small pre-playtest fixes; no save change (healing adds no saved state).
+
+**Built:**
+- **Natural healing.** Health used to never come back except from bandages. Now it slowly returns while food and water are both at least 30, you aren't bleeding and you aren't cold: 0.08 a second awake (about 5 an in-game hour), 0.25 a second asleep in a bed (a full night's sleep heals you completely). First Aid makes it 10% faster per level. The HUD shows "Health 60 (healing)" while it's happening. Numbers are in `data/survival.json` (`heal_rate`, `heal_sleep_rate`, `heal_min`) for tuning after the playtest.
+- **Cars no longer get pinned by zombies.** Zombies are solid bodies a car can't move, so three standing against the bumper held a running car in place for good (found by the soak: "moved 0.1 m" with the engine on). While you're on the gas, a zombie touching the car is now nudged sideways off it (no damage; ramming at speed still hurts as before), so a car creeps out through a crowd (about 5 m in 3 seconds through three).
+- **The soak bot really drives.** If it has no gas can left (the generator burned the one it siphoned) it is handed one; the drive line now says whether the engine was on, the fuel and car hp. `tools/soak.sh` and `tools/tour.sh` are executable again.
+
+**Rules (sim, tested):** `PlayerStats.heal_mult` (set by SimWorld from the First Aid `heal_rate` effect) and `is_healing()`; healing runs in `tick()` only on a tick where nothing hurt you. `CarBody._shove_zombies()` (world): every 0.2 s while the throttle is held, each zombie in contact gets a 7 m/s sideways push through `ZombieBrain.knockback`.
+
+**Tests:** `test_healing.gd` (new, 16 checks): awake and asleep rates, capped at max health, no healing when hungry, thirsty, bleeding, cold or dead, First Aid 5 heals 50% faster. `test_car_shove.gd` (new): the real game scene, three zombies at the bumper, the car moves more than 1.5 m in 3 s (0.1 m without the fix). 7986 checks green. Soak, one day: `SOAK OK`, drive step "engine on (fuel 1.0, hp 300); moved 4.7 m".
+
+**Try it on the PC:** merge, then `play.bat --hurt=40 --time=12`: you start at 60 health and the HUD says "(healing)"; it creeps up. Sleep in a bed to heal fast. Drive a car into a few zombies slowly: it pushes through.
+
+**Known gaps:** healing rates are guesses until Playtest #1. Early water is still tight (the soak bot dies of thirst on long runs) and infamy still climbs fast (about 200 after day 1); both are for the playtest to judge, not changed here.
+
+**Next:** Playtest #1 with Emmitt (see `docs/DIRECTION.md`).
+
 ## 2026-10-13 — Q4 Rule fixes from the winter soak
 
 From the Q4 brief by the project lead, on top of Q3 (PR #39). Three rule changes the lead decided after the Q3 soak (its Known gaps 1, 2, 3 and 6), each with a test. No balance tuning beyond what each fix needs.
