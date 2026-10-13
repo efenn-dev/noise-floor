@@ -2,6 +2,44 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Q3 Winter soak and tour
+
+From the Q3 brief by the project lead, on top of M17a (PR #38). A QA pass: a week of play that reaches winter and the park, the screenshot tour again, fixes for what is small, the rest written down. No new content, no tuning.
+
+**Built:**
+- **`tools/soak.sh --days=7 --start-day=12`.** `--start-day=D` starts the soak on day D (it sets the clock's day the way the game's `--day` does) and turns on the winter steps, on top of the unchanged day-1 script: on the first evening the bot builds a planter and a rain collector in the base and a **stove in house 1** two metres from the bed (from the base crate's scrap, nails and planks; the crate gets 60 extra planks in this mode), loads it; every morning it fetches 10 planks and loads the stove (rebuilding it first if zombies broke it); every night at 22:00 it sleeps in house 1's bed; it eats and drinks every 12 hours; **whenever warmth drops under 50 in the open it goes into house 1** and stands by the stove; on day 15 (the first winter day) at noon it **walks into the park** through the factory hall's two doorways, into the nearest warehouse, searches one crate, delivers the water tower's phase-1 metal plates and walks back (after a death on the way it respawns and goes again); at 14:30 that day a second **save, load, continue** checks that projects and stoves round-trip.
+- The hourly line now shows the season and warmth. New invariants (winter mode): warmth in [0, 100]; no death of cold in house 1 while its stove holds planks or burns; planters frozen in winter and only in winter; the rain collector's season speed differs between autumn and winter; the ground, town-roof and park-roof materials are the season's own `SeasonLook` materials a few frames after each hour, and the ground tint changes when the season does; every park zombie stays inside the park fence (plus 4 m) until it has been drawn (chase, attack, break or investigate); the save round-trip compares the projects, `projects_done`, stove planks and the season too. At the end it prints deaths per day with cause and place, and the wall time per game-day.
+- **`tools/tour.sh`** has sixteen tiles (a 4x4 sheet): Q3 added the park from the hall's north doorway (`--park`), inside a warehouse with the flashlight (`--cam=-16,0,-152,0,-5 --flashlight`), the water tower (`--tower`) and the street in winter (`--day=16`).
+- **Fix (soak): the day-2 wave was "lost" by a later load.** `RunStats` is new after a load in a headless run (only the session log carries it, and headless has none), so the mid-week load reset `waves` to 0 and the end check said no wave came. The soak now adds up waves across loads. The waves did come: zombies alive went 15 to 31 to 40 (the cap) between 21:00 and 23:00 on day 13 at heat 106.
+
+**Rules:** none changed. The game code is untouched; everything is in `test/stress/soak.gd`, `tools/tour.sh`, `tools/contact_sheet.py` (docstring) and the docs.
+
+**Tests:** 7878 checks (unchanged: no game code changed; the soak fixes are tested by the soak runs below).
+
+**Soak (this PC, run 3 of 3):** `SOAK OK: NaN moves undone 0; 7 game-day(s) in 629 s wall (90 s per game-day); deaths 15, kills 48, waves 6, swings 64, gear 9, pieces 1136, bag taken`. Deaths by day: day 12: 5 (bleeding x2, shambler, Old Pete x2), 13: 1 (bleeding), 14: 3 (shambler x2, bleeding), 15: 2, 16: 1, 17: 1, 18: 1, 19 (to 08:00): 1, the last six all dehydration, in house 1. **No death of cold**; warmth low 50, one cold trip indoors (day 15 16:59). Collector speed autumn 1.0, winter 0.5; ground tint autumn then winter; park zombies stayed in the park. Wall time per game-day: 90 s (runs 1 and 2: 100 s and 86 s; Q1 53 s, M17a 102 s). Static memory 142-151 MB all week, first navmesh bake 71-78 ms, 3-4 bakes a run, worst physics frame under 3 ms. What the park added: 1118 town pieces at the start (Q1: about 780, so about 340 park pieces), 24 zombies alive at the start instead of 12 (the park's 12), the first bake 78 ms instead of 49. Nothing else grew over the week (memory flat after day 1, no extra bakes).
+
+**Tour (this PC):** all sixteen tiles render. Nothing new is broken: the park from the doorway (warehouses, a wreck, zombies, the tower in the fog), a warehouse inside (brick walls, the doorway and back doorway, two windows, crates, two zombies), the tower with its "phase 1 of 3" prompt, the winter street (white ground and roof edges, cold sky). Two old notes stand: the hall is grey with fog (Q1), and the park's wreck reads as an ordinary dark car rather than burned out (M17a's gap: town car models in a rust tint).
+
+**Try it on the PC:** merge, then in a terminal in the game folder:
+- `bash tools/soak.sh --days=7 --start-day=12` (about 10-12 minutes; one heavy job at a time): one line per game-hour with season and warmth, ending in `SOAK OK`, the deaths per day and a `winter:` line.
+- `bash tools/tour.sh`, then open `.shots/tour/contact.png` (sixteen tiles).
+
+**Known gaps (findings not fixed; numbers from the three seven-day runs):**
+- **Beds are not furniture, so zombies break them.** M16's rule spares counters, tables, couches, shelves, bathtubs and toilets (kind "prop"); a bed is kind "bed" and still a break target. Every run: `day 12 14:02 piece gone: bed o:-5:-11 (the town's; zombie 9, investigate)`; in run 1 house 1's own bed went too (`day 15 03:13 piece gone: bed o:5:-7 (zombie 50, chase)`), and the bot had no bed for the rest of the week. A rule call for the lead. Repro: `tools/soak.sh --days=7 --start-day=12`, the "piece gone" lines.
+- **Zombies break the stove.** Run 2: `day 14 01:20 piece gone: stove o:4:-7 (the player's; zombie 55, investigate)`, a zombie from the day-13 wave, through house 1's open door (the bot leaves it open); the bot rebuilds it now. Stoves are machines-like break targets, and a lit one is a continuous sound (loudness 15). By the rule as written; worth knowing for Playtest #1.
+- **Indoors, the cold never bites, and the stove adds nothing there.** Under a town roof warmth gains 20 a game-hour whatever the season, so the bot sat at warmth 100 indoors all winter with the stove empty or full; it only fell to 50 outdoors (winter day drain 12 an hour, night 20). The stove matters only for a base you built (no roof) or outdoors. Not tuned here.
+- **One stove load does not last a day:** 10 planks at most, one per 2 game-hours = 20 hours, so a stove loaded at 08:30 is out by about 04:30 (`stove planks 0` in the 03:00-08:00 lines every night). Not tuned here.
+- **The bot dies a lot, mostly of thirst after day 14:** 15-21 deaths a week (run 1: 21, run 2: 17, run 3: 15). Days 12-14 are zombies and bleeding (5, 0-1, 3-8); from day 14 03:00 it has nothing to eat or drink ("Nothing to eat, Nothing to drink"), because it only ever loots house 1 and car_0, and the rain collector's water is dirty (it needs a powered purifier). Six dehydration deaths in run 3, days 15-19. The bot's limit, not the game's.
+- **Old Pete leaves the factory hall** and kills the bot twice on the first evening, outdoors at 21:35 and in house 1's bed at 22:24-22:37, every run (the day-1 factory's noise draws him). Zombies killing the bot, recorded for the lead.
+- **The soak is not deterministic over a week:** the three runs diverge from day 13 night (deaths 21 / 17 / 15, the stove broken in run 2 only, the park trip died of thirst on the way in run 2). Each run is one sample.
+- The day-1 script's drive step does nothing from day 12 on (`refuel: No gas cans; moved 0.0 m`): car_0 was siphoned at noon and the generator burned the crate's gas cans. The bot's limit.
+- Park zombies are re-identified by position after each load (zombie ids are new after a load), so one that left the park undrawn before a load is no longer watched after it.
+- Every other gap from the M17a, A2, M16, Q2, A1, Q1, P3, P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — M17a The industrial park and the water tower
 
 From the M17a brief by the project lead, on top of A2 (PR #37). The first half of the design doc's M17 ("Further out"): a second, harder area north of the factory hall, and the first big project in it. Outposts and the substation are M17b.

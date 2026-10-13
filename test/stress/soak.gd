@@ -1,8 +1,10 @@
 extends SceneTree
 ## Q1 integration soak: plays scripted game days through the REAL game scene (scenes/main.tscn), so every
 ## system (sim, physics, navmesh, zombie bodies, cars, screens, save/load scene reload) runs together.
-## Not a test_*.gd, so tools/test.sh never runs it. Run it with tools/soak.sh [--days=N] (--fixed-fps 60,
-## faster than real time). Default one game-day; --days=3 also runs the day-2 wave and the day-3 death.
+## Not a test_*.gd, so tools/test.sh never runs it. Run it with tools/soak.sh [--days=N] [--start-day=D]
+## (--fixed-fps 60, faster than real time). Default one game-day; --days=3 also runs the day-2 wave and the
+## day-3 death. Q3: --start-day=D starts on day D (like the game's --day) and turns on the winter steps:
+## --days=7 --start-day=12 starts in autumn, crosses into winter on day 15 and walks into the park once.
 ##
 ## A bot does the next thing on its list once each game-hour, using the sim's verbs and by moving the
 ## player node a couple of metres at a time while physics runs (the brief's "set the position, let
@@ -14,10 +16,28 @@ const SAVE := "user://soak_save.json"
 const STEP_M := 2.0          # metres per walking step
 const STEP_FRAMES := 8       # physics frames per step
 const ABSURD := 1000.0
-const WALL_LIMIT_S := 1500.0  # give up (and fail) after 25 minutes of wall time
+const WALL_LIMIT_S := 1440.0  # give up (and fail) after 24 minutes of wall time (tools: timeout 1500)
 const HOUSE := 1             # town["houses"][1] = house_0_e (east of the road, front door facing west)
 
 var days := 1
+var start_day := 1                   # Q3: --start-day=D; above 1 also turns on the winter steps
+var winter := false
+const WARM_AT := 50.0                # Q3: under this warmth (in a cold season) the bot goes indoors
+const TOWER := "water_tower"
+var _stove_key := ""
+var _park_ids: Dictionary = {}       # Q3: park zombie id -> drawn yet (chased, investigated, attacked, broke)
+var _deaths_by_day: Dictionary = {}  # Q3: day -> ["cause@where", ...], from the death tally
+var _last_deaths := 0
+var _rain_by_season: Dictionary = {}  # Q3: season -> a rain collector's season speed seen there
+var _ground_tints: Dictionary = {}   # Q3: ground tints seen (the material's albedo, as html)
+var _frozen_seen := false
+var _tint_due := -1
+var _cold_trips := 0
+var _warmth_min := 100.0
+var _in_park := false
+var _park_note := ""
+var _stove_rebuilds := 0
+var _start_season := ""
 var main: Node3D
 var sim: SimWorld
 var failures: PackedStringArray = []
@@ -38,12 +58,16 @@ var _dying := false                  # the day-3 step: stand still, don't fight 
 var _swings := 0
 var _removed := 0
 var _waves_before := -1
+var _waves_carried := 0              # Q3: RunStats is new after a load (headless has no session log to carry it)
 
 
 func _initialize() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--days="):
 			days = maxi(1, int(arg.get_slice("=", 1)))
+		if arg.begins_with("--start-day="):
+			start_day = maxi(1, int(arg.get_slice("=", 1)))
+	winter = start_day > 1
 	GameSession.skip_menu = true
 	GameSession.skip_hints = true
 	GameSession.save_path = SAVE
@@ -58,10 +82,17 @@ func _run() -> void:
 	_grab()
 	await _frames(10)
 	street_and_house = sim.horde.alive_count()
+	if winter:
+		sim.clock.day = start_day  # what the game's --day does (the season's look follows on the next frame)
+		_kit_crate().add("plank", 60)  # Q3: a week of stove fuel on top of the day-1 builds
+		await _frames(2)
+	_last_deaths = int(sim.tally["deaths"])
+	_start_season = sim.clock.season()
 	_start_abs = _abs_hours()
 	_end_abs = _start_abs + 24.0 * days
-	print("soak: %d game-day(s) from day %d %s, %d min per game-day, %d zombies at start, %d town pieces" % [
-			days, sim.clock.day, sim.clock.clock_text(), Settings.day_minutes, street_and_house, sim.build.pieces.size()])
+	print("soak: %d game-day(s) from day %d %s (%s), %d min per game-day, %d zombies at start (%d in the park), %d town pieces" % [
+			days, sim.clock.day, sim.clock.clock_text(), sim.clock.season_name(), Settings.day_minutes, street_and_house,
+			_park_ids.size(), sim.build.pieces.size()])
 	var plan := _plan()
 	var i := 0
 	while _abs_hours() < _end_abs and failures.is_empty():
@@ -76,6 +107,8 @@ func _run() -> void:
 			var why: String = await step.call()
 			notes.append("%s %s: %s" % [sim.when_text(), label, why if why != "" else "ok"])
 			print("soak:   %s %s -> %s" % [sim.when_text(), label, why if why != "" else "ok"])
+		elif winter and _too_cold():
+			await _warm_up()
 		else:
 			await _frames(30)
 		if (Time.get_ticks_msec() - _t0) / 1000.0 > WALL_LIMIT_S:
@@ -85,8 +118,32 @@ func _run() -> void:
 	_finish()
 
 
-## [hours after the start, label, step]. The start is day 1 08:00.
+## [hours after the start, label, step]. The start is day 1 08:00 (Q3: day --start-day 08:00).
 func _plan() -> Array:
+	var plan := _day1_plan()
+	if winter:
+		plan.append_array(_winter_plan())
+		plan.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return plan
+
+
+## Q3: the week into winter, on top of the day-1 script: a stove in house 1 on the first evening, planks
+## every morning, the bed every night, food and water twice a day, one trip into the park (a warehouse crate,
+## the tower's phase-1 plates) and a second save/load mid-week (projects and stoves).
+func _winter_plan() -> Array:
+	var out := [[13.5, "build a planter and a rain collector in the base, and a stove in house 1", _winter_build]]
+	for d in range(1, days):
+		out.append([24.0 * d, "fetch planks and load the stove", _load_stove])
+		if d >= 1:
+			out.append([24.0 * d + 14.0, "sleep in house 1's bed", _sleep])
+	for h in range(43, 24 * days, 12):
+		out.append([float(h), "eat and drink", _eat_drink])
+	out.append([76.0, "walk into the park: a warehouse crate, the tower's plates, and back", _park_visit])
+	out.append([78.5, "save (F5), load (F9) mid-week: projects and stoves", _save_load])
+	return out
+
+
+func _day1_plan() -> Array:
 	return [
 		[0.0, "walk up the street", _walk_street],
 		[1.0, "open house 1's door and go in", _enter_house],
@@ -302,6 +359,7 @@ func _save_load() -> String:
 	var why: String = main.save_game()
 	if why != "":
 		return "save: " + why
+	_waves_carried += sim.stats.waves
 	main.load_game()
 	await process_frame
 	while current_scene == null or current_scene == main or not current_scene.get("sim"):
@@ -323,8 +381,8 @@ func _wave() -> String:
 	sim.power.load_fuel(sim.build.key_for("generator", Vector2i(-2, 1)), stock)
 	sim.machine_interact(Vector2i(-2, 0), main.player.global_position)
 	sim.director.heat = 100.0
-	_waves_before = sim.stats.waves
-	return "heat %.0f, %d machine noise source(s), waves so far %d" % [sim.director.heat, sim.noise.continuous.size(), sim.stats.waves]
+	_waves_before = _waves()
+	return "heat %.0f, %d machine noise source(s), waves so far %d" % [sim.director.heat, sim.noise.continuous.size(), _waves()]
 
 
 func _die() -> String:
@@ -374,11 +432,207 @@ func _take_bag() -> String:
 	return "took %d kinds of thing" % took.size()
 
 
+# --- Q3 winter steps ------------------------------------------------------------------------------
+
+func _winter_build() -> String:
+	await _walk_to(Vector3(0, 0, 6))
+	var stock := sim.stock_at(main.player.global_position)
+	var errs := PackedStringArray()
+	for x in [3, 4]:
+		_try(errs, sim.build.place("foundation", Vector2i(x, 3), 0, stock))
+	_try(errs, sim.build.place("planter", Vector2i(3, 3), BuildGrid.Side.EAST, stock))
+	_try(errs, sim.build.place("rain_collector", Vector2i(4, 3), BuildGrid.Side.EAST, stock))
+	errs.append(await _build_stove())
+	return "; ".join(errs)
+
+
+## From the base crate's scrap, nails and planks: a stove in house 1 near the bed, loaded.
+func _build_stove() -> String:
+	_take_from_crate({"scrap_metal": 6, "nails": 6, "plank": 10})
+	await _go_into_house()
+	var cell := _stove_cell()
+	var bed: Vector3 = sim.build.piece_center(_bed_key()) if _bed_key() != "" else main.player.global_position
+	var why := sim.build.place("stove", cell, BuildGrid.Side.NORTH, sim.inventory)
+	if why != "":
+		return "stove at %s: %s" % [cell, why]
+	_stove_key = sim.build.key_for("stove", cell)
+	var at := sim.build.piece_center(_stove_key)
+	return "stove %s %.1f m from the bed; %s" % [_stove_key, Vector2(at.x - bed.x, at.z - bed.z).length(), sim.stove_interact(_stove_key)]
+
+
+## Each morning: planks from the base crate into the stove (rebuilding the stove first if zombies broke it).
+func _load_stove() -> String:
+	await _walk_to(Vector3(0, 0, 6))
+	if _stove_key == "" or not sim.climate.stoves.has(_stove_key):
+		_stove_rebuilds += 1
+		return "the stove was gone: " + await _build_stove()
+	var before := sim.climate.hours_left(_stove_key)
+	_take_from_crate({"plank": 10})
+	await _go_into_house()
+	var at := sim.build.piece_center(_stove_key)
+	await _walk_to(_beside(at))
+	return "%s (%.1f h of fuel left before, %.1f after; %d planks in pockets)" % [sim.stove_interact(_stove_key),
+			before, sim.climate.hours_left(_stove_key), sim.inventory.count("plank")]
+
+
+## Once in the park: up the road and through the factory hall's two doorways, into the nearest warehouse
+## for one crate, past the water tower (its phase-1 metal plates), then back the same way.
+func _park_visit() -> String:
+	var first := await _park_trip()
+	if not sim.player.dead:
+		return first
+	await _wait_respawn()
+	return first + " | again after respawning: " + await _park_trip()
+
+
+func _wait_respawn() -> void:
+	var guard := 0
+	while sim.player.dead and guard < 60 * 120:
+		await _frames(30)
+		guard += 30
+
+
+func _park_trip() -> String:
+	await _wait_respawn()
+	await _walk_to(Vector3(0, 0, 6))
+	_take_from_crate({"metal_plate": 10})
+	for at: Vector3 in [Vector3(0, 0, -30), Vector3(0, 0, -100), Vector3(0, 0, -126), ParkPlan.ENTRANCE]:
+		await _walk_to(at)
+	var notes_here := PackedStringArray()
+	var wh := _nearest_warehouse(main.player.global_position)
+	var door: Vector2i = wh["door_cells"][0]
+	var door_mid := Vector3((door.x + 0.5) * BuildGrid.GRID, 0.1, (door.y + 0.5) * BuildGrid.GRID)
+	var to_road := -1.0 if wh["east"] else 1.0
+	await _walk_to(Vector3(0, 0, door_mid.z))
+	await _walk_to(door_mid + Vector3(to_road * 3.0, 0, 0))
+	await _walk_to(door_mid)
+	await _walk_to(door_mid - Vector3(to_road * 2.0, 0, 0))
+	var crate := _nearest_park_crate(wh["name"], main.player.global_position)
+	if crate.is_empty():
+		notes_here.append("no crate in %s" % wh["name"])
+	else:
+		var c_at := SimWorld.town_container_pos(crate)
+		var out := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][crate["side"]] as Vector3
+		await _walk_to(Vector3(c_at.x, 0, c_at.z) - out * 1.2)
+		var why := sim.search(crate["id"])
+		if why == "":
+			await _frames(roundi(sim.loot.search_time() * 60.0) + 30)
+		notes_here.append("%s %s: %s" % [wh["name"], crate["id"], why if why != "" else "searched"])
+	_in_park = _in_park or ParkPlan.area().has_point(Vector2(main.player.global_position.x, main.player.global_position.z))
+	await _walk_to(door_mid)
+	await _walk_to(door_mid + Vector3(to_road * 3.0, 0, 0))
+	await _walk_to(ParkPlan.TOWER_POS + Vector3(-6.0, 0.0, 1.5))
+	notes_here.append("tower: " + sim.project_deliver(TOWER))
+	for at: Vector3 in [Vector3(0, 0, ParkPlan.TOWER_POS.z), ParkPlan.ENTRANCE, Vector3(0, 0, -126), Vector3(0, 0, -100),
+			Vector3(0, 0, -30), Vector3(0, 0, 6)]:
+		await _walk_to(at)
+	_park_note = "; ".join(notes_here)
+	return _park_note + ("" if not sim.player.dead else "; DIED on the way")
+
+
+## Q3: in a cold season with warmth under WARM_AT and not under a roof, go into house 1 (by its stove).
+func _too_cold() -> bool:
+	return not _dying and not sim.player.dead and not sim.player.asleep and main.driving == null \
+			and sim.player.warmth < WARM_AT and not sim.is_indoors(main.player.global_position)
+
+
+func _warm_up() -> void:
+	_cold_trips += 1
+	var w := sim.player.warmth
+	await _go_into_house()
+	if _stove_key != "" and sim.climate.stoves.has(_stove_key):
+		await _walk_to(_beside(sim.build.piece_center(_stove_key)))
+	if _cold_trips <= 12:
+		print("soak:   %s cold (warmth %.0f): into house 1 -> %s" % [sim.when_text(), w,
+				"inside" if sim.is_indoors(main.player.global_position) else "NOT inside"])
+	await _frames(30)
+
+
+func _go_into_house() -> void:
+	if _in_house():
+		return
+	await _walk_to(_house_door_outside())
+	var door := _door_key()
+	if not sim.build.pieces.get(door, {}).get("open", false):
+		sim.toggle_door(door)
+	await _frames(10)
+	await _walk_to(_door_mid())
+	await _walk_to(_door_mid() + _into_house() * 2.0)
+
+
+## A free floor cell of house 1 for the stove: no furniture or container, not the door cell or the one inside
+## it, no wall between it and the bed; the nearest to the bed that isn't right against it.
+func _stove_cell() -> Vector2i:
+	var taken := {}
+	for c: Dictionary in main.town["containers"]:
+		taken[c["cell"]] = true
+	var door: Vector2i = _house()["door_cell"]
+	taken[door] = true
+	taken[BuildGrid.world_to_cell(_door_mid() + _into_house() * 2.0)] = true
+	var bed: Vector3 = sim.build.piece_center(_bed_key()) if _bed_key() != "" else _door_mid() + _into_house() * 3.0
+	var best := door
+	var best_d := INF
+	for c: Vector2i in _house()["cells"]:
+		var mid := Vector3((c.x + 0.5) * BuildGrid.GRID, 0.0, (c.y + 0.5) * BuildGrid.GRID)
+		if taken.has(c) or sim.build.pieces.has("o:%d:%d" % [c.x, c.y]) or sim.noise.walls_between(bed, mid, true) > 0:
+			continue
+		var d := Vector2(mid.x - bed.x, mid.z - bed.z).length()
+		if d > 1.5 and d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+## A spot 1.3 m from a piece's middle, on the side toward the player.
+func _beside(at: Vector3) -> Vector3:
+	var from := Vector3(main.player.global_position.x - at.x, 0, main.player.global_position.z - at.z)
+	if from.length() < 0.1:
+		from = Vector3(1, 0, 0)
+	return Vector3(at.x, 0, at.z) + from.normalized() * 1.3
+
+
+func _nearest_warehouse(at: Vector3) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for wh: Dictionary in main.park["warehouses"]:
+		var r: Rect2 = wh["rect"]
+		var d := r.get_center().distance_to(Vector2(at.x, at.z))
+		if d < best_d:
+			best_d = d
+			best = wh
+	return best
+
+
+func _nearest_park_crate(wh_name: String, at: Vector3) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for c: Dictionary in main.park["crates"]:
+		if c["warehouse"] != wh_name:
+			continue
+		var p := SimWorld.town_container_pos(c)
+		var d := Vector2(p.x - at.x, p.z - at.z).length()
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+func _kit_crate() -> Inventory:
+	return sim.stock_at(Vector3(2, 0, 6)).crates[0]
+
+
 # --- Helpers ---------------------------------------------------------------------------------------
 
 func _grab() -> void:
 	main = current_scene as Node3D
 	sim = main.sim
+	# Q3: the park's zombies are the ones standing in it (at the start, and again after a load: ids are new)
+	_park_ids.clear()
+	for zid: int in sim.horde.zombies:
+		var pz: ZombieBrain = sim.horde.zombies[zid]
+		if not pz.is_dead() and ParkPlan.area().has_point(Vector2(pz.pos.x, pz.pos.z)):
+			_park_ids[zid] = false
+	_last_deaths = int(sim.tally["deaths"])
 	sim.build.piece_removed.connect(func(key: String, piece: Dictionary) -> void:
 		_removed += 1
 		if _removed <= 8:
@@ -389,6 +643,11 @@ func _grab() -> void:
 					by = "; zombie %d, %s" % [zid, ZombieBrain.STATE_NAMES[z.break_from]]
 			print("soak:   %s piece gone: %s %s (%s%s)" % [sim.when_text(), piece.get("id", "?"), key,
 					"the player's" if not piece.get("town", false) else "the town's", by]))
+
+
+## Waves the Director sent since the start, across loads.
+func _waves() -> int:
+	return _waves_carried + sim.stats.waves
 
 
 func _abs_hours() -> float:
@@ -404,6 +663,11 @@ func _frames(n: int) -> void:
 		_worst_phys_ms = maxf(_worst_phys_ms, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 		if i % 15 == 0:
 			_fight_back()
+			_watch()
+		if _tint_due > 0:
+			_tint_due -= 1
+			if _tint_due == 0:
+				_check_tint()
 		var hour := int(floor(_abs_hours()))
 		if _last_hour < 0:
 			_last_hour = hour
@@ -542,9 +806,14 @@ func _xp_total() -> float:
 
 
 func _snapshot() -> Dictionary:
+	var stoves := {}
+	for key: String in sim.climate.stoves:
+		stoves[key] = sim.climate.stoves[key]["planks"]
 	return {"day": sim.clock.day, "clock": sim.clock.clock_text(), "pieces": sim.build.pieces.size(),
 			"zombies": sim.horde.alive_count(), "gear": _gear_count(), "skills_xp": snappedf(_xp_total(), 0.01),
-			"infamy": snappedf(sim.director.infamy, 0.01), "base_log": sim.base_log.entries.size()}
+			"infamy": snappedf(sim.director.infamy, 0.01), "base_log": sim.base_log.entries.size(),
+			"projects": JSON.stringify(sim.projects.to_dict(), "", true), "projects_done": str(sim.projects.done),
+			"stoves": str(stoves), "season": sim.clock.season()}
 
 
 # --- Watching --------------------------------------------------------------------------------------
@@ -555,8 +824,8 @@ func _hour_line() -> void:
 	if _hours_seen == 1:
 		_mem_hour1 = mem
 	_hours_seen += 1
-	print("soak: day %d %s  hp %.0f food %.0f water %.0f energy %.0f  zombies %d  heat %.0f infamy %.1f  pieces %d  deaths %d  mem %.1f MB  worst physics %.1f ms  nav bakes %d (first %.0f ms)%s%s" % [
-			sim.clock.day, sim.clock.clock_text(), p.health, p.food, p.water, p.energy, sim.horde.alive_count(),
+	print("soak: day %d %s %s  hp %.0f food %.0f water %.0f energy %.0f warmth %.0f  zombies %d  heat %.0f infamy %.1f  pieces %d  deaths %d  mem %.1f MB  worst physics %.1f ms  nav bakes %d (first %.0f ms)%s%s" % [
+			sim.clock.day, sim.clock.season_name(), sim.clock.clock_text(), p.health, p.food, p.water, p.energy, p.warmth, sim.horde.alive_count(),
 			sim.director.heat, sim.director.infamy, sim.build.pieces.size(), sim.tally["deaths"], mem, _worst_phys_ms, main.nav.bakes,
 			main.first_bake_ms, "  DEAD" if p.dead else "", "  asleep" if p.asleep else ""])
 	_worst_phys_ms = 0.0
@@ -584,21 +853,106 @@ func _check_hour() -> void:
 	if sim.horde.alive_count() > cap:
 		failures.append("%d zombies alive, cap %d (Director %d + street/house %d + bot %d)" % [sim.horde.alive_count(), cap,
 				int(sim.data.noise["director"]["max_alive"]), street_and_house, extra_zombies])
+	if winter:
+		_check_winter_hour()
 	for key: String in sim.build.pieces:
 		if main.build_view.body_for(key) == null:
 			failures.append("piece %s (%s) has no drawn node" % [key, sim.build.pieces[key]["id"]])
 			break
 
 
+## Q3, every 15 frames: which park zombies have been drawn (chase, attack, break, investigate), and each death
+## (its day, cause, and where: in house 1 by a stove with planks, or not).
+func _watch() -> void:
+	for zid: int in _park_ids:
+		var z: ZombieBrain = sim.horde.zombies.get(zid)
+		if z != null and not z.is_dead() and z.state in [ZombieBrain.State.CHASE, ZombieBrain.State.ATTACK,
+				ZombieBrain.State.BREAK, ZombieBrain.State.INVESTIGATE]:
+			_park_ids[zid] = true
+	_warmth_min = minf(_warmth_min, sim.player.warmth)
+	var deaths := int(sim.tally["deaths"])
+	if deaths > _last_deaths:
+		var inside := _in_house()
+		var planks: int = sim.climate.stoves[_stove_key]["planks"] if sim.climate.stoves.has(_stove_key) else -1
+		var lit: bool = sim.climate.stoves[_stove_key]["lit"] if sim.climate.stoves.has(_stove_key) else false
+		var cause := sim.player.last_cause
+		var where := "house 1" if inside else ("park" if ParkPlan.area().has_point(Vector2(main.player.global_position.x,
+				main.player.global_position.z)) else "out")
+		if not _deaths_by_day.has(sim.clock.day):
+			_deaths_by_day[sim.clock.day] = []
+		_deaths_by_day[sim.clock.day].append("%s@%s" % [cause, where])
+		print("soak:   %s DIED: %s (%s, warmth %.0f, stove planks %d%s)" % [sim.when_text(), cause, where, sim.player.warmth,
+				planks, ", lit" if lit else ""])
+		if cause == "cold" and inside and (planks > 0 or lit):
+			failures.append("died of cold in house 1 with the stove holding %d plank(s) (lit %s) at %s" % [planks, lit, sim.when_text()])
+	_last_deaths = deaths
+
+
+## Q3: the season's tints are on the materials (ground, town and park roofs), a few frames after the hour.
+func _check_tint() -> void:
+	var season := sim.clock.season()
+	var ground: Material = main._ground_mesh.material_override if main._ground_mesh != null else null
+	if ground != SeasonLook.ground_material(season):
+		failures.append("ground material is not %s's at %s" % [season, sim.when_text()])
+	elif ground is StandardMaterial3D:
+		_ground_tints[(ground as StandardMaterial3D).albedo_color.to_html()] = season
+	var roof := SeasonLook.roof_material(season)
+	for view: Variant in [main.town_view, main.park_view]:
+		if view != null and not view.roof_meshes.is_empty() and view.roof_meshes[0].material_override != roof:
+			failures.append("%s roofs are not %s's at %s" % [view.name, season, sim.when_text()])
+
+
+## Q3's hourly invariants: warmth in range; planters frozen exactly in winter; the collector's season speed;
+## park zombies stay in the park until drawn; the tint check a few frames later.
+func _check_winter_hour() -> void:
+	_range("warmth", sim.player.warmth, 0.0, 100.0)
+	var season := sim.clock.season()
+	for cell: Vector2i in sim.factory.machines:
+		var m: Factory.Machine = sim.factory.machines[cell]
+		if m.id == "planter":
+			if m.frozen != (season == "winter"):
+				failures.append("planter frozen %s in %s at %s" % [m.frozen, season, sim.when_text()])
+			_frozen_seen = _frozen_seen or m.frozen
+		elif m.id == "rain_collector":
+			_rain_by_season[season] = sim.factory.season_speed(m)
+	var park := ParkPlan.area().grow(4.0)
+	for zid: int in _park_ids:
+		var z: ZombieBrain = sim.horde.zombies.get(zid)
+		if z != null and not z.is_dead() and not _park_ids[zid] and not park.has_point(Vector2(z.pos.x, z.pos.z)):
+			failures.append("park zombie %d (%s, %s) left the park undrawn, at %s, %s" % [zid, z.type, z.state_name(),
+					_fmt(z.pos), sim.when_text()])
+			_park_ids[zid] = true  # once
+	_tint_due = 5
+
+
 func _check_end() -> void:
 	_check_hour()
-	if _waves_before >= 0 and sim.stats.waves <= _waves_before:
+	if _waves_before >= 0 and _waves() <= _waves_before:
 		failures.append("heat 100 at dusk with machines running sent no wave by the end")
 	var mem := OS.get_static_memory_usage() / 1048576.0
 	if _mem_hour1 > 0.0 and mem > _mem_hour1 * 1.6:
 		failures.append("static memory %.1f MB at the end, %.1f MB after hour 1 (more than 1.6x)" % [mem, _mem_hour1])
 	if _saved_snapshot.is_empty() and 24.0 * days > 20.0:
 		failures.append("the save/load step never ran")
+	if winter:
+		_check_winter_end()
+
+
+## Q3: what the week should have shown by its end.
+func _check_winter_end() -> void:
+	var seasons := {}
+	for t: String in _ground_tints:
+		seasons[_ground_tints[t]] = true
+	if seasons.size() < 2 and _start_season != sim.clock.season():
+		failures.append("the ground tint never changed (%s)" % [_ground_tints])
+	if _stove_key == "":
+		failures.append("no stove was built")
+	if _rain_by_season.has("autumn") and _rain_by_season.has("winter") and is_equal_approx(_rain_by_season["autumn"], _rain_by_season["winter"]):
+		failures.append("the rain collector ran at the same speed in autumn and winter (%s)" % [_rain_by_season])
+	if sim.clock.season() == "winter" and not _frozen_seen:
+		failures.append("winter came but no planter was ever frozen")
+	if 24.0 * days > 76.0 and not _in_park:
+		failures.append("the bot never got into the park (%s)" % _park_note)
 
 
 func _range(what: String, v: float, lo: float, hi: float) -> void:
@@ -616,11 +970,20 @@ func _finish() -> void:
 	print("soak: bot steps:")
 	for n: String in notes:
 		print("soak:   " + n)
+	if winter:
+		var per_day := PackedStringArray()
+		for d in range(start_day, start_day + days + 1):
+			var list: Array = _deaths_by_day.get(d, [])
+			per_day.append("day %d: %d%s" % [d, list.size(), (" (" + ", ".join(list) + ")") if not list.is_empty() else ""])
+		print("soak: deaths by day: " + "; ".join(per_day))
+		print("soak: winter: %d cold trip(s) indoors, warmth low %.0f, stove rebuilt %d time(s), stove %s, collector speed by season %s, ground tints %s, park zombies drawn %d of %d" % [
+				_cold_trips, _warmth_min, _stove_rebuilds, ("%.1f h of fuel left" % sim.climate.hours_left(_stove_key)) if sim.climate.stoves.has(_stove_key) else "gone",
+				_rain_by_season, _ground_tints.values(), _park_ids.values().count(true), _park_ids.size()])
 	var recovered := 0
 	for zb: ZombieBody in main.zombie_view.get("_bodies").values():
 		recovered += zb.nan_recoveries
-	var summary := "NaN moves undone %d; %d game-day(s) in %.0f s wall; deaths %d, kills %d, waves %d, swings %d, gear %d, pieces %d, bag %s" % [
-			recovered, days, wall, sim.tally["deaths"], sim.tally["kills"], sim.stats.waves, _swings, _gear_count(), sim.build.pieces.size(),
+	var summary := "NaN moves undone %d; %d game-day(s) in %.0f s wall (%.0f s per game-day); deaths %d, kills %d, waves %d, swings %d, gear %d, pieces %d, bag %s" % [
+			recovered, days, wall, wall / maxf(0.01, (_abs_hours() - _start_abs) / 24.0), sim.tally["deaths"], sim.tally["kills"], _waves(), _swings, _gear_count(), sim.build.pieces.size(),
 			"taken" if _bag_taken else "-"]
 	if failures.is_empty():
 		print("SOAK OK: " + summary)
