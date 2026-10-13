@@ -111,9 +111,140 @@ func test_breaks_a_wall_in_the_way() -> void:
 func test_wandering_into_a_wall_is_not_breaking() -> void:
 	var z := _z()
 	_think(z, 4.1, Vector3(100, 0, 100), false)
+	eq(z.state, S.WANDER, "out for a stroll")
+	var was := z.target_pos - z.pos
 	z.blocked_by = "w:0:0:n"
-	_think(z, TICK, Vector3(100, 0, 100), false, {"w:0:0:n": {}})
-	eq(z.state, S.IDLE, "a wandering zombie just turns away")
+	var events := _think(z, TICK, Vector3(100, 0, 100), false, {"w:0:0:n": {}})
+	eq(z.state, S.WANDER, "Q2: a wandering zombie turns away and strolls on")
+	check((z.target_pos - z.pos).dot(was) < 0.0, "Q2: toward a new spot away from the wall")
+	eq(z.blocked_by, "", "and forgets the bump")
+	for i in 600:  # a minute of pressing on it
+		z.blocked_by = "w:0:0:n"
+		events.append_array(z.think(TICK, Vector3(100, 0, 100), false, false, {"w:0:0:n": {}}))
+	eq(events.size(), 0, "never hits it")
+
+
+## Q2 (the soak broke a town door and house 1's counter on day 1 with nobody chasing anyone): a town with
+## its house zombies, run through the real sim step that turns hits into piece damage.
+func _town_sim() -> Array:
+	var sim := SimWorld.new(12.0, null, 1)
+	var plan := TownPlan.generate(1)
+	sim.place_town(plan)
+	sim.place_props(plan)
+	sim.player_pos = Vector3(0, 0, 500)
+	var ids := sim.spawn_house_zombies(plan)
+	return [sim, plan, ids]
+
+
+## The first town piece with id `id` in house `h`'s cells (or on its edges).
+func _piece_in(sim: SimWorld, plan: Dictionary, h: int, id: String) -> String:
+	for key: String in sim.build.pieces:
+		var p: Dictionary = sim.build.pieces[key]
+		if p["id"] == id and TownPlan.house_at(plan, p["cell"]) == h:
+			return key
+	return ""
+
+
+func test_q2_idle_house_zombie_leaves_the_counter_alone() -> void:
+	var t := _town_sim()
+	var sim: SimWorld = t[0]
+	var plan: Dictionary = t[1]
+	var ids: Array = t[2]
+	var z: ZombieBrain = null
+	var counter := ""
+	for i in ids.size():
+		counter = _piece_in(sim, plan, plan["zombies"][i]["house"], "counter")
+		if counter != "":
+			z = sim.horde.zombies[ids[i]]
+			break
+	check(z != null, "a house zombie with a counter in its house")
+	if z == null:
+		return
+	var hp: int = sim.build.pieces[counter]["hp"]
+	z.pos = sim.build.piece_center(counter) + Vector3(0.9, -sim.build.piece_center(counter).y, 0)
+	var broke := 0
+	for i in roundi(600.0 / TICK):  # ten minutes, no noise, nobody near, leaning on the counter all along
+		z.blocked_by = counter
+		if i == roundi(300.0 / TICK):  # halfway, it goes for a stroll and walks into it too
+			z.state = S.WANDER
+			z.target_pos = sim.build.piece_center(counter)
+		sim.step()
+		if z.state == S.BREAK:
+			broke += 1
+	eq(broke, 0, "never starts breaking it")
+	check(sim.build.pieces.has(counter), "the counter is still there")
+	if sim.build.pieces.has(counter):
+		eq(sim.build.pieces[counter]["hp"], hp, "not a scratch on it")
+	check(z.state == S.IDLE or z.state == S.WANDER, "still idle or strolling (%s)" % z.state_name())
+
+
+func test_q2_chasing_zombie_breaks_a_closed_door() -> void:
+	var t := _town_sim()
+	var sim: SimWorld = t[0]
+	var plan: Dictionary = t[1]
+	var door := _piece_in(sim, plan, 1, "door")
+	check(door != "", "house 1 has a door")
+	if door == "":
+		return
+	var z := sim.horde.spawn("shambler", sim.build.piece_center(door) + Vector3(0, 0, 0))
+	z.pos.y = 0.0
+	z.think(TICK, z.pos + Vector3(3, 0, 0), true, false, sim.build.pieces)  # it saw you go in
+	eq(z.state, S.CHASE, "chasing")
+	z.blocked_by = door
+	var hit := false
+	for i in roundi(120.0 / TICK):
+		if not sim.build.pieces.has(door):
+			break
+		z.blocked_by = door
+		sim.step()
+		hit = hit or z.state == S.BREAK
+	check(hit, "a chaser blocked by the closed door breaks it")
+	check(not sim.build.pieces.has(door), "the door is gone")
+
+
+func test_q2_investigating_zombie_breaks_a_wall_in_its_way() -> void:
+	var t := _town_sim()
+	var sim: SimWorld = t[0]
+	var plan: Dictionary = t[1]
+	var wall := _piece_in(sim, plan, 1, "town_wall")
+	check(wall != "", "house 1 has a wall")
+	if wall == "":
+		return
+	var at := sim.build.piece_center(wall)
+	var z := sim.horde.spawn("shambler", Vector3(at.x + 1.0, 0, at.z + 1.0))
+	z.hear(Vector3(at.x - 4.0, 0, at.z - 4.0))
+	eq(z.state, S.INVESTIGATE, "investigating a sound")
+	var hp: int = sim.build.pieces[wall]["hp"]
+	var hit := false
+	for i in roundi(20.0 / TICK):
+		z.blocked_by = wall
+		sim.step()
+		hit = hit or z.state == S.BREAK
+	check(hit, "an investigator blocked by a wall breaks it")
+	check(not sim.build.pieces.has(wall) or sim.build.pieces[wall]["hp"] < hp, "the wall is hit")
+
+
+func test_q2_after_breaking_an_investigator_walks_on_to_the_sound() -> void:
+	var z := _z()
+	var pieces := {"w:0:-1:n": {}}
+	z.hear(Vector3(0, 0, -10))
+	z.blocked_by = "w:0:-1:n"
+	_think(z, TICK, Vector3(100, 0, 100), false, pieces)
+	eq(z.state, S.BREAK, "breaking the wall in its way")
+	pieces.erase("w:0:-1:n")
+	z.blocked_by = ""
+	_think(z, TICK, Vector3(100, 0, 100), false, pieces)
+	eq(z.state, S.INVESTIGATE, "wall gone: back to the sound, not a chase after nobody")
+	check(z.target_pos.distance_to(Vector3(0, 0, -10)) < 0.01, "still heading for the sound")
+	var m := _z()
+	var mp := {"o:0:-3": {}}
+	m.hear(Vector3(0, 0, -6), "o:0:-3")
+	m.blocked_by = "o:0:-3"
+	_think(m, TICK, Vector3(100, 0, 100), false, mp)
+	mp.erase("o:0:-3")
+	m.blocked_by = ""
+	_think(m, TICK, Vector3(100, 0, 100), false, mp)
+	eq(m.state, S.IDLE, "the noisy machine itself wrecked: it's done")
 
 
 func test_hits_head_shots_and_death() -> void:
@@ -151,3 +282,19 @@ func test_horde_removes_corpses_and_is_deterministic() -> void:
 	for i in roundi((ZombieBrain.CORPSE_TIME + 0.1) / TICK):
 		h.tick(TICK, ctx)
 	check(not h.zombies.has(1), "corpse cleared after %.0f s" % ZombieBrain.CORPSE_TIME)
+
+
+func test_q2_a_bump_from_a_stroll_is_not_in_the_way_to_a_sound() -> void:
+	var z := _z()
+	var pieces := {"o:0:-1": {}}
+	_think(z, 4.1, Vector3(100, 0, 100), false)
+	z.blocked_by = "o:0:-1"  # it strolled into the counter on this frame...
+	z.hear(Vector3(0, 0, 20))  # ...and hears something behind it
+	var events := _think(z, 0.5, Vector3(100, 0, 100), false, pieces)
+	eq(z.state, S.INVESTIGATE, "it goes to the sound")
+	eq(events.size(), 0, "without breaking the counter it bumped while strolling")
+	var c := _z()
+	_think(c, 4.1, Vector3(100, 0, 100), false)
+	c.blocked_by = "o:0:-1"
+	_think(c, TICK, Vector3(0, 0, 10), true, pieces)  # it spots you behind it
+	eq(c.state, S.CHASE, "spotted you: chasing, not breaking the counter it strolled into")

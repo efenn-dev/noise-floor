@@ -12,6 +12,16 @@ const FACTORY_TOP := 6.0  # W1b: the factory hall's roof; brick runs up from the
 
 var roofs := 0  # roof slabs drawn, for tests
 var factory_cells := 0  # W1b: cells under the factory roof, for tests
+var _roofed := {}  # Q2: Vector2i cell -> true for every house cell under a roof
+var _has_factory := false
+
+
+## Q2: is `pos` (the camera, say) under a roof: in a house's cells below its ceiling, or in the factory
+## hall below its ceiling? main.gd thins the fog there.
+func is_under_roof(pos: Vector3) -> bool:
+	if _has_factory and pos.y < FACTORY_TOP and TownPlan.factory_rect().has_point(Vector2(pos.x, pos.z)):
+		return true
+	return pos.y < WALL_TOP and _roofed.has(BuildGrid.world_to_cell(pos))
 
 
 func setup(plan: Dictionary, grid: BuildGrid) -> void:
@@ -24,6 +34,7 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 		var min_x := 1 << 30
 		var max_x := -(1 << 30)
 		for c: Vector2i in house["cells"]:
+			_roofed[c] = true
 			var r: Array = rows.get(c.x, [c.y, c.y])
 			rows[c.x] = [mini(r[0], c.y), maxi(r[1], c.y)]
 			min_x = mini(min_x, c.x)
@@ -39,6 +50,7 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 					ceiling_mat, false)
 			roofs += 1
 	if plan.has("factory"):
+		_has_factory = true
 		_factory(plan["factory"], roof_mat, ceiling_mat)
 	var door_top: float = grid.foundation_top() + grid.data.buildables["door"]["size"].y
 	var wall_mat := {}

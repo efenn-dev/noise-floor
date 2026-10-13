@@ -71,6 +71,15 @@ var driving: CarBody = null  # the car you're in, or null when walking
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
+## Q2: under a roof the fog thins to INDOOR_FOG of outside's, eased over FOG_EASE seconds (Old Pete was
+## grey at 7 m in the factory hall). _apply_time sets the outdoor densities; _apply_fog scales them.
+const INDOOR_FOG := 0.2
+const MATERIALS_WIDTH := 380.0  # Q2: the top-right pockets block wraps at this width
+const FOG_EASE := 0.5
+var indoor_fog := 0.0  # 0 = outside's fog, 1 = fully thinned
+var _fog_density := 0.008
+var _vol_fog_density := 0.0
+var _fog_started := false
 var _title_camera: Camera3D  # set while the title screen shows its dusk view
 var _hud: Label
 var _build_label: Label
@@ -326,6 +335,7 @@ func _process(delta: float) -> void:
 	if _shot_path == "":
 		_footsteps(delta)
 	_update_hud(delta)
+	_update_indoor_fog(delta)
 	if _shot_path == "":
 		if not sim.paused:
 			sim.stats.add_real_time(delta / maxf(Engine.time_scale, 1.0))  # sleeping speeds time up
@@ -351,10 +361,46 @@ func _apply_time() -> void:
 	_env.ambient_light_energy = lerpf(0.08, 1.0, light)
 	_env.fog_light_energy = lerpf(0.03, 1.0, light)
 	# Thicker, darker fog at night; the volumetric part (Forward+ only) is what shows the flashlight beam.
-	_env.fog_density = lerpf(0.02, 0.006, light)
+	_fog_density = lerpf(0.02, 0.006, light)
 	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(Color(0.62, 0.66, 0.7), light)
-	_env.volumetric_fog_density = lerpf(0.022, 0.002, light)
+	_vol_fog_density = lerpf(0.022, 0.002, light)
+	_apply_fog()
 	_hud.text = "Day %d  %s" % [clock.day, clock.clock_text()]
+
+
+## Q2: 1 while the camera is under a roof (TownView knows the house cells and the factory hall), else 0.
+func indoor_fog_target() -> float:
+	var cam := get_viewport().get_camera_3d()
+	if town_view == null or cam == null or _title_camera != null:
+		return 0.0
+	return 1.0 if town_view.is_under_roof(cam.global_position) else 0.0
+
+
+## Q2: eases indoor_fog toward its target over FOG_EASE s (snaps on the first frame, so a screenshot
+## taken inside shows it) and re-applies the densities. Light, colour and night darkness are untouched.
+func _update_indoor_fog(delta: float) -> void:
+	if _title_camera != null:
+		return
+	var want := indoor_fog_target()
+	var was := indoor_fog
+	indoor_fog = want if not _fog_started else move_toward(indoor_fog, want, delta / FOG_EASE)
+	_fog_started = true
+	if indoor_fog != was:
+		_apply_fog()
+
+
+## Q2: the fog densities for this hour, thinned by how far indoors the camera is.
+func fog_targets() -> Vector2:
+	var k := lerpf(1.0, INDOOR_FOG, indoor_fog)
+	return Vector2(_fog_density * k, _vol_fog_density * k)
+
+
+func _apply_fog() -> void:
+	if _title_camera != null:
+		return
+	var d := fog_targets()
+	_env.fog_density = d.x
+	_env.volumetric_fog_density = d.y
 
 
 func _build_environment() -> void:
@@ -638,6 +684,8 @@ func _update_hud(delta: float) -> void:
 	var level := sim.director.level_name()
 	_heat_label.text = overlay if overlay != "" else ({"calm": "", "noticed": "The noise is being noticed",
 			"group": "The dead are gathering", "horde": "Something big is coming"}[level])
+	# Q2: its own line under the materials block (it used to sit 30 px down, on the carry-weight line).
+	_heat_label.position.y = _materials_hud.position.y + maxf(_materials_hud.size.y, _materials_hud.get_combined_minimum_size().y) + 6.0
 	var hp := sim.player.health
 	var p := sim.player
 	_health_label.text = "Health %d   Food %d   Water %d   Energy %d   Stamina %d%s%s" % [ceili(hp), ceili(p.food),
@@ -992,6 +1040,11 @@ func _build_hud() -> void:
 	_materials_hud = _outlined_label(18)
 	_materials_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
 	_materials_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	# Q2: a fixed-width column that wraps, so a long pocket list can't reach the messages in the middle.
+	_materials_hud.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_materials_hud.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_materials_hud.custom_minimum_size.x = MATERIALS_WIDTH
+	_materials_hud.offset_left = -16.0 - MATERIALS_WIDTH
 	layer.add_child(_materials_hud)
 
 	_interact_label = _outlined_label(20)
@@ -1023,7 +1076,6 @@ func _build_hud() -> void:
 
 	_heat_label = _outlined_label(18)
 	_heat_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
-	_heat_label.position.y += 30
 	_heat_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_heat_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.4))
 	layer.add_child(_heat_label)

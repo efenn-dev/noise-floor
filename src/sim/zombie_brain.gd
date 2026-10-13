@@ -6,6 +6,9 @@ extends RefCounted
 ##                   that has settled inside a house or the factory stands there until something draws it)
 ##   sees you -> CHASE -> close enough -> ATTACK (hits every attack_interval)
 ##   chasing but stuck against something you built -> BREAK (hits the piece until it's gone)
+##   Q2: only a zombie that is chasing you or investigating a sound (a wave's road route included) breaks
+##                  a piece, and only one in its way; an idle or wandering zombie that bumps a piece turns
+##                  away to another wander spot. When the piece is gone it goes back to what it was doing.
 ##   loses sight -> walks to where it last saw you, waits LOSE_TIME there, then gives up (IDLE);
 ##                  it also gives up after CHASE_MEMORY if it can't get there
 ##   hears something (idle, wandering or already investigating) -> INVESTIGATE: walks to the sound;
@@ -37,6 +40,7 @@ var home: Vector3
 var target_pos: Vector3  # where it wants to walk
 var last_seen: Vector3
 var break_key := ""
+var break_from: int = State.CHASE  # Q2: what it was doing when it started breaking (CHASE or INVESTIGATE)
 var sound_key := ""  # piece key of the machine it's walking toward, "" for other sounds
 var sound_pos: Vector3  # where the sound it's investigating came from (target_pos once the route is walked)
 var route: Array = []   # W1b: waypoints (Vector3) to walk before heading for sound_pos; target_pos = route[0]
@@ -127,6 +131,7 @@ func hear(at: Vector3, key: String = "", time: float = INVESTIGATE_TIME) -> void
 		_timer = maxf(_timer, time)  # the same sound it's already on its way to: keep to the route
 		return
 	state = State.INVESTIGATE
+	blocked_by = ""  # Q2: a bump from before it heard this isn't in the way to the sound
 	target_pos = at
 	sound_pos = at
 	sound_key = key
@@ -190,6 +195,8 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 		last_seen = player_pos
 		_lost = 0.0
 		_unseen = 0.0
+		if state == State.IDLE or state == State.WANDER:
+			blocked_by = ""  # Q2: what it bumped while strolling isn't in the way to you
 		if state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE:
 			state = State.CHASE
 	var reach := float(stats["attack_range"])
@@ -207,7 +214,9 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				_timer = WANDER_TIMEOUT
 		State.WANDER:
 			_timer -= dt
-			if _flat_dist(pos, target_pos) < ARRIVE or _timer <= 0.0 or blocked_by != "":
+			if blocked_by != "":
+				_turn_away()  # Q2: it bumped a piece: never breaks it, strolls somewhere else instead
+			elif _flat_dist(pos, target_pos) < ARRIVE or _timer <= 0.0:
 				_go_idle(false)
 		State.INVESTIGATE:
 			_timer -= dt
@@ -251,8 +260,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 			if sees and dist <= reach:
 				state = State.ATTACK
 			elif not _standing(pieces, break_key):
-				state = State.CHASE
-				break_key = ""
+				_after_break()
 			else:
 				if not sees:
 					_lost += dt
@@ -299,9 +307,43 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 
 
 func _start_break(key: String) -> void:
+	if state != State.CHASE and state != State.INVESTIGATE:
+		return  # Q2: idle and wandering zombies never break anything
+	break_from = state
 	state = State.BREAK
 	break_key = key
 	_lost = 0.0
+
+
+## Q2: the piece is gone. A chaser chases on; an investigator walks on to the sound (or, if what it broke
+## was the noisy machine itself, it's done). It used to always chase, toward wherever it last saw you
+## (or the world origin if it never had), breaking whatever stood on the way.
+func _after_break() -> void:
+	var was := break_key
+	break_key = ""
+	blocked_by = ""
+	if break_from == State.INVESTIGATE:
+		if was == sound_key:
+			_go_idle(true)
+		else:
+			state = State.INVESTIGATE
+			_timer = maxf(_timer, 5.0)
+	else:
+		state = State.CHASE
+
+
+## Q2: a wandering zombie walked into a piece: pick another stroll spot, away from the way it was going.
+func _turn_away() -> void:
+	var was := Vector3(target_pos.x - pos.x, 0.0, target_pos.z - pos.z)
+	blocked_by = ""
+	_timer = WANDER_TIMEOUT
+	for i in 8:
+		var angle := _rng.randf_range(0.0, TAU)
+		var r := _rng.randf_range(2.0, WANDER_RADIUS)
+		target_pos = home + Vector3(cos(angle) * r, 0.0, sin(angle) * r)
+		if Vector3(target_pos.x - pos.x, 0.0, target_pos.z - pos.z).dot(was) < 0.0:
+			return
+	target_pos = pos - was.normalized() * 2.0 if was.length_squared() > 1e-6 else pos  # straight back
 
 
 func _go_idle(new_home: bool) -> void:
