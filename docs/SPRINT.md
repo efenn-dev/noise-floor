@@ -1,6 +1,6 @@
 # Read me first (Emmitt)
 
-*Final update of the overnight run: 2026-10-13 04:35Z. The lead has stopped launching builders; nothing is running.*
+*Updated 2026-10-13 11:40Z. Emmitt is at work; the lead is running a day queue (below) with the same rules. Builders are running; the merge list grows at the bottom as PRs appear.*
 
 **Merge these on GitHub, top to bottom, each against `main`:** #24 (stress test + W1b), #26 (M12 skills and perks), #27 (M13 loot), #28 (W1c furniture), #29 (M14 guns), #30 (M15 automated defense), #31 (P2 gun feel and screens), then #25 (this board) last. Every one targets `main`, so the order only keeps the diffs readable; merging a later one first is safe. After the last merge, `play.bat` updates itself; the title screen shows the build in the corner.
 
@@ -30,6 +30,17 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 | S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
 | S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Opus 5.5 agent on the PC, worktree `noise-floor-w1b`, stacked on #22 | PR #23 open; 2022 checks green | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
+
+## Day run, 2026-10-13 (Emmitt at work, ~12 hours)
+
+Chosen for value before a playtest and low design risk, in this order, one at a time, each PR against `main`, each reviewed by the lead:
+1. **P3 — playtest readiness** (running): a help screen on F1, key hints that fit the moment, a session log that covers gear, skills, guns and the base log, town doors and beds that salvage instead of refunding, crosshair contrast.
+2. **Q1 — integration soak and screenshot tour**: a headless scripted "bot day" over three game-days through the whole stack with script-error detection, plus `tools/tour.sh` that takes a dozen screenshots around town for the lead to review; fix what breaks.
+3. **A1 — street dressing** with the Blender kit: lamp posts, mailboxes, fences, trash cans, a few trees, placed by the town plan. No Codex.
+4. **M16 — seasons**: a calendar, winter stops crops, cold needs heat, sound carries farther on cold nights.
+5. **A2 — zombie variety** (if time): more body variants from the rigged zombie script.
+6. **M17 — further out** (only if the day allows): a second, harder area and the first big project.
+Not today: tuning (waits for Playtest #1), anything needing Codex image generation.
 
 ## Overnight run, night of 2026-10-12 to 13
 
