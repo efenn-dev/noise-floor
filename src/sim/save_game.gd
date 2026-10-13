@@ -10,14 +10,21 @@ extends RefCounted
 ## 2 = M11 (stats, infamy, fresh/stale gas). 3 = W1a: the town's houses are build pieces, saved with
 ## everything else (damage, open doors, broken windows, walls you knocked down).
 ## Older saves still load: anything they lack gets its default, and a save from before 3 gets the
-## houses laid fresh by the town plan (see holds_town).
-const VERSION := 3
+## houses laid fresh by the town plan (see holds_town). 4 = W1b: the factory is a hall of pieces too;
+## a save from before 4 gets it laid fresh (see holds_factory). House zombies are ordinary saved zombies.
+const VERSION := 4
 const FIRST_WITH_TOWN := 3
+const FIRST_WITH_FACTORY := 4
 
 
 ## True if the save already holds the town's houses as pieces, so the world must not lay them again.
 static func holds_town(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_TOWN
+
+
+## True if the save already holds the factory hall's pieces (W1b).
+static func holds_factory(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_FACTORY
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:
