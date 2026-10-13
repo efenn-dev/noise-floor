@@ -233,6 +233,33 @@ func place_start_stash(cell: Vector2i) -> String:
 	return key
 
 
+## Lays the town's houses (TownPlan.generate) into the build grid as if built: floors, walls, doors,
+## windows and a bed per house, at full hp, free, and not counted as the player's builds.
+## Containers aren't pieces: the world registers them (they need bodies). Returns pieces placed.
+func place_town(plan: Dictionary) -> int:
+	var was_muted := stats.muted
+	stats.muted = true
+	var n := 0
+	for p: Dictionary in plan["pieces"]:
+		build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
+				"hp": data.buildables[p["id"]]["hp"]})
+		n += 1
+	for b: Dictionary in plan["beds"]:
+		build.restore(build.key_for("bed", b["cell"]), {"id": "bed", "cell": b["cell"], "side": b["side"],
+				"hp": data.buildables["bed"]["hp"]})
+		n += 1
+	stats.muted = was_muted
+	return n
+
+
+## Where a town container stands: against its wall in its cell, on the floor (y = its middle).
+static func town_container_pos(c: Dictionary, height: float = 1.6, depth: float = 0.7) -> Vector3:
+	var g := BuildGrid.GRID
+	var out := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)][c["side"]] as Vector2
+	var push := g / 2.0 - 0.1 - depth / 2.0 - 0.02  # to the wall's inner face
+	return Vector3((c["cell"].x + 0.5) * g + out.x * push, 0.1 + height / 2.0, (c["cell"].y + 0.5) * g + out.y * push)
+
+
 func _place_start_stash(cell: Vector2i) -> String:
 	var kit := Inventory.new()
 	kit.give_all(data.debug_kit)

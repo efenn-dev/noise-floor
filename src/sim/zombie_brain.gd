@@ -179,7 +179,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				_go_idle(false)
 		State.INVESTIGATE:
 			_timer -= dt
-			if blocked_by != "" and pieces.has(blocked_by):
+			if blocked_by != "" and _standing(pieces, blocked_by):
 				_start_break(blocked_by)
 			elif sound_key != "" and pieces.has(sound_key) and _flat_dist(pos, target_pos) < MACHINE_REACH:
 				_start_break(sound_key)  # found the noisy machine: wreck it
@@ -191,7 +191,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				_go_idle(true)
 			elif sees and dist <= reach:
 				state = State.ATTACK
-			elif blocked_by != "" and pieces.has(blocked_by):
+			elif blocked_by != "" and _standing(pieces, blocked_by):
 				_start_break(blocked_by)
 			elif not sees:
 				_unseen += dt
@@ -211,7 +211,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 		State.BREAK:
 			if sees and dist <= reach:
 				state = State.ATTACK
-			elif not pieces.has(break_key):
+			elif not _standing(pieces, break_key):
 				state = State.CHASE
 				break_key = ""
 			else:
@@ -223,6 +223,14 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 					events.append({"target": break_key})
 					_cooldown = float(stats["attack_interval"])
 	return events
+
+
+## A piece still there to break: not wrecked, and not a window whose glass is already gone (W1a).
+static func _standing(pieces: Dictionary, key: String) -> bool:
+	if not pieces.has(key):
+		return false
+	var p: Variant = pieces[key]
+	return not (p is Dictionary and p.get("id", "") == "window" and int(p.get("hp", 1)) <= 0)
 
 
 ## Hit by the player standing at `from`. Returns true if this killed it.

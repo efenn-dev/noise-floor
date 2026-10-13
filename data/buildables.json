@@ -27,6 +27,30 @@
 		"size": [2.0, 1.3, 0.25],
 		"cost": { "plank": 3, "nails": 6 }
 	},
+	"town_floor": {
+		"name": "Floor",
+		"kind": "foundation",
+		"hp": 400,
+		"size": [2.0, 0.1, 2.0],
+		"cost": { "plank": 1 },
+		"player_placeable": false
+	},
+	"town_wall": {
+		"name": "House wall",
+		"kind": "wall",
+		"hp": 600,
+		"size": [2.0, 2.7, 0.2],
+		"cost": { "plank": 1, "scrap_metal": 1 },
+		"player_placeable": false
+	},
+	"window": {
+		"name": "Window",
+		"kind": "window",
+		"hp": 40,
+		"size": [2.0, 2.7, 0.2],
+		"cost": { "plank": 1 },
+		"player_placeable": false
+	},
 	"belt": {
 		"name": "Belt",
 		"kind": "belt",
