@@ -1,8 +1,8 @@
 # Read me first (Emmitt)
 
-*Updated 2026-10-13 11:40Z. Emmitt is at work; the lead is running a day queue (below) with the same rules. Builders are running; the merge list grows at the bottom as PRs appear.*
+*Updated 2026-10-13 11:50Z. Emmitt is at work; the lead is running a day queue (below) with the same rules. Builders are running; the merge list grows at the bottom as PRs appear.*
 
-**Merge these on GitHub, top to bottom, each against `main`:** #24 (stress test + W1b), #26 (M12 skills and perks), #27 (M13 loot), #28 (W1c furniture), #29 (M14 guns), #30 (M15 automated defense), #31 (P2 gun feel and screens), then #25 (this board) last. Every one targets `main`, so the order only keeps the diffs readable; merging a later one first is safe. After the last merge, `play.bat` updates itself; the title screen shows the build in the corner.
+**Merge these on GitHub, top to bottom, each against `main`:** #24 (stress test + W1b), #26 (M12 skills and perks), #27 (M13 loot), #28 (W1c furniture), #29 (M14 guns), #30 (M15 automated defense), #31 (P2 gun feel and screens), #32 (P3 playtest readiness: F1 help screen, key hints that fit the moment, fuller session log, town salvage; 4706 checks), then the day-run PRs as they appear, then #25 (this board) last. Every one targets `main`, so the order only keeps the diffs readable; merging a later one first is safe. After the last merge, `play.bat` updates itself; the title screen shows the build in the corner.
 
 **Checks on the final branch: 4371, all passing.** Save files from any earlier version still load (each milestone bumped the save version and keeps a fixture of the one before).
 
@@ -34,8 +34,8 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 ## Day run, 2026-10-13 (Emmitt at work, ~12 hours)
 
 Chosen for value before a playtest and low design risk, in this order, one at a time, each PR against `main`, each reviewed by the lead:
-1. **P3 — playtest readiness** (running): a help screen on F1, key hints that fit the moment, a session log that covers gear, skills, guns and the base log, town doors and beds that salvage instead of refunding, crosshair contrast.
-2. **Q1 — integration soak and screenshot tour**: a headless scripted "bot day" over three game-days through the whole stack with script-error detection, plus `tools/tour.sh` that takes a dozen screenshots around town for the lead to review; fix what breaks.
+1. **P3 — playtest readiness**: done, PR #32 (4706 checks): a help screen on F1, key hints that fit the moment, a session log that covers gear, skills, guns and the base log, town doors and beds that salvage instead of refunding, crosshair contrast.
+2. **Q1 — integration soak and screenshot tour** (running): a headless scripted "bot day" over three game-days through the whole stack with script-error detection, plus `tools/tour.sh` that takes a dozen screenshots around town for the lead to review; fix what breaks.
 3. **A1 — street dressing** with the Blender kit: lamp posts, mailboxes, fences, trash cans, a few trees, placed by the town plan. No Codex.
 4. **M16 — seasons**: a calendar, winter stops crops, cold needs heat, sound carries farther on cold nights.
 5. **A2 — zombie variety** (if time): more body variants from the rigged zombie script.
