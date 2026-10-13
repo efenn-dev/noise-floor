@@ -2,6 +2,42 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — A1 Street dressing
+
+From the A1 brief by the project lead, on top of Q1 (PR #33). The street looked like twelve houses, four cars and a road on flat ground; now it looks lived-in. No new rules beyond searchable trash cans, no tuning.
+
+**Built:**
+- **Five new Blender-kit models** (flat colours, low-poly, `tools/art/`): a **lamp post** with a lantern on top (4.1 m, its glass a separate "Lamp" part), a tin **mailbox** on a wooden post with a red flag, a 2 m section of white **picket fence**, a plastic **trash can** with a lid, and a low-poly **tree** (one model in three sizes: 0.75, 1 and 1.25).
+- **Lamp posts** on the strip beside the road, between every second lot on each side (three a side, staggered). At night each lantern glows and lights the street around it with a small warm light (10 m), like the floodlight. No rule attached.
+- **A mailbox for every house**, by the road a few metres along from its front door, each house its own colour, its door facing the road.
+- **Picket fences** along the side boundary between neighbouring lots, from the house fronts back, ending 2 m short of the back of the lot so zombies and you can still get round. Never across the front.
+- **Trash cans**, one or two behind every house, a little out from the back wall and clear of the back door. **E searches them** like a fridge: one roll from a new `trash` table, mostly nothing, sometimes scrap metal or a few nails, now and then a bandage or a can of food.
+- **Trees**: one behind most houses, plus four past the spawn at the south end of the road and three beside the factory, off the hordes' road route. Only the trunk is solid.
+- **Road markings**: a dashed white centre line and a concrete kerb along both edges of the asphalt (drawn only; nothing to trip on).
+- Everything stands on the ground, has a box collider (the navmesh and the player go round it), and never sits on the road, a house, a car, the start crate's cell, a door's doorstep or the path from the road to a front door.
+
+**Rules (sim, tested):** `StreetPlan` (new, `src/sim/street_plan.gd`, pure, seeded): `generate(seed, town)` gives `{"items": [{kind, pos, yaw, scale, color, id, house}], "markings": {dashes, dash_size, kerbs, kerb_height}}`, with `footprint(item)`, `road_rect()`, `house_rects()`, `door_zones()` (every door's cell and the cell outside it), `door_paths()` (road to front door) and `is_clear()`; the model boxes are `SIZES` and the colliders `COLLIDERS`. `SimWorld.place_street(street)` registers each trash can as a `"trash"` container (like the fridges; searched cans save by id like every container). `data/loot.json`: new table `trash` (`"rolls": [1, 1]`, `"empty": 12`, scrap 3, nails 3, bandage 1, canned food 1). `Loot.roll` reads a table's optional `"empty"` weight as "this pick finds nothing"; `GameData` checks it isn't negative. World: `StreetView` (new, `src/world/street_view.gd`; `MODELS`, colliders on the WORLD layer, `container_id` on cans, mailbox tint, lamp lights on at night, the markings); `main.gd` lays the street after the cars.
+
+**Tests:** `test_street_plan.gd` (new: same seed same street, seeds differ; for seeds 1, 5 and 77 six lamp posts, twelve mailboxes in twelve colours within 5 m of their doors and facing the road, ten fence lines of six sections, one or two cans at every house, trees behind most houses and at the road's ends in more than one size, the centre line and kerbs; nothing on the road, the factory, a house, the start cell or the spawn, within 1.5 m of a front door's cell or the cell in front of it, on the path to a front door, or on another item; fences run back from the fronts and every one leaves a clear 2 m gap at the back; lamps on the strip by the road; the cans are registered `trash` containers you can search once; the trash table is one roll and mostly nothing; the Director's road route from both ends, points and legs, runs into no scenery; physics: you walk from the spawn to house 0's front door with every street collider in place; the real game draws every item, nothing stands on a car, the cans are registered and searchable bodies, and the six lamps are off at 08:00 and all lit at 22:00 with a 10 m range). `test_art_models.gd` (the five models load, fit their boxes, stand on the floor, are one mesh each plus the lamp post's Lamp, colliders inside the model boxes, and the mailbox's door is at its front). **4843 checks** (was 4713). With the scenery in place the first navmesh bake is 49 ms headless (`test_town_world.gd`; Q1 measured 42-47 ms).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**:
+- Look up the street: lamp posts, mailboxes, fences, the centre line and kerbs. Walk round the back of a house: trash cans and a tree. Press **E** on a trash can to search it (mostly "Nothing useful").
+- At night: `play.bat --time=22` (the lamps are lit), or `play.bat --time=22 --flashlight`.
+- A house front with its mailbox and fence: `play.bat --cam=0,0,-6,-62,-6 --time=12 --zombies=0`. The backs of the lots: `play.bat --cam=30,0,-12,75,-8 --time=12 --zombies=0`.
+
+**Known gaps:**
+- Not in A1, as planned: textures (flat colours only), new buildings, a shop, and any tuning (the trash table's odds included).
+- Scenery isn't a build piece: the build grid doesn't know about it, so you can place a foundation or wall through a fence, tree or trash can, and zombies walk round it but never break it. Cars hit it like a wall.
+- A fence section's collider is one solid 2 m box, so a bullet stops at it even between the pickets (as at a lamp post, a mailbox or a tree trunk). Fences only run between neighbouring lots on the same side; there is no back fence and nothing past the last lot.
+- Street lamps light nothing for the sim: zombies don't see you better under them, and they need no power.
+- Trees don't block sight or sound, and their canopies have no collider (only the trunk).
+- The kerbs are drawn only, so a car drives over them without a bump.
+- Every other gap from the Q1, P3, P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — Q1 Soak and tour
 
 From the Q1 brief by the project lead, on top of P3 (PR #32), so the whole unmerged stack (M12 skills to P3) runs as one game. No new content, no tuning: a bot plays the game for days, a fix for what it found, and a screenshot tour.

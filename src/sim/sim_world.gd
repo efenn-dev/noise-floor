@@ -444,6 +444,17 @@ func place_props(plan: Dictionary) -> int:
 	return n
 
 
+## A1: the street's trash cans (StreetPlan "trash_can" items) are searchable "trash" containers, like the
+## fridges. The rest of the street plan is scenery with no rule. Returns how many were registered.
+func place_street(street: Dictionary) -> int:
+	var n := 0
+	for item: Dictionary in street["items"]:
+		if item["kind"] == "trash_can":
+			loot.add(item["id"], "trash", item["pos"] + Vector3(0, 0.5, 0))
+			n += 1
+	return n
+
+
 ## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
 ## new game: a save keeps its zombies (house ones included) and brings them back itself.
 func spawn_house_zombies(plan: Dictionary) -> Array:

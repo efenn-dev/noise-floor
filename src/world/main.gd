@@ -62,6 +62,8 @@ var hints: Hints  # first-game hints; null after a load, with --demo-*/--cam/--n
 var cars: Dictionary = {}  # car id -> CarBody
 var town: Dictionary = {}  # TownPlan.generate(seed): the houses, their pieces, containers and beds (W1a)
 var town_view: TownView
+var street: Dictionary = {}  # A1: StreetPlan.generate (lamp posts, mailboxes, fences, trash cans, trees)
+var street_view: StreetView
 var town_pieces := 0  # pieces the town plan laid this run (0 when a save brought its own houses)
 var first_bake_ms := 0.0  # how long the first navmesh bake took
 var driving: CarBody = null  # the car you're in, or null when walking
@@ -716,6 +718,12 @@ func _build_town(lay_houses: bool = true, lay_factory: bool = true, lay_props: b
 		add_child(car)
 		car.setup(sim, id, car_color * 1.6)
 		cars[id] = car
+	# A1: street scenery off the road (lamps, mailboxes, fences, searchable trash cans, trees) and road markings.
+	street = StreetPlan.generate(sim.seed_value, town)
+	sim.place_street(street)
+	street_view = StreetView.new()
+	add_child(street_view)
+	street_view.setup(sim, street)
 
 
 func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> StaticBody3D:
