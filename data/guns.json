@@ -25,7 +25,6 @@
 	"max_bloom": 12.0,
 	"min_spread_mult": 0.4,
 	"min_reload_mult": 0.4,
-	"hit_chance": [0.05, 0.97],
 	"ray_range": 150,
 	"finds": {
 		"car_trunk": {"gun": 0.05, "part": 0.02, "ammo": 0.25},

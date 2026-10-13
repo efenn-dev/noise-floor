@@ -46,6 +46,7 @@ const MOUSE := {
 	"attack": MOUSE_BUTTON_LEFT,
 	"build_next": MOUSE_BUTTON_WHEEL_DOWN,
 	"build_prev": MOUSE_BUTTON_WHEEL_UP,
+	"aim": MOUSE_BUTTON_RIGHT,  # P2: hold to zoom with a scope (in build mode right click removes instead)
 }
 
 

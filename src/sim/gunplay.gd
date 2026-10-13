@@ -1,8 +1,10 @@
 class_name Gunplay
 extends RefCounted
 ## Guns in your hands (M14): what you're holding (Q swaps melee and gun), raising the gun, the spread
-## that grows with each shot's recoil and settles back, the magazine and reloading, hit chance by distance,
-## and how loud each shot is. Numbers come from Gear.gun_stats() (base + parts) and data/guns.json; skills
+## that grows with each shot's recoil and settles back, the magazine and reloading, and how loud each shot is.
+## Since P2 the spread cone is the only thing that decides a hit: the world's ray lands or it doesn't, and
+## Firearms, the scope (range), recoil and distance (a fixed angle covers more ground further out) all act
+## on that cone. Numbers come from Gear.gun_stats() (base + parts) and data/guns.json; skills
 ## and perks come in through Skills.bonus(): spread_cut (Firearms), recoil_cut (Steady Hands),
 ## reload_speed (Quick Hands), suppressed_quiet (Gunsmith), gun_damage (gear later). SimWorld owns one and
 ## does the world side (noise, zombies, XP, messages).
@@ -71,22 +73,37 @@ func spread_mult() -> float:
 	return maxf(float(data.guns["min_spread_mult"]), 1.0 - skills.bonus("spread_cut"))
 
 
-## The cone the world shoots into, in degrees: the gun's spread plus the recoil bloom, times spread_mult.
+## How much a gun's range (the scope, "+% accuracy at range" rolls) tightens its cone: the base gun's range
+## over this one's, so a scope's +60% range is a cone 1/1.6 as wide. 1.0 without range bonuses.
+func sight_mult() -> float:
+	if gun().is_empty():
+		return 1.0
+	var base: Dictionary = data.guns["guns"].get(gun().get("base", ""), {})
+	var reach := float(stats()["range"])
+	if base.is_empty() or reach <= 0.0:
+		return 1.0
+	return clampf(float(base["range"]) / reach, 0.1, 1.0)
+
+
+## The cone the world shoots into, in degrees (half-angle): the gun's spread plus the recoil bloom, times
+## spread_mult (Firearms) and sight_mult (scope and range). The ray is the only roll: what it meets is hit.
 func spread_deg() -> float:
 	if gun().is_empty():
 		return 0.0
-	return (float(stats()["spread"]) + bloom) * spread_mult()
+	return (float(stats()["spread"]) + bloom) * spread_mult() * sight_mult()
 
 
-## Chance a shot that's on target hits at `distance` m: 1 - 0.5 * (d / reach)^2, clamped to hit_chance,
-## where reach = the gun's range (scope and accuracy stats raise it) / spread_mult (Firearms raises it).
-## So at the gun's range a shot hits half the time, inside it nearly always.
-func hit_chance(distance: float) -> float:
-	if gun().is_empty():
-		return 0.0
-	var reach := float(stats()["range"]) / spread_mult()
-	var span: Array = data.guns["hit_chance"]
-	return clampf(1.0 - 0.5 * pow(distance / reach, 2.0), float(span[0]), float(span[1]))
+## The radius in metres of the cone `distance` m out: why the same cone lands less often further away.
+func cone_radius(distance: float) -> float:
+	return tan(deg_to_rad(spread_deg())) * distance
+
+
+## True when the gun in hand has a working sight part (the scope): right click zooms with it.
+func scoped() -> bool:
+	if not in_hand():
+		return false
+	var sight: Dictionary = gun().get("parts", {}).get("sight", {})
+	return not sight.is_empty() and gear.working(sight)
 
 
 ## How loud the next shot is: the gun with its parts, the loaded ammo (subsonic quieter), and Gunsmith's

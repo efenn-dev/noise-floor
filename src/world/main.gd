@@ -72,6 +72,8 @@ var _title_camera: Camera3D  # set while the title screen shows its dusk view
 var _hud: Label
 var _build_label: Label
 var _materials_hud: Label
+var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
+var _dot: ColorRect      # the centre dot, shown otherwise
 var _interact_label: Label
 var _health_label: Label
 var _hurt_flash: ColorRect
@@ -177,8 +179,17 @@ func _ready() -> void:
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
 		skills_screen.open()  # --skills, for screenshots
-	if args.has("gun") or args.has("workbench") or args.has("shoot"):
+	if args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("window"):
+		var wh: PackedStringArray = str(args["window"]).split("x")  # P2: --window=1280x720, a smaller window
+		if wh.size() == 2:
+			get_window().size = Vector2i(int(wh[0]), int(wh[1]))
+	if args.has("aim"):
+		var scope := sim.gear.make("scope", "civilian", "white")  # P2: --aim fits a scope and holds the
+		sim.gear.pieces.append(scope)                              # zoom, for screenshots
+		sim.attach_part(scope["uid"])
+		shooter.hold_aim = true
 	if args.has("shoot"):
 		shooter.fire.call_deferred()  # --shoot: fire once (screenshots of the HUD line after a shot)
 	if args.has("sensor-screen"):
@@ -589,6 +600,11 @@ func _update_hud(delta: float) -> void:
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
+	var gun_up := driving == null and sim.guns.in_hand() and not builder.active and not sim.player.dead
+	crosshair.visible = gun_up
+	_dot.visible = not gun_up
+	if gun_up:
+		crosshair.update_from(sim.guns.spread_deg(), player.camera)
 	var notes := PackedStringArray()
 	for m: Dictionary in sim.messages:
 		notes.append(m["text"])
@@ -988,7 +1004,7 @@ func _build_hud() -> void:
 	layer.add_child(_death_label)
 
 	var hint := Label.new()
-	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB attack · Q gun · R reload · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
+	hint.text = "WASD move · Shift sprint · Space jump · Ctrl crouch · F flashlight · LMB attack · RMB scope · Q gun · R reload · E use · T repair · G siphon · Z eat · X drink · H bandage · B build · U muffle · N noise · K skills · F5 save · Esc menu"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	hint.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -996,11 +1012,15 @@ func _build_hud() -> void:
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
 	layer.add_child(hint)
 
-	var dot := ColorRect.new()
-	dot.color = Color(1, 1, 1, 0.8)
-	dot.size = Vector2(4, 4)
-	dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
-	layer.add_child(dot)
+	_dot = ColorRect.new()
+	_dot.color = Color(1, 1, 1, 0.8)
+	_dot.size = Vector2(4, 4)
+	_dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	layer.add_child(_dot)
+	crosshair = Crosshair.new()  # P2: its ticks ignore the mouse too (it sets that on its own children)
+	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	crosshair.visible = false
+	layer.add_child(crosshair)
 	# The HUD only shows things; it must never catch the mouse. A locked mouse sits in the middle of the
 	# screen, right on the crosshair, and a HUD element there would swallow every look and click.
 	for child in layer.get_children():

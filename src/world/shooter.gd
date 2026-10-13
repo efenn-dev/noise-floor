@@ -2,8 +2,8 @@ class_name Shooter
 extends Node3D
 ## M14: the gun in your hands. Left-click (outside build mode, gun in hand: Q) fires: the sim uses a round
 ## and makes the noise (SimWorld.fire), then this raycasts from the camera inside a cone as wide as the
-## sim's spread (Gunplay.spread_deg: accuracy, recoil, Firearms), and if it meets a zombie the sim decides
-## the hit (SimWorld.shoot_zombie, by distance). A hit above the shoulders is a headshot. Shows the gun model
+## sim's spread (Gunplay.spread_deg: accuracy, scope, recoil, Firearms), and if it meets a zombie that's a hit
+## (SimWorld.shoot_zombie; P2: the ray is the only roll). Right click (hold) with a scope zooms the camera. A hit above the shoulders is a headshot. Shows the gun model
 ## held in view, a brief muzzle light and a recoil kick on the camera. Sounds come from SoundView, which plays
 ## the shot's noise event.
 
@@ -13,6 +13,8 @@ const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.1
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
+const AIM_FOV := 35.0  # P2: right click (hold) with a scope zooms the camera to this field of view
+const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
 
 var sim: SimWorld
 var camera: Camera3D
@@ -21,6 +23,10 @@ var exclude: Array[RID] = []
 var last_message := ""
 ## Tests set this so a shot goes straight down the middle of the cone.
 var no_spread := false
+## --aim (screenshots) and tests: hold the scope zoom without a right click.
+var hold_aim := false
+var base_fov := 75.0
+var _aim_held := false
 
 var _rng := RandomNumberGenerator.new()
 var _models: Dictionary = {}  # base -> Node3D
@@ -35,6 +41,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	camera = p_camera
 	builder = p_builder
 	exclude = p_exclude
+	base_fov = camera.fov
 	_rng.randomize()
 	for base: String in MODELS:
 		var node: Node3D
@@ -62,6 +69,8 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action("aim") and not event.is_echo():
+		_aim_held = event.is_pressed() and InputSetup.captured()  # a release always lets go
 	if not InputSetup.captured() or builder.active:
 		return
 	if event.is_action_pressed("attack") and sim.guns.in_hand():
@@ -83,10 +92,17 @@ func _process(delta: float) -> void:
 	_flash_time -= delta
 	_flash.light_energy = 6.0 if _flash_time > 0.0 else 0.0
 	camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
+	camera.fov = move_toward(camera.fov, AIM_FOV if aiming() else base_fov, ZOOM_SPEED * delta)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_message_time -= delta
 	if _message_time <= 0.0:
 		last_message = ""
+
+
+## True while the scope zoom is on: right click held (or --aim) with a scoped gun in hand, on foot, alive.
+## Without a scope right click does nothing. The scope's tighter cone is always on (Gunplay.sight_mult).
+func aiming() -> bool:
+	return (_aim_held or hold_aim) and sim.guns.scoped() and not builder.active and not sim.player.dead
 
 
 ## Fires if the sim lets it. Returns the id of the zombie the ray met (hit or not), -1 for none, -2 if no shot.
@@ -111,7 +127,7 @@ func fire() -> int:
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
 	var head: bool = hit["position"].y > body.global_position.y + ZombieBody.HEAD_Y
-	var r := sim.shoot_zombie(id, head, from.distance_to(hit["position"]))
+	var r := sim.shoot_zombie(id, head)
 	_say("Killed it" if r["killed"] else (("Headshot!" if head else "Hit") if r["hit"] else "Missed"))
 	return id
 

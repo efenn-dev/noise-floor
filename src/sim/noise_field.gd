@@ -46,11 +46,12 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 		continuous.append_array(power.noise_sources())  # running generators
 	if vehicles != null:
 		continuous.append_array(vehicles.noise_sources())  # running car engines
+	var quiet := machine_quiet()  # P2: once per tick (Skills.bonus walks skills, perks and gear)
 	for cell: Vector2i in factory.machines:
 		var m: Factory.Machine = factory.machines[cell]
 		if m.crafting and m.powered:  # M15: a stopped machine (brownout, quiet mode) is silent
 			continuous.append({"pos": Vector3((cell.x + 0.5) * BuildGrid.GRID, 1.0, (cell.y + 0.5) * BuildGrid.GRID),
-					"loudness": machine_loudness(m), "key": "o:%d:%d" % [cell.x, cell.y], "kind": m.id})
+					"loudness": machine_loudness(m, quiet), "key": "o:%d:%d" % [cell.x, cell.y], "kind": m.id})
 	var kept := []
 	for s: Dictionary in recent:
 		s["age"] += dt
@@ -61,9 +62,11 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 	_pending.clear()
 
 
-func machine_loudness(m: Factory.Machine) -> float:
+## `quiet` is machine_quiet() when the caller already has it (refresh), so it's worked out once a tick.
+func machine_loudness(m: Factory.Machine, quiet: float = -1.0) -> float:
 	var base: float = data.buildables[m.id]["loudness"]
-	return maxf(0.0, base - (float(data.noise["muffler"]["cut"]) if m.muffled else 0.0) - machine_quiet())
+	var q := quiet if quiet >= 0.0 else machine_quiet()
+	return maxf(0.0, base - (float(data.noise["muffler"]["cut"]) if m.muffled else 0.0) - q)
 
 
 ## How much quieter Dampened Gears makes machines and generators (M12; skills set by SimWorld).

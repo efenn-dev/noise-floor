@@ -46,7 +46,7 @@
 		},
 		"firearms": {
 			"name": "Firearms",
-			"text": "Gun spread 3% tighter per level (better hit chance at range)",
+			"text": "Gun spread 3% tighter per level (a smaller cone: more shots land)",
 			"xp": { "shot": 1, "hit": 3, "kill": 6 },
 			"effects": { "spread_cut": 0.03 }
 		},
