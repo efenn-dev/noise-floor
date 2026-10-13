@@ -2,6 +2,19 @@
 
 *Written 2026-10-12 by Claude Fable 5.1 at Emmitt's request, after reading the design doc, the devlog, the sim code and the first fifteen pull requests. This file outranks the milestone list in `GAME_DESIGN.md`: when they disagree, follow this one. Update it when a decision below changes.*
 
+## Update, evening of 2026-10-13: where things stand
+
+In the thirty hours after this file was written, builders (Claude Opus 5.5, one at a time, each from a plan by the lead) delivered the whole long-game list except outposts: W1a–W1c (houses with rooms, loot, furniture, a zombie in some, the factory hall, hordes down the road), M12–M16 (skills and perks, loot with rarity and gear, guns and the workbench, automated defense with sensors and the base log, seasons with cold and the stove), M17a (the industrial park and the water tower project), two art passes (street dressing, five zombie bodies), three polish passes (gun feel, playtest readiness with a help screen, soak fixes) and three QA passes (a stress test, a bot that plays game-days headless, a twelve-shot tour). Every one is a pull request against `main` with tests; the suite is past seven thousand checks.
+
+**The rule from the top of this file is now the only thing that matters:** nobody has played it. Everything above the line "Order of work from here" still holds, with the order replaced by this:
+
+1. **Playtest #1.** Thirty minutes, the template in `docs/PLAYTESTS.md`, the session log pasted in. Then a second session a day later.
+2. **Sprint 3 is tuning from those notes, not new systems.** Likely candidates the builders flagged, to be confirmed by play: infamy and heat climb fast once a generator runs; house zombies barely hear a search by day; the first runner's timing; whether the cold in winter is fair; whether the park is too hard; the bot dies two to four times a game-day, mostly to street zombies.
+3. **M17b** (outposts, the substation and radio-tower projects) and the hardcore option come after two playtests, not before.
+4. **Before every playtest**, run `tools/soak.sh --days=3` and `tools/tour.sh` on `main` and fix what they find first. They are cheap and they caught real bugs (a NaN that spammed 836,000 warnings an hour after a car ride; zombies wrecking furniture).
+
+**Process rules learned:** every pull request targets `main` (stacked ones merged into each other once); one builder at a time on this PC; a builder costs about five points of a 5-hour usage window; the lead reviews each PR and keeps `docs/SPRINT.md` honest.
+
 ## What's right. Keep all of it.
 
 - **The shape of the code.** Rules in `src/sim/` on a fixed 20 Hz tick, seeded, with no scene nodes; what you see in `src/world/`; content in `data/*.json` checked by a test. This is why 15 milestones landed in one day without the game falling over. Don't let a feature bypass it "just this once".

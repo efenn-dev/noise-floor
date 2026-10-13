@@ -1,3 +1,21 @@
+# Read me first (Emmitt)
+
+*Final update of the day run: 2026-10-13 15:45Z. Nothing is running. The lead has stopped.*
+
+**Merge these on GitHub, top to bottom, each against `main`:** #24, then #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, then #25 (this board) last. Every one targets `main`; the order only keeps the diffs readable. After the last merge `play.bat` updates itself and shows the build in the title screen's corner.
+
+**On the final branch:** 7968 checks pass; the bot plays a week into winter and the park headless and reports `SOAK OK` (13 deaths in the week, 6 of them the bot dying of thirst in house 1, none from cold, none from Old Pete, no beds, stoves or furniture lost). Save files from any earlier version still load.
+
+**What to play, in this order:** a new game with no flags, as a stranger: do the tips and F1 explain enough? Into a house, loot the kitchen, meet the zombie in one of them, close the door. The red sedan's key is in its trunk. Build a smelter line with a generator and watch heat and infamy; note when the first runner appears. Tab, K, L, F1. Fit a scope at the workbench and hold right click. Play into the night: lamps, flashlight, fog indoors. If you have time, north through the hall into the park and the water tower; expect to die. Then the entry at the top of `docs/PLAYTESTS.md` with the session log pasted in.
+
+**What nobody has verified:** a human playing any of it. The builders' flagged soft spots, in one place: infamy and heat climb fast once a generator runs; house zombies barely hear a search by day; early clean water needs a powered purifier, so the bot dies of thirst by day three; the winter stove runs dry around 04:30 each night; zoom adds no accuracy; the park is hard; you can shoot Old Pete from outside his doorway and he won't react.
+
+**Sprint 3 is tuning from your notes, not new systems.** `docs/DIRECTION.md` says so at the top.
+
+---
+
+
+
 # Sprint 2 — "Into the houses"
 
 *Started 2026-10-12, right after Sprint 1 closed: #16, #17 and #18 merged, and Emmitt's first play (on the old build, before play.bat caught up) said two things: no way into the buildings, and cars that would not drive. Lead: Claude Fable 5.1. Builders: Claude Opus 5.5. QA: Emmitt and Kaleb. Budget rule unchanged: the lead checks the 5-hour window before launching a builder, stops launching at 75%, one build agent on the PC at a time; cloud sessions on the credit don't count against it.*
@@ -10,11 +28,41 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 
 | # | Task | Owner | Status | Done when |
 |---|---|---|---|---|
-| S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent, worktree `noise-floor-p1` | In progress | PR merged; Emmitt sees the version on the title screen |
-| S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5, cloud session on the credit (recommended) or a PC agent after S2-1 | Ready to start after S2-1 merges | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
+| S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent | Merged (#20) | PR merged; Emmitt sees the version on the title screen |
+| S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5 agent on the PC, worktree `noise-floor-w1a` (Emmitt chose local, 2026-10-13) | PR #21 open; 1546 checks green; 455 town pieces, first bake 48 ms | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
 | S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
-| S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Decided after Playtest #1 | Backlog | |
+| S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Opus 5.5 agent on the PC, worktree `noise-floor-w1b`, stacked on #22 | PR #23 open; 2022 checks green | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
+
+## Day run, 2026-10-13 (Emmitt at work, ~12 hours)
+
+Chosen for value before a playtest and low design risk, in this order, one at a time, each PR against `main`, each reviewed by the lead:
+1. **P3 — playtest readiness**: done, PR #32 (4706 checks): a help screen on F1, key hints that fit the moment, a session log that covers gear, skills, guns and the base log, town doors and beds that salvage instead of refunding, crosshair contrast.
+2. **Q1 — integration soak and screenshot tour**: done, PR #33. Soak OK over three game-days (176 s wall, memory 113 to 124 MB, worst frame 2.2 ms). Unfixed, for Q2: idle zombies break a town door and a kitchen counter on day 1; fog indoors is as thick as outside; the heat warning overlaps the carry line; the car reports one NaN speed after you get out: a headless scripted "bot day" over three game-days through the whole stack with script-error detection, plus `tools/tour.sh` that takes a dozen screenshots around town for the lead to review; fix what breaks.
+3. **A1 — street dressing**: done, PR #34 (4843 checks; all five models built first try) with the Blender kit: lamp posts, mailboxes, fences, trash cans, a few trees, placed by the town plan. No Codex.
+3b. **Q2 — fixes from the soak**: done, PR #35 (4928 checks). The counter still breaks because an investigating zombie may wreck what blocks it; the lead decided zombies never break furniture, and that rule rides with M16: idle zombies stop bashing furniture and doors unless they are chasing or investigating, thinner fog under a roof, the heat warning gets its own line, the car NaN root cause if cheap.
+4. **M16 — seasons**: done, PR #36 (5155 checks; soak OK, the counter now survives): a calendar, winter stops crops, cold needs heat, sound carries farther on cold nights.
+5. **A2 — zombie variety**: done, PR #37 (5325 checks): more body variants from the rigged zombie script.
+6. **M17a — the industrial park and the water tower**: done, PR #38 (7878 checks; soak OK; a game-day of soak now takes 102 s instead of 59 s, bake 49 to 78 ms), then **Q3 — a seven-day winter soak and the tour again**: done, PR #39 (SOAK OK over 7 days, 90 s per game-day, memory flat; found: Old Pete leaves the hall and kills you on evening one, zombies still wreck beds and stoves, indoors warms you in winter with no fire, the bot dies of thirst from day 14), then **Q4 — rule fixes**: done, PR #40 (7968 checks; Old Pete guards the hall, a breakable-kinds list in one place, indoor cold at a third of the outdoor rate; the week-long soak now passes end to end: 7 days, 87 s per game-day, 0 cold deaths, 0 Old Pete kills). Day run complete. Outposts and the substation wait for a playtest.
+6b. **M17 — further out** (original line, for reference): a second, harder area and the first big project.
+Not today: tuning (waits for Playtest #1), anything needing Codex image generation.
+
+## Overnight run, night of 2026-10-12 to 13
+
+Emmitt went to bed and left the PC on. The lead runs one Opus 5.5 builder at a time, reviews each pull request, and checks the 5-hour window before every launch (no launch above 75%; wait for the reset instead). Each builder branches from the previous one, so the morning merge order is the queue order; merging the first retargets the next on GitHub. Queue:
+
+1. **W1a — into the houses**: done, PR #21 against `main`.
+2. **Stress test**: done, PR #22 (numbers only: 4.6 ms per tick with 200 zombies, 50 machines and the town; the Director's once-a-second wall count spikes to 20 ms; cheap cache fix noted in docs/perf): one headless test with 200 zombies, 50 machines and a game-day, printing the time per tick, the noise query and the navmesh bake. Branch from W1a so it measures the town pieces too. Numbers only, no fixes.
+3. **W1b — life inside**: done, PR #23 (stacked on #22; 2022 checks; a zombie in 4 of 12 houses, the factory hall with a 4 m doorway, groups and hordes come down the road): a zombie in about one house in three, the factory as a grid interior with a roof, hordes that follow the road. Branch from W1a. Furniture props stay out (PC art).
+4. **M12 — skills and perks**: done, PR #26 against main (2189 checks; ten skills with effects, Strength carry, three perk trees, K screen; interrupted once by an app restart and resumed), from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
+
+Extended while Emmitt is away until the evening of 2026-10-13, in this order, one at a time, each PR against `main`, each reviewed by the lead:
+5. **M13 — loot**: done, PR #27 against main (2367 checks; gear instances with rarity colours and rolled stats, five slots, condition and repair kits from the Press, Old Pete and his axe in the factory hall, the Night Shift set; `--gear` flag): rarity colours, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set (`GAME_DESIGN.md` "Loot"). Branch from M12.
+6. **W1c — furniture**: done, PR #28 against main (3794 checks; six Blender-kit props in every house and the factory hall, salvageable for planks; `--inside=N,PROP` flag): Blender-kit props (table, counter, couch, shelves, bathtub) placed by TownPlan, existing surfaces, no Codex. Branch from M13.
+7. **M14 — guns**: done, PR #29 against main (3995 checks; pistol and rifle in a gun slot with Q to swap, parts and a workbench, crude and machined suppressors, casings from the Press, Firearms levels, Gunsmith plus two more Fighter perks; `--gun`, `--workbench`, `--shoot` flags; known soft spot: a shot rolls twice, the ray and then a hit chance, so misses may feel harsh, and there is no crosshair): firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk. Branch from W1c.
+8. **M15 — automated defense**: done, PR #30 against main (4285 checks; belt-fed and hopper-fed turrets, crossbow and rifle turrets with suppressors, motion and noise sensors with quiet mode, floodlights, decoy noisemakers and door locks, base log on L and radio alerts, bear traps, tripwire bells, electric fences, the repair station, and the Director cache: worst tick 20 ms down to 12 ms; no new Blender models, reused bodies and boxes): turrets fed by belts, traps, sensors and actions, the repair station, attacks that play out while you are away, radio alerts and the base log. Includes the cheap Director cache from docs/perf. Branch from M14.
+9. **P2 — polish**: done, PR #31 against main (4371 checks; one roll per shot, a crosshair that shows the spread, scope zoom on right click, skills screen in three scrolling columns; noise.refresh 448 to 95 microseconds, the Dampened Gears lookup is now once a tick): a crosshair when a gun is in hand, shooting decided by the spread ray alone (no second roll), scope zoom, skills screen layout with six Fighter perks.
+Not in this run: tuning of any kind (waits for Playtest #1), M16, M17, anything needing Codex image generation.
 
 ## What Emmitt tests, and when
 
