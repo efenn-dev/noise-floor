@@ -80,8 +80,8 @@ func write() -> String:
 func lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	out.append("Noise Floor session log, written %s" % Time.get_datetime_string_from_system(false, true))
-	out.append("Started %s. World seed %d, game clock now %s. (No version string in the game yet.)" % [
-			_stamp, sim.seed_value, sim.when_text()])
+	out.append("Build: " + GameSession.version_line())
+	out.append("Started %s. World seed %d, game clock now %s." % [_stamp, sim.seed_value, sim.when_text()])
 	out.append("")
 	out.append_array(sim.stats.summary_lines())
 	return out

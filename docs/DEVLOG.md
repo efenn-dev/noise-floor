@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-12 — P1 Playtest fixes
+
+From Playtest #1 (`docs/PLAYTESTS.md`): Emmitt pressed E on cars and couldn't drive them, and nobody could tell which build he was playing.
+
+**Built:**
+- **Cars explain themselves.** Looking at a car you have no key for now says `[E] get in   No key: search the trunk (E at the back) or the nearest house`. A wreck says what's wrong first, then what you can still do: `Flat tyres.   [E] search the trunk   [G] siphon gas`. A car you can start still just says `[E] get in`. The first time you sit in a keyless car, the HUD also says "No key. The glovebox is searched from the trunk, or try the nearest house" (once per car). The in-car line with `[R] hotwire` is unchanged.
+- **Which build am I playing.** `play.bat` now writes two files next to itself on every run: `play-update.log` (when it ran and everything the update step said, including why it skipped or failed, plus git's own error text) and `version.txt` (the commit about to run, like `0c55be4 Merge pull request #18 ...`; "unknown build" without git). The title screen shows that line small in the bottom-right corner ("dev build" when there's no file), the session log's header starts with `Build: <that line>`, and the console prints `Noise Floor build: <that line>` at startup. The update itself is unchanged: clean `main` only, fast-forward only. Both files are git-ignored.
+
+**Rules (sim, tested):** `Vehicles.start_hint(id, pockets)` (the one-line reason a car won't go: "" if it starts, the wreck text plus "you can still search the trunk and siphon its gas", or `Vehicles.NO_KEY_HINT`); `SimWorld.enter_car` adds `SimWorld.NO_KEY_MESSAGE` once per car. World: the car look-at prompt in `Interactor._car_status`, `GameSession.version_line()` / `version_path` (tests point it at their own file, like `save_path`), the title-screen label in `Menus`, the header line in `SessionLog`, and the console line in `main.gd`.
+
+**Tests:** `test_car_keys.gd` (start_hint for no key, key in pockets, key in the ignition, hotwired and a wreck; the no-key message comes once per car and not for a car you can start), `test_car_prompts_world.gd` (loads the game, stands beside the first car and reads the prompt with no key, with the key, and as a wreck), `test_version.gd` (a temp version file shows on the title screen and in the session log header; no file or an empty one says "dev build"). 1095 checks (was 1067). `play.bat` was tried by hand on a branch (skips, logs why), a clean `main` one commit behind (fast-forwards, logs "Up to date"), and with local changes (skips, logs why).
+
+**Try it on the PC:** merge, then double-click `play.bat`. The title screen's bottom-right corner shows the build; `play-update.log` and `version.txt` appear next to `play.bat` (open them with Notepad). Start a **New game**, walk up the street to the red sedan and look at its side: it says there's no key and where to look. Look at its back and press E to search the trunk (the glovebox key is there), then E at the side to get in and drive. To try a wreck, walk on down the street until a car says "Flat tyres", "The engine won't turn over" or "Smashed up too badly".
+
+**Known gaps:** the no-key hint doesn't say which house, and a car whose key is lost gets the same hint (hotwiring with Mechanics 2 is its only way). The "told you once" memory isn't saved, so a loaded game may say it once more. `version.txt` is only written by `play.bat`, so running Godot directly shows "dev build". The houses are still closed boxes (W1).
+
+**Next:** Playtest #1 on the merged build.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-12 — P0 Playtest kit
 
 **Built:**

@@ -310,6 +310,9 @@ func _car_status() -> String:
 	if c["wreck"] != "":
 		head += " · wreck: " + String(c["wreck"]).to_lower()
 	var keys := PackedStringArray()
+	var why := sim.vehicles.why_not(target_car)
+	if why != "":
+		keys.append(why + ".")  # a wreck: say what's wrong, then what you can still do with it
 	if target_trunk:
 		var trunk: Dictionary = sim.loot.containers.get(target_car, {})
 		if sim.loot.active == target_car:
@@ -319,8 +322,10 @@ func _car_status() -> String:
 		else:
 			keys.append("[E] search the trunk")
 	else:
-		var why := sim.vehicles.why_not(target_car)
-		keys.append("[E] get in" if why == "" else why)
+		keys.append("[E] get in")
+		var hint := sim.vehicles.start_hint(target_car, sim.inventory)
+		if hint != "":
+			keys.append(hint)  # no key: where to look for one
 	if float(c["fuel"]) >= 1.0:
 		keys.append("[G] siphon gas")
 	if sim.inventory.count("gas_can") > 0 and float(c["fuel"]) <= float(s["tank"]) - 1.0:

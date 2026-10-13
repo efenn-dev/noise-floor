@@ -193,6 +193,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
   - **Saving:** cars are saved where you parked them.
   - **Rules in the sim:** fuel, damage and position are sim state (tested); the world handles the physics, like zombie bodies and brains. Moving cars need navmesh obstacles so zombies path around them.
 - [x] **P0 — Playtest kit.** Session log written on death and quit; first-game hints.
+- [x] **P1 — Playtest fixes.** Car prompts explain keys and wrecks; play.bat logs its update and the title screen shows the build.
 
 **The long game** (see "Long game" above), in this order:
 

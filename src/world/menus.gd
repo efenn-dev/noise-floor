@@ -12,6 +12,7 @@ signal settings_changed
 
 var _title: Control
 var _heading: Label
+var _version: Label  # the build being played, small in the bottom-right corner of the title screen
 var _stats_label: Label
 var _flicker := 0.0
 var _pause: Control
@@ -39,6 +40,14 @@ func _init() -> void:
 	_button(_title, "New game", func() -> void: new_game.emit())
 	_button(_title, "Settings", func() -> void: show_settings("title"))
 	_button(_title, "Quit", func() -> void: get_tree().quit())
+	_version = Label.new()
+	_version.add_theme_font_size_override("font_size", 15)
+	_version.modulate = Color(1, 1, 1, 0.6)
+	_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_title.add_child(_version)
+	_version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+	_version.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_version.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	_pause = _screen()
 	_pause.get_child(0).add_child(_label("Paused", 48))
@@ -78,6 +87,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func show_title(has_save: bool) -> void:
 	hide_all()
 	_continue_button.disabled = not has_save
+	_version.text = GameSession.version_line()
 	_title.visible = true
 
 
@@ -109,6 +119,11 @@ func is_open() -> bool:
 
 func title_open() -> bool:
 	return _title.visible
+
+
+## The build line in the title screen's corner (for tests).
+func version_text() -> String:
+	return _version.text
 
 
 func _build_settings(box: VBoxContainer) -> void:

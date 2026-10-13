@@ -16,4 +16,11 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
-*(No entries yet. The next milestone waits for the first one.)*
+## 2026-10-12 — Emmitt, length not recorded (verbal, relayed by the lead), build 15f2c95 (M10c: play.bat had not picked up PRs #16–#18)
+- First five minutes: looked for a way into the houses; there is none. The houses are closed boxes.
+- Fun: not recorded.
+- Confusing: cars. Pressed E on cars and could not drive them (most need a key from the trunk or a house, and one is a wreck; nothing on screen said so).
+- Death: not recorded.
+- Wanted: to go inside buildings; to drive a car.
+- Fix first: doors and interiors (Sprint 2, W1). Car prompts that explain keys, and a visible build version (P1).
+- Session log: none (the build predates P0).

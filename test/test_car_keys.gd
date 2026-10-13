@@ -122,3 +122,45 @@ func test_skills_and_hotwiring_are_saved() -> void:
 	check(b.vehicles.cars["car_3"]["hotwired"], "the hotwired car stays hotwired")
 	eq(b.vehicles.cars["car_0"]["key_in"], "glovebox", "and keys stay where they were")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_start_hint_says_why_a_car_wont_go() -> void:
+	var sim := _town()
+	var v := sim.vehicles
+	eq(v.cars["car_0"]["key_in"], "glovebox", "car_0's key starts in its glovebox")
+	eq(v.start_hint("car_0", sim.inventory), Vehicles.NO_KEY_HINT, "no key: where to look")
+	eq(Vehicles.NO_KEY_HINT, "No key: search the trunk (E at the back) or the nearest house", "in plain words")
+	sim.inventory.add(Vehicles.key_item("car_0"), 1)
+	eq(v.start_hint("car_0", sim.inventory), "", "key in your pockets: nothing to explain")
+	sim.inventory.remove(Vehicles.key_item("car_0"), 1)
+	v.cars["car_0"]["hotwired"] = true
+	eq(v.start_hint("car_0", sim.inventory), "", "hotwired: nothing to explain")
+	v.cars["car_0"]["hotwired"] = false
+	v.cars["car_0"]["key_in"] = "ignition"
+	eq(v.start_hint("car_0", sim.inventory), "", "key in the ignition: nothing to explain")
+	v.cars["car_1"]["wreck"] = "Flat tyres"
+	var wreck := v.start_hint("car_1", sim.inventory)
+	check(wreck.begins_with("Flat tyres. "), "a wreck says what's wrong (%s)" % wreck)
+	check("search the trunk" in wreck and "siphon" in wreck, "and that it can still be searched and siphoned")
+	sim.inventory.add(Vehicles.key_item("car_1"), 1)
+	check(v.start_hint("car_1", sim.inventory).begins_with("Flat tyres. "), "even with its key, a wreck is a wreck")
+
+
+func test_no_key_message_once_per_car() -> void:
+	var sim := _town()
+	var told := func() -> int:
+		return sim.messages.filter(func(m: Dictionary) -> bool: return m["text"] == SimWorld.NO_KEY_MESSAGE).size()
+	eq(sim.enter_car("car_0"), "", "sit in car_0 without its key")
+	eq(told.call(), 1, "the HUD says there's no key and where to look")
+	eq(SimWorld.NO_KEY_MESSAGE, "No key. The glovebox is searched from the trunk, or try the nearest house", "in plain words")
+	sim.exit_car()
+	sim.enter_car("car_0")
+	eq(told.call(), 1, "only once per car")
+	sim.exit_car()
+	sim.vehicles.cars["car_1"]["key_in"] = "house"
+	sim.enter_car("car_1")
+	eq(told.call(), 2, "a different keyless car says it again")
+	sim.exit_car()
+	sim.vehicles.cars["car_2"]["key_in"] = "ignition"
+	sim.enter_car("car_2")
+	eq(told.call(), 2, "a car you can start says nothing")
