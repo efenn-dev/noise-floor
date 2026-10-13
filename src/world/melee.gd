@@ -51,7 +51,7 @@ func _process(delta: float) -> void:
 
 ## Swings if ready. Returns the id of the zombie hit, -1 for a miss, -2 if the swing wasn't ready.
 func swing() -> int:
-	if not sim.player.try_swing(float(sim.weapon_stats()["cooldown"])):
+	if not sim.swing():
 		return -2
 	_swing = 0.0
 	SoundView.play_at(self, "swing", camera.global_position, -8.0, randf_range(0.9, 1.1))

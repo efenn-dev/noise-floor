@@ -169,6 +169,9 @@ func validate() -> PackedStringArray:
 			if float(levels[i]) <= float(levels[i - 1]):
 				errors.append("skill levels must go up")
 		_check_stats(errors, "skills", {"hotwire": skills}, ["hotwire_level", "hotwire_seconds", "hotwire_min_seconds", "hotwire_noise"])
+		_check_stats(errors, "skills", {"perks": skills}, ["levels_per_perk_point", "perk_max_rank", "sneak_range",
+				"heavy_load", "search_time_min"])
+		_check_skills(errors, skills)
 		for id: String in vehicles:
 			for key: String in ["size", "seat"]:
 				var v: Variant = vehicles[id].get(key)
@@ -203,6 +206,25 @@ const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudn
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
 		"heat_per_zombie", "lure_time"]
+
+
+## M12: every skill in "order" has a name, xp and effects; every tree's perks exist with effects.
+static func _check_skills(errors: PackedStringArray, skills: Dictionary) -> void:
+	var defs: Dictionary = skills.get("skills", {})
+	var order: Array = skills.get("order", [])
+	if order.size() != defs.size():
+		errors.append("skills.json 'order' must list every skill once")
+	for s: String in order:
+		if not defs.has(s) or not (defs[s].get("xp") is Dictionary) or not (defs[s].get("effects") is Dictionary):
+			errors.append("skill '%s' needs a name, xp and effects" % s)
+	var perks: Dictionary = skills.get("perks", {})
+	var trees: Dictionary = skills.get("trees", {})
+	for t: String in trees:
+		for p: String in trees[t].get("perks", []):
+			if not perks.has(p) or not (perks[p].get("effects") is Dictionary) or perks[p]["effects"].is_empty():
+				errors.append("perk '%s' (tree %s) needs effects" % [p, t])
+			elif perks[p].has("synergy") and not trees.has(perks[p]["synergy"].get("tree", "")):
+				errors.append("perk '%s' synergy names an unknown tree" % p)
 
 
 static func _check_stats(errors: PackedStringArray, what: String, table: Dictionary, keys: Array) -> void:

@@ -183,7 +183,7 @@ func interact() -> String:
 		"solar", "pole":
 			return ""
 	# Machines load from your pockets and nearby crates; what they made goes in your pockets.
-	var moved: Dictionary = sim.factory.hand_interact(target_cell, sim.stock_at(sim.build.piece_center(target_key)))
+	var moved: Dictionary = sim.machine_interact(target_cell, sim.build.piece_center(target_key))
 	var parts := PackedStringArray()
 	if not moved["took"].is_empty():
 		parts.append("Took " + _list(moved["took"]))
@@ -204,7 +204,7 @@ func status_text() -> String:
 		if c.get("searched", false):
 			return "%s · searched%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 		if sim.loot.active == target_container:
-			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"]))]
+			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / sim.loot.search_time())]
 		return "%s\n[E] search (stay close; it makes a little noise)%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 	if target_key == "" or not sim.build.pieces.has(target_key):
 		return ""
@@ -284,7 +284,7 @@ func status_text() -> String:
 
 func _append_repair(lines: PackedStringArray, piece: Dictionary, b: Dictionary) -> void:
 	if piece["hp"] < b["hp"]:
-		lines.append("[T] repair (%s)" % _list(sim.build.repair_cost(target_key)))
+		lines.append("[T] repair (%s)" % _list(sim.repair_cost(target_key)))
 
 
 func _network_line(net: Dictionary) -> String:
@@ -316,7 +316,7 @@ func _car_status() -> String:
 	if target_trunk:
 		var trunk: Dictionary = sim.loot.containers.get(target_car, {})
 		if sim.loot.active == target_car:
-			keys.append("searching the trunk %d%%" % roundi(100.0 * sim.loot.progress / float(sim.data.survival["search_time"])))
+			keys.append("searching the trunk %d%%" % roundi(100.0 * sim.loot.progress / sim.loot.search_time()))
 		elif trunk.get("searched", false):
 			keys.append("trunk searched")
 		else:

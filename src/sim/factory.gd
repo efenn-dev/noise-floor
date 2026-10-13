@@ -11,6 +11,8 @@ const BELT_SPEED := 1.0
 const SPACING := 0.25
 const INPUT_CAP := 20   # per input item
 const OUTPUT_CAP := 50  # per output item
+## A planter's crop: Farming adds planter_extra of these per harvest grown (M12).
+const CROP := "vegetable"
 
 
 class Machine:
@@ -119,6 +121,10 @@ var turrets: Dictionary = {}   # Vector2i -> Turret
 var belts: Dictionary = {}     # Vector2i -> Belt
 
 
+## Set by SimWorld (M12): Fast Lines speeds belts, Tuned Machines speeds crafting, Farming grows more.
+var skills: Skills
+
+
 func _init(p_data: GameData) -> void:
 	data = p_data
 
@@ -187,9 +193,14 @@ func tick(dt: float) -> void:
 		if not belt.items.is_empty() and belt.items[0]["pos"] >= 1.0:
 			if _give(cell + DIRS[belt.facing], cell, belt.items[0]["item"]):
 				belt.items.pop_front()
+	var craft_dt := dt * (1.0 + _bonus("craft_speed"))
+	var extra := floori(_bonus("planter_extra"))
 	for cell: Vector2i in _sorted(machines):
 		var m: Machine = machines[cell]
-		m.tick(dt)
+		var crafted := m.crafted
+		m.tick(craft_dt)
+		if extra > 0 and m.id == "planter" and m.crafted > crafted:
+			m.output[CROP] = m.output.get(CROP, 0) + extra * (m.crafted - crafted)
 		for item: String in _sorted(m.output):
 			if _give(cell + DIRS[m.facing], cell, item):
 				m.output[item] -= 1
@@ -226,12 +237,22 @@ func hand_interact(cell: Vector2i, inv: Inventory) -> Dictionary:
 	return {"took": took, "fed": fed}
 
 
+func _bonus(effect: String) -> float:
+	return skills.bonus(effect) if skills != null else 0.0
+
+
+## Belt speed in cells per second, with Fast Lines.
+func belt_speed() -> float:
+	return BELT_SPEED * (1.0 + _bonus("belt_speed"))
+
+
 func _move_belt(belt: Belt, dt: float) -> void:
+	var speed := belt_speed()
 	for i in belt.items.size():
 		var entry: Dictionary = belt.items[i]
 		entry["prev"] = entry["pos"]
 		var limit: float = 1.0 if i == 0 else belt.items[i - 1]["pos"] - SPACING
-		entry["pos"] = maxf(entry["pos"], minf(entry["pos"] + BELT_SPEED * dt, limit))
+		entry["pos"] = maxf(entry["pos"], minf(entry["pos"] + speed * dt, limit))
 
 
 ## Hands one item from `from` to whatever is at `to`, if it will take it from that side.

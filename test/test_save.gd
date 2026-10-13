@@ -161,6 +161,27 @@ func test_version_3_save_still_loads() -> void:
 	check(not sim.build.pieces.has(plan["factory"]["doorway"][0]), "the hall's doorway is open")
 
 
+## M12: a version-4 save (made by the W1b game, before perks) still loads: its skills xp comes back,
+## it has no perks, and it gets the perk points its skill levels are worth.
+func test_version_4_save_still_loads() -> void:
+	var d := SaveGame.read("res://test/fixtures/save_v4.json")
+	eq(int(d.get("version", 0)), 4, "the fixture is a version-4 save")
+	check(SaveGame.holds_town(d) and SaveGame.holds_factory(d), "it holds the houses and the hall")
+	check(not d.has("perks") and not d.has("perk_points"), "and no perks")
+	var sim := SimWorld.new(8.0, null, int(d["seed"]))
+	_town(sim)
+	eq(SaveGame.apply(sim, d), "", "loads cleanly")
+	eq(sim.build.pieces.size(), d["pieces"].size(), "every saved piece, once")
+	check(sim.build.pieces[sim.build.key_for("door", Vector2i(-1, -1), N)]["open"], "your door is still open")
+	eq(sim.skills.level("mechanics"), 3, "Mechanics 3 kept")
+	eq(sim.skills.perks, {}, "no perks yet")
+	eq(sim.skills.perk_points, 1, "one perk point for its three levels")
+	near(sim.player.food, 70.0, "your food meter", 1.0)
+	var again: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
+	eq(int(again["version"]), SaveGame.VERSION, "saved again as version %d" % SaveGame.VERSION)
+	eq(int(again["perk_points"]), 1, "with its point")
+
+
 ## W1a: the town is saved like your own pieces: damage, open doors and broken windows come back,
 ## and a version-3 save says it holds the town, so it isn't laid twice.
 func test_town_damage_and_doors_survive_save_and_load() -> void:

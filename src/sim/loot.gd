@@ -11,6 +11,8 @@ var seed_value: int
 var containers: Dictionary = {}
 var active := ""        # id being searched now, "" if none
 var progress := 0.0     # seconds into the current search
+## Set by SimWorld (M12): Scavenging and Quick Fingers make searches quicker, Lucky Find adds an item.
+var skills: Skills
 
 
 func _init(p_data: GameData, p_seed: int = 1) -> void:
@@ -72,17 +74,30 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 		active = ""  # walked away: search abandoned (and starts over next time)
 		return {}
 	progress += dt
-	if progress < float(data.survival["search_time"]) - 1e-6:
+	if progress < search_time() - 1e-6:
 		return {}
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, active])
-	var items := roll(data.loot[c["table"]], rng)
+	var table: Dictionary = data.loot[c["table"]]
+	var items := roll(table, rng)
+	if skills != null and rng.randf() < skills.bonus("lucky_find"):  # one more pick from the same table
+		var one := table.duplicate()
+		one["rolls"] = [1, 1]
+		for item: String in (roll(one, rng) as Dictionary):
+			items[item] = int(items.get(item, 0)) + 1
 	for item: String in c.get("extra", {}):
 		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
 	var done := {"id": active, "items": items}
 	active = ""
 	return done
+
+
+## Seconds a search takes: search_time, 5% less per Scavenging level and 10% per Quick Fingers rank,
+## never under search_time_min (a share of the base).
+func search_time() -> float:
+	var cut := skills.bonus("search_speed") if skills != null else 0.0
+	return float(data.survival["search_time"]) * maxf(float(data.skills["search_time_min"]), 1.0 - cut)
 
 
 static func _flat_dist(a: Vector3, b: Vector3) -> float:

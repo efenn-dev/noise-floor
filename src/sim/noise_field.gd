@@ -12,6 +12,8 @@ const HEAR_WINDOW := 0.5
 const DRAW_TIME := 1.5  # one-offs stay in `recent` this long so the overlay can show them
 
 var data: GameData
+## Set by SimWorld (M12): Dampened Gears makes machines quieter.
+var skills: Skills
 var build: BuildGrid
 ## {pos: Vector3, loudness: float, key: String (piece key or ""), kind: String}
 var continuous: Array = []
@@ -61,7 +63,12 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 
 func machine_loudness(m: Factory.Machine) -> float:
 	var base: float = data.buildables[m.id]["loudness"]
-	return base - (float(data.noise["muffler"]["cut"]) if m.muffled else 0.0)
+	return maxf(0.0, base - (float(data.noise["muffler"]["cut"]) if m.muffled else 0.0) - machine_quiet())
+
+
+## How much quieter Dampened Gears makes machines and generators (M12; skills set by SimWorld).
+func machine_quiet() -> float:
+	return skills.bonus("machine_quiet") if skills != null else 0.0
 
 
 ## The loudest sound a listener at `at` can hear over `threshold`, with "heard" (its level) added.
