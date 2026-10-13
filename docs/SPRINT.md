@@ -16,6 +16,17 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 | S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Decided after Playtest #1 | Backlog | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
 
+## Overnight run, night of 2026-10-12 to 13
+
+Emmitt went to bed and left the PC on. The lead runs one Opus 5.5 builder at a time, reviews each pull request, and checks the 5-hour window before every launch (no launch above 75%; wait for the reset instead). Each builder branches from the previous one, so the morning merge order is the queue order; merging the first retargets the next on GitHub. Queue:
+
+1. **W1a — into the houses** (running). PR against `main`.
+2. **Stress test**: one headless test with 200 zombies, 50 machines and a game-day, printing the time per tick, the noise query and the navmesh bake. Branch from W1a so it measures the town pieces too. Numbers only, no fixes.
+3. **W1b — life inside**: a zombie in about one house in three, the factory as a grid interior with a roof, hordes that follow the road. Branch from W1a. Furniture props stay out (PC art).
+4. **M12 — skills and perks**, from `GAME_DESIGN.md`: skills that level by doing, the Strength carry limit and bags, perk points, the three trees with a few perks each, a skills screen. Branch from W1b. Only if the window allows.
+
+Not tonight: anything needing Codex or Blender, W1 tuning (waits for Playtest #1), M11 tuning, M13+.
+
 ## What Emmitt tests, and when
 
 **Now, on the merged build:** `play.bat`, New game. The green tip line should be there. Play thirty minutes. Cars: the first car up the street (red sedan) has its key in the trunk: look at its back, press E to search, then look at its side and press E to get in. Note when the first runner shows up. Quit from the title screen and check `%APPDATA%/Godot/app_userdata/Noise Floor/sessions/` for the log. Write the `PLAYTESTS.md` entry.
