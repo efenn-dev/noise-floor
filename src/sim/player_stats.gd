@@ -8,6 +8,9 @@ extends RefCounted
 ##   bleeding (from zombie hits) drains health until you use a bandage
 ##   carry_ratio (carried kg / limit, set by SimWorld): over 1 you're slower and tire faster;
 ##   at carry_no_sprint you can't sprint at all
+##   M16 warmth: moves by warmth_rate (per second, set by SimWorld from Climate each tick); below cold_at
+##   stamina comes back at cold_stamina_regen speed, below freezing_at you lose freeze_damage health every
+##   freeze_every seconds (cold_cfg is data/seasons.json "warmth"; empty = no cold effects)
 
 signal died
 signal respawned
@@ -23,6 +26,10 @@ var food := 100.0
 var water := 100.0
 var energy := 100.0
 var stamina := 100.0
+var warmth := 100.0       # M16
+var warmth_rate := 0.0    # M16: per second, + or - (written by SimWorld each tick)
+var cold_cfg: Dictionary = {}  # M16: data/seasons.json "warmth"
+var _freeze_timer := 0.0
 var bleeding := false
 var asleep := false
 var sprinting := false   # written by the world each frame
@@ -32,7 +39,7 @@ var stamina_regen_mult := 1.0
 var dead := false
 var respawn_timer := 0.0
 var deaths := 0
-## What hurt you last: a zombie type ("shambler"), "starvation", "dehydration", "bleeding" or "unknown".
+## What hurt you last: a zombie type ("shambler"), "starvation", "dehydration", "bleeding", "cold" or "unknown".
 ## When health hits 0 this is what killed you.
 var last_cause := "unknown"
 
@@ -90,6 +97,16 @@ func consume(item_food: float, item_water: float) -> void:
 	water = minf(100.0, water + item_water)
 
 
+## M16: below cold_at (stamina comes back slower).
+func is_cold() -> bool:
+	return not cold_cfg.is_empty() and warmth < float(cold_cfg["cold_at"])
+
+
+## M16: below freezing_at (losing health).
+func is_freezing() -> bool:
+	return not cold_cfg.is_empty() and warmth < float(cold_cfg["freezing_at"])
+
+
 func sleep() -> void:
 	if not dead:
 		asleep = true
@@ -122,9 +139,19 @@ func tick(dt: float) -> void:
 	else:
 		_rested += dt
 		if _rested >= _c("stamina_regen_delay"):
-			stamina = minf(100.0, stamina + _c("stamina_regen") * stamina_regen_mult * dt)
+			var cold_mult := float(cold_cfg["cold_stamina_regen"]) if is_cold() else 1.0  # M16
+			stamina = minf(100.0, stamina + _c("stamina_regen") * stamina_regen_mult * cold_mult * dt)
+	warmth = clampf(warmth + warmth_rate * dt, 0.0, 100.0)  # M16
 	var hurt := 0.0
 	var cause := ""
+	if is_freezing():
+		_freeze_timer += dt
+		if _freeze_timer >= float(cold_cfg["freeze_every"]):
+			_freeze_timer -= float(cold_cfg["freeze_every"])
+			hurt += float(cold_cfg["freeze_damage"])
+			cause = "cold"
+	else:
+		_freeze_timer = 0.0
 	if food <= 0.0 or water <= 0.0:
 		hurt += _c("starve_damage") * dt
 		cause = "starvation" if food <= 0.0 else "dehydration"
@@ -145,6 +172,7 @@ func _respawn() -> void:
 	food = maxf(food, floor_value)
 	water = maxf(water, floor_value)
 	energy = maxf(energy, floor_value)
+	warmth = maxf(warmth, floor_value)  # M16
 	stamina = 100.0
 	bleeding = false
 	asleep = false

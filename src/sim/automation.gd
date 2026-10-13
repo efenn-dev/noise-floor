@@ -169,7 +169,7 @@ func sense(key: String, horde: Horde) -> String:
 		var d := _flat(s["pos"], at)
 		if d > reach:
 			continue
-		if NoiseField.heard_level(s["loudness"], d, noise.walls_between(s["pos"], at)) >= threshold:
+		if noise.level(s["loudness"], d, noise.walls_between(s["pos"], at)) >= threshold:
 			return "a noise (%s)" % String(s["kind"]).replace("_", " ")
 	return ""
 

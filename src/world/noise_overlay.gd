@@ -55,7 +55,7 @@ func _process(_delta: float) -> void:
 		_ring(s["pos"], reach(effective, float(z["hearing_night"])), Color(0.5, 0.6, 1.0, 0.5))
 	for s: Dictionary in sim.noise.recent:
 		var fade: float = 1.0 - s["age"] / NoiseField.DRAW_TIME
-		_ring(s["pos"], reach(s["loudness"], float(z["hearing_day"])), Color(1.0, 1.0, 1.0, 0.8 * fade))
+		_ring(s["pos"], reach(sim.noise.level(s["loudness"], 1.0, 0), float(z["hearing_day"])), Color(1.0, 1.0, 1.0, 0.8 * fade))
 	for id: int in sim.horde.zombies:
 		var b: ZombieBrain = sim.horde.zombies[id]
 		if b.is_dead():

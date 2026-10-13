@@ -332,6 +332,19 @@ func _after_break() -> void:
 		state = State.CHASE
 
 
+## M16 (reverses W1c's "bashed by zombies like a crate"): it walked into a piece of furniture, which is never
+## broken. A stroller turns away as from anything else (Q2); a chaser or investigator forgets the bump and keeps
+## going, and its body's navmesh path goes round the piece (furniture is a navmesh obstacle). One that was
+## already breaking furniture (a save from before M16) stops and carries on as after a break.
+func leave_furniture() -> void:
+	if state == State.WANDER:
+		return
+	if state == State.BREAK:
+		_after_break()
+		return
+	blocked_by = ""
+
+
 ## Q2: a wandering zombie walked into a piece: pick another stroll spot, away from the way it was going.
 func _turn_away() -> void:
 	var was := Vector3(target_pos.x - pos.x, 0.0, target_pos.z - pos.z)

@@ -6,7 +6,9 @@ const DIR := "res://data/"
 const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "machine", "bed", "storage", "generator", "solar",
 		"pole", "trap", "turret", "prop", "workbench",
 		# M15: automated defense
-		"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "tripwire", "fence", "repair_station"]
+		"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "tripwire", "fence", "repair_station",
+		# M16: heat
+		"stove", "heater"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -21,6 +23,7 @@ var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, ca
 var guns: Dictionary = {}        # M14: gun bases, parts, ammo types, gun finds: data/guns.json
 var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
 var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
+var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], empty (optional weight of nothing), items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
@@ -39,6 +42,7 @@ static func load_default() -> GameData:
 	data.gear = _read_json(DIR + "gear.json", data)
 	data.guns = _read_json(DIR + "guns.json", data)
 	data.defense = _read_json(DIR + "defense.json", data)
+	data.seasons = _read_json(DIR + "seasons.json", data)
 	return data
 
 
@@ -224,6 +228,7 @@ func validate() -> PackedStringArray:
 			errors.append("spoiled food needs a 'rotten_food' item")
 	if not defense.is_empty():
 		_check_defense(errors, self)
+	_check_seasons(errors, self)
 	return errors
 
 
@@ -281,6 +286,52 @@ static func _check_defense(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("defense.json %s needs a known item" % key)
 	if int(df.get("log", {}).get("size", 0)) <= 0:
 		errors.append("defense.json log needs a size")
+
+
+## M16: seasons.json. Four seasons in "order", each with sun hours inside the day (sunrise before sunset),
+## crop and rain speeds and cold drains of 0 or more, and a hearing bonus; the warmth thresholds in order;
+## the stove's fuel (in buildables.json) an item, and its burn time, cap and radius positive.
+static func _check_seasons(errors: PackedStringArray, d: GameData) -> void:
+	var se := d.seasons
+	if se.is_empty():
+		if not d.buildables.is_empty() and d.buildables.has("stove"):
+			errors.append("no seasons data")
+		return
+	if int(se.get("days_per_season", 0)) <= 0:
+		errors.append("seasons.json needs a positive days_per_season")
+	var order: Array = se.get("order", [])
+	var defs: Dictionary = se.get("seasons", {})
+	if order.size() != 4 or defs.size() != 4:
+		errors.append("seasons.json needs four seasons in 'order', each defined once")
+	for s: String in order:
+		var def: Dictionary = defs.get(s, {})
+		if not def.has("name"):
+			errors.append("season '%s' needs a name" % s)
+			continue
+		var rise := float(def.get("sunrise", -1.0))
+		var fall := float(def.get("sunset", -1.0))
+		if rise <= 0.0 or fall >= 24.0 or rise >= fall:
+			errors.append("season '%s' needs 0 < sunrise < sunset < 24" % s)
+		for key: String in ["crop_speed", "rain_speed", "cold_day", "cold_night", "hearing_night"]:
+			if not def.has(key) or float(def[key]) < 0.0:
+				errors.append("season '%s' needs '%s' of 0 or more" % [s, key])
+	var w: Dictionary = se.get("warmth", {})
+	for key: String in ["indoor_gain", "heat_gain", "cold_at", "freezing_at", "freeze_damage", "freeze_every", "cold_stamina_regen"]:
+		if float(w.get(key, 0.0)) <= 0.0:
+			errors.append("seasons.json warmth needs a positive '%s'" % key)
+	if float(w.get("freezing_at", 0.0)) >= float(w.get("cold_at", 0.0)):
+		errors.append("seasons.json warmth: freezing_at must be below cold_at")
+	var bc := float(w.get("bonus_cap", -1.0))
+	if bc < 0.0 or bc > 1.0:
+		errors.append("seasons.json warmth needs a bonus_cap in 0..1")
+	var st: Dictionary = se.get("stove", {})
+	for key: String in ["hours_per_fuel", "cap", "radius"]:
+		if float(st.get(key, 0.0)) <= 0.0:
+			errors.append("seasons.json stove needs a positive '%s'" % key)
+	if float(se.get("heater", {}).get("radius", 0.0)) <= 0.0:
+		errors.append("seasons.json heater needs a positive radius")
+	if d.buildables.has("stove") and not d.items.has(str(d.buildables["stove"]["fuel"])):
+		errors.append("the stove's fuel must be an item")
 
 
 ## M14: guns.json. Every gun base names a gun with its numbers; every part base names a part with a slot;

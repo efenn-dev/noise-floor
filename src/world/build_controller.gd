@@ -12,7 +12,9 @@ const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "
 		"nail_turret", "workbench",
 		# M15: automated defense (mouse wheel)
 		"crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor", "floodlight", "noisemaker",
-		"bear_trap", "tripwire", "electric_fence", "repair_station"]
+		"bear_trap", "tripwire", "electric_fence", "repair_station",
+		# M16: heat
+		"stove", "electric_heater"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 

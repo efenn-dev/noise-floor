@@ -12,6 +12,7 @@ const FACTORY_TOP := 6.0  # W1b: the factory hall's roof; brick runs up from the
 
 var roofs := 0  # roof slabs drawn, for tests
 var factory_cells := 0  # W1b: cells under the factory roof, for tests
+var roof_meshes: Array = []  # M16: every roof slab, retinted by apply_season
 var _roofed := {}  # Q2: Vector2i cell -> true for every house cell under a roof
 var _has_factory := false
 
@@ -45,7 +46,7 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 			var x0 := x * g - (OVERHANG if x == min_x else 0.0)
 			var x1 := (x + 1) * g + (OVERHANG if x == max_x else 0.0)
 			var mid := Vector3((x0 + x1) / 2.0, 0.0, (z0 + z1) / 2.0)
-			_box(Vector3(x1 - x0, ROOF, z1 - z0), mid + Vector3(0, WALL_TOP + ROOF / 2.0, 0), roof_mat)
+			roof_meshes.append(_box(Vector3(x1 - x0, ROOF, z1 - z0), mid + Vector3(0, WALL_TOP + ROOF / 2.0, 0), roof_mat))
 			_box(Vector3(g, 0.04, (rows[x][1] - rows[x][0] + 1) * g), Vector3((x + 0.5) * g, WALL_TOP - 0.02, mid.z),
 					ceiling_mat, false)
 			roofs += 1
@@ -66,12 +67,19 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 		lintel.rotation_degrees.y = grid.yaw_for("town_wall", p["cell"], p["side"])
 
 
+## M16: the roofs in this season's tint (snow-white in winter).
+func apply_season(season: String) -> void:
+	var mat := SeasonLook.roof_material(season)
+	for m: MeshInstance3D in roof_meshes:
+		m.material_override = mat
+
+
 ## W1b: the factory hall's roof and ceiling at FACTORY_TOP, and the brick band from the top of its wall
 ## pieces up to the roof all round (over the doorway too, as a lintel). No colliders, like the houses' roofs.
 func _factory(f: Dictionary, roof_mat: Material, ceiling_mat: Material) -> void:
 	var r := TownPlan.factory_rect()
 	var mid := Vector3(r.get_center().x, 0.0, r.get_center().y)
-	_box(Vector3(r.size.x + 2 * OVERHANG, ROOF, r.size.y + 2 * OVERHANG), mid + Vector3(0, FACTORY_TOP + ROOF / 2.0, 0), roof_mat)
+	roof_meshes.append(_box(Vector3(r.size.x + 2 * OVERHANG, ROOF, r.size.y + 2 * OVERHANG), mid + Vector3(0, FACTORY_TOP + ROOF / 2.0, 0), roof_mat))
 	_box(Vector3(r.size.x, 0.04, r.size.y), mid + Vector3(0, FACTORY_TOP - 0.02, 0), ceiling_mat, false)
 	roofs += 1
 	var brick := BuildView.town_material("factory")

@@ -19,6 +19,10 @@ var build: BuildGrid
 var continuous: Array = []
 var recent: Array = []  # one-offs, each with an extra "age" in seconds
 var _pending: Array = []
+## M16: dB every sound carries farther by right now: on cold, still nights (autumn +3, winter +6 in
+## data/seasons.json "hearing_night"), 0 otherwise. Set by SimWorld every tick. level() adds it, and every
+## listener (zombies, the Director's heat, noise sensors, the overlay's rings) goes through level().
+var carry_bonus := 0.0
 
 
 func _init(p_data: GameData, p_build: BuildGrid) -> void:
@@ -28,6 +32,12 @@ func _init(p_data: GameData, p_build: BuildGrid) -> void:
 
 static func heard_level(loudness: float, distance: float, walls: int) -> float:
 	return loudness - 20.0 * log(maxf(distance, 1.0)) / log(10.0) - 10.0 * walls
+
+
+## M16: how loud a sound is to a listener now: heard_level plus tonight's carry_bonus. The one place the
+## season's bonus is added.
+func level(loudness: float, distance: float, walls: int) -> float:
+	return heard_level(loudness, distance, walls) + carry_bonus
 
 
 ## Queues a one-off sound; it becomes audible on the next tick.
@@ -49,7 +59,7 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 	var quiet := machine_quiet()  # P2: once per tick (Skills.bonus walks skills, perks and gear)
 	for cell: Vector2i in factory.machines:
 		var m: Factory.Machine = factory.machines[cell]
-		if m.crafting and m.powered:  # M15: a stopped machine (brownout, quiet mode) is silent
+		if m.crafting and m.powered and not m.frozen:  # M15: a stopped machine (brownout, quiet mode) is silent; M16: a frozen planter too
 			continuous.append({"pos": Vector3((cell.x + 0.5) * BuildGrid.GRID, 1.0, (cell.y + 0.5) * BuildGrid.GRID),
 					"loudness": machine_loudness(m, quiet), "key": "o:%d:%d" % [cell.x, cell.y], "kind": m.id})
 	var kept := []
@@ -83,7 +93,7 @@ func loudest_heard(at: Vector3, threshold: float) -> Dictionary:
 		if s.has("age") and s["age"] >= HEAR_WINDOW:
 			continue
 		var d := Vector2(s["pos"].x - at.x, s["pos"].z - at.z).length()
-		var open := heard_level(s["loudness"], d, 0)
+		var open := level(s["loudness"], d, 0)
 		if open < threshold or open <= best_level:
 			continue  # too quiet even before walls: skip the wall count
 		var level := open - 10.0 * walls_between(s["pos"], at)
@@ -97,7 +107,7 @@ func loudest_heard(at: Vector3, threshold: float) -> Dictionary:
 ## How loud a sound is to the world outside: the loudest it gets at `distance` in any of 8 directions,
 ## so a gap in your walls lets it out.
 func outdoor_level(s: Dictionary, distance: float) -> float:
-	return heard_level(s["loudness"], distance, outdoor_walls(s["pos"], distance))
+	return level(s["loudness"], distance, outdoor_walls(s["pos"], distance))
 
 
 ## The fewest walls between `pos` and a point `distance` away, over 8 directions (the gap sound leaks out of).

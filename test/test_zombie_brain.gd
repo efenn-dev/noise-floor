@@ -178,6 +178,52 @@ func test_q2_idle_house_zombie_leaves_the_counter_alone() -> void:
 	check(z.state == S.IDLE or z.state == S.WANDER, "still idle or strolling (%s)" % z.state_name())
 
 
+## M16 (reverses W1c's "bashed by zombies like a crate"): furniture is never broken. The house zombie
+## investigating a noise with its counter in the way leaves the counter at full hp; so does one chasing you.
+func test_m16_zombies_never_break_furniture() -> void:
+	var t := _town_sim()
+	var sim: SimWorld = t[0]
+	var plan: Dictionary = t[1]
+	var ids: Array = t[2]
+	var z: ZombieBrain = null
+	var counter := ""
+	for i in ids.size():
+		counter = _piece_in(sim, plan, plan["zombies"][i]["house"], "counter")
+		if counter != "":
+			z = sim.horde.zombies[ids[i]]
+			break
+	check(z != null, "a house zombie with a counter in its house")
+	if z == null:
+		return
+	var hp: int = sim.build.pieces[counter]["hp"]
+	var at := sim.build.piece_center(counter)
+	z.pos = Vector3(at.x + 0.9, 0, at.z)
+	z.hear(Vector3(at.x - 6.0, 0, at.z))  # a noise on the far side of the counter
+	eq(z.state, S.INVESTIGATE, "investigating a noise")
+	var broke := 0
+	for i in roundi(30.0 / TICK):
+		z.blocked_by = counter  # walking into the counter the whole time
+		sim.step()
+		if z.state == S.BREAK:
+			broke += 1
+	eq(broke, 0, "an investigator never starts breaking the counter")
+	eq(sim.build.pieces[counter]["hp"], hp, "the counter keeps every hit point")
+	z.pos = Vector3(at.x + 0.9, 0, at.z)
+	z.think(TICK, Vector3(at.x - 3.0, 0, at.z), true, false, sim.build.pieces)  # it sees you behind the counter
+	eq(z.state, S.CHASE, "chasing you")
+	for i in roundi(30.0 / TICK):
+		z.blocked_by = counter
+		sim.step()
+		if z.state == S.BREAK:
+			broke += 1
+	eq(broke, 0, "a chaser never breaks it either")
+	eq(sim.build.pieces[counter]["hp"], hp, "still full hp")
+	z.state = S.BREAK  # one caught mid-break (as before M16) stops
+	z.break_key = counter
+	sim.step()
+	check(z.state != S.BREAK, "a zombie breaking furniture stops (%s)" % z.state_name())
+
+
 func test_q2_chasing_zombie_breaks_a_closed_door() -> void:
 	var t := _town_sim()
 	var sim: SimWorld = t[0]

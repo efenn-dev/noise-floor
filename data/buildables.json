@@ -205,6 +205,23 @@
 		"size": [1.6, 1.3, 1.2],
 		"cost": { "metal_plate": 12, "nails": 10 }
 	},
+	"stove": {
+		"name": "Stove",
+		"kind": "stove",
+		"hp": 120,
+		"loudness": 15,
+		"fuel": "plank",
+		"size": [1.6, 1.3, 1.2],
+		"cost": { "scrap_metal": 6, "nails": 6 }
+	},
+	"electric_heater": {
+		"name": "Electric heater",
+		"kind": "heater",
+		"hp": 60,
+		"watts": 40,
+		"size": [1.4, 1.5, 1.4],
+		"cost": { "metal_plate": 4, "nails": 6 }
+	},
 	"solar_panel": {
 		"name": "Solar panel",
 		"kind": "solar",

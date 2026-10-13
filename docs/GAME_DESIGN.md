@@ -69,7 +69,9 @@ Slow shamblers in the Zomboid style, often in groups. States: idle/wander → in
 Melee first (pipe, bat, axe): stamina cost, knockback, bonus for hits to the head. Guns come later, and **they're loud**.
 
 ### Time
-One real minute = one in-game hour, so a full day is 24 real minutes. The sun is up 05:00–21:00. `src/sim/game_clock.gd` holds the rules.
+One real minute = one in-game hour, so a full day is 24 real minutes. The sun is up 05:00–21:00 in summer. `src/sim/game_clock.gd` holds the rules.
+
+**Seasons (M16):** a year is four seasons of 7 days: summer (days 1-7), autumn, winter (days 15-21), spring, then summer again. Sun hours: summer 05:00-21:00, autumn 06:00-19:00, winter 07:30-17:30, spring 06:00-20:00 (solar follows). Planters freeze in winter and grow 25% faster in summer; rain collectors run at half speed in winter and 1.5x in spring. A **warmth** meter drains outdoors (autumn 3/5 a game-hour day/night, winter 12/20, spring 1/2, summer none), refills under a roof (+20) and fast by a lit **stove** (planks, 2 game-hours each, 6 m, loudness 15) or a powered **electric heater** (40 W, 5 m, silent); the jacket cuts the drain by 30%. Below 30 stamina comes back at half speed; below 10 you lose 1 health every 20 s. Asleep in a bed, warmth doesn't fall. On autumn and winter nights every sound is heard 3 / 6 dB louder. Numbers in `data/seasons.json`.
 
 ## Long game (after first playable)
 
@@ -207,7 +209,7 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M13 — Loot.** Rarity colors, stat rolls in ranges, base tiers, durability and repair kits, the first uniques and one set.
 - [x] **M14 — Guns.** Firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk.
 - [x] **M15 — Automated defense.** The turret lineup fed by belts, traps, sensors and actions, the repair station, attacks that play out while you're away, radio alerts and the base log.
-- [ ] **M16 — Seasons.** Winter, heat, crop cycles, sound carrying farther in the cold.
+- [x] **M16 — Seasons.** Winter, heat, crop cycles, sound carrying farther in the cold.
 - [ ] **M17 — Further out.** A second, harder area, the first big project (water tower), outposts.
 
 ## Open questions (decide when we get there)

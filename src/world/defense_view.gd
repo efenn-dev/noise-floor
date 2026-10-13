@@ -3,12 +3,17 @@ extends Node3D
 ## M15: draws what the automated defense is doing. Floodlights the sim says are lit get a spotlight and a
 ## glowing lamp; a sensor's lamp is red while it's on; a noisemaker's lamp flashes while it blares and is
 ## amber while it recharges. The rules are in Automation; this only reads them.
+## M16: a lit stove's lamp glows like a fire and it lights the room with a warm flickering light; a powered
+## electric heater's lamp glows orange. The rules are in Climate.
 
 const LIGHT_RANGE := 22.0
 
 var sim: SimWorld
 var build_view: BuildView
 var _lights: Dictionary = {}  # floodlight key -> SpotLight3D
+var _fires: Dictionary = {}   # M16: stove key -> OmniLight3D
+const FIRE_COLOR := Color(1.0, 0.55, 0.22)
+const FIRE_RANGE := 7.0
 var _t := 0.0
 
 
@@ -19,6 +24,7 @@ func setup(p_sim: SimWorld, p_build_view: BuildView) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_heat()
 	var auto := sim.automation
 	for key: String in _lights.keys():
 		if not auto.floodlights.has(key) or not is_instance_valid(_lights[key]):
@@ -59,6 +65,36 @@ func _process(delta: float) -> void:
 			_lamp(nbody, Color(1.0, 0.6, 0.1), true)
 		else:
 			_lamp(nbody, Color(0.2, 0.9, 0.3), true)
+
+
+## M16: stoves and heaters.
+func _heat() -> void:
+	var c := sim.climate
+	for key: String in _fires.keys():
+		if not c.stoves.has(key) or not is_instance_valid(_fires[key]):
+			_fires.erase(key)
+	for key: String in c.stoves:
+		var body := build_view.body_for(key)
+		if body == null:
+			continue
+		var lit: bool = c.stoves[key]["lit"]
+		if lit and not _fires.has(key):
+			var fire := OmniLight3D.new()
+			fire.light_color = FIRE_COLOR
+			fire.omni_range = FIRE_RANGE
+			fire.shadow_enabled = false
+			fire.position = Vector3(0, 1.0, -0.9)  # in front of the firebox
+			body.add_child(fire)
+			_fires[key] = fire
+		if _fires.has(key):
+			_fires[key].visible = lit
+			_fires[key].light_energy = 2.2 + 0.35 * sin(_t * 9.0) + 0.2 * sin(_t * 23.0)
+		_lamp(body, FIRE_COLOR if lit else Color(0.12, 0.1, 0.1), lit)
+	for key: String in c.heaters:
+		var hbody := build_view.body_for(key)
+		if hbody != null:
+			var on := c.heater_on(key)
+			_lamp(hbody, Color(1.0, 0.45, 0.15) if on else Color(0.2, 0.2, 0.2), on)
 
 
 func _lamp(body: Node3D, color: Color, glow: bool) -> void:

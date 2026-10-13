@@ -35,6 +35,9 @@ const COLORS := {
 	"tripwire": Color(0.55, 0.5, 0.35),
 	"fence": Color(0.5, 0.52, 0.5),
 	"repair_station": Color(0.45, 0.45, 0.3),
+	# M16
+	"stove": Color(0.2, 0.2, 0.2),
+	"heater": Color(0.85, 0.85, 0.8),
 }
 ## M15: walk-over pieces (only rays see them): spike strips, bear traps, tripwires.
 const WALK_OVER := ["trap", "bear_trap", "tripwire"]
@@ -65,6 +68,10 @@ const MODELS := {
 	"rifle_turret": "res://assets/models/nail_turret.glb",
 	"floodlight": "res://assets/models/power_pole.glb",
 	"repair_station": "res://assets/models/purifier.glb",
+	# M16: the stove is the generator's body painted cast-iron black (its Lamp is the fire, lit by DefenseView),
+	# the electric heater the purifier's body painted cream.
+	"stove": "res://assets/models/generator.glb",
+	"electric_heater": "res://assets/models/purifier.glb",
 	# W1c: house furniture, laid by the town plan (kind "prop").
 	"counter": "res://assets/models/counter.glb",
 	"table": "res://assets/models/table.glb",
@@ -290,6 +297,17 @@ func _add_m15_parts(body: StaticBody3D, id: String, size: Vector3) -> void:
 			lamp.name = "Lamp"
 		"repair_station":
 			_add_part(body, Vector3(1.0, 0.16, 0.7), Vector3(0, size.y / 2.0 + 0.08, 0), Color(0.62, 0.62, 0.55))
+		# M16: the stove's fire is a glowing window low on its front, with a stovepipe on top; the heater's is a
+		# grille across its front. Either becomes the body's "Lamp" (DefenseView lights it).
+		"stove", "electric_heater":
+			var old := body.get_node_or_null("Lamp")
+			if old != null:
+				old.name = "ModelLamp"
+			var fire := _add_part(body, Vector3(0.7, 0.32, 0.04) if id == "stove" else Vector3(0.9, 0.5, 0.04),
+					Vector3(0, -size.y / 2.0 + (0.42 if id == "stove" else 0.7), -size.z / 2.0 - 0.01), Color(0.12, 0.1, 0.1))
+			fire.name = "Lamp"
+			if id == "stove":
+				_add_part(body, Vector3(0.16, 0.9, 0.16), Vector3(size.x / 2.0 - 0.3, size.y / 2.0 + 0.45, 0.2), Color(0.12, 0.12, 0.12))
 
 
 func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
@@ -310,6 +328,8 @@ func _add_part(body: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshI
 func _add_model(body: StaticBody3D, id: String) -> void:
 	var model := (load(MODELS[id]) as PackedScene).instantiate() as Node3D
 	body.add_child(model)
+	if MODEL_TINTS.has(id):
+		tint_model(model, MODEL_TINTS[id])
 	for part_name in ["Lamp", "Head"]:
 		var part := model.get_node_or_null(part_name) as MeshInstance3D
 		if part == null:
@@ -321,6 +341,23 @@ func _add_model(body: StaticBody3D, id: String) -> void:
 			var mat := StandardMaterial3D.new()
 			mat.albedo_color = Color(0.2, 0.2, 0.2)
 			part.material_override = mat
+
+
+## M16: model ids drawn with every material's colour multiplied by a tint (a reused body made to look different).
+const MODEL_TINTS := {"stove": Color(0.3, 0.28, 0.27), "electric_heater": Color(1.25, 1.2, 1.05)}
+
+
+static func tint_model(model: Node3D, tint: Color) -> void:
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for s in mesh.mesh.get_surface_count():
+			var mat := mesh.mesh.surface_get_material(s) as StandardMaterial3D
+			if mat != null:
+				mat = mat.duplicate()
+				mat.albedo_color = Color(minf(1.0, mat.albedo_color.r * tint.r), minf(1.0, mat.albedo_color.g * tint.g),
+						minf(1.0, mat.albedo_color.b * tint.b), mat.albedo_color.a)
+				mesh.set_surface_override_material(s, mat)
 
 
 func _surface(id: String) -> StandardMaterial3D:

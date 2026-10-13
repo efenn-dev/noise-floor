@@ -66,9 +66,21 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 		var eye := z.pos + Vector3.UP * ZombieBrain.EYE_HEIGHT
 		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, ctx["player_pos"], z.los_clear,
 				ctx["night"], ctx["player_lit"], z.stats)
+		if _is_furniture(ctx["pieces"], z.blocked_by) or (z.state == ZombieBrain.State.BREAK and _is_furniture(ctx["pieces"], z.break_key)):
+			z.leave_furniture()  # M16: zombies never break furniture
 		for e: Dictionary in z.think(dt, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
 			e["zombie"] = id
 			events.append(e)
 		if z.is_dead() and z.dead_time >= ZombieBrain.CORPSE_TIME:
 			zombies.erase(id)
 	return events
+
+
+## M16: is `key` a piece of furniture (kind "prop": counters, tables, couches, shelves, bathtubs, toilets)?
+func _is_furniture(pieces: Dictionary, key: String) -> bool:
+	if key == "" or not pieces.has(key):
+		return false
+	var p: Variant = pieces[key]
+	if not (p is Dictionary) or not data.buildables.has(p.get("id", "")):
+		return false
+	return data.buildables[p["id"]]["kind"] == "prop"
