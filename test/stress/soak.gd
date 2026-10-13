@@ -26,6 +26,9 @@ const WARM_AT := 50.0                # Q3: under this warmth (in a cold season) 
 const TOWER := "water_tower"
 var _stove_key := ""
 var _park_ids: Dictionary = {}       # Q3: park zombie id -> drawn yet (chased, investigated, attacked, broke)
+## Q4: every live zombie at the save, as {pos, park, drawn}, so _grab() can carry the park watch across the load
+## (zombie ids are new after a load; a saved zombie comes back at the same spot).
+var _zombies_at_save: Array = []
 var _deaths_by_day: Dictionary = {}  # Q3: day -> ["cause@where", ...], from the death tally
 var _last_deaths := 0
 var _rain_by_season: Dictionary = {}  # Q3: season -> a rain collector's season speed seen there
@@ -356,6 +359,11 @@ func _sleep() -> String:
 func _save_load() -> String:
 	var before := _snapshot()
 	_saved_snapshot = before
+	_zombies_at_save = []
+	for zid: int in sim.horde.zombies:
+		var sz: ZombieBrain = sim.horde.zombies[zid]
+		if not sz.is_dead():
+			_zombies_at_save.append({"pos": sz.pos, "park": _park_ids.has(zid), "drawn": _park_ids.get(zid, false)})
 	var why: String = main.save_game()
 	if why != "":
 		return "save: " + why
@@ -626,11 +634,26 @@ func _kit_crate() -> Inventory:
 func _grab() -> void:
 	main = current_scene as Node3D
 	sim = main.sim
-	# Q3: the park's zombies are the ones standing in it (at the start, and again after a load: ids are new)
+	# Q3: the park's zombies are the ones standing in it at the start. Q4: after a load (ids are new) each zombie
+	# is matched to the one saved at its spot and keeps its watch: a park zombie stays one, drawn or not, wherever
+	# it is now, and a zombie that wasn't one (a wave or town zombie standing in the park) isn't made one. Only a
+	# zombie that matches nothing falls back to "standing in the park".
 	_park_ids.clear()
 	for zid: int in sim.horde.zombies:
 		var pz: ZombieBrain = sim.horde.zombies[zid]
-		if not pz.is_dead() and ParkPlan.area().has_point(Vector2(pz.pos.x, pz.pos.z)):
+		if pz.is_dead():
+			continue
+		var hit: Dictionary = {}
+		var best := 0.5
+		for saved: Dictionary in _zombies_at_save:
+			var d := Vector2(saved["pos"].x - pz.pos.x, saved["pos"].z - pz.pos.z).length()
+			if d < best:
+				best = d
+				hit = saved
+		if not hit.is_empty():
+			if hit["park"]:
+				_park_ids[zid] = hit["drawn"]
+		elif ParkPlan.area().has_point(Vector2(pz.pos.x, pz.pos.z)):
 			_park_ids[zid] = false
 	_last_deaths = int(sim.tally["deaths"])
 	sim.build.piece_removed.connect(func(key: String, piece: Dictionary) -> void:
