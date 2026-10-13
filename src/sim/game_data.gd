@@ -21,7 +21,7 @@ var survival: Dictionary = {}    # hunger, thirst, energy, stamina, bleeding, ca
 var guns: Dictionary = {}        # M14: gun bases, parts, ammo types, gun finds: data/guns.json
 var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
 var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
-var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], items: [{item, weight, min, max}]}
+var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], empty (optional weight of nothing), items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
 
@@ -178,6 +178,8 @@ func validate() -> PackedStringArray:
 			errors.append("loot '%s' needs rolls [min, max]" % table)
 		if t.get("items", []).is_empty():
 			errors.append("loot '%s' has no items" % table)
+		if float(t.get("empty", 0.0)) < 0.0:
+			errors.append("loot '%s' has a negative empty weight" % table)
 		for e: Dictionary in t.get("items", []):
 			if not items.has(e.get("item", "")):
 				errors.append("loot '%s' has unknown item '%s'" % [table, e.get("item", "")])

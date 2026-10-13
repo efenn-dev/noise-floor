@@ -21,10 +21,11 @@ func _init(p_data: GameData, p_seed: int = 1) -> void:
 
 
 ## Rolls a table: `rolls` picks, each a weighted item and an amount. Returns {item: count}.
+## A1: a table's optional "empty" weight is the chance a pick finds nothing (trash cans).
 static func roll(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var out := {}
 	var entries: Array = table["items"]
-	var total := 0.0
+	var total := float(table.get("empty", 0.0))
 	for e: Dictionary in entries:
 		total += float(e["weight"])
 	for i in rng.randi_range(int(table["rolls"][0]), int(table["rolls"][1])):

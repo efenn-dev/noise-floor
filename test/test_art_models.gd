@@ -85,6 +85,56 @@ func test_furniture_faces_the_room() -> void:
 		root.free()
 
 
+## A1: the street scenery models (StreetView.MODELS, boxes in StreetPlan.SIZES) fit their boxes, stand on the
+## floor, are merged (the lamp post's glass is its own "Lamp"), and the mailbox's door faces the front (the road).
+func test_street_models_fit_and_face() -> void:
+	for kind: String in StreetPlan.MODELS:
+		var model_id: String = StreetPlan.MODELS[kind]
+		var path: String = StreetView.MODELS.get(model_id, "")
+		var scene: PackedScene = null
+		if path != "":
+			scene = load(path) as PackedScene
+		check(scene != null, "%s model loads" % model_id)
+		if scene == null:
+			continue
+		var root := scene.instantiate() as Node3D
+		var half: Vector3 = StreetPlan.SIZES[kind] / 2.0
+		var meshes := root.find_children("*", "MeshInstance3D", true, false)
+		var lamp := root.get_node_or_null("Lamp")
+		check(meshes.size() <= (2 if kind == "lamp_post" else 1), "%s is one merged mesh (plus its lamp) (%d meshes)" % [model_id, meshes.size()])
+		if kind == "lamp_post":
+			check(lamp is MeshInstance3D, "the lamp post has a Lamp directly under the model root")
+		var collider: Vector3 = StreetPlan.COLLIDERS[kind]
+		check(collider.x <= StreetPlan.SIZES[kind].x + SLACK and collider.z <= StreetPlan.SIZES[kind].z + SLACK,
+				"%s collider is inside its model box" % model_id)
+		var lowest := INF
+		for m: MeshInstance3D in meshes:
+			var box := _transform_to(root, m) * m.get_aabb()
+			var top := half.y + (LAMP_ALLOWANCE if m == lamp else 0.0)
+			var inside := box.position.x >= -half.x - SLACK and box.end.x <= half.x + SLACK 					and box.position.z >= -half.z - SLACK and box.end.z <= half.z + SLACK 					and box.position.y >= -half.y - SLACK and box.end.y <= top + SLACK
+			check(inside, "%s/%s fits its %s box (%s)" % [model_id, m.name, StreetPlan.SIZES[kind], box])
+			lowest = minf(lowest, box.position.y)
+		near(lowest, -half.y, "%s stands on the floor of its box" % model_id, 0.02)
+		root.free()
+	var mailbox := (load(StreetView.MODELS["mailbox"]) as PackedScene).instantiate() as Node3D
+	var z := 0.0
+	var n := 0
+	var painted := false
+	for m: MeshInstance3D in mailbox.find_children("*", "MeshInstance3D", true, false):
+		var xf := _transform_to(mailbox, m)
+		for i in m.mesh.get_surface_count():
+			var mat := m.mesh.surface_get_material(i)
+			painted = painted or (mat != null and mat.resource_name == "Mailbox Paint")
+			if mat == null or mat.resource_name != "Mailbox Door":
+				continue
+			for v: Vector3 in m.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+				z += (xf * v).z
+				n += 1
+	check(painted, "the mailbox has a Mailbox Paint material to tint")
+	check(n > 0 and z / n < -0.1, "the mailbox door is at the front (mean z %.2f)" % (z / maxf(n, 1)))
+	mailbox.free()
+
+
 func test_each_machine_gets_its_own_lamp() -> void:
 	var sim := SimWorld.new(10.0)
 	sim.give_debug_kit()
