@@ -1,12 +1,17 @@
 # Read me first (Emmitt)
 
-*Kept current by the lead while you are away. Last update: 2026-10-13 03:45Z.*
+*Final update of the overnight run: 2026-10-13 04:35Z. The lead has stopped launching builders; nothing is running.*
 
-**Merge these, in order, each against `main`:** #24 (brings the stress test and W1b to main; the stacked merges of #22 and #23 landed on each other's branches, so main only got W1a), then #26 (M12 skills and perks, 2189 checks), then #27 (M13 loot, 2367 checks), then #28 (W1c furniture, 3794 checks), then #29 (M14 guns, 3995 checks), then #30 (M15 automated defense, 4285 checks), then the small P2 polish PR if it has appeared, then this sprint-board PR (#25) last. From now on every pull request targets `main`, so merging top to bottom always works, and merging a later one first is also safe (it just brings the earlier code with it).
+**Merge these on GitHub, top to bottom, each against `main`:** #24 (stress test + W1b), #26 (M12 skills and perks), #27 (M13 loot), #28 (W1c furniture), #29 (M14 guns), #30 (M15 automated defense), #31 (P2 gun feel and screens), then #25 (this board) last. Every one targets `main`, so the order only keeps the diffs readable; merging a later one first is safe. After the last merge, `play.bat` updates itself; the title screen shows the build in the corner.
 
-**Then play.** `play.bat` updates itself. Houses have doors, rooms and loot; one in three has a zombie inside; the factory is a hall you can walk into; groups come down the road. Thirty minutes and a `docs/PLAYTESTS.md` entry decide what Sprint 3 fixes.
+**Checks on the final branch: 4371, all passing.** Save files from any earlier version still load (each milestone bumped the save version and keeps a fixture of the one before).
+
+**What to play, in this order:** a new game. Open a front door and loot a kitchen; one house in three has a zombie inside. Press K for skills, Tab for your gear (colours are rarity), E on the workbench to fit a scope, Q to swap pipe and gun, right click to zoom, L for the base log. North end of the road: the factory hall, Old Pete, his axe and rifle. `play.bat --demo-defense --time=22` shows a defended base at night with floodlights, sensors and a decoy.
+
+**What nobody has verified:** a human playing any of it. Every number is a builder's guess checked by a test, which is why the next step is still your thirty minutes and a `docs/PLAYTESTS.md` entry. Known soft spots the builders flagged: house zombies barely hear a search by day (they find you by sight); town doors and beds refund their full build cost when removed; zooming adds no accuracy; the skills screen needs about 1220 px of width; the decoy noisemaker adds no Director heat by design.
 
 ---
+
 
 # Sprint 2 — "Into the houses"
 
@@ -40,7 +45,7 @@ Extended while Emmitt is away until the evening of 2026-10-13, in this order, on
 6. **W1c — furniture**: done, PR #28 against main (3794 checks; six Blender-kit props in every house and the factory hall, salvageable for planks; `--inside=N,PROP` flag): Blender-kit props (table, counter, couch, shelves, bathtub) placed by TownPlan, existing surfaces, no Codex. Branch from M13.
 7. **M14 — guns**: done, PR #29 against main (3995 checks; pistol and rifle in a gun slot with Q to swap, parts and a workbench, crude and machined suppressors, casings from the Press, Firearms levels, Gunsmith plus two more Fighter perks; `--gun`, `--workbench`, `--shoot` flags; known soft spot: a shot rolls twice, the ray and then a hit chance, so misses may feel harsh, and there is no crosshair): firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk. Branch from W1c.
 8. **M15 — automated defense**: done, PR #30 against main (4285 checks; belt-fed and hopper-fed turrets, crossbow and rifle turrets with suppressors, motion and noise sensors with quiet mode, floodlights, decoy noisemakers and door locks, base log on L and radio alerts, bear traps, tripwire bells, electric fences, the repair station, and the Director cache: worst tick 20 ms down to 12 ms; no new Blender models, reused bodies and boxes): turrets fed by belts, traps, sensors and actions, the repair station, attacks that play out while you are away, radio alerts and the base log. Includes the cheap Director cache from docs/perf. Branch from M14.
-9. **P2 — polish** (after the 04:00Z window reset): a crosshair when a gun is in hand, shooting decided by the spread ray alone (no second roll), scope zoom, skills screen layout with six Fighter perks.
+9. **P2 — polish**: done, PR #31 against main (4371 checks; one roll per shot, a crosshair that shows the spread, scope zoom on right click, skills screen in three scrolling columns; noise.refresh 448 to 95 microseconds, the Dampened Gears lookup is now once a tick): a crosshair when a gun is in hand, shooting decided by the spread ray alone (no second roll), scope zoom, skills screen layout with six Fighter perks.
 Not in this run: tuning of any kind (waits for Playtest #1), M16, M17, anything needing Codex image generation.
 
 ## What Emmitt tests, and when
