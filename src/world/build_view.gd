@@ -5,6 +5,9 @@ extends Node3D
 
 var grid: BuildGrid
 var _bodies: Dictionary = {}  # key -> StaticBody3D
+## Town pieces (W1a): piece key -> "brick", "siding", "plaster" (inside walls) or "floor", from the
+## town plan. Set by main.gd before setup(). Town pieces without an entry get siding / floor.
+var styles: Dictionary = {}
 
 const COLORS := {
 	"foundation": Color(0.55, 0.45, 0.32),
@@ -17,6 +20,7 @@ const COLORS := {
 	"solar": Color(0.12, 0.16, 0.3),
 	"pole": Color(0.4, 0.3, 0.2),
 	"door": Color(0.45, 0.3, 0.18),
+	"window": Color(0.6, 0.58, 0.55),
 	"barricade": Color(0.5, 0.4, 0.28),
 	"trap": Color(0.3, 0.3, 0.32),
 	"turret": Color(0.35, 0.38, 0.35),
@@ -73,6 +77,15 @@ func _on_added(key: String) -> void:
 	body.rotation_degrees.y = grid.yaw_for(id, piece["cell"], piece.get("side", 0))
 	if MODELS.has(id):
 		_add_model(body, id)
+	elif id == "window":
+		_add_window(body, key, size)
+	elif id in ["town_wall", "town_floor"]:
+		var town_mesh := MeshInstance3D.new()
+		var town_box := BoxMesh.new()
+		town_box.size = size
+		town_mesh.mesh = town_box
+		town_mesh.material_override = town_material(styles.get(key, "floor" if id == "town_floor" else "siding"))
+		body.add_child(town_mesh)
 	else:
 		var mesh := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -134,6 +147,50 @@ func _on_added(key: String) -> void:
 	body.add_child(shape)
 	add_child(body)
 	_bodies[key] = body
+	if grid.is_broken(key):
+		_on_changed(key)  # a broken window from a save
+
+
+## The surface a town piece is drawn with (shared materials; world-space, so pieces join up).
+static func town_material(style: String) -> StandardMaterial3D:
+	match style:
+		"brick":
+			return Surfaces.material("brick", 2.5, Color(0.78, 0.7, 0.66))
+		"siding":
+			return Surfaces.material("siding", 2.5, Color(0.72, 0.74, 0.78))
+		"plaster":
+			return Surfaces.material("concrete_floor", 3.0, Color(0.86, 0.84, 0.78))  # pale inside walls
+	return Surfaces.material("concrete_floor", 2.0, Color(0.62, 0.5, 0.4))  # a warm, worn floor
+
+
+## A window: wall below and above, posts each side, and a pane of glass ("Glass") in the middle.
+## The collider is the whole edge while the glass holds. Intact windows are see-through for zombie
+## sight rays (meta "see_through"); broken ones stop colliding at all (see _on_changed).
+func _add_window(body: StaticBody3D, key: String, size: Vector3) -> void:
+	var mat := town_material(styles.get(key, "siding"))
+	var h := size.y / 2.0
+	var sill := 0.9
+	var top := 0.5
+	for part: Array in [[Vector3(size.x, sill, size.z), Vector3(0, -h + sill / 2.0, 0)],
+			[Vector3(size.x, top, size.z), Vector3(0, h - top / 2.0, 0)],
+			[Vector3(0.3, size.y - sill - top, size.z), Vector3(-size.x / 2.0 + 0.15, -h + sill + (size.y - sill - top) / 2.0, 0)],
+			[Vector3(0.3, size.y - sill - top, size.z), Vector3(size.x / 2.0 - 0.15, -h + sill + (size.y - sill - top) / 2.0, 0)]]:
+		var m := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = part[0]
+		m.mesh = b
+		m.position = part[1]
+		m.material_override = mat
+		body.add_child(m)
+	var glass := _add_part(body, Vector3(size.x - 0.6, size.y - sill - top, 0.03),
+			Vector3(0, -h + sill + (size.y - sill - top) / 2.0, 0), Color(0.6, 0.75, 0.85, 0.25))
+	glass.name = "Glass"
+	var glass_mat: StandardMaterial3D = glass.material_override
+	glass_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass_mat.roughness = 0.05
+	glass_mat.metallic_specular = 0.9
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # daylight comes in
+	body.set_meta("see_through", true)
 
 
 ## A door opened or closed: swing it and stop it blocking (layer 0 = nothing collides, and the
@@ -141,6 +198,13 @@ func _on_added(key: String) -> void:
 func _on_changed(key: String) -> void:
 	var body: StaticBody3D = _bodies.get(key)
 	if body == null or not grid.pieces.has(key):
+		return
+	if grid.pieces[key]["id"] == "window":  # broken: the glass is gone and it's an opening
+		var broken := grid.is_broken(key)
+		body.collision_layer = 0 if broken else Layers.BUILT
+		var glass := body.get_node_or_null("Glass") as Node3D
+		if glass != null:
+			glass.visible = not broken
 		return
 	var open: bool = grid.pieces[key].get("open", false)
 	body.collision_layer = 0 if open else Layers.BUILT

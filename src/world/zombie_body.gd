@@ -152,7 +152,15 @@ func _has_line_of_sight() -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT, [get_rid()])
 	if player is CollisionObject3D:
 		query.exclude = [get_rid(), player.get_rid()]
-	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+	for i in 4:  # it can see through window glass (BuildView marks windows "see_through")
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			return true
+		var other: Object = hit["collider"]
+		if other == null or not other.has_meta("see_through"):
+			return false
+		query.exclude = query.exclude + [hit["rid"]]
+	return false
 
 
 ## The built piece it walked head-first into this frame, if any.
@@ -163,7 +171,8 @@ func _blocking_piece(dir: Vector3) -> String:
 	for i in get_slide_collision_count():
 		var hit := get_slide_collision(i)
 		var other := hit.get_collider()
-		if other != null and other.has_meta("piece_key") and hit.get_normal().dot(-want) > 0.5:
+		# Only something it walks into face first: the low edge of a floor it's stepping onto doesn't count.
+		if other != null and other.has_meta("piece_key") and hit.get_normal().dot(-want) > 0.5 				and absf(hit.get_normal().y) < 0.5:
 			return other.get_meta("piece_key")
 	return ""
 

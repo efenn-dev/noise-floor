@@ -5,8 +5,8 @@ extends RefCounted
 ## Continuous sounds: machines while they work and generators while they run (a muffler takes 15 off). One-off sounds: footsteps,
 ## pipe hits, zombies bashing and wrecking things. One-offs stay audible for HEAR_WINDOW so every
 ## zombie (they listen every HEAR_WINDOW) gets one chance to hear each.
-## Walls are the player's built walls, closed doors and barricades on the 2 m grid; the town's
-## buildings don't muffle yet.
+## Walls are built walls, closed doors, barricades and whole windows on the 2 m grid. Since W1a the
+## town's houses are made of the same pieces, so they muffle too.
 
 const HEAR_WINDOW := 0.5
 const DRAW_TIME := 1.5  # one-offs stay in `recent` this long so the overlay can show them

@@ -5,9 +5,10 @@ extends Label
 ## It's only a label: it never takes input or pauses anything.
 
 const TIMEOUT := 90.0
-const NOISE_SECONDS := 40.0  # the noise hint is just information, so it goes sooner
+const NOISE_SECONDS := 40.0  # the noise and house hints are just information, so they go sooner
 const STEPS := [
 	"Find the crate next to you and press E (Tab looks inside)",
+	"Houses have food inside. E opens doors; close them behind you",
 	"Press B and build a foundation and a smelter",
 	"It's loud. Zombies hear it. Press N to see how far",
 	"Wall it in, or press U on it to fit a muffler",
@@ -55,12 +56,22 @@ func _done(i: int) -> bool:
 		0:
 			return sim.stats.used_crate or (inventory_screen != null and inventory_screen.is_open())
 		1:
-			return int(sim.stats.built.get("smelter", 0)) > 0
+			return _time >= NOISE_SECONDS or _searched_a_house()
 		2:
-			return _time >= NOISE_SECONDS or (overlay != null and overlay.visible)
+			return int(sim.stats.built.get("smelter", 0)) > 0
 		3:
+			return _time >= NOISE_SECONDS or (overlay != null and overlay.visible)
+		4:
 			return sim.stats.mufflers > 0 or _walls() >= 4
 	return true
+
+
+## The house tip is done once you've searched something inside a house (W1a).
+func _searched_a_house() -> bool:
+	for id: String in sim.loot.containers:
+		if id.begins_with("house_") and sim.loot.containers[id]["searched"]:
+			return true
+	return false
 
 
 func _walls() -> int:

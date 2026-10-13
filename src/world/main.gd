@@ -24,6 +24,7 @@ extends Node3D
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
+##   --inside[=N]                    start inside house N (0-11, default 0), looking at its fridge
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
 const SHOT_DELAY_FRAMES := 30
@@ -49,6 +50,10 @@ var noise_overlay: NoiseOverlay
 var session_log: SessionLog
 var hints: Hints  # first-game hints; null after a load, with --demo-*/--cam/--no-hints, or in screenshots
 var cars: Dictionary = {}  # car id -> CarBody
+var town: Dictionary = {}  # TownPlan.generate(seed): the houses, their pieces, containers and beds (W1a)
+var town_view: TownView
+var town_pieces := 0  # pieces the town plan laid this run (0 when a save brought its own houses)
+var first_bake_ms := 0.0  # how long the first navmesh bake took
 var driving: CarBody = null  # the car you're in, or null when walking
 
 var _sun: DirectionalLight3D
@@ -103,7 +108,7 @@ func _ready() -> void:
 		print("Noise Floor build: " + GameSession.version_line())
 	_build_environment()
 	_build_ground()
-	_build_town()
+	_build_town(not (_loaded and SaveGame.holds_town(save)))  # a W1a+ save brings the houses back itself
 	_build_player(args)
 	_build_building(args)
 	_build_zombies(args)
@@ -151,7 +156,7 @@ func _ready() -> void:
 func _wants_hints(args: Dictionary) -> bool:
 	if args.has("hints"):
 		return true
-	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or GameSession.skip_hints:
+	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or GameSession.skip_hints:
 		return false
 	for key: String in args:
 		if key.begins_with("demo"):
@@ -466,27 +471,28 @@ func _build_ground() -> void:
 	add_child(ground)
 
 
-func _build_town() -> void:
+func _build_town(lay_houses: bool = true) -> void:
 	# A road running north (-Z) with houses on both sides and the factory at the far end.
-	# Searchable things: a cabinet or fridge outside each house, every car's trunk, crates by the factory.
-	var loot_rng := RandomNumberGenerator.new()
-	loot_rng.seed = 11
+	# Houses (W1a) are build-grid pieces from TownPlan: floors, walls, doors, windows and a bed, laid as
+	# if built (so they muffle, break and save like the player's own), plus a roof drawn by TownView.
+	# Searchable things: fridges and cabinets inside the houses, every car's trunk, crates by the factory.
 	_add_block(Vector3(0, 0.01, -55), Vector3(8, 0.02, 130), Color(0.17, 0.17, 0.19), false, Surfaces.material("asphalt", 4.0, Color(0.55, 0.55, 0.55)))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	for i in 6:
-		for side in [-1, 1]:
-			var size := Vector3(rng.randf_range(7, 10), rng.randf_range(4, 7), rng.randf_range(7, 10))
-			var pos := Vector3(side * (7.0 + size.x / 2.0), size.y / 2.0, -10.0 - i * 16.0)
-			var paint := Color(0.55, 0.5, 0.45).lerp(Color(0.4, 0.42, 0.5), rng.randf())
-			# Every third house is brick, the rest painted siding; same rng calls as before, so the town doesn't move.
-			var walls := "brick" if (i * 2 + (1 if side > 0 else 0)) % 3 == 0 else "siding"
-			_add_block(pos, size, paint, true, Surfaces.material(walls, 2.5, (paint * 1.5).clamp()))
-			var table: String = ["kitchen", "bathroom", "fridge"][loot_rng.randi_range(0, 2)]
-			var spot := Vector3(side * 6.6, 0.8, pos.z + loot_rng.randf_range(-2.0, 2.0))
-			var box := _add_container("house_%d_%s" % [i, "e" if side > 0 else "w"], table, spot,
-					Vector3(0.7, 1.6, 0.7), Color(0.85, 0.85, 0.8) if table == "fridge" else Color(0.55, 0.42, 0.3))
-			_dress(box, "fridge" if table == "fridge" else "cabinet", side * PI / 2.0)  # front faces the road
+	for i in 48:
+		rng.randf()  # the twelve old box houses drew 4 numbers each: keep the draws so the cars don't move
+	town = TownPlan.generate(sim.seed_value, sim.data)
+	if lay_houses:
+		town_pieces = sim.place_town(town)
+	for c: Dictionary in town["containers"]:
+		var fridge: bool = c["table"] == "fridge"
+		var box := _add_container(c["id"], c["table"], SimWorld.town_container_pos(c), Vector3(0.7, 1.6, 0.7),
+				Color(0.85, 0.85, 0.8) if fridge else Color(0.55, 0.42, 0.3))
+		var out := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)][c["side"]] as Vector2
+		_dress(box, "fridge" if fridge else "cabinet", atan2(out.x, out.y))  # back to the wall, facing the room
+	town_view = TownView.new()
+	add_child(town_view)
+	town_view.setup(town, sim.build)
 	_add_block(Vector3(0, 6, -125), Vector3(30, 12, 24), Color(0.45, 0.47, 0.5), true, Surfaces.material("brick", 3.0, Color(0.6, 0.6, 0.62)))
 	for i in 3:
 		var crate := _add_container("factory_crate_%d" % i, "factory_crate", Vector3(-8.0 + i * 8.0, 0.5, -111.8),
@@ -549,6 +555,8 @@ func _build_player(args: Dictionary) -> void:
 			v.append(0.0)
 		player.position = Vector3(v[0], v[1], v[2])
 		player.set_look(v[3], v[4])
+	if args.has("inside"):
+		_stand_inside(int(args["inside"]) if args["inside"] != "" else 0)
 	if args.has("flashlight"):
 		player.flashlight.visible = true
 	if _shot_path != "":
@@ -559,6 +567,20 @@ func _build_player(args: Dictionary) -> void:
 	sim.player.respawned.connect(_on_respawned)
 
 
+## --inside=N: stand in house N's kitchen, across the cell from its fridge, looking at it.
+func _stand_inside(n: int) -> void:
+	var house: Dictionary = town["houses"][clampi(n, 0, town["houses"].size() - 1)]
+	for c: Dictionary in town["containers"]:
+		if c["id"] != "%s_fridge" % house["name"]:
+			continue
+		var fridge := SimWorld.town_container_pos(c)
+		var out := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][c["side"]] as Vector3
+		var cell_mid := Vector3((c["cell"].x + 0.5) * BuildGrid.GRID, 0.1, (c["cell"].y + 0.5) * BuildGrid.GRID)
+		player.position = cell_mid - out * 0.75
+		var d := fridge - player.position
+		player.set_look(rad_to_deg(atan2(-d.x, -d.z)), -12.0)
+
+
 func _build_building(args: Dictionary) -> void:
 	# The debug kit waits in a crate next to the start; you carry a little food, water and a bandage.
 	# (A loaded save brings back its own crates and pockets instead.)
@@ -567,6 +589,8 @@ func _build_building(args: Dictionary) -> void:
 		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
+	for p: Dictionary in town["pieces"]:
+		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster or floor
 	build_view.setup(sim.build)
 	builder = BuildController.new()
 	add_child(builder)
@@ -610,7 +634,11 @@ func _build_zombies(args: Dictionary) -> void:
 	nav = NavBaker.new()
 	add_child(nav)
 	nav.setup(self, NAV_BOUNDS)
+	var t0 := Time.get_ticks_usec()
 	nav.bake_now()
+	first_bake_ms = (Time.get_ticks_usec() - t0) / 1000.0
+	if DisplayServer.get_name() != "headless":
+		print("Town: %d house pieces laid, first navmesh bake %.0f ms" % [town_pieces, first_bake_ms])
 	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors

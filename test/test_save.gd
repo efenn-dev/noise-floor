@@ -120,3 +120,61 @@ func test_file_write_and_read() -> void:
 	var bad := SimWorld.new()
 	check(SaveGame.apply(bad, {"version": 999}) != "", "refuses other versions")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## W1a: a version-2 save (made by the game before houses were pieces) still loads. It doesn't hold
+## the town, so the town plan lays the houses first and the save goes on top, as main.gd does.
+func test_version_2_save_still_loads() -> void:
+	var d := SaveGame.read("res://test/fixtures/save_v2.json")
+	eq(int(d.get("version", 0)), 2, "the fixture is a version-2 save")
+	check(not SaveGame.holds_town(d), "it predates the town pieces")
+	var sim := SimWorld.new(8.0, null, int(d["seed"]))
+	_town(sim)
+	var laid := sim.place_town(TownPlan.generate(sim.seed_value))
+	eq(SaveGame.apply(sim, d), "", "loads cleanly")
+	eq(sim.build.pieces.size(), laid + d["pieces"].size(), "the houses plus everything you built")
+	var door := sim.build.key_for("door", Vector2i(-1, -1), N)
+	check(sim.build.pieces.has(door) and sim.build.pieces[door]["open"], "your door is still open")
+	eq(sim.build.pieces[sim.build.key_for("wall", Vector2i(-2, -1), N)]["hp"], 150, "your wall is still damaged")
+	eq(sim.search("house_0_e"), "Already searched", "what you'd searched stays searched")
+	near(sim.player.food, 70.0, "your food meter", 0.5)
+	eq(sim.tally, {"kills": 0, "deaths": 0}, "defaults for what version 2 didn't save")
+
+
+## W1a: the town is saved like your own pieces: damage, open doors and broken windows come back,
+## and a version-3 save says it holds the town, so it isn't laid twice.
+func test_town_damage_and_doors_survive_save_and_load() -> void:
+	var a := SimWorld.new(10.0, null, 42)
+	_town(a)
+	var plan := TownPlan.generate(42)
+	a.place_town(plan)
+	var h: Dictionary = plan["houses"][3]
+	var door := BuildGrid.key_for_wall_edge(h["door_cell"], h["door_side"])
+	a.toggle_door(door)
+	var wall := ""
+	var window := ""
+	for p: Dictionary in plan["pieces"]:
+		if wall == "" and p["id"] == "town_wall":
+			wall = TownPlan.piece_key(p)
+		if window == "" and p["id"] == "window":
+			window = TownPlan.piece_key(p)
+	a.build.damage(wall, 250)
+	a.build.damage(window, 99)
+	var gone := ""
+	for p: Dictionary in plan["pieces"]:
+		if p["id"] == "town_wall" and p["style"] == "plaster":
+			gone = TownPlan.piece_key(p)
+			break
+	eq(a.build.remove(gone, a.inventory), "", "knock an inside wall down")
+	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
+	eq(int(d["version"]), 3, "saved as version 3")
+	check(SaveGame.holds_town(d), "it holds the town")
+	var b := SimWorld.new(8.0, null, 42)
+	_town(b)
+	eq(SaveGame.apply(b, d), "", "loads cleanly")
+	eq(b.build.pieces.size(), a.build.pieces.size(), "every town piece is back, once")
+	check(b.build.pieces[door]["open"], "the front door is still open")
+	eq(b.build.pieces[wall]["hp"], 350, "the wall is still damaged")
+	check(b.build.is_broken(window), "the window is still broken")
+	check(not b.build.edge_blocks(window), "and still lets sound through")
+	check(not b.build.pieces.has(gone), "the wall you knocked down stays down")
