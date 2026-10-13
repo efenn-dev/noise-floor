@@ -10,8 +10,8 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 
 | # | Task | Owner | Status | Done when |
 |---|---|---|---|---|
-| S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent, worktree `noise-floor-p1` | In progress | PR merged; Emmitt sees the version on the title screen |
-| S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5, cloud session on the credit (recommended) or a PC agent after S2-1 | Ready to start after S2-1 merges | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
+| S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent | Merged (#20) | PR merged; Emmitt sees the version on the title screen |
+| S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5 agent on the PC, worktree `noise-floor-w1a` (Emmitt chose local, 2026-10-13) | In progress | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
 | S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
 | S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Decided after Playtest #1 | Backlog | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
