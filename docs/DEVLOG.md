@@ -2,6 +2,40 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Q2 Fixes from the soak
+
+From the Q2 brief by the project lead, on top of A1 (PR #34). Four fixes for what the Q1 soak and tour found, each with a test. No tuning, no new content.
+
+**Built:**
+- **Idle zombies leave things alone.** Only a zombie that is chasing you or investigating a sound (a wave walking its road route included) may start breaking a piece, and only one it walked into on its way. A wandering zombie that bumps a piece now turns away and strolls to another spot (it used to stop and stand). Two holes are closed: a bump from a stroll no longer counts as "in the way" in the tick the zombie hears a sound or spots you, and when the piece it was breaking is gone an investigating zombie walks on to the sound (or, if it wrecked the noisy machine itself, it is done) instead of switching to a chase after nobody, toward wherever it last saw you (the world's centre if it never had), breaking everything on the way.
+- **Thinner fog under a roof.** When the camera is under a house roof or the factory hall's roof, the fog and the volumetric fog thin to a fifth of outside's, eased over half a second, and thicken again when you step out. Light, colour and night darkness are unchanged. Before (the same as outside): fog 0.0071 and volumetric 0.0035 in the factory hall at 15:00, 0.0063 and 0.0024 in house 1 at 12:00. Now: 0.0014 / 0.0007 and 0.0013 / 0.0005. Old Pete is no longer grey at 7 m in the hall.
+- **The heat warning has its own line**, under the pockets / weight / weapon block in the top right, wherever that block ends. The pockets block is now a 380 px column that wraps (right-aligned), so a long list can't reach the messages in the middle of the screen at 1280x720.
+- **A parked car reports 0 m/s.** A frozen body gets no more physics callbacks, so the velocity a car had when you got out stayed cached in the node and the physics server: `forward_speed()` kept reporting it (4 m/s for a car left rolling), and it is what the engine hands a body touching the car. Getting out now zeroes the car's velocity before it freezes, and `forward_speed()` of a frozen car is 0. Q1's guards (no platform velocity for zombies and the player, undo a NaN move) stay.
+- `tools/soak.sh`'s "piece gone" lines now say which zombie broke the piece and what it was doing when it started.
+
+**Rules (sim, tested):** `ZombieBrain`: `_start_break` refuses unless the zombie is in CHASE or INVESTIGATE and records `break_from`; `_after_break` returns it to the chase, the investigation, or idle (the sound's machine wrecked); `_turn_away` picks a wander spot on the far side for a WANDER bump; `hear()` and the idle/wander-to-chase switch clear `blocked_by`. World: `TownView.is_under_roof(pos)` (house cells below the ceiling, the factory hall below its roof); `main.gd` `indoor_fog`, `indoor_fog_target()`, `fog_targets()`, `INDOOR_FOG = 0.2`, `FOG_EASE = 0.5`, `MATERIALS_WIDTH = 380`; `CarBody.drive(false)` zeroes velocities before freezing.
+
+**Tests:** `test_zombie_brain.gd` (a wandering zombie that walks into a wall turns away to a spot on the far side and never hits it in a minute of pressing; town seed 1 through the real sim step: the house zombie leaning on its house's counter for ten minutes with no noise, idle and then strolling into it, never starts breaking it and the counter keeps every hit point; a chaser blocked by house 1's closed door breaks it; an investigator blocked by house 1's wall hits it; after breaking a wall an investigator goes back to its sound, and one that wrecked the noisy machine goes idle; a bump from a stroll is not broken when the zombie then hears a sound behind it or spots you). `test_indoor_fog.gd` (new, real scene: house 1's cells and the factory hall are under a roof, the spawn is not; inside, the fog eases (not a jump) and is a fifth of outside's after half a second, volumetric too, fog light as outside; back outside, both come back). `test_hud_layout.gd` (new: with text in all three, at every heat level and at 1600x900 and 1280x720, the heat warning, the pockets block and the messages never overlap, and the heat warning is under the pockets block). `test_car_exit.gd` (new, real scene: get into car_0, drive, handbrake to a stop and get out, then again getting out while rolling; with a body leaning on the car's side, the car's speed, velocity, server velocity, velocity at a point and what it hands the leaning body are finite on every frame for two seconds; the parked car reports 0 m/s and zero velocity in the node and the server). `test_automated_defense.gd`: its wall-hit zombie is put in a chase before it starts breaking. **4928 checks** (was 4843).
+
+**Soak (this PC, after the fixes):** `SOAK OK: NaN moves undone 0; 1 game-day(s) in 57 s wall; deaths 2, kills 11, waves 0, swings 32, gear 5, pieces 779, bag -`. The town door and house 1's counter still go on day 1, and the new lines say why: `day 1 08:29 piece gone: door w:-4:-14:w (the town's; zombie 9, chase)` and `day 1 13:12 piece gone: counter o:6:-13 (the town's; zombie 10, investigate)`. Both are allowed by the rule (see Known gaps).
+
+**Try it on the PC:** merge, then double-click `play.bat` and pick **New game**:
+- Walk into a house: the room clears up over half a second; step back out and the street fog comes back. The factory hall with Old Pete: `play.bat --time=15 --cam=0,0,-116,0,-5`.
+- `play.bat --demo-factory`: the orange "The noise is being noticed" is on its own line under your weapon, top right.
+- Drive car_0 (`play.bat --drive`) and get out (E) while still rolling: nothing new to see (the fix is under the hood); zombies keep walking round the parked car.
+- Leave the street zombies alone for a while: wanderers bump fences and furniture and turn away; only one that is after you or a noise breaks through.
+
+**Known gaps:**
+- **The soak's door and counter still break on day 1, by the rule as written.** The door is broken by a zombie chasing the bot as it goes into house 1; the counter by house 1's own zombie, investigating the factory's noise from 13:00, which walks into its counter on the way out. Making the counter survive needs a rule change for the lead to decide (for example: furniture is never "in the way", or an investigator goes round it), not a fix. Repro: `tools/soak.sh`, the two "piece gone" lines.
+- **The car's NaN was not reproduced.** Two attempts (the soak's own drive, handbrake and get out, and getting out while rolling, each with a body leaning on the car every frame for two seconds) never saw a NaN. What they did find is the stale velocity of a parked car, which is fixed above and is the value the engine hands a body touching the car. A likely remaining source is VehicleBody3D's own wheel solver, which divides by the chassis' inverse mass (0 once frozen) if it ever runs a step on the frame the freeze lands; Q1's guards stay for that.
+- The pockets block now wraps at 380 px and is right-aligned; a very long message line in the middle of a 1280-wide screen could still reach it.
+- Indoor fog goes by the camera's cell, so it changes as you cross a doorway (eased, so no pop). Under a roof you built yourself it stays outdoor fog; only town roofs count.
+- Every other gap from the A1, Q1, P3, P2, M15 and M14 lists stands.
+
+**Next:** Playtest #1.
+
+- Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
+
 ## 2026-10-13 — A1 Street dressing
 
 From the A1 brief by the project lead, on top of Q1 (PR #33). The street looked like twelve houses, four cars and a road on flat ground; now it looks lived-in. No new rules beyond searchable trash cans, no tuning.

@@ -382,8 +382,13 @@ func _grab() -> void:
 	sim.build.piece_removed.connect(func(key: String, piece: Dictionary) -> void:
 		_removed += 1
 		if _removed <= 8:
-			print("soak:   %s piece gone: %s %s (%s)" % [sim.when_text(), piece.get("id", "?"), key,
-					"the player's" if not piece.get("town", false) else "the town's"]))
+			var by := ""  # Q2: which zombie broke it, and what it was doing when it started
+			for zid: int in sim.horde.zombies:
+				var z: ZombieBrain = sim.horde.zombies[zid]
+				if z.break_key == key:
+					by = "; zombie %d, %s" % [zid, ZombieBrain.STATE_NAMES[z.break_from]]
+			print("soak:   %s piece gone: %s %s (%s%s)" % [sim.when_text(), piece.get("id", "?"), key,
+					"the player's" if not piece.get("town", false) else "the town's", by]))
 
 
 func _abs_hours() -> float:

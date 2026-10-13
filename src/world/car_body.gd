@@ -73,11 +73,22 @@ func sim_yaw() -> float:
 
 ## Forward speed in m/s (negative when reversing).
 func forward_speed() -> float:
+	if freeze:
+		return 0.0  # Q2: parked (or a wreck): not moving, whatever the last physics step left behind
 	return linear_velocity.dot(global_basis.z)
 
 
 func drive(on: bool) -> void:
 	driven = on
+	if not on:
+		# Q2: park it still. A frozen body gets no more physics callbacks, so whatever velocity it had at the
+		# moment you got out stayed cached for good: forward_speed() kept reporting it on a parked car, and
+		# it is what the engine hands a body touching the car (Q1's NaN "platform velocity"). Zero it in the
+		# node and the physics server before freezing, and put the brakes on before the freeze too.
+		engine_force = 0.0
+		brake = float(stats["brake_force"])
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
 	freeze = not on
 	camera.current = on
 	_head.rotation = Vector3.ZERO

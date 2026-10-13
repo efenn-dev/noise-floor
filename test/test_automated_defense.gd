@@ -296,6 +296,7 @@ func test_the_base_log_records_a_wall_hit_and_a_turret_kill_with_game_time() -> 
 	sim.build.place("wall", Vector2i(0, 0), W, sim.inventory)
 	var wall := sim.build.key_for("wall", Vector2i(0, 0), W)
 	var z := sim.horde.spawn("shambler", Vector3(-0.6, 0, 1))
+	z.state = ZombieBrain.State.CHASE  # Q2: only a chasing or investigating zombie breaks things
 	z._start_break(wall)
 	_run(sim, 3.0)
 	check(sim.build.pieces[wall]["hp"] < 200, "the zombie is hitting the wall")
