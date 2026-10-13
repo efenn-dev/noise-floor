@@ -83,5 +83,10 @@ func lines() -> PackedStringArray:
 	out.append("Build: " + GameSession.version_line())
 	out.append("Started %s. World seed %d, game clock now %s." % [_stamp, sim.seed_value, sim.when_text()])
 	out.append("")
+	var worn := PackedStringArray()  # P3: what you wear (and hold) right now
+	for slot: String in sim.gear.equipped:
+		var piece: Dictionary = sim.gear.equipped[slot]
+		worn.append("%s (%s)" % [piece.get("name", slot), piece.get("rarity", "white")])
+	sim.stats.worn = worn
 	out.append_array(sim.stats.summary_lines())
 	return out

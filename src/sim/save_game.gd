@@ -25,7 +25,11 @@ extends RefCounted
 ## hold); sensors with their actions, floodlights' night setting, noisemakers' blare and recharge, doors a
 ## sensor holds shut ("automation"); sprung bear traps; and the base log. A save from before 9 loads with
 ## none of those (it had none of the pieces), an empty base log, and every sensor on its default action.
-const VERSION := 9
+## 10 = P3: a piece the town laid (houses, beds, the factory hall, furniture) carries "town": true, so pulling
+## it down gives salvage, not its full cost. A save from 3 to 9 gets the flag on every piece that stands where
+## the town plan put one of the same kind (see _mark_town); one from before 3 gets the town laid fresh, flagged.
+const VERSION := 10
+const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
@@ -54,7 +58,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for key: String in sim.build.pieces:
 		var p: Dictionary = sim.build.pieces[key]
 		pieces.append({"key": key, "id": p["id"], "cell": _v2(p["cell"]), "side": p["side"], "hp": p["hp"],
-				"open": p.get("open", false), "wear": p.get("wear", 0.0)})
+				"open": p.get("open", false), "wear": p.get("wear", 0.0), "town": p.get("town", false)})
 	var machines := []
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
@@ -153,8 +157,13 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.player_pos = _to_v3(d["player_pos"])
 	sim.spawn_point = _to_v3(d["spawn_point"])
 	for pd: Dictionary in d["pieces"]:
-		sim.build.restore(pd["key"], {"id": pd["id"], "cell": _to_v2(pd["cell"]), "side": int(pd["side"]),
-				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])})
+		var piece := {"id": pd["id"], "cell": _to_v2(pd["cell"]), "side": int(pd["side"]),
+				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])}
+		if bool(pd.get("town", false)):
+			piece["town"] = true
+		sim.build.restore(pd["key"], piece)
+	if version >= FIRST_WITH_TOWN and version < FIRST_WITH_TOWN_FLAG:
+		_mark_town(sim)
 	for md: Dictionary in d["machines"]:
 		var m: Factory.Machine = sim.factory.machines.get(_to_v2(md["cell"]))
 		if m == null:
@@ -245,6 +254,23 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim._next_bag = int(d["next_bag"])
 	sim._rng.state = int(d["rng_state"])
 	return ""
+
+
+## P3 upgrade for a version 3-9 save: flags as the town's every piece standing where the seed's town plan
+## (houses, beds, factory hall, furniture) puts one of the same kind. A town door you pulled down and built
+## again yourself in the same spot counts as the town's: rare, and it only changes a refund.
+static func _mark_town(sim: SimWorld) -> void:
+	var plan := TownPlan.generate(sim.seed_value, sim.data)
+	var keys := {}
+	for p: Dictionary in plan["pieces"] + plan["factory"]["pieces"]:
+		keys[TownPlan.piece_key(p)] = p["id"]
+	for b: Dictionary in plan["beds"]:
+		keys[sim.build.key_for("bed", b["cell"])] = "bed"
+	for p: Dictionary in plan["props"] + plan["factory"].get("props", []):
+		keys[sim.build.key_for(p["id"], p["cell"])] = p["id"]
+	for key: String in keys:
+		if sim.build.pieces.has(key) and sim.build.pieces[key]["id"] == keys[key]:
+			sim.build.pieces[key]["town"] = true
 
 
 static func write(sim: SimWorld, path: String, extra: Dictionary = {}) -> String:

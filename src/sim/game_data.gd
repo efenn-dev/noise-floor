@@ -54,6 +54,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 		var raw_cost: Dictionary = b.get("cost", {})
 		for item: String in raw_cost:
 			cost[item] = int(raw_cost[item])
+		var raw_salvage: Dictionary = b.get("salvage", {})
 		buildables[id] = {
 			"name": b.get("name", id),
 			"kind": b.get("kind", ""),
@@ -78,6 +79,11 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
 			"against_wall": bool(b.get("against_wall", false)),  # W1c: stands at the back of its cell, not the middle
 		}
+		if not raw_salvage.is_empty():  # P3: what pulling down one the town laid gives (see BuildGrid.refund_for)
+			var salvage := {}
+			for item: String in raw_salvage:
+				salvage[item] = int(raw_salvage[item])
+			buildables[id]["salvage"] = salvage
 	recipes = {}
 	for id: String in raw_recipes:
 		var r: Dictionary = raw_recipes[id]
@@ -116,6 +122,9 @@ func validate() -> PackedStringArray:
 				errors.append("buildable '%s' costs unknown item '%s'" % [id, item])
 			if b["cost"][item] <= 0:
 				errors.append("buildable '%s' has a non-positive cost for '%s'" % [id, item])
+		for item: String in b.get("salvage", {}):
+			if not items.has(item) or b["salvage"][item] <= 0:
+				errors.append("buildable '%s' has a bad salvage item '%s'" % [id, item])
 		if b["hp"] <= 0:
 			errors.append("buildable '%s' needs positive hp" % id)
 		if b["kind"] == "machine" and not recipes.has(b["recipe"]):

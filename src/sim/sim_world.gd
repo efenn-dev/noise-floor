@@ -53,6 +53,8 @@ var player := PlayerStats.new()
 var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
+## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
+var house_cells: Dictionary = {}
 var player_lit := false
 ## Written by the world each frame: moving while crouched (Sneaking xp near zombies that haven't noticed you).
 var player_sneaking := false
@@ -131,6 +133,10 @@ func step() -> void:
 	clock.advance(TICK)
 	base_log.now = when_text()
 	stats.tick(TICK, clock.seconds_per_day)
+	if ticks % 10 == 0 and not house_cells.is_empty():
+		var house: String = house_cells.get(BuildGrid.world_to_cell(player_pos), "")
+		if house != "":
+			stats.note_house(house)
 	power.tick(TICK, clock.daylight())
 	factory.tick(TICK)
 	vehicles.tick(TICK)
@@ -156,6 +162,7 @@ func step() -> void:
 			names.append(_list(found["items"]))
 		for piece: Dictionary in _search_gear(found):
 			gear.pieces.append(piece)
+			stats.note_gear(piece.get("rarity", "white"))
 			names.append(piece["name"])
 			_announce(piece, "You find")
 		var armoury := _search_guns(found)  # M14: guns, parts and ammo, on their own seeded stream
@@ -164,6 +171,7 @@ func step() -> void:
 			names.append(_list(armoury["items"]))
 		for piece: Dictionary in armoury["pieces"]:
 			gear.pieces.append(piece)
+			stats.note_gear(piece.get("rarity", "white"))
 			names.append(piece["name"])
 		add_message(("Found " + ", ".join(names)) if not names.is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
@@ -228,6 +236,8 @@ func _radio() -> void:
 	var cfg: Dictionary = data.defense["radio"]
 	var carried := carries_radio()
 	for e: Dictionary in base_log.fresh:
+		if _flat_dist(e["pos"], player_pos) > float(cfg["far"]):
+			stats.note_away(e["text"], e["when"])  # P3: for the session log, radio or not
 		if carried and e["radio"] and _flat_dist(e["pos"], player_pos) > float(cfg["far"]):
 			radio_lines.append(e["text"])
 			add_message("Radio: " + e["text"], float(cfg["seconds"]))
@@ -386,11 +396,11 @@ func place_town(plan: Dictionary) -> int:
 	var n := 0
 	for p: Dictionary in plan["pieces"]:
 		build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
-				"hp": data.buildables[p["id"]]["hp"]})
+				"hp": data.buildables[p["id"]]["hp"], "town": true})  # P3: town pieces salvage, they don't refund
 		n += 1
 	for b: Dictionary in plan["beds"]:
 		build.restore(build.key_for("bed", b["cell"]), {"id": "bed", "cell": b["cell"], "side": b["side"],
-				"hp": data.buildables["bed"]["hp"]})
+				"hp": data.buildables["bed"]["hp"], "town": true})
 		n += 1
 	stats.muted = was_muted
 	return n
@@ -404,7 +414,7 @@ func place_factory(plan: Dictionary) -> int:
 	var n := 0
 	for p: Dictionary in plan["factory"]["pieces"]:
 		build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
-				"hp": data.buildables[p["id"]]["hp"]})
+				"hp": data.buildables[p["id"]]["hp"], "town": true})
 		n += 1
 	stats.muted = was_muted
 	return n
@@ -427,7 +437,8 @@ func place_props(plan: Dictionary) -> int:
 			taken = taken or BuildGrid.world_to_cell(z.pos) == p["cell"]
 		if taken:
 			continue
-		build.restore(key, {"id": p["id"], "cell": p["cell"], "side": p["side"], "hp": data.buildables[p["id"]]["hp"]})
+		build.restore(key, {"id": p["id"], "cell": p["cell"], "side": p["side"], "hp": data.buildables[p["id"]]["hp"],
+				"town": true})
 		n += 1
 	stats.muted = was_muted
 	return n
@@ -964,6 +975,7 @@ func fire() -> String:
 	noise.emit(player_pos, maxf(0.0, loud - skills.bonus("quiet_all")), kind)
 	_practice("firearms", "shot")
 	stats.note("fired a gun")
+	stats.note_shot(str(guns.gun().get("name", "gun")))
 	return ""
 
 
@@ -977,6 +989,7 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
 	var killed := z.take_hit(dmg, player_pos, float(guns.stats()["knockback"]))
 	stats.note("shot a zombie")
+	stats.note_gun_hit(str(guns.gun().get("name", "gun")), killed)
 	_practice("firearms", "hit")
 	if killed:
 		_practice("firearms", "kill")
@@ -1192,8 +1205,28 @@ func _practice(skill: String, action: String, times: float = 1.0) -> void:
 	var points := skills.perk_points
 	if skills.practice(skill, action, times) > before:
 		add_message("%s %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
+		stats.note_level(skill, skills.level(skill))
 	if skills.perk_points > points:
 		add_message("Perk point earned: K to spend", 6.0)
+		stats.note_perk_points(skills.perk_points - points)
+
+
+## P3: spends a perk point on `perk` (the skills screen's buttons). Returns "" or why not.
+func spend_perk(perk: String) -> String:
+	var why := skills.spend(perk)
+	if why == "":
+		stats.note_perk(perk)
+	return why
+
+
+## P3: learns which town cells belong to which house (TownPlan.generate's "houses"), for the session log.
+func know_houses(plan: Dictionary) -> void:
+	house_cells.clear()
+	for h: Dictionary in plan.get("houses", []):
+		var parts: PackedStringArray = str(h["name"]).split("_")  # house_3_e
+		var label := "house %s (%s side)" % [parts[1], "east" if parts[2] == "e" else "west"] if parts.size() == 3 else str(h["name"])
+		for c: Vector2i in h["cells"]:
+			house_cells[c] = label
 
 
 ## Placing a piece yourself trains Building (not the town, a save or a demo base being laid).
@@ -1284,6 +1317,7 @@ func _zombie_drop(z: ZombieBrain) -> void:
 		piece = gear.roll_piece(rng, "zombie")
 	if piece.is_empty():
 		return
+	stats.note_gear(piece.get("rarity", "white"))
 	var extra: Dictionary = data.guns["zombie_extra_uniques"].get(z.type, {})
 	if not extra.is_empty():  # M14: Old Pete also carries his deer rifle and some rounds
 		drop_bag(z.pos, extra.get("ammo", {}).duplicate(), [piece, gear.roll_unique(rng, extra["unique"])])

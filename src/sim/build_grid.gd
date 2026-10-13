@@ -209,7 +209,7 @@ func can_remove(key: String) -> String:
 	return ""
 
 
-## Removes the piece and refunds its full cost. Returns "" or the reason it failed.
+## Removes the piece and gives back refund_for(it). Returns "" or the reason it failed.
 func remove(key: String, inv: Inventory) -> String:
 	var reason := can_remove(key)
 	if reason != "":
@@ -218,9 +218,20 @@ func remove(key: String, inv: Inventory) -> String:
 	var broken := is_broken(key)
 	pieces.erase(key)
 	if not broken:  # a broken window is worth nothing
-		inv.give_all(data.buildables[piece["id"]]["cost"])
+		inv.give_all(refund_for(piece))
 	piece_removed.emit(key, piece)
 	return ""
+
+
+## What pulling `piece` down gives back. P3: a piece the town laid ("town": true: houses, beds, the factory
+## hall, furniture) gives its data "salvage" if it has one (a door 2 planks, a bed 3 planks and a scrap),
+## otherwise its cost, which for town-only pieces (walls, floors, windows, furniture) is already a salvage.
+## Anything you built gives its full cost back.
+func refund_for(piece: Dictionary) -> Dictionary:
+	var b: Dictionary = data.buildables[piece["id"]]
+	if piece.get("town", false) and b.has("salvage"):
+		return b["salvage"]
+	return b["cost"]
 
 
 ## Zombies hitting a piece. Returns true if that destroyed it (see destroy) or broke a window.

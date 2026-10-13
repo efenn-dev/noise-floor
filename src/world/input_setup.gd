@@ -1,6 +1,7 @@
 class_name InputSetup
 extends RefCounted
 ## The one place input actions are registered (instead of hand-editing project.godot).
+## P3: every action here needs a row in HelpScreen.ROWS (test_help_screen.gd checks it).
 
 const KEYS := {
 	"move_forward": [KEY_W, KEY_UP],
@@ -39,6 +40,7 @@ const KEYS := {
 	"skills": [KEY_K],  # the skills and perks screen (M12)
 	"base_log": [KEY_L],  # M15: the base log screen
 	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
+	"help": [KEY_F1],  # P3: the controls screen (HelpScreen describes every action here)
 }
 const MOUSE := {
 	"build_place": MOUSE_BUTTON_LEFT,

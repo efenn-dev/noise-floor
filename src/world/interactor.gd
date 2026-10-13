@@ -365,6 +365,22 @@ func status_text() -> String:
 	return "\n".join(lines)
 
 
+## P3: the keys status_text() offers, short, for the key hint line: "[E] search (stay close...)" -> "E search",
+## "[U] fit muffler (...)" -> "U fit muffler", "[E] pick it up" -> "E pick".
+const _FILLER := ["it", "the", "a", "an", "here", "now", "from", "your", "something", "building", "every", "when"]
+var _keys_re := RegEx.create_from_string("\\[([A-Z]+)\\] ([a-z]+)(?: ([a-z]+))?")
+
+
+func keys() -> PackedStringArray:
+	var out := PackedStringArray()
+	for m: RegExMatch in _keys_re.search_all(status_text()):
+		var words := m.get_string(2)
+		if m.get_string(3) != "" and not m.get_string(3) in _FILLER:
+			words += " " + m.get_string(3)
+		out.append(m.get_string(1) + " " + words)
+	return out
+
+
 func _append_repair(lines: PackedStringArray, piece: Dictionary, b: Dictionary) -> void:
 	if piece["hp"] < b["hp"]:
 		lines.append("[T] repair (%s)" % _list(sim.repair_cost(target_key)))
