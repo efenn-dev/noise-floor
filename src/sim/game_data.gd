@@ -24,6 +24,7 @@ var guns: Dictionary = {}        # M14: gun bases, parts, ammo types, gun finds:
 var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, uniques, sets: data/gear.json
 var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
 var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
+var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
 var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], empty (optional weight of nothing), items: [{item, weight, min, max}]}
 var load_errors: PackedStringArray = []
 
@@ -43,6 +44,8 @@ static func load_default() -> GameData:
 	data.guns = _read_json(DIR + "guns.json", data)
 	data.defense = _read_json(DIR + "defense.json", data)
 	data.seasons = _read_json(DIR + "seasons.json", data)
+	data.projects = _read_json(DIR + "projects.json", data)
+	data.projects.erase("_about")
 	return data
 
 
@@ -81,7 +84,8 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"ammo_cap": int(b.get("ammo_cap", 0)),
 			"sense": str(b.get("sense", "")),  # M15: a sensor's kind ("motion" or "noise")
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
-			"against_wall": bool(b.get("against_wall", false)),  # W1c: stands at the back of its cell, not the middle
+			"against_wall": bool(b.get("against_wall", false)),
+			"needs_project": str(b.get("needs_project", "")),  # M17a: can't be built until that project is done  # W1c: stands at the back of its cell, not the middle
 		}
 		if not raw_salvage.is_empty():  # P3: what pulling down one the town laid gives (see BuildGrid.refund_for)
 			var salvage := {}
@@ -229,6 +233,7 @@ func validate() -> PackedStringArray:
 	if not defense.is_empty():
 		_check_defense(errors, self)
 	_check_seasons(errors, self)
+	_check_projects(errors, self)
 	return errors
 
 
@@ -481,3 +486,33 @@ static func _read_json(path: String, data: GameData) -> Dictionary:
 		data.load_errors.append("%s is not a JSON object" % path)
 		return {}
 	return parsed
+
+
+## M17a: data/projects.json. Every project has a name, a deliver_range and work_radius, at least one phase
+## (a name, known items needed in positive amounts, positive work_hours and loudness, optional positive watts)
+## and a reward (rain_mult >= 1, unlocks that are known buildables); a buildable's needs_project is a project.
+static func _check_projects(errors: PackedStringArray, d: GameData) -> void:
+	for id: String in d.projects:
+		var p: Variant = d.projects[id]
+		if not p is Dictionary or not p.has("name") or float(p.get("deliver_range", 0)) <= 0.0 				or float(p.get("work_radius", 0)) <= 0.0:
+			errors.append("project '%s' needs a name, deliver_range and work_radius" % id)
+			continue
+		var phases: Array = p.get("phases", [])
+		if phases.is_empty():
+			errors.append("project '%s' needs phases" % id)
+		for ph: Dictionary in phases:
+			if not ph.has("name") or float(ph.get("work_hours", 0)) <= 0.0 or float(ph.get("loudness", 0)) <= 0.0 					or float(ph.get("watts", 0)) < 0.0:
+				errors.append("project '%s' phase '%s' needs a name, positive work_hours and loudness" % [id, ph.get("name", "?")])
+			for item: String in ph.get("needs", {}):
+				if not d.items.has(item) or int(ph["needs"][item]) <= 0:
+					errors.append("project '%s' phase '%s' needs a bad item '%s'" % [id, ph.get("name", "?"), item])
+		var reward: Dictionary = p.get("reward", {})
+		if float(reward.get("rain_mult", 1.0)) < 1.0:
+			errors.append("project '%s' rain_mult must be 1 or more" % id)
+		for u: String in reward.get("unlocks", []):
+			if not d.buildables.has(u):
+				errors.append("project '%s' unlocks unknown buildable '%s'" % [id, u])
+	for id: String in d.buildables:
+		var need: String = d.buildables[id].get("needs_project", "")
+		if need != "" and not d.projects.is_empty() and not d.projects.has(need):
+			errors.append("buildable '%s' needs unknown project '%s'" % [id, need])

@@ -78,7 +78,7 @@ func give_start() -> Dictionary:
 ## tier (Police with its chance, else Civilian), then rarity by weight (white 70 / blue 20 / yellow 8 /
 ## set 2; set only from a set's sources or a Police roll, otherwise its weight is left out), then a base.
 func roll_piece(rng: RandomNumberGenerator, source: String) -> Dictionary:
-	var tier := "police" if rng.randf() < float(g()["tiers"]["police"]["chance"]) else "civilian"
+	var tier := "police" if rng.randf() < police_chance(source) else "civilian"
 	var set_id := _set_for(source, tier)
 	var weights := {}
 	for r: String in ["white", "blue", "yellow", "set"]:
@@ -110,14 +110,20 @@ func _roll_as(rng: RandomNumberGenerator, base: String, tier: String, rarity: St
 
 ## M14: one gun or gun part found ("gun" or "part"): a base by guns.json weights, the tier (Police with its
 ## chance, or `police` forced), a rarity by weight (no sets), stats from the gun stats only.
-func roll_gun_piece(rng: RandomNumberGenerator, kind: String, police: bool = false) -> Dictionary:
-	var tier := "police" if police or rng.randf() < float(g()["tiers"]["police"]["chance"]) else "civilian"
+func roll_gun_piece(rng: RandomNumberGenerator, kind: String, police: bool = false, source: String = "") -> Dictionary:
+	var tier := "police" if police or rng.randf() < police_chance(source) else "civilian"
 	var weights := {}
 	for r: String in ["white", "blue", "yellow"]:
 		weights[r] = float(g()["rarities"][r]["weight"])
 	var rarity: String = _weighted(rng, weights)
 	var base: String = _weighted(rng, data.guns["gun_weights" if kind == "gun" else "part_weights"])
 	return _roll_as(rng, base, tier, rarity)
+
+
+## M17a: the chance a piece found in `source` is Police tier: the tier's chance, times gear.json
+## "police_by_source" for that source (the industrial park's crates: 3x).
+func police_chance(source: String) -> float:
+	return float(g()["tiers"]["police"]["chance"]) * float(g().get("police_by_source", {}).get(source, 1.0))
 
 
 ## A named unique (gold): its fixed stats, each rolled in its own range.

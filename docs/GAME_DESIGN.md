@@ -211,7 +211,8 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M14 — Guns.** Firearms, workbench and parts, loudness per part, the crude suppressor, the subsonic ammo chain, the Gunsmith perk.
 - [x] **M15 — Automated defense.** The turret lineup fed by belts, traps, sensors and actions, the repair station, attacks that play out while you're away, radio alerts and the base log.
 - [x] **M16 — Seasons.** Winter, heat, crop cycles, sound carrying farther in the cold.
-- [ ] **M17 — Further out.** A second, harder area, the first big project (water tower), outposts.
+- [x] **M17a — The industrial park and the water tower.** A harder second area, the first big project, the water tap.
+- [ ] **M17b — Outposts and the substation.**
 
 ## Open questions (decide when we get there)
 - Map: hand-built town vs. procedurally generated blocks? (Hand-built greybox until M6.)

@@ -36,7 +36,10 @@ const SPAWN := Vector3(0, 0, 6)
 const DEFAULT_ZOMBIES := 8
 const STASH_CELL := Vector2i(1, 3)  # just east of the spawn point
 ## The area the zombie navmesh covers: the street and a margin around it.
-const NAV_BOUNDS := AABB(Vector3(-45, -1, -160), Vector3(90, 8, 200))
+## M17a: north to the industrial park's north fence and the Director's north road end (z -275).
+const NAV_BOUNDS := AABB(Vector3(-45, -1, -275), Vector3(90, 8, 315))
+const GROUND_SIZE := Vector2(400, 640)  # M17a: x -200..200, z -440..200 (centred at GROUND_Z)
+const GROUND_Z := -120.0
 
 var sim: SimWorld
 var player: Player
@@ -53,6 +56,10 @@ var melee: Melee
 var shooter: Shooter  # M14: the gun in your hands
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
+var project_screen: ProjectScreen  # M17a: E on the water tower
+var park: Dictionary = {}  # M17a: ParkPlan.generate(seed): warehouses, crates, zombies, wrecks, fences, the tower
+var park_view: ParkView
+var park_pieces := 0  # M17a: warehouse pieces the park plan laid this run (0 when the save holds them)
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
 var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
 var defense_view: DefenseView
@@ -142,6 +149,7 @@ func _ready() -> void:
 	# A W1a+ save brings the houses back itself, and a W1b+ save the factory hall.
 	# W1c: a new game lays the furniture with the town; a pre-W1c save gets it after the save is applied.
 	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)), not _loaded)
+	_build_park(not (_loaded and SaveGame.holds_park(save)))  # M17a: a pre-park save gets the park laid fresh
 	_build_player(args)
 	_build_building(args)
 	_build_zombies(args)
@@ -162,6 +170,10 @@ func _ready() -> void:
 	add_child(sensor_screen)
 	sensor_screen.setup(sim)
 	sensor_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	project_screen = ProjectScreen.new()
+	add_child(project_screen)
+	project_screen.setup(sim)
+	project_screen.message.connect(func(text: String) -> void: sim.add_message(text, 4.0))
 	base_log_screen = BaseLogScreen.new()
 	add_child(base_log_screen)
 	base_log_screen.setup(sim)
@@ -220,6 +232,10 @@ func _ready() -> void:
 	if args.has("base-log"):
 		_fill_demo_log()
 		base_log_screen.open()  # M15: --base-log, for screenshots
+	if args.has("tower"):
+		_setup_tower(args["tower"])  # M17a: --tower[=N], N phases done and the next one's materials in your pockets
+	if args.has("project-screen"):
+		_open_project("water_tower")  # M17a: --project-screen, for screenshots
 	if args.has("help"):
 		help_screen.open()  # P3: --help, the controls screen (F1 in game), for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
@@ -293,7 +309,35 @@ func _open_sensor(key: String) -> void:
 
 
 func _m15_screen_open() -> bool:
-	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open()  # P3: and help
+	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open() \
+			or project_screen.is_open()  # P3: and help; M17a: and the project screen
+
+
+## M17a: E on the water tower.
+func _open_project(id: String) -> void:
+	if inventory_screen.is_open():
+		inventory_screen.close()
+	if skills_screen.is_open():
+		skills_screen.close()
+	sim.player_pos = player.global_position
+	project_screen.open(id)
+
+
+## M17a --tower[=N]: N (0-3) of the water tower's phases already done, and what the next one needs in your
+## pockets (phase 3's: a generator, a foundation for it, a power pole and gas). Stands you by the tower.
+func _setup_tower(arg: String) -> void:
+	var n := clampi(int(arg) if arg != "" else 0, 0, sim.projects.phases("water_tower").size())
+	var st: Dictionary = sim.projects.state["water_tower"]
+	st["phase"] = n
+	if n >= sim.projects.phases("water_tower").size() and not sim.projects.is_done("water_tower"):
+		sim.projects.done.append("water_tower")
+	if n < sim.projects.phases("water_tower").size():
+		var ph := sim.projects.current("water_tower")
+		sim.inventory.give_all(ph.get("needs", {}))
+		if float(ph.get("watts", 0.0)) > 0.0:
+			sim.inventory.give_all({"metal_plate": 12, "nails": 12, "plank": 8, "gas_can": 3})
+	else:
+		sim.inventory.give_all(sim.data.buildables["water_tap"]["cost"])
 
 
 ## The demo base's first sensor (--sensor-screen), or any sensor.
@@ -321,7 +365,8 @@ func _fill_demo_log() -> void:
 func _wants_hints(args: Dictionary) -> bool:
 	if args.has("hints"):
 		return true
-	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or GameSession.skip_hints:
+	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or args.has("park") \
+			or args.has("tower") or GameSession.skip_hints:
 		return false
 	for key: String in args:
 		if key.begins_with("demo"):
@@ -384,6 +429,8 @@ func apply_season(season: String) -> void:
 		street_view.apply_season(season)
 	if town_view != null:
 		town_view.apply_season(season)
+	if park_view != null:
+		park_view.apply_season(season)
 
 
 ## Q2: 1 while the camera is under a roof (TownView knows the house cells and the factory hall), else 0.
@@ -391,6 +438,8 @@ func indoor_fog_target() -> float:
 	var cam := get_viewport().get_camera_3d()
 	if town_view == null or cam == null or _title_camera != null:
 		return 0.0
+	if park_view != null and park_view.is_under_roof(cam.global_position):
+		return 1.0  # M17a: inside a warehouse
 	return 1.0 if town_view.is_under_roof(cam.global_position) else 0.0
 
 
@@ -462,6 +511,8 @@ func _sync_player() -> void:
 		workbench_screen.close()
 	if sensor_screen.is_open() and (p.dead or p.asleep):
 		sensor_screen.close()
+	if project_screen.is_open() and (p.dead or p.asleep):
+		project_screen.close()
 	# no walking while sorting your pockets, spending perk points or at the workbench
 	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
 			or _m15_screen_open()
@@ -668,6 +719,8 @@ func _apply_save(save: Dictionary) -> void:
 		return
 	if not SaveGame.holds_props(save):
 		town_pieces += sim.place_props(town)  # W1c: furnish an older save's houses (not where you built)
+	if not SaveGame.holds_park(save):
+		sim.spawn_park_zombies(park)  # M17a: the park is new to this save, and so are its zombies
 	player.position = sim.player_pos
 	for car: CarBody in cars.values():
 		car.place_from_sim()  # parked where you left it
@@ -733,16 +786,17 @@ func _build_ground() -> void:
 	var ground := StaticBody3D.new()
 	var mesh := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(400, 400)
+	plane.size = GROUND_SIZE
 	mesh.mesh = plane
+	mesh.position.z = GROUND_Z
 	mesh.material_override = Surfaces.material("ground", 6.0, Color(0.62, 0.64, 0.56))
 	_ground_mesh = mesh  # M16: retinted per season (apply_season)
 	ground.add_child(mesh)
 	var shape := CollisionShape3D.new()
 	var slab := BoxShape3D.new()  # a box, not an endless plane, so the navmesh baker can read it
-	slab.size = Vector3(400, 2, 400)
+	slab.size = Vector3(GROUND_SIZE.x, 2, GROUND_SIZE.y)
 	shape.shape = slab
-	shape.position.y = -1.0
+	shape.position = Vector3(0, -1.0, GROUND_Z)
 	ground.add_child(shape)
 	add_child(ground)
 
@@ -801,6 +855,25 @@ func _build_town(lay_houses: bool = true, lay_factory: bool = true, lay_props: b
 	street_view.setup(sim, street)
 
 
+## M17a: the industrial park north of the factory hall (ParkPlan): the park road's asphalt, the warehouses
+## (pieces laid unless the save holds them), their crates, the wrecks on the road (CarBodies), the wire fence
+## and the water tower (ParkView), and the tower's project site.
+func _build_park(lay_pieces: bool = true) -> void:
+	var road := ParkPlan.road_rect()
+	_add_block(Vector3(road.get_center().x, 0.01, road.get_center().y), Vector3(road.size.x, 0.02, road.size.y),
+			Color(0.17, 0.17, 0.19), false, Surfaces.material("asphalt", 4.0, Color(0.5, 0.5, 0.5)))
+	park = ParkPlan.generate(sim.seed_value)
+	park_pieces = sim.place_park(park, lay_pieces)
+	park_view = ParkView.new()
+	add_child(park_view)
+	park_view.setup(sim, park)
+	for w: Dictionary in park["wrecks"]:
+		var car := CarBody.new()
+		add_child(car)
+		car.setup(sim, w["id"], Color(0.32, 0.24, 0.2))  # burned-out rust
+		cars[w["id"]] = car
+
+
 func _add_container(id: String, table: String, pos: Vector3, size: Vector3, color: Color) -> StaticBody3D:
 	var body := _add_block(pos, size, color)
 	body.set_meta("container_id", id)
@@ -844,6 +917,12 @@ func _build_player(args: Dictionary) -> void:
 			v.append(0.0)
 		player.position = Vector3(v[0], v[1], v[2])
 		player.set_look(v[3], v[4])
+	if args.has("park"):  # M17a: at the park's south entrance, outside the hall's north doorway, looking north
+		player.position = ParkPlan.ENTRANCE
+		player.set_look(0.0, 0.0)
+	if args.has("tower"):  # M17a: beside the tower, on its road side, looking at it
+		player.position = ParkPlan.TOWER_POS + Vector3(-6.0, 0.0, 1.5)
+		player.set_look(-100.0, 18.0)
 	if args.has("inside"):
 		var inside := String(args["inside"]).split(",")
 		_stand_inside(inside[0].to_int(), inside[1] if inside.size() > 1 else "")
@@ -888,8 +967,8 @@ func _build_building(args: Dictionary) -> void:
 		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
-	for p: Dictionary in town["pieces"] + town["factory"]["pieces"]:
-		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster, factory or floor
+	for p: Dictionary in town["pieces"] + town["factory"]["pieces"] + park.get("pieces", []):
+		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster, factory, floor; M17a park_brick, corrugated
 	build_view.setup(sim.build)
 	builder = BuildController.new()
 	add_child(builder)
@@ -906,6 +985,7 @@ func _build_building(args: Dictionary) -> void:
 	interactor.entered_car.connect(_enter_car)
 	interactor.opened_workbench.connect(_open_workbench)
 	interactor.opened_sensor.connect(_open_sensor)
+	interactor.opened_project.connect(_open_project)
 	defense_view = DefenseView.new()
 	add_child(defense_view)
 	defense_view.setup(sim, build_view)
@@ -979,7 +1059,8 @@ func _build_zombies(args: Dictionary) -> void:
 	nav.bake_now()
 	first_bake_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	if DisplayServer.get_name() != "headless":
-		print("Town: %d town pieces laid (houses and factory), first navmesh bake %.0f ms" % [town_pieces, first_bake_ms])
+		print("Town: %d town pieces laid (houses and factory), %d park pieces, first navmesh bake %.0f ms" % [town_pieces,
+				park_pieces, first_bake_ms])
 	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
@@ -988,6 +1069,7 @@ func _build_zombies(args: Dictionary) -> void:
 		if args.get("zombies", "") != "0":
 			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
 			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe
+			sim.spawn_park_zombies(park)  # M17a: shamblers and runners in and between the warehouses
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):

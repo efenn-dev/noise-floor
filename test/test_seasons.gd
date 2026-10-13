@@ -363,7 +363,7 @@ func test_save_keeps_warmth_and_stove_fuel() -> void:
 	_run(sim, 45.0)
 	sim.player.warmth = 42.5
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
-	eq(int(d["version"]), 11, "saves are version 11")
+	check(int(d["version"]) >= 11, "saves are version 11 or later (M17a: 12)")
 	var b := SimWorld.new(8.0)
 	eq(SaveGame.apply(b, d), "", "loads")
 	near(b.player.warmth, 42.5, "warmth kept")
@@ -380,7 +380,7 @@ func test_version_10_save_loads_warm_with_empty_stoves() -> void:
 	eq(SaveGame.apply(sim, d), "", "loads cleanly")
 	near(sim.player.warmth, 100.0, "full warmth")
 	eq(sim.climate.stoves.size(), 0, "no stoves (it had none)")
-	eq(sim.build.pieces.size(), d["pieces"].size(), "every piece")
+	eq(sim.build.pieces.size(), d["pieces"].size() - 2, "every piece (less the hall's two north-doorway walls M17a opens)")
 	eq(sim.clock.day, 3, "day 3")
 	eq(sim.power.generators.size(), 1, "its generator")
 	for v in range(2, 11):

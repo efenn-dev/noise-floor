@@ -453,6 +453,6 @@ func test_version_7_save_loads_with_an_empty_gun_slot() -> void:
 	eq(sim.guns.hands, "melee", "the pipe in hand")
 	eq(sim.gear.weapon_name(), "Pipe", "your pipe")
 	eq(sim.swap_hands(), "No gun (equip one from Tab)", "Q with no gun says so")
-	eq(sim.build.pieces.size(), d["pieces"].size(), "every piece, once")
+	eq(sim.build.pieces.size(), d["pieces"].size() - 2, "every piece, once (less the two walls of the hall's north doorway, opened by M17a)")
 	var again: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
 	eq(int(again["version"]), SaveGame.VERSION, "saved again as the current version")

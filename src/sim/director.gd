@@ -9,13 +9,20 @@ extends RefCounted
 ## from the north or south end of the road (EDGES 0 and 1) and walk down the road first: to the road point
 ## nearest the noise, then they turn toward it (ZombieBrain.hear_via with road_route()).
 
-const EDGES := [Vector3(-25, 0, -145), Vector3(0, 0, 35), Vector3(-40, 0, -60), Vector3(40, 0, -60)]
+## M17a: the north road end is past the industrial park's north fence (ParkPlan.ROAD_NORTH_Z), so a wave from
+## the north walks the park road south first, comes round the factory hall's west side (NORTH_VIA), and then
+## down the town road. ROAD_LINE is that whole way, north end first.
+const EDGES := [Vector3(0, 0, -266), Vector3(0, 0, 35), Vector3(-40, 0, -60), Vector3(40, 0, -60)]
 const EDGE_NAMES := ["north", "south", "west", "east"]
 const ROAD_X := 0.0
-const ROAD_NORTH_Z := -106.0  # the north end of the open road, in front of the factory's doorway
+const ROAD_NORTH_Z := -258.0  # M17a: the north end of the park road (was -106, the town road's north end)
+const TOWN_NORTH_Z := -106.0  # the north end of the town road, in front of the factory's south doorway
+const PARK_SOUTH_Z := -142.0  # where the park road meets the way round the hall, by its north doorway
 const ROAD_SOUTH_Z := 10.0    # the south end of the asphalt
-## The north end is behind the factory: come round its west side to the road first.
-const NORTH_VIA := [Vector3(-25, 0, -106)]
+## Round the factory hall's west side, from the park road to the town road.
+const NORTH_VIA := [Vector3(-25, 0, -142), Vector3(-25, 0, -106)]
+const ROAD_LINE := [Vector3(0, 0, -258), Vector3(0, 0, -142), Vector3(-25, 0, -142), Vector3(-25, 0, -106),
+		Vector3(0, 0, -106), Vector3(0, 0, 10)]
 const ROAD_LEG := 40.0        # longest stretch between road waypoints (each leg gets lure_time to walk)
 
 var cfg: Dictionary
@@ -88,15 +95,31 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 
 
 ## The waypoints a wave from the `edge` road end ("north" or "south") walks before turning toward
-## `lure`: onto the road, then along it (in legs of at most ROAD_LEG) to the road point nearest the lure.
+## `lure`: along ROAD_LINE from that end (in legs of at most ROAD_LEG) to the point on it nearest the lure.
+## M17a: from the north that's the park road, round the factory hall's west side, then the town road.
 static func road_route(edge: String, lure: Vector3) -> Array:
-	var points: Array = NORTH_VIA.duplicate() if edge == "north" else []
-	var z := ROAD_NORTH_Z if edge == "north" else ROAD_SOUTH_Z
-	var stop := clampf(lure.z, ROAD_NORTH_Z, ROAD_SOUTH_Z)
-	points.append(Vector3(ROAD_X, 0, z))
-	var legs := ceili(absf(stop - z) / ROAD_LEG)
-	for i in range(1, legs + 1):
-		points.append(Vector3(ROAD_X, 0, lerpf(z, stop, float(i) / legs)))
+	var line: Array = ROAD_LINE.duplicate()
+	if edge != "north":
+		line.reverse()
+	var at := Vector2(lure.x, lure.z)
+	var best_seg := 0
+	var best_point := Vector2.ZERO
+	var best_d := INF
+	for i in line.size() - 1:
+		var a := Vector2(line[i].x, line[i].z)
+		var b := Vector2(line[i + 1].x, line[i + 1].z)
+		var q := Geometry2D.get_closest_point_to_segment(at, a, b)
+		if at.distance_to(q) < best_d - 1e-6:
+			best_d = at.distance_to(q)
+			best_seg = i
+			best_point = q
+	var points: Array = [line[0]]
+	for i in best_seg + 1:
+		var from: Vector3 = line[i]
+		var to: Vector3 = line[i + 1] if i < best_seg else Vector3(best_point.x, 0, best_point.y)
+		var legs := maxi(1, ceili(from.distance_to(to) / ROAD_LEG))
+		for k in range(1, legs + 1):
+			points.append(from.lerp(to, float(k) / legs))
 	var out: Array = []
 	for p: Vector3 in points:  # drop points on top of the one before
 		if out.is_empty() or p.distance_to(out.back()) > 3.0:

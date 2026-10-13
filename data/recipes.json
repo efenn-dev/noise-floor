@@ -17,6 +17,12 @@
 		"in": {},
 		"out": { "dirty_water": 1 }
 	},
+	"tap_water": {
+		"name": "Tap water",
+		"time": 30.0,
+		"in": {},
+		"out": { "clean_water": 1 }
+	},
 	"purify_water": {
 		"name": "Clean water",
 		"time": 4.0,
