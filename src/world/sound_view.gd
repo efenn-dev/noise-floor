@@ -11,7 +11,13 @@ const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum
 		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car"}
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
-		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"]}
+		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"],
+		# M14: guns (the sim's shot loudness sets the volume) and the reload click
+		"gunshot_pistol": ["shot_pistol"], "gunshot_rifle": ["shot_rifle"],
+		"gunshot_pistol_suppressed": ["shot_pistol_suppressed"], "gunshot_rifle_suppressed": ["shot_rifle_suppressed"],
+		"reload": ["reload"]}
+## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
+const GUN_BOOST := -8.0
 ## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones
 ## were "too loud and sharp"), since they're right under your ears.
 const EVENT_BOOST := 10.0
@@ -137,6 +143,8 @@ func _play_new_events() -> void:
 		var options: Array = EVENTS[s["kind"]]
 		_step += 1
 		var boost := STEP_BOOST if String(s["kind"]).begins_with("footstep") else EVENT_BOOST
+		if String(s["kind"]).begins_with("gunshot"):
+			boost = GUN_BOOST
 		play_at(self, options[_step % options.size()], s["pos"], volume_for(s["loudness"]) + boost, randf_range(0.92, 1.08))
 	_heard = now.duplicate()
 

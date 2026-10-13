@@ -19,7 +19,9 @@ extends RefCounted
 ## in the weapon slot) and Old Pete in the factory hall.
 ## 7 = W1c: furniture (counters, tables, couches, shelves, bathtubs, toilets) is pieces, saved with the rest.
 ## A save from before 7 gets the furniture laid by the town plan after it's applied (see holds_props).
-const VERSION := 7
+## 8 = M14: guns. A gun piece also holds its parts, rounds loaded and ammo type (all inside "gear"), and
+## "hands" says whether the gun or the melee weapon was in your hands. A save from before 8 has an empty gun slot.
+const VERSION := 8
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
@@ -105,6 +107,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"perks": sim.skills.perks,
 		"perk_points": sim.skills.perk_points,
 		"gear": sim.gear.to_dict(),
+		"hands": sim.guns.hands,
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
@@ -194,6 +197,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.gear.give_start()
 	if version < FIRST_WITH_GEAR:
 		sim.spawn_old_pete()  # he wasn't in the hall before M13
+	sim.guns.hands = "gun" if str(d.get("hands", "melee")) == "gun" and not sim.gear.gun().is_empty() else "melee"
 	var st: Dictionary = d.get("stats", {})
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))

@@ -25,6 +25,7 @@ const COLORS := {
 	"trap": Color(0.3, 0.3, 0.32),
 	"turret": Color(0.35, 0.38, 0.35),
 	"prop": Color(0.45, 0.36, 0.26),
+	"workbench": Color(0.5, 0.36, 0.2),
 }
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)

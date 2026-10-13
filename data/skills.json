@@ -46,10 +46,9 @@
 		},
 		"firearms": {
 			"name": "Firearms",
-			"text": "Comes with guns",
-			"disabled": true,
-			"xp": {},
-			"effects": {}
+			"text": "Gun spread 3% tighter per level (better hit chance at range)",
+			"xp": { "shot": 1, "hit": 3, "kill": 6 },
+			"effects": { "spread_cut": 0.03 }
 		},
 		"first_aid": {
 			"name": "First Aid",
@@ -72,7 +71,7 @@
 	"trees": {
 		"engineer": { "name": "Engineer", "perks": ["fast_lines", "dampened_gears", "tuned_machines"] },
 		"ghost": { "name": "Ghost", "perks": ["soft_step", "quick_fingers", "lucky_find"] },
-		"fighter": { "name": "Fighter", "perks": ["heavy_swing", "second_wind", "thick_skin"] }
+		"fighter": { "name": "Fighter", "perks": ["heavy_swing", "second_wind", "thick_skin", "steady_hands", "quick_hands", "gunsmith"] }
 	},
 	"perks": {
 		"fast_lines": { "name": "Fast Lines", "text": "Belts +10% speed per rank", "effects": { "belt_speed": 0.1 } },
@@ -88,7 +87,10 @@
 		"lucky_find": { "name": "Lucky Find", "text": "20% chance per rank of one extra item per search", "effects": { "lucky_find": 0.2 } },
 		"heavy_swing": { "name": "Heavy Swing", "text": "Melee damage +10% per rank", "effects": { "melee_damage": 0.1 } },
 		"second_wind": { "name": "Second Wind", "text": "Stamina comes back 10% faster per rank", "effects": { "stamina_regen": 0.1 } },
-		"thick_skin": { "name": "Thick Skin", "text": "Zombies hurt you 5% less per rank", "effects": { "damage_cut": 0.05 } }
+		"thick_skin": { "name": "Thick Skin", "text": "Zombies hurt you 5% less per rank", "effects": { "damage_cut": 0.05 } },
+		"steady_hands": { "name": "Steady Hands", "text": "Gun recoil 8% less per rank", "effects": { "recoil_cut": 0.08 } },
+		"quick_hands": { "name": "Quick Hands", "text": "Reloads 10% faster per rank", "effects": { "reload_speed": 0.1 } },
+		"gunsmith": { "name": "Gunsmith", "text": "Rank 1: machined suppressor and subsonic rounds at the workbench. Suppressed shots 2 quieter per rank", "effects": { "suppressed_quiet": 2 } }
 	},
 	"hotwire_level": 2,
 	"hotwire_seconds": 12,

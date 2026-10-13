@@ -16,5 +16,9 @@
 	"hiking_pack": { "name": "Hiking pack", "color": "#c06020", "weight": 1.0, "bag": 18 },
 	"military_rucksack": { "name": "Military rucksack", "color": "#506040", "weight": 1.5, "bag": 25 },
 	"gas_can": { "name": "Gas can", "color": "#c03020", "weight": 4.0 },
-	"repair_kit": { "name": "Repair kit", "color": "#d0a040", "weight": 0.5 }
+	"repair_kit": { "name": "Repair kit", "color": "#d0a040", "weight": 0.5 },
+	"ammo_casing": { "name": "Ammo casing", "color": "#c8a050", "weight": 0.005 },
+	"ammo_standard": { "name": "Standard rounds", "color": "#d8b860", "weight": 0.012 },
+	"ammo_subsonic": { "name": "Subsonic rounds", "color": "#70a0c0", "weight": 0.012 },
+	"ammo_ap": { "name": "Armour-piercing rounds", "color": "#c05050", "weight": 0.014 }
 }

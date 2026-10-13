@@ -32,10 +32,11 @@ func test_all_ten_skills_in_data() -> void:
 	eq(sim.skills.ids(), ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "melee",
 			"firearms", "first_aid", "farming"], "the ten skills, in the screen's order")
 	eq(sim.data.validate(), PackedStringArray(), "skills.json passes validation")
-	check(sim.skills.is_disabled("firearms"), "Firearms is listed but does nothing yet")
-	eq(sim.data.skills["skills"]["firearms"]["xp"], {}, "and nothing gives Firearms xp")
+	check(not sim.skills.is_disabled("firearms"), "Firearms works since M14")
+	check(not sim.data.skills["skills"]["firearms"]["xp"].is_empty(), "and shots give Firearms xp")
 	for t: String in sim.data.skills["trees"]:
-		eq(sim.data.skills["trees"][t]["perks"].size(), 3, "three perks in " + t)
+		eq(sim.data.skills["trees"][t]["perks"].size(), 6 if t == "fighter" else 3,
+				"three perks in %s (Fighter has three gun perks since M14)" % t)
 
 
 func test_level_thresholds() -> void:

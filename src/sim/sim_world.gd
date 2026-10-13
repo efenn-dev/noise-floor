@@ -26,6 +26,8 @@ var vehicles: Vehicles
 var skills: Skills
 ## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
 var gear: Gear
+## M14: what's in your hands (melee or gun), spread, magazine and reloads.
+var guns: Gunplay
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
 var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
 var _counted_dead: Dictionary = {}
@@ -78,6 +80,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	gear = Gear.new(data)
 	skills.gear = gear       # M13: every bonus(effect) query includes what you wear
 	gear.give_start()        # the pipe, white, in the weapon slot
+	guns = Gunplay.new(data, gear, skills)
 	_day = clock.day
 	player.cfg = data.survival
 	_rng.seed = hash([seed_value, "sim"])
@@ -123,6 +126,7 @@ func step() -> void:
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.tick(TICK)
+	guns.tick(TICK, inventory)
 	if sprinted:
 		_practice("fitness", "sprint_second", TICK)
 	if player_sneaking and not player.dead and _unnoticed_zombie_near():
@@ -139,6 +143,13 @@ func step() -> void:
 			gear.pieces.append(piece)
 			names.append(piece["name"])
 			_announce(piece, "You find")
+		var armoury := _search_guns(found)  # M14: guns, parts and ammo, on their own seeded stream
+		if not armoury["items"].is_empty():
+			inventory.give_all(armoury["items"])
+			names.append(_list(armoury["items"]))
+		for piece: Dictionary in armoury["pieces"]:
+			gear.pieces.append(piece)
+			names.append(piece["name"])
 		add_message(("Found " + ", ".join(names)) if not names.is_empty() else "Nothing useful", 4.0)
 	var night := clock.is_night()
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
@@ -804,6 +815,135 @@ func hit_zombie(id: int, head: bool) -> bool:
 	return killed
 
 
+# --- Guns (M14) --------------------------------------------------------------------
+
+## Q: swaps between your melee weapon and your gun. Returns a message.
+func swap_hands() -> String:
+	return guns.swap()
+
+
+## Fires the gun in your hands: uses a round, kicks up the spread, wears the gun and its suppressor, and
+## makes the shot's noise where you stand (loud: it raises heat and infamy like any one-off sound).
+## Trains Firearms. Returns "" if it fired, otherwise why not. The world then raycasts and calls
+## shoot_zombie() if the ray met a zombie.
+func fire() -> String:
+	var why := guns.can_fire()
+	if why != "":
+		return why
+	var kind := guns.shot_kind()
+	var loud := guns.shot_loudness()
+	for piece: Dictionary in guns.fire():
+		add_message("Your %s is worn out: its bonuses stop until you repair it" % piece["name"], 5.0)
+	noise.emit(player_pos, maxf(0.0, loud - skills.bonus("quiet_all")), kind)
+	_practice("firearms", "shot")
+	stats.note("fired a gun")
+	return ""
+
+
+## A shot that the world's ray put on zombie `id`, `distance` m away: hits with Gunplay.hit_chance
+## (falls with distance; Firearms and a scope raise it), headshots double. Trains Firearms.
+## Returns {"hit": bool, "killed": bool}.
+func shoot_zombie(id: int, head: bool, distance: float) -> Dictionary:
+	var z: ZombieBrain = horde.zombies.get(id)
+	if z == null or z.is_dead() or _rng.randf() >= guns.hit_chance(distance):
+		return {"hit": false, "killed": false}
+	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
+	var killed := z.take_hit(dmg, player_pos, float(guns.stats()["knockback"]))
+	stats.note("shot a zombie")
+	_practice("firearms", "hit")
+	if killed:
+		_practice("firearms", "kill")
+		stats.note_kill()
+		stats.note("killed a " + z.type)
+	return {"hit": true, "killed": killed}
+
+
+## R with a gun in hand: starts a reload (or switches ammo type). A reload click carries a few metres.
+func reload() -> String:
+	var msg := guns.start_reload(inventory)
+	if guns.reloading > 0.0:
+		noise.emit(player_pos, noise_loudness("reload"), "reload")
+	return msg
+
+
+## At a workbench: attach a part from your pockets to the gun you have equipped. Returns a message.
+func attach_part(uid: int) -> String:
+	var part := gear.find(uid)
+	var why := gear.attach(gear.gun(), uid)
+	return why if why != "" else "Attached %s to %s" % [part["name"], gear.gun_name()]
+
+
+## At a workbench: take a part off your gun, back into your pockets (with any rounds that no longer fit).
+func detach_part(slot: String) -> String:
+	var part: Dictionary = gear.gun().get("parts", {}).get(slot, {})
+	var out := gear.detach(gear.gun(), slot)
+	if out["why"] != "":
+		return out["why"]
+	if int(out["rounds"]) > 0:
+		inventory.add(gear.gun()["ammo"], int(out["rounds"]))
+	return "Took off " + part["name"]
+
+
+## The workbench's recipes (recipes.json "station": "workbench"), in file order.
+func bench_recipes() -> Array:
+	return data.recipes.keys().filter(func(r: String) -> bool: return data.recipes[r]["station"] == "workbench")
+
+
+## "" if you can make `recipe` at a workbench at `at` now, otherwise why not (Gunsmith, materials).
+func can_bench_craft(recipe: String, at: Vector3) -> String:
+	var r: Dictionary = data.recipes.get(recipe, {})
+	if r.is_empty() or r["station"] != "workbench":
+		return "Not a workbench recipe"
+	if r["perk"] != "" and skills.rank(r["perk"]) < 1:
+		return "Needs the %s perk (Fighter tree, K)" % skills.perk_name(r["perk"])
+	if not stock_at(at).has_all(r["in"]):
+		return "Needs " + _list(r["in"])
+	return ""
+
+
+## Makes `recipe` by hand at a workbench at `at`, from your pockets and crates in reach: ammo goes in
+## your pockets, a part (white, civilian, mint) too. Returns a message.
+func bench_craft(recipe: String, at: Vector3) -> String:
+	var why := can_bench_craft(recipe, at)
+	if why != "":
+		return why
+	var r: Dictionary = data.recipes[recipe]
+	stock_at(at).take_all(r["in"])
+	inventory.give_all(r["out"])
+	if r["gear"] != "":
+		var piece := gear.make(r["gear"], "civilian", "white")
+		gear.pieces.append(piece)
+		return "Made " + piece["name"]
+	return "Made " + _list(r["out"])
+
+
+## Guns, parts and ammo a finished search turns up (guns.json "finds" for its table, plus a small
+## police_find chance anywhere of a Police-tier gun or part). Its own seeded stream.
+func _search_guns(found: Dictionary) -> Dictionary:
+	var out := {"pieces": [], "items": {}}
+	var table: Dictionary = data.guns["finds"].get(found.get("table", ""), {})
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, found.get("id", ""), "guns"])
+	for kind: String in ["gun", "part"]:
+		if rng.randf() < float(table.get(kind, 0.0)):
+			out["pieces"].append(_found_gun(rng, kind, false))
+	if rng.randf() < float(data.guns["police_find"]):
+		out["pieces"].append(_found_gun(rng, "gun" if rng.randf() < 0.5 else "part", true))
+	if rng.randf() < float(table.get("ammo", 0.0)):
+		var span: Array = data.guns["ammo_found"]
+		out["items"]["ammo_standard"] = rng.randi_range(int(span[0]), int(span[1]))
+	return out
+
+
+func _found_gun(rng: RandomNumberGenerator, kind: String, police: bool) -> Dictionary:
+	var piece := gear.roll_gun_piece(rng, kind, police)
+	if kind == "gun":
+		var span: Array = data.guns["loaded_when_found"]
+		piece["loaded"] = mini(rng.randi_range(int(span[0]), int(span[1])) * int(gear.gun_stats(piece)["magazine"]) / 2,
+				int(gear.gun_stats(piece)["magazine"]))
+	return piece
+
+
 ## The equipped weapon's stats (M13: from its gear base and tier; fists with nothing equipped).
 func weapon_stats() -> Dictionary:
 	return gear.weapon_stats()
@@ -1004,7 +1144,11 @@ func _zombie_drop(z: ZombieBrain) -> void:
 		piece = gear.roll_piece(rng, "zombie")
 	if piece.is_empty():
 		return
-	drop_bag(z.pos, {}, [piece])
+	var extra: Dictionary = data.guns["zombie_extra_uniques"].get(z.type, {})
+	if not extra.is_empty():  # M14: Old Pete also carries his deer rifle and some rounds
+		drop_bag(z.pos, extra.get("ammo", {}).duplicate(), [piece, gear.roll_unique(rng, extra["unique"])])
+	else:
+		drop_bag(z.pos, {}, [piece])
 	var who: String = data.zombies[z.type]["name"] if unique != "" else "The zombie"
 	if piece["rarity"] in ["gold", "set"]:
 		add_message("%s drops something %s" % [who, Gear.rarity_word(piece["rarity"])], 6.0)
