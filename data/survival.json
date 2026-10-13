@@ -26,5 +26,7 @@
 	"siphon_noise": 35,
 	"car_fuel_min": 1,
 	"car_fuel_max": 3,
-	"car_wreck_chance": 0.4
+	"car_wreck_chance": 0.4,
+	"gas_stale_day": 21,
+	"found_food_rots_day": 7
 }

@@ -21,7 +21,8 @@ func _init(p_data: GameData) -> void:
 func add(id: String, type: String, pos: Vector3, yaw: float, fuel: float, wreck: String, key_in: String = "ignition") -> void:
 	var s: Dictionary = data.vehicles[type]
 	cars[id] = {"type": type, "pos": pos, "yaw": yaw, "fuel": minf(fuel, float(s["tank"])), "hp": float(s["hp"]),
-			"wreck": wreck, "running": false, "speed": 0.0, "lights": false, "key_in": key_in, "hotwired": false}
+			"wreck": wreck, "running": false, "speed": 0.0, "lights": false, "key_in": key_in, "hotwired": false,
+			"fresh": 0.0, "stale": false}
 
 
 ## The item id of this car's key.
@@ -109,6 +110,7 @@ func tick(dt: float) -> void:
 func _burn(id: String, cans: float) -> void:
 	var c: Dictionary = cars[id]
 	c["fuel"] = maxf(0.0, c["fuel"] - cans)
+	c["fresh"] = minf(c["fresh"], c["fuel"])
 	if c["fuel"] <= 0.0:
 		c["running"] = false  # out of gas: it rolls to a stop
 
@@ -121,6 +123,7 @@ func is_running(id: String) -> bool:
 func siphon(id: String) -> int:
 	var n := floori(cars[id]["fuel"])
 	cars[id]["fuel"] -= n
+	cars[id]["fresh"] = minf(cars[id]["fresh"], cars[id]["fuel"])
 	return n
 
 
@@ -135,6 +138,7 @@ func refuel(id: String, inv: Inventory) -> String:
 		return "No gas cans"
 	inv.remove("gas_can", n)
 	c["fuel"] += n
+	c["fresh"] += n  # your gas, fresh: it doesn't go stale
 	return "Poured in %d gas can%s" % [n, "s" if n > 1 else ""]
 
 
@@ -182,7 +186,8 @@ func to_dict() -> Dictionary:
 	for id: String in cars:
 		var c: Dictionary = cars[id]
 		out[id] = {"type": c["type"], "pos": [c["pos"].x, c["pos"].y, c["pos"].z], "yaw": c["yaw"],
-				"fuel": c["fuel"], "hp": c["hp"], "wreck": c["wreck"], "key_in": c["key_in"], "hotwired": c["hotwired"]}
+				"fuel": c["fuel"], "hp": c["hp"], "wreck": c["wreck"], "key_in": c["key_in"], "hotwired": c["hotwired"],
+				"fresh": c["fresh"], "stale": c["stale"]}
 	return out
 
 
@@ -200,5 +205,24 @@ func load_dict(d: Dictionary) -> void:
 		c["wreck"] = String(s["wreck"])
 		c["key_in"] = String(s.get("key_in", c["key_in"]))
 		c["hotwired"] = bool(s.get("hotwired", false))
+		c["fresh"] = float(s.get("fresh", 0.0))
+		c["stale"] = bool(s.get("stale", false))
 	driving = ""
 	hotwire_left = 0.0
+
+
+## About three weeks in, the gas left in the town's tanks has gone stale: only the gas you poured in
+## yourself is any good. Returns how many cars lost gas.
+func go_stale() -> int:
+	var lost := 0
+	for id: String in cars:
+		var c: Dictionary = cars[id]
+		if c["stale"]:
+			continue
+		c["stale"] = true
+		if c["fuel"] > c["fresh"]:
+			lost += 1
+		c["fuel"] = c["fresh"]
+		if c["fuel"] <= 0.0:
+			c["running"] = false
+	return lost

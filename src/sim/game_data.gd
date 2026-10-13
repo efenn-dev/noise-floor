@@ -174,6 +174,13 @@ func validate() -> PackedStringArray:
 				if not (v is Array and v.size() == 3):
 					errors.append("vehicle '%s' needs '%s' as [x, y, z]" % [id, key])
 		_check_stats(errors, "noise", {"director": noise.get("director", {})}, DIRECTOR_STATS)
+		var inf: Dictionary = noise.get("infamy", {})
+		_check_stats(errors, "noise", {"infamy": inf}, ["one_off_floor", "one_off_rate"])
+		for u: Dictionary in inf.get("unlocks", []):
+			if not zombies.has(u.get("type", "")):
+				errors.append("infamy unlocks unknown zombie '%s'" % u.get("type", ""))
+		if not items.has("rotten_food"):
+			errors.append("spoiled food needs a 'rotten_food' item")
 	return errors
 
 
@@ -185,7 +192,8 @@ const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sl
 		"respawn_minimum", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
-		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance"]
+		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance",
+		"gas_stale_day", "found_food_rots_day"]
 const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck", "door", "horn"]
 ## Each car has its own key: item id "car_key:<car id>" (not in items.json).
 const CAR_KEY := "car_key:"

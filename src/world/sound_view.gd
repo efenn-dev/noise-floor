@@ -127,7 +127,12 @@ func _update_hums() -> void:
 func _play_new_events() -> void:
 	var now: Array = sim.noise.recent
 	for s: Dictionary in now:
-		if _seen(_heard, s) or not EVENTS.has(s["kind"]):
+		if _seen(_heard, s):
+			continue
+		if s["kind"] == "scream":  # a screamer's shriek: a moan, much higher and louder
+			play_at(self, "zombie/moan_%02d" % (1 + randi() % 13), s["pos"], volume_for(s["loudness"]), randf_range(1.5, 1.75))
+			continue
+		if not EVENTS.has(s["kind"]):
 			continue
 		var options: Array = EVENTS[s["kind"]]
 		_step += 1

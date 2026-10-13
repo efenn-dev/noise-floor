@@ -20,6 +20,31 @@ Newest first. One entry per milestone: what was built, how to try it, known gaps
 
 - Built by Claude Opus 5.5 from a plan by Claude Fable 5.1.
 
+## 2026-10-12 — M11 The world gets worse
+
+**Built:**
+- **Loot never comes back:** a searched container stays empty for good (it already worked that way; now there's a test).
+- **Food spoils:** vegetables keep about 5 days (`spoil_days` in items.json), in your pockets and in crates, and rot into **rotten food**, which you can't eat. Fresh food you find in town from day 7 on is already rotten. Canned food, chips and soda keep forever, which is what the canner is for.
+- **Stale gas:** on day 21 the gas left in the town's cars goes stale. Only gas you poured in yourself stays good, so siphoning dries up and generators eventually need another fuel source or solar.
+- **Infamy:** a permanent score of all the noise you've made that the dead could hear: machine and generator noise reaching 50 m out, plus loud one-offs like the horn. It never cools off the way heat does; zombies' own bangs don't count. As it climbs, waves bring new kinds of zombie. **Runners** come at 3000 infamy (about a quarter of the wave), roughly a quarter of an hour of an unmuffled generator in the open. **Screamers** come at 8000 (about 1 in 8). Each one arrives with a warning message.
+- **Runners:** they sprint at 3.6 m/s (shamblers do 1.3) but have 60 hp. They're smaller, dark-skinned and dark-clothed, and have a new **Run** animation.
+- **Screamers:** when one spots you it stops and shrieks (a loudness-88 noise, then 25 s before it can again), and everything within earshot comes to investigate. They're pale with blood-red shirts, and have a new **Scream** animation and a high, warped moan.
+- **Stats:** the pause menu shows the day, your deaths, zombies killed (by you, your turrets, traps or your car) and total noise made. Saved with the game.
+
+**Rules (sim, tested):** `Director.infamy`/`unlocked`/`pick_type`, screamers in `ZombieBrain` (`screaming`), spoilage (`SimWorld._spoil`, `Inventory.spoil_debt`), `_rot_old_food`, `Vehicles.go_stale` (cars track the `fresh` gas you poured in), and kill and death `stats`. Data: runner and screamer in `zombies.json`, `infamy` in `noise.json`, `spoil_days` and `rotten_food` in items.json, and `gas_stale_day` and `found_food_rots_day` in survival.json. World: zombie looks and the Run/Scream animations in `ZombieBody`, the scream sound in `SoundView`, stats in the pause menu, and a new `--zombie-type=` flag.
+
+**Tests:** `test_world_worse.gd` (loot stays gone, vegetables rot and canned food keeps, in crates too, late-found food is rotten, stale gas, infamy builds and never cools (the horn counts, wrecks don't), runners then screamers unlock, a screamer pulls in a zombie that couldn't see you, stats add up and are saved) and `test_zombie_types_world.gd` (runners run, screamers scream, the kinds look different). 978 checks.
+
+**Try it on the PC:** merge, then double-click `play.bat`. To meet the new zombies straight away, run `play.bat --zombie=0,-10,2,-12 --zombie-type=runner` or `play.bat --zombie=0,-8 --zombie-type=screamer`. Press **Esc** to see your stats.
+
+**Saves:** the save version is now 2. Saves from M9-M10c still load, and whatever they lack starts at its default (no stats, no infamy, fresh gas); a save from a newer game is refused.
+
+**Known gaps:** rotten food has no use yet (compost for the planter would be a good one); only vegetables spoil; gas cans in pockets and crates never go stale; there's no infamy meter apart from the stats line; brutes, crawlers and listeners come later.
+
+**Next:** M12, skills and carry weight (Mechanics already exists).
+
+Built by Claude Opus 5.5.
+
 ## 2026-10-12 — M10c Wheels
 
 **Built:**

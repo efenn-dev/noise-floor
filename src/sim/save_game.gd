@@ -7,7 +7,8 @@ extends RefCounted
 ## death bags, the cars (where they're parked, fuel, damage), and the world seed. The world (town, containers, cars) is rebuilt from code, then
 ## this is laid over it.
 
-const VERSION := 1
+## 2 = M11 (stats, infamy, fresh/stale gas). Older saves still load: anything they lack gets its default.
+const VERSION := 2
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:
@@ -68,6 +69,9 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"searched": searched,
 		"vehicles": sim.vehicles.to_dict(),
 		"skills": sim.skills.xp,
+		"stats": sim.tally,
+		"infamy": sim.director.infamy,
+		"unlocked": sim.director.unlocked,
 		"bags": bags,
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
@@ -77,7 +81,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 ## Lays saved state over a freshly made SimWorld whose town (loot containers, cars) is already set up,
 ## but which has nothing built and no zombies yet. Returns "" or what went wrong.
 static func apply(sim: SimWorld, d: Dictionary) -> String:
-	if int(d.get("version", 0)) != VERSION:
+	var version := int(d.get("version", 0))
+	if version < 1 or version > VERSION:  # unknown or from a newer game: refuse rather than guess
 		return "This save is from a different version (%s)" % str(d.get("version", "?"))
 	sim.ticks = int(d["ticks"])
 	sim.clock.time_of_day = float(d["clock"]["time"])
@@ -140,6 +145,11 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.vehicles.load_dict(d["vehicles"])
 	for s: String in d.get("skills", {}):
 		sim.skills.xp[s] = float(d["skills"][s])
+	var st: Dictionary = d.get("stats", {})
+	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
+	sim.director.infamy = float(d.get("infamy", 0.0))
+	sim.director.unlocked = Array(d.get("unlocked", []))
+	sim._day = sim.clock.day
 	for id: String in d.get("car_fuel", {}):  # saves from before M10c kept only the gas
 		if sim.vehicles.cars.has(id):
 			sim.vehicles.cars[id]["fuel"] = float(d["car_fuel"][id])
