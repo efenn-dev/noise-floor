@@ -4,6 +4,7 @@ extends Node3D
 ## Game flags go after `--`:
 ##   --screenshot[=PATH]   freeze time, save one frame as PNG, quit (tools/shot.sh wraps this)
 ##   --time=HOURS          start at this hour, e.g. --time=22 for night
+##   --day=N               start on day N (M16: days 1-7 summer, 8-14 autumn, 15-21 winter, 22-28 spring)
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
@@ -71,6 +72,8 @@ var driving: CarBody = null  # the car you're in, or null when walking
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
+var _ground_mesh: MeshInstance3D
+var season_shown := ""  # M16: the season whose look is applied (ground, trees, roofs, fog)
 ## Q2: under a roof the fog thins to INDOOR_FOG of outside's, eased over FOG_EASE seconds (Old Pete was
 ## grey at 7 m in the factory hall). _apply_time sets the outdoor densities; _apply_fog scales them.
 const INDOOR_FOG := 0.2
@@ -119,6 +122,8 @@ func _ready() -> void:
 		_loaded = not save.is_empty()
 	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)))
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
+	if args.has("day"):
+		sim.clock.day = maxi(1, int(args["day"]))  # M16: --day=16 starts in winter (a save sets its own day)
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
@@ -362,10 +367,23 @@ func _apply_time() -> void:
 	_env.fog_light_energy = lerpf(0.03, 1.0, light)
 	# Thicker, darker fog at night; the volumetric part (Forward+ only) is what shows the flashlight beam.
 	_fog_density = lerpf(0.02, 0.006, light)
-	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(Color(0.62, 0.66, 0.7), light)
+	if clock.season() != season_shown:
+		apply_season(clock.season())
+	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(SeasonLook.fog_day(season_shown), light)  # M16: colder in winter
 	_vol_fog_density = lerpf(0.022, 0.002, light)
 	_apply_fog()
-	_hud.text = "Day %d  %s" % [clock.day, clock.clock_text()]
+	_hud.text = "Day %d · %s %s" % [clock.day, clock.season_name(), clock.clock_text()]
+
+
+## M16: the season's look: ground, tree leaves, roofs (the fog colour follows in _apply_time).
+func apply_season(season: String) -> void:
+	season_shown = season
+	if _ground_mesh != null:
+		_ground_mesh.material_override = SeasonLook.ground_material(season)
+	if street_view != null:
+		street_view.apply_season(season)
+	if town_view != null:
+		town_view.apply_season(season)
 
 
 ## Q2: 1 while the camera is under a roof (TownView knows the house cells and the factory hall), else 0.
@@ -688,10 +706,10 @@ func _update_hud(delta: float) -> void:
 	_heat_label.position.y = _materials_hud.position.y + maxf(_materials_hud.size.y, _materials_hud.get_combined_minimum_size().y) + 6.0
 	var hp := sim.player.health
 	var p := sim.player
-	_health_label.text = "Health %d   Food %d   Water %d   Energy %d   Stamina %d%s%s" % [ceili(hp), ceili(p.food),
-			ceili(p.water), ceili(p.energy), ceili(p.stamina), "   BLEEDING (H)" if p.bleeding else "",
+	_health_label.text = "Health %d   Food %d   Water %d   Energy %d   Stamina %d%s%s%s" % [ceili(hp), ceili(p.food),
+			ceili(p.water), ceili(p.energy), ceili(p.stamina), warmth_text(), "   BLEEDING (H)" if p.bleeding else "",
 			"   Sleeping... (any key wakes you)" if p.asleep else ""]
-	var low := hp <= 30.0 or p.bleeding or p.food < 15.0 or p.water < 15.0
+	var low := hp <= 30.0 or p.bleeding or p.food < 15.0 or p.water < 15.0 or p.is_freezing()
 	_health_label.modulate = Color(1, 0.35, 0.3) if low else Color.WHITE
 	if hp < _last_health:
 		_hurt_flash.color.a = 0.45
@@ -703,6 +721,14 @@ func _update_hud(delta: float) -> void:
 		_death_label.text = "You died\nYour things are in a bag where you fell\nRespawning in %d" % ceili(sim.player.respawn_timer)
 
 
+## M16: "   Warmth 64" once you've lost any (so a summer HUD is unchanged), with COLD / FREEZING below the lines.
+func warmth_text() -> String:
+	var p := sim.player
+	if p.warmth >= 99.5:
+		return ""
+	return "   Warmth %d%s" % [ceili(p.warmth), " FREEZING" if p.is_freezing() else (" COLD" if p.is_cold() else "")]
+
+
 func _build_ground() -> void:
 	var ground := StaticBody3D.new()
 	var mesh := MeshInstance3D.new()
@@ -710,6 +736,7 @@ func _build_ground() -> void:
 	plane.size = Vector2(400, 400)
 	mesh.mesh = plane
 	mesh.material_override = Surfaces.material("ground", 6.0, Color(0.62, 0.64, 0.56))
+	_ground_mesh = mesh  # M16: retinted per season (apply_season)
 	ground.add_child(mesh)
 	var shape := CollisionShape3D.new()
 	var slab := BoxShape3D.new()  # a box, not an endless plane, so the navmesh baker can read it
@@ -890,9 +917,46 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_farm()
 	if args.has("demo-defense"):
 		_place_demo_defense()
+	if args.has("demo-stove"):
+		_place_demo_stove()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
+
+
+## M16 --demo-stove: a stove loaded with 10 planks (burning) in the free floor cell of the house you stand in
+## (--inside) in the same room nearest 3 m from you, its fire facing you, and you turned to look at it. Outside a house it goes
+## on a new foundation 4 m ahead.
+func _place_demo_stove() -> void:
+	var here := BuildGrid.world_to_cell(player.global_position)
+	var cells: Array = []
+	for house: Dictionary in town.get("houses", []):
+		if here in house["cells"]:
+			cells = house["cells"]
+	var taken := {here: true}
+	for c: Dictionary in town.get("containers", []):
+		taken[c["cell"]] = true
+	var inv := Inventory.new()
+	inv.give_all({"plank": 30, "scrap_metal": 20, "nails": 20})
+	var best := Vector2i(here.x, here.y - 2)
+	var best_d := INF
+	for c: Vector2i in cells:
+		var mid := Vector3((c.x + 0.5) * BuildGrid.GRID, 0.0, (c.y + 0.5) * BuildGrid.GRID)
+		if taken.has(c) or sim.build.pieces.has("o:%d:%d" % [c.x, c.y]) or sim.noise.walls_between(player.global_position, mid, true) > 0:
+			continue  # free, and in the same room (no wall between)
+		var d := absf(Vector2((c.x + 0.5) * BuildGrid.GRID - player.global_position.x,
+				(c.y + 0.5) * BuildGrid.GRID - player.global_position.z).length() - 3.0)
+		if d < best_d:
+			best_d = d
+			best = c
+	if cells.is_empty():
+		sim.build.place("foundation", best, 0, inv)
+	var to := Vector3((best.x + 0.5) * BuildGrid.GRID, 0.0, (best.y + 0.5) * BuildGrid.GRID) - player.global_position
+	var side := (BuildGrid.Side.EAST if to.x < 0.0 else BuildGrid.Side.WEST) if absf(to.x) > absf(to.z) 			else (BuildGrid.Side.SOUTH if to.z < 0.0 else BuildGrid.Side.NORTH)
+	if sim.build.place("stove", best, side, inv) == "":
+		sim.climate.load_fuel(sim.build.key_for("stove", best), inv)
+		sim.climate.tick(SimWorld.TICK, sim.clock.seconds_per_hour())  # lit now, for a screenshot
+	player.set_look(rad_to_deg(atan2(-to.x, -to.z)), -18.0)
 
 
 ## A 4 x 3 floor just north of spawn with a back wall and two side walls.

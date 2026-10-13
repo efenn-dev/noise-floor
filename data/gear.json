@@ -21,7 +21,7 @@
 		"hard_hat": {"name": "Hard hat", "slot": "head", "weight": 0.4, "base": {"damage_cut": 0.05}},
 		"cap": {"name": "Cap", "slot": "head", "weight": 0.1, "base": {"walk_quiet": 1}},
 		"hi_vis_vest": {"name": "Hi-vis vest", "slot": "body", "weight": 0.3, "base": {"carry_kg": 3}},
-		"jacket": {"name": "Jacket", "slot": "body", "weight": 1.5, "base": {"damage_cut": 0.08}},
+		"jacket": {"name": "Jacket", "slot": "body", "weight": 1.5, "base": {"damage_cut": 0.08, "warmth": 0.3}},
 		"work_gloves": {"name": "Work gloves", "slot": "hands", "weight": 0.2, "base": {"melee_damage": 0.05}},
 		"headlamp": {"name": "Headlamp", "slot": "light", "weight": 0.2, "base": {"search_speed": 0.05}},
 		"pistol": {"name": "Pistol", "slot": "gun", "gun": "pistol", "weight": 1.0},

@@ -31,6 +31,7 @@ class Machine:
 	var time_scale := 1.0  # a muffler slows the machine down
 	var watts := 0.0       # power it draws while working (0 = needs no power)
 	var powered := true    # set by PowerGrid each tick; an unpowered machine does nothing
+	var frozen := false    # M16: a planter in winter: its timer pauses (set by Factory.tick)
 
 	## Would draw power this tick: working, or able to start.
 	func wants_power() -> bool:
@@ -43,6 +44,8 @@ class Machine:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP
 
 	func status() -> String:
+		if frozen:
+			return "Frozen: nothing grows in winter"
 		if not powered:
 			return "no power"
 		if crafting:
@@ -160,6 +163,10 @@ class Bin:
 
 ## Set by SimWorld (M12): Fast Lines speeds belts, Tuned Machines speeds crafting, Farming grows more.
 var skills: Skills
+## M16: this season's speed for planters (0 in winter: frozen) and rain collectors (data/seasons.json),
+## set by SimWorld every tick.
+var crop_speed := 1.0
+var rain_speed := 1.0
 
 
 func _init(p_data: GameData) -> void:
@@ -260,7 +267,10 @@ func tick(dt: float) -> void:
 	for cell: Vector2i in _sorted(machines):
 		var m: Machine = machines[cell]
 		var crafted := m.crafted
-		m.tick(craft_dt)
+		var season := season_speed(m)
+		m.frozen = season <= 0.0
+		if not m.frozen:
+			m.tick(craft_dt * season)
 		if extra > 0 and m.id == "planter" and m.crafted > crafted:
 			m.output[CROP] = m.output.get(CROP, 0) + extra * (m.crafted - crafted)
 		for item: String in _sorted(m.output):
@@ -323,6 +333,16 @@ func hand_interact(cell: Vector2i, inv: Inventory) -> Dictionary:
 
 func _bonus(effect: String) -> float:
 	return skills.bonus(effect) if skills != null else 0.0
+
+
+## M16: how fast the season lets this machine work: planters crop_speed, rain collectors rain_speed, others 1.
+func season_speed(m: Machine) -> float:
+	match m.id:
+		"planter":
+			return crop_speed
+		"rain_collector":
+			return rain_speed
+	return 1.0
 
 
 ## Belt speed in cells per second, with Fast Lines.

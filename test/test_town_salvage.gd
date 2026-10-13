@@ -85,7 +85,7 @@ func test_flag_survives_save_and_load() -> void:
 	a.build.place("foundation", Vector2i(0, 0), BuildGrid.Side.NORTH, a.inventory)
 	a.build.place("door", Vector2i(0, 0), BuildGrid.Side.NORTH, a.inventory)
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(d["version"]), 10, "saves are version 10 (P3)")
+	check(int(d["version"]) >= 10, "saves are version 10 (P3) or later")
 	var b := SimWorld.new(10.0, null, int(d["seed"]))
 	eq(SaveGame.apply(b, d), "", "loads")
 	var town_key := _town_door_key(TownPlan.generate(1))

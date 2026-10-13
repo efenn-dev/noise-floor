@@ -119,7 +119,7 @@ func gain_now(noise: NoiseField, night: bool) -> float:
 			walls = noise.outdoor_walls(at, dist)
 			recounts += 1
 		used[at] = walls
-		g += maxf(0.0, NoiseField.heard_level(s["loudness"], dist, walls) - float(cfg["gain_floor"])) * float(cfg["gain_rate"])
+		g += maxf(0.0, noise.level(s["loudness"], dist, walls) - float(cfg["gain_floor"])) * float(cfg["gain_rate"])
 	_walls_cache = used
 	return g * (float(cfg["night_multiplier"]) if night else 1.0)
 

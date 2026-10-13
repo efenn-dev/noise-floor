@@ -19,6 +19,8 @@ var factory: Factory
 var horde: Horde
 var noise: NoiseField
 var power: PowerGrid
+## M16: stoves, heaters and the warmth rate (data/seasons.json)
+var climate: Climate
 var defense: Defense
 ## M15: sensors and their actions, floodlights, noisemakers, locked doors.
 var automation: Automation
@@ -44,6 +46,7 @@ var director: Director
 var messages: Array = []
 ## Cars you've already been told have no key (see enter_car).
 var _told_no_key := {}
+var _cold_hour := -1  # M16: the game-hour "You're cold" / "You're freezing" was last said
 var loot: Loot
 ## Storage crates: piece key -> Inventory.
 var storages: Dictionary = {}
@@ -75,6 +78,10 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
 	power = PowerGrid.new(data, build, factory)
+	climate = Climate.new(data, build, power)
+	if not data.seasons.is_empty():
+		clock.set_calendar(data.seasons)  # M16: four seasons; sunrise and sunset follow them
+		player.cold_cfg = data.seasons["warmth"]
 	defense = Defense.new(data, build, factory)
 	horde = Horde.new(data, seed_value)
 	noise = NoiseField.new(data, build)
@@ -137,16 +144,26 @@ func step() -> void:
 		var house: String = house_cells.get(BuildGrid.world_to_cell(player_pos), "")
 		if house != "":
 			stats.note_house(house)
+	var season := clock.season_cfg()
+	var night_now := clock.is_night()
+	factory.crop_speed = float(season.get("crop_speed", 1.0))  # M16: winter freezes planters
+	factory.rain_speed = float(season.get("rain_speed", 1.0))
+	noise.carry_bonus = float(season.get("hearing_night", 0.0)) if night_now else 0.0  # M16: cold, still nights
 	power.tick(TICK, clock.daylight())
+	climate.tick(TICK, clock.seconds_per_hour())
 	factory.tick(TICK)
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	noise.refresh(factory, TICK, power, vehicles)
+	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	_note_noise()
 	player.carry_ratio = carry_ratio()
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
+	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
+			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
 	player.tick(TICK)
+	_cold_messages()
 	guns.tick(TICK, inventory)
 	if sprinted:
 		_practice("fitness", "sprint_second", TICK)
@@ -226,6 +243,34 @@ func step() -> void:
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
+
+
+## M16: "You're cold" / "You're freezing", at most once per game-hour while it lasts.
+func _cold_messages() -> void:
+	if player.dead or not player.is_cold():
+		return
+	var hour := clock.day * 24 + int(clock.time_of_day)
+	if hour != _cold_hour:
+		_cold_hour = hour
+		add_message("You're freezing: find a roof or a fire" if player.is_freezing() else "You're cold", 5.0)
+
+
+## M16: under a roof: standing on a town floor (a house or the factory hall), as the zombies' "indoors" and
+## the indoor fog go by.
+func is_indoors(at: Vector3) -> bool:
+	return ZombieBrain._indoors(build.pieces, at)
+
+
+## M16: E on a stove: loads planks from your pockets and nearby crates. Returns a message.
+func stove_interact(key: String) -> String:
+	if not climate.stoves.has(key):
+		return ""
+	var n := climate.load_fuel(key, stock_at(build.piece_center(key)))
+	if n > 0:
+		return "Loaded %d plank%s" % [n, "s" if n > 1 else ""]
+	if climate.stoves[key]["planks"] >= int(data.seasons["stove"]["cap"]):
+		return "The stove is full"
+	return "No planks to burn"
 
 
 ## M15: the base log's new entries that happened more than radio "far" metres from you go to the HUD as
@@ -1179,7 +1224,7 @@ func _on_piece_added(key: String) -> void:
 ## Removing one hands back whatever it was holding, on top of the build refund.
 ## If zombies wrecked it, the contents are lost.
 func _on_piece_removed(key: String, piece: Dictionary) -> void:
-	var cans := power.take_refund(key)
+	var cans := power.take_refund(key) + climate.take_refund(key)  # M16: and a stove's waiting planks
 	if cans > 0 and not piece.get("destroyed", false):
 		inventory.add(data.buildables[piece["id"]]["fuel"], cans)  # unburnt fuel comes back
 	if storages.has(key):

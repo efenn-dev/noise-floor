@@ -517,6 +517,7 @@ static func _base_text(effect: String, v: float) -> String:
 		"melee_damage": return "+%d%% melee damage" % roundi(v * 100.0)
 		"search_speed": return "+%d%% search speed" % roundi(v * 100.0)
 		"quiet_all": return "your noises %d quieter" % roundi(v)
+		"warmth": return "The cold gets to you %d%% slower" % roundi(v * 100.0)  # M16
 	return "%s %s" % [effect, v]
 
 

@@ -28,7 +28,9 @@ extends RefCounted
 ## 10 = P3: a piece the town laid (houses, beds, the factory hall, furniture) carries "town": true, so pulling
 ## it down gives salvage, not its full cost. A save from 3 to 9 gets the flag on every piece that stands where
 ## the town plan put one of the same kind (see _mark_town); one from before 3 gets the town laid fresh, flagged.
-const VERSION := 10
+## 11 = M16: the player's warmth ("player" "warmth") and each stove's planks and burning fuel ("stoves"). A save from
+## before 11 loads with full warmth and every stove (it had none) empty; the season follows from the saved day.
+const VERSION := 11
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
@@ -103,7 +105,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"clock": {"time": sim.clock.time_of_day, "day": sim.clock.day},
 		"inventory": _counts(sim.inventory),
 		"player": {"health": p.health, "food": p.food, "water": p.water, "energy": p.energy, "stamina": p.stamina,
-				"bleeding": p.bleeding, "deaths": p.deaths, "dead": p.dead, "respawn_timer": p.respawn_timer},
+				"bleeding": p.bleeding, "deaths": p.deaths, "dead": p.dead, "respawn_timer": p.respawn_timer,
+				"warmth": p.warmth},
 		# Saved while driving: you load standing beside the car, not inside it.
 		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
 		"spawn_point": _v3(sim.spawn_point),
@@ -117,6 +120,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"base_log": sim.base_log.to_dict(),
 		"crates": crates,
 		"generators": sim.power.generators,
+		"stoves": sim.climate.to_dict(),
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
@@ -152,6 +156,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for key: String in ["health", "food", "water", "energy", "stamina", "respawn_timer"]:
 		p.set(key, float(pl[key]))
 	p.bleeding = bool(pl["bleeding"])
+	p.warmth = float(pl.get("warmth", 100.0))  # M16: full for a save from before 11
 	p.deaths = int(pl["deaths"])
 	p.dead = bool(pl["dead"])
 	sim.player_pos = _to_v3(d["player_pos"])
@@ -211,6 +216,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			var g: Dictionary = d["generators"][key]
 			sim.power.generators[key] = {"cans": int(g["cans"]), "fuel": float(g["fuel"]), "running": false,
 					"load": 0.0, "muffled": bool(g["muffled"])}
+	sim.climate.from_dict(d.get("stoves", {}))  # M16: none before 11
 	for zd: Dictionary in d["zombies"]:
 		var z := sim.horde.restore(int(zd["id"]), zd["type"], _to_v3(zd["pos"]))
 		z.home = _to_v3(zd["home"])

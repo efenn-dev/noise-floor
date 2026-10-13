@@ -65,7 +65,8 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 ## the town plan, never built by the player, removable for a small refund, bashed by zombies.
 func is_object(id: String) -> bool:
 	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop", "workbench",
-			"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "repair_station"]
+			"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "repair_station",
+			"stove", "heater"]  # M16
 
 
 func kind_of(id: String) -> String:

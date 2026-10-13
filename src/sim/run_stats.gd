@@ -231,6 +231,8 @@ func note_continuous(kind: String, loudness: float, when: String) -> void:
 static func cause_text(cause: String) -> String:
 	if cause in ["starvation", "dehydration", "bleeding", "unknown"]:
 		return cause
+	if cause == "cold":
+		return "froze to death"  # M16
 	return "killed by a " + _words(cause)
 
 

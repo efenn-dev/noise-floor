@@ -189,7 +189,10 @@ func interact() -> String:
 			var n := sim.power.load_fuel(target_key, sim.stock_at(sim.build.piece_center(target_key)))
 			last_message = ("Loaded %d gas can%s" % [n, "s" if n > 1 else ""]) if n > 0 else "No gas cans (G on a car siphons some)"
 			return last_message
-		"solar", "pole":
+		"stove":
+			last_message = sim.stove_interact(target_key)  # M16
+			return last_message
+		"solar", "pole", "heater":
 			return ""
 		"workbench":
 			opened_workbench.emit(target_key)
@@ -324,6 +327,18 @@ func status_text() -> String:
 				roundi(loud), " (muffled)" if g["muffled"] else ""])
 		lines.append(_network_line(net))
 		lines.append("[E] load gas cans%s" % ("" if g["muffled"] else "   [U] fit muffler (%s)" % _list(sim.data.noise["muffler"]["cost"])))
+	elif kind == "stove":  # M16
+		var st: Dictionary = sim.climate.stoves[target_key]
+		lines.append("Stove · %s · %d plank%s waiting · heats %d m · loudness %d" % [
+				"burning, %.1f h left" % sim.climate.hours_left(target_key) if st["lit"] else "cold",
+				st["planks"], "" if st["planks"] == 1 else "s", int(sim.data.seasons["stove"]["radius"]),
+				int(sim.data.buildables["stove"]["loudness"])])
+		lines.append("[E] load planks (one burns %d game-hours)" % int(sim.data.seasons["stove"]["hours_per_fuel"]))
+	elif kind == "heater":  # M16
+		var hb: Dictionary = sim.data.buildables["electric_heater"]
+		lines.append("Electric heater · %s · heats %d m · silent" % ["on" if sim.climate.heater_on(target_key)
+				else "NO POWER (%d W)" % roundi(hb["watts"]), int(sim.data.seasons["heater"]["radius"])])
+		lines.append(_network_line(sim.power.network_of(target_key)))
 	elif kind == "solar":
 		lines.append("Solar panel · silent · %d W now (sunlight only)" % roundi(sim.data.buildables["solar_panel"]["watts_out"] * sim.clock_daylight()))
 		lines.append(_network_line(sim.power.network_of(target_key)))

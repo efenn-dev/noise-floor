@@ -96,11 +96,26 @@ func _add_lamp(body: StaticBody3D, model: Node3D) -> void:
 	lights.append(light)
 
 
-func _paint(model: Node3D, material_name: String, color: Color) -> void:
+## M16: the trees' leaves in this season's colours (brown in autumn, grey and bare-looking in winter, bright
+## in spring, the model's own green in summer).
+func apply_season(season: String) -> void:
+	var colors := SeasonLook.leaves(season)
+	for body: StaticBody3D in bodies:
+		if body.get_meta("street_kind", "") != "tree":
+			continue
+		for model: Node3D in body.get_children().filter(func(n: Node) -> bool: return n is Node3D and not n is CollisionShape3D):
+			for mat_name: String in ["Leaves", "Leaves Dark"]:
+				_paint(model, mat_name, colors.get(mat_name, Color()), not colors.has(mat_name))
+
+
+func _paint(model: Node3D, material_name: String, color: Color, original := false) -> void:
 	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		for s in mesh.mesh.get_surface_count():
 			var mat := mesh.mesh.surface_get_material(s) as StandardMaterial3D
 			if mat != null and mat.resource_name == material_name:
+				if original:
+					mesh.set_surface_override_material(s, null)  # M16: back to the model's own colour
+					continue
 				mat = mat.duplicate()
 				mat.albedo_color = color
 				mesh.set_surface_override_material(s, mat)
