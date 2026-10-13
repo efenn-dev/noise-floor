@@ -36,6 +36,22 @@ func can_start(id: String, pockets: Inventory) -> bool:
 	return c["key_in"] == "ignition" or c["hotwired"] or pockets.count(key_item(id)) > 0
 
 
+## What the look-at prompt says about a car you have no key for.
+const NO_KEY_HINT := "No key: search the trunk (E at the back) or the nearest house"
+
+
+## The one line a player needs about starting `id`: "" if it starts (key in the ignition or your pockets,
+## or hotwired); for a wreck, what's wrong with it and that it can still be searched and siphoned;
+## otherwise where to look for the key.
+func start_hint(id: String, pockets: Inventory) -> String:
+	var why := why_not(id)
+	if why != "":
+		return "%s. It won't drive, but you can still search the trunk and siphon its gas" % why
+	if can_start(id, pockets):
+		return ""
+	return NO_KEY_HINT
+
+
 ## Where to stand to search the trunk: the back of the car (+Z in the car's own frame).
 func trunk_pos(id: String) -> Vector3:
 	var c: Dictionary = cars[id]

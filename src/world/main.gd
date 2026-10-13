@@ -98,6 +98,9 @@ func _ready() -> void:
 	sim.stats.muted = true  # building the town, a save or a demo base isn't the player's doing
 	add_child(session_log)
 	session_log.setup(sim)
+	if session_log.enabled and not GameSession.build_printed:
+		GameSession.build_printed = true  # once per run, not on every scene reload
+		print("Noise Floor build: " + GameSession.version_line())
 	_build_environment()
 	_build_ground()
 	_build_town()

@@ -6,3 +6,7 @@
 /build/
 # Python bytecode from tools/art
 __pycache__/
+
+# Written by play.bat on every run (the build being played, and what its update step did)
+version.txt
+play-update.log

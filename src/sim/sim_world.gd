@@ -8,6 +8,8 @@ const TICK_RATE := 20
 const TICK := 1.0 / TICK_RATE
 ## Cap per update so a long freeze (debugger, alt-tab) can't snowball into thousands of ticks.
 const MAX_TICKS_PER_UPDATE := 10
+## What the HUD says the first time you sit in a car you have no key for.
+const NO_KEY_MESSAGE := "No key. The glovebox is searched from the trunk, or try the nearest house"
 
 var clock: GameClock
 var data: GameData
@@ -29,6 +31,8 @@ var _day := 1
 var director: Director
 ## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
 var messages: Array = []
+## Cars you've already been told have no key (see enter_car).
+var _told_no_key := {}
 var loot: Loot
 ## Storage crates: piece key -> Inventory.
 var storages: Dictionary = {}
@@ -436,6 +440,9 @@ func enter_car(id: String) -> String:
 		player_pos = vehicles.cars[id]["pos"]  # you're in the car now: zombies come for it
 		var c: Dictionary = vehicles.cars[id]
 		c["running"] = c["fuel"] > 0.0 and vehicles.can_start(id, inventory)  # no key, no engine
+		if not vehicles.can_start(id, inventory) and not _told_no_key.has(id):
+			_told_no_key[id] = true  # once per car, so it doesn't nag every time you sit in it
+			add_message(NO_KEY_MESSAGE, 8.0)
 		stats.note("got in a " + str(c.get("type", "car")))
 	return why
 

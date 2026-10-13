@@ -15,3 +15,22 @@ static var skip_menu := false
 static var skip_hints := false
 ## Where saves go (tests point this somewhere else).
 static var save_path := SAVE_PATH
+
+## Where play.bat writes the build being played: one line, "<short commit> <commit title>".
+const VERSION_PATH := "res://version.txt"
+## Tests point this at a file of their own, so they never read the real one.
+static var version_path := VERSION_PATH
+## True once the build line has been printed to the console (main.gd, once per run).
+static var build_printed := false
+
+
+## The build being played, for the title screen, the session log and the console. "dev build" when
+## play.bat didn't write one (running from the editor, a test, a cloud session).
+static func version_line() -> String:
+	if not FileAccess.file_exists(version_path):
+		return "dev build"
+	var f := FileAccess.open(version_path, FileAccess.READ)
+	if f == null:
+		return "dev build"
+	var line := f.get_line().trim_prefix("\ufeff").strip_edges()
+	return line if line != "" else "dev build"
