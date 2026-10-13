@@ -9,7 +9,7 @@ const NOISE_SECONDS := 40.0  # the noise and house hints are just information, s
 const STEPS := [
 	"Find the crate next to you and press E (Tab looks inside)",
 	"Houses have food inside. E opens doors; close them behind you",
-	"Press B and build a foundation and a smelter",
+	"Press 1 and click to lay a foundation, then B to pick a smelter from the build menu",
 	"It's loud. Zombies hear it. Press N to see how far",
 	"Wall it in, or press U on it to fit a muffler",
 ]

@@ -15,18 +15,19 @@ const KEYS := {
 	"free_mouse": [KEY_ESCAPE],  # opens the pause menu
 	"quicksave": [KEY_F5],
 	"quickload": [KEY_F9],
-	"build_mode": [KEY_B],
+	"build_mode": [KEY_B],  # S3: opens the build menu
 	"build_rotate": [KEY_R],
-	"build_pick_1": [KEY_1],
-	"build_pick_2": [KEY_2],
-	"build_pick_3": [KEY_3],
-	"build_pick_4": [KEY_4],
-	"build_pick_5": [KEY_5],
-	"build_pick_6": [KEY_6],
-	"build_pick_7": [KEY_7],
-	"build_pick_8": [KEY_8],
-	"build_pick_9": [KEY_9],
-	"build_pick_10": [KEY_0],
+	# S3: the hotbar (Hotbar): each key builds the piece or uses the item on that slot, anywhere on foot.
+	"hotbar_1": [KEY_1],
+	"hotbar_2": [KEY_2],
+	"hotbar_3": [KEY_3],
+	"hotbar_4": [KEY_4],
+	"hotbar_5": [KEY_5],
+	"hotbar_6": [KEY_6],
+	"hotbar_7": [KEY_7],
+	"hotbar_8": [KEY_8],
+	"hotbar_9": [KEY_9],
+	"hotbar_10": [KEY_0],
 	"inventory": [KEY_TAB, KEY_I],
 	"eat": [KEY_Z],
 	"drink": [KEY_X],
@@ -59,6 +60,14 @@ static var assume_captured := false
 ## True while the mouse is locked to the game (look around, swing, build).
 static func captured() -> bool:
 	return assume_captured or Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+
+
+## S3: the hotbar slot (0-9) an event's action presses, or -1.
+static func hotbar_slot(event: InputEvent) -> int:
+	for i in 10:
+		if event.is_action_pressed("hotbar_%d" % (i + 1)):
+			return i
+	return -1
 
 
 static func register() -> void:

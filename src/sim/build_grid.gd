@@ -107,13 +107,42 @@ func player_placeable(id: String) -> bool:
 	return data.buildables.has(id) and data.buildables[id].get("player_placeable", true)
 
 
-## Opens or closes a door. Returns the new state (true = open).
-func toggle_door(key: String) -> bool:
+## Opens or closes a door. Returns the new state (true = open). S3: given where the opener stands (`from`),
+## the door swings AWAY from them (stored as "swing": 1 or -1, see door_pose), so it never shoves them.
+func toggle_door(key: String, from: Vector3 = Vector3.INF) -> bool:
 	if not pieces.has(key) or _kind(pieces[key]["id"]) != "door":
 		return false
-	pieces[key]["open"] = not pieces[key].get("open", false)
+	var piece: Dictionary = pieces[key]
+	piece["open"] = not piece.get("open", false)
+	if piece["open"] and from.is_finite():
+		piece["swing"] = swing_away_from(key, from)
 	piece_changed.emit(key)
-	return pieces[key]["open"]
+	return piece["open"]
+
+
+## Which way a door at `key` should swing to open away from `from`: 1 toward the door's own -Z side (the
+## default), -1 toward its +Z side.
+func swing_away_from(key: String, from: Vector3) -> int:
+	var piece: Dictionary = pieces[key]
+	var yaw := yaw_for(piece["id"], piece["cell"], piece["side"])
+	var local := Basis(Vector3.UP, deg_to_rad(yaw)).inverse() * (from - piece_center(key))
+	return 1 if local.z >= 0.0 else -1
+
+
+## Where a door's box stands: closed, flat on its edge; open, turned a quarter round the hinge at its -X end
+## toward the side "swing" says (1 = the door's -Z side, -1 = +Z), so an open door is still a solid, visible
+## panel beside the doorway (the look ray finds it to close it again, and nothing walks through it).
+func door_pose(key: String) -> Transform3D:
+	var piece: Dictionary = pieces[key]
+	var yaw := yaw_for(piece["id"], piece["cell"], piece["side"])
+	var center := piece_center(key)
+	if not piece.get("open", false):
+		return Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), center)
+	var size: Vector3 = data.buildables[piece["id"]]["size"]
+	var swing := int(piece.get("swing", 1))
+	var hinge := center - Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(size.x / 2.0, 0, 0)
+	var open_basis := Basis(Vector3.UP, deg_to_rad(yaw + 90.0 * swing))
+	return Transform3D(open_basis, hinge + open_basis * Vector3(size.x / 2.0, 0, 0))
 
 
 ## Fully repairs a piece, paying a share of its build cost for the damage, less `discount` (Building).

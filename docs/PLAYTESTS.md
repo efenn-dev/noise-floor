@@ -16,6 +16,15 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-13 — Emmitt, length not recorded (verbal with a screenshot, relayed by the lead), build 23f1433 (everything through PR #41)
+- First five minutes: not recorded. "The game is pretty cool now."
+- Fun: not recorded.
+- Confusing: **driving does not work.** The screenshot shows him standing beside the red sedan with a car key in his pockets, the car at gas 1.0 and the driving-keys message ("W/S gas and brake · A/D steer ...") stacked eight times down the screen: eight presses of E, each one in and straight back out. Cause found in the code: the Interactor got him in, then the same E press reached main.gd, where E while driving means get out. **Doors:** once a door is open you can't close it (the open door was on no collision layer, so the look ray never found it again) and you walk straight through the open panel.
+- Death: not recorded.
+- Wanted: **a hotbar for items like Satisfactory, and a build menu**, where anything from the build menu or any usable item can be put on a hotbar key.
+- Fix first: driving, then doors, then the hotbar and build menu (all three in S3, the first Sprint 3 pull request).
+- Session log: not supplied.
+
 ## 2026-10-12 — Emmitt, length not recorded (verbal, relayed by the lead), build 15f2c95 (M10c: play.bat had not picked up PRs #16–#18)
 - First five minutes: looked for a way into the houses; there is none. The houses are closed boxes.
 - Fun: not recorded.

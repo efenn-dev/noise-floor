@@ -201,7 +201,7 @@ func test_save_and_load_keep_phases_progress_and_reward() -> void:
 	sim.project_deliver(ID)
 	eq(sim.projects.missing(ID), {"nails": 12}, "part of phase 2 delivered")
 	var d := SaveGame.to_dict(sim)
-	eq(int(d["version"]), 12, "a version-12 save")
+	eq(int(d["version"]), SaveGame.VERSION, "saved as the current version")
 	var b := SimWorld.new(8.0)
 	b.place_park(ParkPlan.generate(1), false)
 	eq(SaveGame.apply(b, d), "", "loads")

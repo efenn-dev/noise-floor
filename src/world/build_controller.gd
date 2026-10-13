@@ -1,10 +1,11 @@
 class_name BuildController
 extends Node3D
-## Build mode: B toggles it. Aim at the ground or a foundation to see a ghost of the piece,
-## snapped to the 2 m grid: green = can build, red = can't (the HUD says why).
-## 1-9, 0 and the mouse wheel pick the piece (see PIECES). R turns the piece: walls move to the next edge,
-## belts and machines turn to face the next way (default: facing away from you).
-## Left-click builds, right-click removes the piece you're looking at (full refund).
+## Build mode. Aim at the ground or a foundation to see a ghost of the piece, snapped to the 2 m grid:
+## green = can build, red = can't (the HUD says why). S3: main.gd turns it on with a piece from the build
+## menu (B) or a hotbar key (1-9, 0), and Esc turns it off; the mouse wheel steps through PIECES (the order
+## the build menu lists them in). R turns the piece: walls move to the next edge, belts and machines turn to
+## face the next way (default: facing away from you). Left-click builds, right-click removes the piece you're
+## looking at (full refund).
 
 const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
@@ -77,15 +78,16 @@ func select(index: int) -> void:
 	last_message = ""
 
 
+## S3: picks a piece by id (the hotbar and the build menu). Unknown ids are ignored.
+func select_id(id: String) -> void:
+	var i := PIECES.find(id)
+	if i != -1:
+		select(i)
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("build_mode"):
-		set_active(not active)
 	if not active:
 		return
-	for i in mini(PIECES.size(), 10):  # keys 1-9 and 0; the rest via the wheel
-		if event.is_action_pressed("build_pick_%d" % (i + 1)):
-			select(i)
-			return
 	if event.is_action_pressed("build_next"):
 		select((piece_index + 1) % PIECES.size())
 		return
@@ -200,11 +202,11 @@ static func _facing_side(forward: Vector3) -> int:
 ## Two lines for the HUD.
 func status_text() -> String:
 	if not active:
-		return "B: build mode"
+		return "B: build menu"
 	var info: Dictionary = sim.data.buildables[piece()]
 	var lines := PackedStringArray()
 	lines.append("BUILD  %s  (%s)" % [info["name"], _cost_text(info["cost"])])
-	var hint := "1-9, 0 or wheel: pick · R rotate · LMB build · RMB remove · B exit · uses crates within %dm" % int(sim.data.survival["storage_range"])
+	var hint := "1-0 hotbar · wheel: next piece · B menu · R rotate · LMB build · RMB remove · Esc stop · uses crates within %dm" % int(sim.data.survival["storage_range"])
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)

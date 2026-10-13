@@ -33,6 +33,7 @@ var radio_lines: Array = []
 var _pete_busy := false
 ## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
 var vehicles: Vehicles
+var hotbar: Hotbar  # S3: the ten slots under keys 1-9 and 0
 ## Skills that level by doing and the perks they earn (M12). Kept when you die.
 var skills: Skills
 ## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
@@ -90,6 +91,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	director = Director.new(data, seed_value)
 	loot = Loot.new(data, seed_value)
 	vehicles = Vehicles.new(data)
+	hotbar = Hotbar.new(data)
 	base_log = BaseLog.new(data, build)
 	automation = Automation.new(data, build, power, noise)
 	automation.base_log = base_log
@@ -785,13 +787,14 @@ func _is_supply(item: String) -> bool:
 
 # --- Doors and repair ---------------------------------------------------------
 
-## Opens or closes a door (a little noise). Returns a message.
-func toggle_door(key: String) -> String:
+## Opens or closes a door (a little noise). Returns a message. S3: `from` is where the opener stands, so
+## the door swings away from them (see BuildGrid.toggle_door).
+func toggle_door(key: String, from: Vector3 = Vector3.INF) -> String:
 	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "door":
 		return ""
 	if automation.is_locked(key):
 		return "Locked by a sensor until it clears"
-	var open := build.toggle_door(key)
+	var open := build.toggle_door(key, from)
 	noise.emit_kind(build.piece_center(key), "door")
 	return "Door opened" if open else "Door closed"
 

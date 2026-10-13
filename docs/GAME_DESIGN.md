@@ -35,7 +35,7 @@ Searchable containers in houses, cars and shops (cabinets, fridges, car trunks),
 **Storage (added in M6):** storage crates hold what you can't carry. Building and hand-feeding machines draw from your pockets first, then from any crate within 30 m, and build refunds go back into the crate. The starting kit begins in a crate next to the spawn point.
 
 ### Building
-Build menu with a ghost preview, grid snapping (2 m foundations), and rotation. Costs come out of your inventory and deconstructing refunds 100%. Pieces: foundation, wall, doorway, door, barricaded window, stairs.
+Build menu with a ghost preview, grid snapping (2 m foundations), and rotation. Costs come out of your inventory and deconstructing refunds 100%. Pieces: foundation, wall, doorway, door, barricaded window, stairs. **S3 (2026-10-13, from Playtest #1):** B opens a build menu of every piece in groups (Base, Factory, Power, Defense) with costs greyed when you can't pay; clicking one starts building it, Esc stops. A ten-slot **hotbar** under 1-9 and 0 (Satisfactory-style) holds pieces to build and items to use (food, drink, bandages); a number key in the build menu or on an item in your pockets (Tab) puts it on that key. Saved with the game. Doors swing away from whoever opens them and stay solid while open, so you close them from either side and can't walk through the panel.
 
 ### Production (first chains)
 

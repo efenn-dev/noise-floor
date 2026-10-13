@@ -4,6 +4,7 @@ extends SceneTree
 ## Use tools/test.sh (it refreshes the class cache first and fails on script errors).
 ## A test may `await` (e.g. `await tree.physics_frame`) to run real physics; `tree` is set on every suite.
 ## Output stays compact on purpose: one line per file, plus one line per failure.
+## S3: `-- --only=hotbar` runs only the files whose name contains that (tools/test.sh hotbar).
 
 const TEST_DIR := "res://test/"
 
@@ -11,10 +12,16 @@ const TEST_DIR := "res://test/"
 func _initialize() -> void:
 	var total_passed := 0
 	var total_failed := 0
+	var only := ""
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			only = arg.substr("--only=".length())
 	var files := Array(DirAccess.get_files_at(TEST_DIR))
 	files.sort()
 	for file: String in files:
 		if not (file.begins_with("test_") and file.ends_with(".gd")):
+			continue
+		if only != "" and not file.contains(only):
 			continue
 		var script: GDScript = load(TEST_DIR + file)
 		if script == null or not script.can_instantiate():

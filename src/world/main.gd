@@ -62,6 +62,8 @@ var park_view: ParkView
 var park_pieces := 0  # M17a: warehouse pieces the park plan laid this run (0 when the save holds them)
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
 var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
+var build_menu: BuildMenu  # S3: B; click a piece to build it, 1-9/0 puts it on the hotbar
+var hotbar_view: HotbarView  # S3: the ten slots along the bottom of the HUD
 var defense_view: DefenseView
 var bag_view: BagView
 var noise_overlay: NoiseOverlay
@@ -99,6 +101,9 @@ var _dot: ColorRect      # the centre dot, shown otherwise
 var _keys_label: Label   # P3: the one-line key hint at the bottom, for what you're doing now
 ## P3: the key hint line never gets longer than this (it drops its least useful keys first).
 const KEY_HINT_MAX := 110
+## S3: the hotbar's bottom edge sits this far above the window's bottom (the health and key-hint lines are
+## bottom-left under it, the first-game hints above it).
+const HOTBAR_BOTTOM := 92.0
 var _interact_label: Label
 var _health_label: Label
 var _hurt_flash: ColorRect
@@ -158,6 +163,10 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	build_menu = BuildMenu.new()
+	add_child(build_menu)
+	build_menu.setup(sim, builder)
+	build_menu.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
 	skills_screen = SkillsScreen.new()
 	add_child(skills_screen)
 	skills_screen.setup(sim)
@@ -185,7 +194,7 @@ func _ready() -> void:
 		hints.setup(sim, inventory_screen, noise_overlay)
 		hints.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE)
 		hints.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		hints.position.y -= 110
+		hints.position.y -= HOTBAR_BOTTOM + 84  # S3: above the hotbar
 		_hud.get_parent().add_child(hints)  # the HUD layer, so the title screen hides it too
 	if _loaded:
 		_apply_save(save)
@@ -210,6 +219,8 @@ func _ready() -> void:
 		inventory_screen.open()
 		if args["inventory"] != "":
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
+	if args.has("build-menu"):
+		_open_build_menu()  # S3: --build-menu, for screenshots (B in game)
 	if args.has("gear"):
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
@@ -239,7 +250,7 @@ func _ready() -> void:
 	if args.has("help"):
 		help_screen.open()  # P3: --help, the controls screen (F1 in game), for screenshots
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
-			and not workbench_screen.is_open() and not _m15_screen_open():
+			and not workbench_screen.is_open() and not _m15_screen_open() and not build_menu.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	sim.stats.muted = false
 
@@ -513,9 +524,11 @@ func _sync_player() -> void:
 		sensor_screen.close()
 	if project_screen.is_open() and (p.dead or p.asleep):
 		project_screen.close()
-	# no walking while sorting your pockets, spending perk points or at the workbench
+	if build_menu.is_open() and (p.dead or p.asleep):
+		build_menu.close()
+	# no walking while sorting your pockets, spending perk points, at the workbench or in the build menu
 	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
-			or _m15_screen_open()
+			or _m15_screen_open() or build_menu.is_open()
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -546,7 +559,10 @@ func _footsteps(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("free_mouse"):
 		if not menus.is_open():
-			_open_pause()  # closing it again is handled by Menus, which runs while paused
+			if builder.active:
+				builder.set_active(false)  # S3: Esc stops building first; Esc again pauses
+			else:
+				_open_pause()  # closing it again is handled by Menus, which runs while paused
 			get_viewport().set_input_as_handled()
 		return
 	if menus.is_open():
@@ -581,6 +597,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.is_action_pressed("inventory") or event.is_action_pressed("skills"):
 			return  # no rummaging while driving
+		if event.is_action_pressed("build_mode") or InputSetup.hotbar_slot(event) != -1:
+			return  # S3: no building or snacking from the driver's seat either
 	if workbench_screen.is_open() or _m15_screen_open():
 		return  # they close themselves on E, Tab or Esc (the base log on L too)
 	if event.is_action_pressed("base_log") and not sim.player.dead:
@@ -603,6 +621,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not InputSetup.captured():
+		return
+	if event.is_action_pressed("build_mode") and not sim.player.dead:
+		_open_build_menu()  # S3: B (the menu's own _input closes it)
+		get_viewport().set_input_as_handled()
+		return
+	var slot := InputSetup.hotbar_slot(event)
+	if slot != -1 and not sim.player.dead:
+		_hotbar_press(slot)  # S3: 1-9, 0 (a screen with the mouse free takes these first, to assign)
+		get_viewport().set_input_as_handled()
 		return
 	var msg := ""
 	if event.is_action_pressed("eat"):
@@ -1001,7 +1028,7 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_stove()
 	if args.has("build"):
 		builder.set_active(true)
-		builder.select(maxi(0, BuildController.PIECES.find(args["build"])))
+		builder.select_id(args["build"])
 
 
 ## M16 --demo-stove: a stove loaded with 10 planks (burning) in the free floor cell of the house you stand in
@@ -1242,6 +1269,14 @@ func _build_hud() -> void:
 	_keys_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	layer.add_child(_keys_label)
 
+	hotbar_view = HotbarView.new()  # S3: bottom centre, above the health and key-hint lines
+	hotbar_view.setup(sim, builder)
+	hotbar_view.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE)
+	hotbar_view.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	hotbar_view.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	hotbar_view.position.y -= HOTBAR_BOTTOM
+	layer.add_child(hotbar_view)
+
 	_dot = ColorRect.new()
 	_dot.color = Color(1, 1, 1, 0.8)
 	_dot.size = Vector2(4, 4)
@@ -1269,7 +1304,7 @@ func key_hint_text() -> String:
 	elif driving != null:
 		parts.append_array(["WASD drive", "Space handbrake", "E get out", "H horn", "F lights"])
 	elif builder.active:
-		parts.append_array(["1-9, 0 or wheel: pick", "R rotate", "LMB place", "RMB remove", "B leave"])
+		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
 	else:
 		parts.append_array(interactor.keys())
 		if sim.guns.in_hand():
@@ -1281,7 +1316,7 @@ func key_hint_text() -> String:
 			parts.append("LMB swing")
 			if not sim.gear.gun().is_empty():
 				parts.append("Q gun")
-		parts.append_array(["WASD move", "E use", "B build", "Tab gear", "K skills", "L log", "F light"])
+		parts.append_array(["WASD move", "E use", "B build", "1-0 hotbar", "Tab gear", "K skills", "L log", "F light"])
 	return fit_key_hint(parts)
 
 
@@ -1398,6 +1433,34 @@ func _exit_tree() -> void:
 	SoundView.clear_cache()
 
 
+## S3: B. The build menu, with the mouse free; the other screens close.
+func _open_build_menu() -> void:
+	if inventory_screen.is_open():
+		inventory_screen.close()
+	if skills_screen.is_open():
+		skills_screen.close()
+	sim.player_pos = player.global_position
+	build_menu.open()
+
+
+## S3: a hotbar key on foot. A piece: build mode with it (the same key again stops building). An item: use
+## it (eat, drink, bandage). An empty key says how to fill it.
+func _hotbar_press(i: int) -> void:
+	match sim.hotbar.kind(i):
+		"build":
+			var id := sim.hotbar.id(i)
+			if builder.active and builder.piece() == id:
+				builder.set_active(false)
+			else:
+				builder.select_id(id)
+				builder.set_active(true)
+		"item":
+			sim.add_message(sim.use_item(sim.hotbar.id(i)), 2.5)
+		_:
+			sim.add_message("Key %s is empty: press it on a piece in the build menu (B) or on an item in your pockets (Tab)"
+					% Hotbar.key_name(i), 4.0)
+
+
 ## Get into a car: its camera takes over and the walker is switched off until you get out.
 func _enter_car(id: String) -> void:
 	if inventory_screen.is_open():
@@ -1406,6 +1469,8 @@ func _enter_car(id: String) -> void:
 		skills_screen.close()
 	if workbench_screen.is_open():
 		workbench_screen.close()
+	if build_menu.is_open():
+		build_menu.close()
 	builder.set_active(false)
 	driving = cars[id]
 	_set_walker(false)

@@ -35,7 +35,9 @@ extends RefCounted
 ## work progress and whether work was started; "projects_done"). A save from before 12 gets the park laid fresh
 ## (see holds_park; main.gd also spawns its zombies after applying it), the hall's north doorway opened, and every
 ## project at phase 0.
-const VERSION := 12
+## 13 = S3: the hotbar (ten slots, "build:<piece>" / "item:<item>" / ""), and a door's "swing" (which way it
+## opened). A save from before 13 gets the default hotbar and its open doors swing the default way.
+const VERSION := 13
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -71,7 +73,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for key: String in sim.build.pieces:
 		var p: Dictionary = sim.build.pieces[key]
 		pieces.append({"key": key, "id": p["id"], "cell": _v2(p["cell"]), "side": p["side"], "hp": p["hp"],
-				"open": p.get("open", false), "wear": p.get("wear", 0.0), "town": p.get("town", false)})
+				"open": p.get("open", false), "wear": p.get("wear", 0.0), "town": p.get("town", false),
+				"swing": p.get("swing", 1)})
 	var machines := []
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
@@ -126,6 +129,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
 		"spawn_point": _v3(sim.spawn_point),
 		"pieces": pieces,
+		"hotbar": sim.hotbar.to_array(),  # S3
 		"machines": machines,
 		"belts": belts,
 		"turrets": turrets,
@@ -183,6 +187,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])}
 		if bool(pd.get("town", false)):
 			piece["town"] = true
+		if pd.has("swing"):  # S3: before 13 every open door swung the default way
+			piece["swing"] = int(pd["swing"])
 		sim.build.restore(pd["key"], piece)
 	if version >= FIRST_WITH_TOWN and version < FIRST_WITH_TOWN_FLAG:
 		_mark_town(sim)
@@ -223,6 +229,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			bin.put(str(bd["item"]), int(bd["count"]))
 		if bin != null:
 			bin.timer = float(bd.get("timer", 0.0))
+	sim.hotbar.load_array(d.get("hotbar", []))  # S3: defaults before 13
 	sim.automation.load_dict(d.get("automation", {}))
 	sim.defense.sprung = {}
 	for key: String in d.get("sprung", []):
