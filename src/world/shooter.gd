@@ -38,6 +38,9 @@ const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
+## V16: on iron sights the camera skips what's closer than this, so the rifle's stock under your cheek doesn't
+## fill the bottom of the view (the receiver, sights and both hands are farther out).
+const ADS_NEAR := {"hunting_rifle": 0.34}
 const IRON_FOV_MULT := 0.85  # V15: iron sights narrow the normal field of view by 15%
 const ADS_SWAY_MULT := 0.12
 const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
@@ -91,6 +94,7 @@ var sprinting := false  # V15: the player controller sets this from the sprint r
 var hold_reload_at := -1.0  # V13: --reload-at freezes the visible choreography without touching the sim
 var hold_inspect_at := -1.0  # V13: --inspect-at does the same for inspection
 var base_fov := 75.0
+var base_near := 0.05
 var _aim_held := false
 var _aim_weight := 0.0
 
@@ -120,6 +124,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	builder = p_builder
 	exclude = p_exclude
 	base_fov = camera.fov
+	base_near = camera.near
 	_rng.randomize()
 	for base: String in MODELS:
 		var node: Node3D
@@ -476,6 +481,8 @@ func _process(delta: float) -> void:
 		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
 	var aimed_fov := AIM_FOV if sim.guns.scoped() else base_fov * IRON_FOV_MULT
 	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
+	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(sim.gear.gun().get("base", ""), 0.0))
+	camera.near = lerpf(base_near, maxf(base_near, clip), _aim_weight)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_message_time -= delta
 	if _message_time <= 0.0:
