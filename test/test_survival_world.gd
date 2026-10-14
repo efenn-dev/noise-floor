@@ -70,7 +70,7 @@ func test_search_store_and_sleep_with_e() -> void:
 	eq(interactor.interact(), "", "E opens the storage crate")
 	eq(opened[1], stash, "it names the crate to open")
 	var scrap := sim.inventory.count("scrap_metal")
-	var stored_before := sim.storages[stash].count("scrap_metal")
+	var stored_before: int = sim.storages[stash].count("scrap_metal")
 	eq(sim.move_container_item(stash, "scrap_metal", scrap, false)["moved"], scrap,
 			"the loot-screen sim path moves the stack into storage")
 	eq(sim.storages[stash].count("scrap_metal"), stored_before + scrap, "scrap is in the crate")

@@ -887,7 +887,8 @@ func can_equip_gear(uid: int, slot: String) -> String:
 		gear.equipped[slot] = old
 	else:
 		gear.equipped.erase(slot)
-	return "Too heavy" if final_kg > limit + 0.001 else ""
+	# only refuse when the swap makes you heavier: putting on what you carry always lightens your pockets
+	return "Too heavy" if final_kg > limit + 0.001 and final_kg > carried_kg() + 0.001 else ""
 
 
 func equip_gear_to_slot(uid: int, slot: String) -> String:

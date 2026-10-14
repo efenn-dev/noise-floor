@@ -114,7 +114,7 @@ func test_drag_items_gear_slots_and_hotbar() -> void:
 	eq(screen.drop_reason(pocket_gear, "slot:body"), "Doesn't fit that slot", "the invalid drop says why")
 	screen.begin_drag()
 	check(not screen.check_drop(pocket_gear, "slot:body"), "Godot's drop check refuses the invalid target")
-	eq(messages.back(), "Doesn't fit that slot", "the refused drag shows the short message")
+	eq(messages[messages.size() - 1], "Doesn't fit that slot", "the refused drag shows the short message")
 	screen.drop_data(pocket_gear, "slot:head")
 	eq(sim.gear.equipped["head"]["uid"], hat["uid"], "dropping on Head equips it")
 	var worn := screen.drag_data(InventoryScreen.GEAR + str(hat["uid"]), InventoryScreen.WORN)
@@ -146,8 +146,8 @@ func test_too_heavy_and_leaving_or_damage_close_loot() -> void:
 	check(not screen.can_drop(drag, InventoryScreen.POCKETS), "an overweight drop is refused")
 	eq(screen.drop_reason(drag, InventoryScreen.POCKETS), "Too heavy", "with the short message")
 	screen.take_everything()
-	check(messages.back().begins_with("Too heavy:") and "Plank" in messages.back(),
-			"take all reports what did not fit (%s)" % messages.back())
+	check(messages[messages.size() - 1].begins_with("Too heavy:") and "Plank" in messages[messages.size() - 1],
+			"take all reports what did not fit (%s)" % messages[messages.size() - 1])
 	sim.player_pos = Vector3(10, 0, 0)
 	screen._process(0.0)
 	check(not screen.is_open(), "walking beyond reach closes it")
