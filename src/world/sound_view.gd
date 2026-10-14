@@ -26,7 +26,8 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		# M15: a decoy noisemaker is a horn; a tripwire bell borrows the click until it gets its own sound
 		"noisemaker": ["horn"], "bell": ["click"],
 		"weapon_break": ["weapon_break"],  # V9: a weapon snapping
-		"glass_break": ["glass_break"], "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2
+		"glass_break": ["glass_break"], "glass_clear": ["glass_break"],
+		"vault": STEPS, "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2, V17
 const CHOREOGRAPHED_RELOADS: Array[String] = ["pistol", "hunting_rifle"]  # V16: Shooter supplies timed mechanics
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0

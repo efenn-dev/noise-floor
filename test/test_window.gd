@@ -1,6 +1,6 @@
 extends "res://test/base_test.gd"
-## W1a windows: 40 hp, block sound but not sight while the glass holds, become an opening when broken,
-## and a barricade boards a broken one up (no refund). You can't build windows or other town pieces.
+## W1a/V17 windows: 40 hp, block sound but not sight while the glass holds, stop muffling when broken but
+## keep blocking ordinary walking, and a barricade boards a broken one up (no refund).
 
 const N := BuildGrid.Side.NORTH
 
@@ -18,6 +18,7 @@ func test_window_blocks_sound_not_sight() -> void:
 	eq(sim.data.buildables["window"]["hp"], 40, "window hp")
 	check(sim.build.is_edge("window"), "windows are edge pieces")
 	check(sim.build.edge_blocks(key), "glass blocks sound")
+	check(sim.build.edge_blocks_walk(key), "the intact window blocks walking")
 	check(not sim.build.edge_blocks(key, true), "you can see through glass")
 	var inside := Vector3(1, 1, 1)
 	var outside := Vector3(1, 1, -3)
@@ -25,7 +26,7 @@ func test_window_blocks_sound_not_sight() -> void:
 	eq(sim.noise.walls_between(inside, outside, true), 0, "sight doesn't")
 
 
-func test_window_breaks_into_an_opening() -> void:
+func test_window_breaks_into_a_climbable_frame() -> void:
 	var sim := _room()
 	var key := "w:0:0:n"
 	var changed := []
@@ -39,6 +40,8 @@ func test_window_breaks_into_an_opening() -> void:
 	eq(changed, [key], "the view hears it break")
 	check(not sim.build.edge_blocks(key), "sound passes")
 	check(not sim.build.edge_blocks(key, true), "sight passes")
+	check(sim.build.edge_blocks_walk(key), "V17: the broken frame still blocks ordinary walking")
+	check(sim.build.has_shards(key), "freshly broken glass leaves sharp shards")
 	eq(sim.noise.walls_between(Vector3(1, 1, 1), Vector3(1, 1, -3)), 0, "no wall in the way any more")
 	check(not sim.build.damage(key, 30), "can't break it twice")
 	check(not ZombieBrain._standing(sim.build.pieces, key), "zombies stop bashing a broken window")

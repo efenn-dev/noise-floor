@@ -36,6 +36,8 @@ var crouching := false
 var head: Node3D
 var camera: Camera3D
 var flashlight: SpotLight3D
+var vaulting := false
+var _vault_body: PhysicsBody3D
 
 var _capsule: CapsuleShape3D
 var _shape: CollisionShape3D
@@ -102,6 +104,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if vaulting:
+		velocity = Vector3.ZERO
+		wish_move = Vector2.ZERO
+		wish_jump = false
+		wish_sprint = false
+		return
 	if frozen:
 		wish_move = Vector2.ZERO
 		wish_jump = false
@@ -134,6 +142,30 @@ func _physics_process(delta: float) -> void:
 	velocity.x = flat.x
 	velocity.z = flat.z
 	move_and_slide()
+
+
+## V17: the sim owns whether/timing; the body only draws the smooth path and ignores this window collider.
+func begin_vault(window_body: PhysicsBody3D) -> void:
+	vaulting = true
+	velocity = Vector3.ZERO
+	_vault_body = window_body
+	if _vault_body != null:
+		add_collision_exception_with(_vault_body)
+
+
+func show_vault(from: Vector3, to: Vector3, fraction: float) -> void:
+	var k := smoothstep(0.0, 1.0, clampf(fraction, 0.0, 1.0))
+	global_position = from.lerp(to, k) + Vector3.UP * sin(PI * k) * 0.5
+	velocity = Vector3.ZERO
+
+
+func end_vault(landing: Vector3) -> void:
+	if _vault_body != null and is_instance_valid(_vault_body):
+		remove_collision_exception_with(_vault_body)
+	_vault_body = null
+	vaulting = false
+	global_position = landing
+	velocity = Vector3.ZERO
 
 
 func _update_crouch(delta: float) -> void:

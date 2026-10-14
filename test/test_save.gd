@@ -217,6 +217,7 @@ func test_town_damage_and_doors_survive_save_and_load() -> void:
 	check(b.build.pieces[door]["open"], "the front door is still open")
 	eq(b.build.pieces[wall]["hp"], 350, "the wall is still damaged")
 	check(b.build.is_broken(window), "the window is still broken")
+	check(b.build.has_shards(window), "and its sharp glass state survives")
 	check(not b.build.edge_blocks(window), "and still lets sound through")
 	check(not b.build.pieces.has(gone), "the wall you knocked down stays down")
 

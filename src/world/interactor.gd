@@ -40,7 +40,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not InputSetup.captured():
+	if not InputSetup.captured() or not sim.player_vault.is_empty():
 		return
 	if event.is_action_pressed("interact"):
 		var was_driving := sim.vehicles.driving
@@ -185,6 +185,11 @@ func interact() -> String:
 		var why := sim.search(target_container)
 		last_message = why
 		return why
+	if target_key != "" and sim.build.is_broken(target_key):
+		if sim.build.has_shards(target_key):
+			last_message = sim.start_clear_glass(target_key)
+			return last_message
+		return ""
 	if target_key != "" and sim.build.kind_of(sim.build.pieces[target_key]["id"]) == "door":
 		if door_blocked(target_key):
 			last_message = "Something's in the way of the door"
@@ -284,6 +289,18 @@ func status_text() -> String:
 	if not has_target:  # a wall, door, barricade or foundation
 		var piece: Dictionary = sim.build.pieces[target_key]
 		var b: Dictionary = sim.data.buildables[piece["id"]]
+		if sim.build.is_broken(target_key):
+			lines.append("Broken window · frame blocks walking")
+			if sim.window_in_reach(target_key):
+				lines.append("Space: climb through")
+				if sim.build.has_shards(target_key):
+					if not sim.clearing_glass.is_empty() and sim.clearing_glass.get("key", "") == target_key:
+						lines.append("Clearing glass %d%%" % roundi(100.0 * sim.clear_glass_fraction()))
+					else:
+						lines.append("E: clear the glass")
+			if last_message != "":
+				lines.append(last_message)
+			return "\n".join(lines)
 		var line := "%s · %d/%d hp" % [b["name"], piece["hp"], b["hp"]]
 		if b["kind"] == "door":
 			line += " · %s   [E] %s" % ["open" if piece.get("open", false) else "closed", "close" if piece.get("open", false) else "open"]
@@ -445,6 +462,10 @@ func project_status(id: String) -> String:
 
 func keys() -> PackedStringArray:
 	var out := PackedStringArray()
+	if target_key != "" and sim.build.is_broken(target_key) and sim.window_in_reach(target_key):
+		out.append("Space climb")
+		if sim.build.has_shards(target_key):
+			out.append("E clear glass")
 	for m: RegExMatch in _keys_re.search_all(status_text()):
 		var words := m.get_string(2)
 		if m.get_string(3) != "" and not m.get_string(3) in _FILLER:

@@ -63,6 +63,12 @@ var player := PlayerStats.new()
 var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
+## V17: an active scripted window crossing. Rules and timing live here; Player only draws the curve.
+## {key, from, to, elapsed, duration}. `vault_landing` hands the exact endpoint to the world for one frame.
+var player_vault: Dictionary = {}
+var vault_landing := Vector3.INF
+## V17: timed E interaction on sharp remnants: {key, elapsed, duration}.
+var clearing_glass: Dictionary = {}
 ## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
 var house_cells: Dictionary = {}
 var player_lit := false
@@ -179,6 +185,7 @@ func step() -> void:
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
 			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
+	_tick_window_actions()
 	player.tick(TICK)
 	_cold_messages()
 	guns.tick(TICK, inventory)
@@ -388,7 +395,7 @@ func _watch_pete() -> void:
 	for id: int in horde.zombies:
 		var z: ZombieBrain = horde.zombies[id]
 		if z.type == "old_pete" and not z.is_dead() and z.state in [ZombieBrain.State.CHASE, ZombieBrain.State.INVESTIGATE,
-				ZombieBrain.State.BREAK, ZombieBrain.State.ATTACK]:
+				ZombieBrain.State.BREAK, ZombieBrain.State.CLIMB, ZombieBrain.State.ATTACK]:
 			busy = true
 			at = z.pos
 	if busy and not _pete_busy:
@@ -501,6 +508,137 @@ func _unnoticed_zombie_near() -> bool:
 		if z.state in calm and _flat_dist(z.pos, player_pos) <= reach:
 			return true
 	return false
+
+
+# --- Window vaulting and glass -------------------------------------------------
+
+## Fitness is the existing agility-like skill: 3% off per level, capped so the motion stays readable.
+func vault_duration() -> float:
+	return float(data.survival["vault_seconds"]) * maxf(0.65, 1.0 - skills.bonus("vault_speed"))
+
+
+func vault_fraction() -> float:
+	if player_vault.is_empty():
+		return 0.0
+	return clampf(float(player_vault["elapsed"]) / maxf(0.001, float(player_vault["duration"])), 0.0, 1.0)
+
+
+## A prompt/action only counts when the player is beside the opening, not merely inside the 4 m look ray.
+func window_in_reach(key: String) -> bool:
+	return build.is_broken(key) and _flat_dist(player_pos, build.piece_center(key)) <= float(data.survival["vault_reach"])
+
+
+## Why Space cannot begin this vault. Empty means it is legal.
+func vault_reason(key: String) -> String:
+	if not build.is_broken(key):
+		return "Only a broken window can be climbed"
+	if not window_in_reach(key):
+		return "Move closer to the window"
+	if not player_vault.is_empty():
+		return "Already climbing"
+	if player.dead or player.asleep:
+		return "You can't climb now"
+	if player.aiming or guns.aiming:
+		return "Lower your aim before climbing"
+	if guns.reloading > 0.0:
+		return "Finish reloading before climbing"
+	if player.swing_cooldown > 0.0:
+		return "Finish the swing before climbing"
+	if player.blocking:
+		return "Lower your guard before climbing"
+	if carry_ratio() > 1.0:
+		return "Too over-encumbered to climb"
+	if player.stamina < float(data.survival["vault_stamina"]):
+		return "Too tired to climb"
+	return ""
+
+
+## Starts a deterministic crossing from the player's side of the frame to a safe point on the other side.
+## Returns "" or the reason it did not start.
+func start_vault(key: String) -> String:
+	var why := vault_reason(key)
+	if why != "":
+		return why
+	var piece: Dictionary = build.pieces[key]
+	var center := build.piece_center(key)
+	center.y = player_pos.y
+	var yaw := build.yaw_for(piece["id"], piece["cell"], piece["side"])
+	var normal := Basis(Vector3.UP, deg_to_rad(yaw)).z
+	var side := 1.0 if (player_pos - center).dot(normal) >= 0.0 else -1.0
+	var clearance := float(data.survival["vault_clearance"])
+	var landing := center - normal * side * clearance
+	if not player.try_vault(float(data.survival["vault_stamina"])):
+		return "Too tired to climb"
+	player.sprinting = false
+	player.set_blocking(false)
+	clearing_glass = {}
+	vault_landing = Vector3.INF
+	player_vault = {"key": key, "from": player_pos, "to": landing, "elapsed": 0.0, "duration": vault_duration()}
+	noise.emit_kind(center, "vault")
+	if build.has_shards(key):
+		player.damage(float(data.survival["vault_cut_damage"]), "glass")
+		if not player.dead:
+			player.bleeding = true
+			add_message("The glass cut you — you're bleeding (H to bandage)", 5.0)
+	return ""
+
+
+## Screenshot-only positioning uses the same state and curve without advancing the sim clock.
+func set_vault_fraction(fraction: float) -> void:
+	if not player_vault.is_empty():
+		player_vault["elapsed"] = float(player_vault["duration"]) * clampf(fraction, 0.0, 1.0)
+		player_pos = (player_vault["from"] as Vector3).lerp(player_vault["to"] as Vector3, vault_fraction())
+
+
+## Starts clearing sharp glass. An equipped melee weapon (not bare fists or a gun in hand) is faster.
+func start_clear_glass(key: String) -> String:
+	if not build.is_broken(key):
+		return "The window is not broken"
+	if not window_in_reach(key):
+		return "Move closer to the window"
+	if player.dead or player.asleep:
+		return "You can't clear glass now"
+	if not player_vault.is_empty():
+		return "Finish climbing first"
+	if not build.has_shards(key):
+		return "The glass is already cleared"
+	if not clearing_glass.is_empty():
+		return "Clearing the glass..." if clearing_glass.get("key", "") == key else "Already clearing another window"
+	var duration := float(data.survival["clear_glass_seconds"])
+	if guns.hands == "melee" and gear.equipped.get("weapon") is Dictionary:
+		duration *= float(data.survival["clear_glass_weapon_mult"])
+	clearing_glass = {"key": key, "elapsed": 0.0, "duration": duration}
+	return "Clearing the glass..."
+
+
+func clear_glass_fraction() -> float:
+	if clearing_glass.is_empty():
+		return 0.0
+	return clampf(float(clearing_glass["elapsed"]) / maxf(0.001, float(clearing_glass["duration"])), 0.0, 1.0)
+
+
+func _tick_window_actions() -> void:
+	if not player_vault.is_empty():
+		player_vault["elapsed"] = minf(float(player_vault["duration"]), float(player_vault["elapsed"]) + TICK)
+		var k := smoothstep(0.0, 1.0, vault_fraction())
+		player_pos = (player_vault["from"] as Vector3).lerp(player_vault["to"] as Vector3, k)
+		if float(player_vault["elapsed"]) >= float(player_vault["duration"]):
+			vault_landing = player_vault["to"] as Vector3
+			player_pos = vault_landing
+			player_vault = {}
+	if clearing_glass.is_empty():
+		return
+	var key: String = clearing_glass["key"]
+	if not build.has_shards(key) or not window_in_reach(key):
+		clearing_glass = {}
+		return
+	clearing_glass["elapsed"] = float(clearing_glass["elapsed"]) + TICK
+	if float(clearing_glass["elapsed"]) < float(clearing_glass["duration"]):
+		return
+	clearing_glass = {}
+	if build.clear_shards(key):
+		noise.emit_kind(build.piece_center(key), "glass_clear")
+		add_message("Glass cleared — the frame is safe to climb", 3.0)
 
 
 # --- Carrying ---------------------------------------------------------------
@@ -1182,7 +1320,7 @@ func fit_muffler(cell: Vector2i) -> String:
 ## Starts a melee swing if the weapon is ready and there's stamina (PlayerStats.try_swing). Swinging
 ## trains Strength. Returns true if it swung.
 func swing() -> bool:
-	if not player.try_swing(swing_cooldown()):
+	if not player_vault.is_empty() or not player.try_swing(swing_cooldown()):
 		return false
 	_practice("strength", "swing")
 	return true
@@ -1287,6 +1425,8 @@ func hit_zombie(id: int, head: bool) -> bool:
 
 ## Q: cycles melee, primary and sidearm, skipping empty firearm slots. Returns a message.
 func swap_hands() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	return guns.swap()
 
 
@@ -1295,6 +1435,8 @@ func swap_hands() -> String:
 ## Trains Firearms. Returns "" if it fired, otherwise why not. The world then raycasts and calls
 ## shoot_zombie() if the ray met a zombie.
 func fire() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	var why := guns.can_fire()
 	if why != "":
 		return why
@@ -1330,6 +1472,8 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 
 ## R with a gun in hand: starts a reload (or switches ammo type). A reload click carries a few metres.
 func reload() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	var msg := guns.start_reload(inventory)
 	if guns.reloading > 0.0:
 		noise.emit(player_pos, noise_loudness("reload"), "reload")
@@ -1452,12 +1596,19 @@ func take_bag(id: int) -> Dictionary:
 
 
 func _on_player_respawned() -> void:
+	player_vault = {}
+	clearing_glass = {}
+	vault_landing = Vector3.INF
 	player_pos = spawn_point
 
 
 ## Dying drops everything you carry in a bag where you fell, gear in your pockets too.
 ## What you're wearing stays on you (M13).
 func _on_player_died() -> void:
+	if not player_vault.is_empty():
+		vault_landing = player_pos
+	player_vault = {}
+	clearing_glass = {}
 	stats.note_death(player.last_cause, when_text())
 	tally["deaths"] += 1
 	var items := _counts_of(inventory)

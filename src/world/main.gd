@@ -15,6 +15,7 @@ extends Node3D
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
 ##   --block               V15: hold the melee/fists guard pose, for screenshots
 ##   --break-windows[=R]   W2: break every window within R m (default 12) at the start, for screenshots
+##   --vault-at=T          V17: face the nearest broken window and freeze its climb at fraction T (0-1)
 ##   --fists               V12: start bare-handed (your weapon goes to your pockets)
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
@@ -248,6 +249,8 @@ func _ready() -> void:
 		for key: String in sim.build.pieces.keys():
 			if sim.piece_material(key) == "glass" and sim.build.piece_center(key).distance_to(player.global_position) <= r:
 				sim.player_hit_piece(key, 50.0, "bullet")  # as a shot would: no weapon wear
+	if args.has("vault-at"):
+		_setup_vault_shot(clampf(float(args["vault-at"]), 0.0, 1.0))
 	if args.has("fists"):
 		sim.gear.unequip("weapon")  # V12: --fists starts bare-handed (the weapon goes to your pockets)
 	if args.has("swing-at"):
@@ -578,17 +581,31 @@ func _sync_player() -> void:
 		project_screen.close()
 	if build_menu.is_open() and (p.dead or p.asleep):
 		build_menu.close()
+	var vault_active := not sim.player_vault.is_empty()
+	if vault_active:
+		var key: String = sim.player_vault["key"]
+		if not player.vaulting:
+			player.begin_vault(build_view.body_for(key))
+		player.show_vault(sim.player_vault["from"] as Vector3, sim.player_vault["to"] as Vector3, sim.vault_fraction())
+		view_feel.vault_fraction = sim.vault_fraction()
+	elif player.vaulting:
+		var landing: Vector3 = sim.vault_landing if sim.vault_landing.is_finite() else player.global_position
+		player.end_vault(landing)
+		sim.vault_landing = Vector3.INF
+		view_feel.vault_fraction = -1.0
+	else:
+		view_feel.vault_fraction = -1.0
 	# no walking while sorting your pockets, spending perk points, at the workbench or in the build menu
 	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
-			or _m15_screen_open() or build_menu.is_open()
+			or _m15_screen_open() or build_menu.is_open() or vault_active
 	var sprint_requested := player.wish_sprint
 	if player.use_device_input:
 		sprint_requested = Input.is_action_pressed("sprint")
-	shooter.sprinting = sprint_requested or driving != null  # V15: requesting sprint drops ADS immediately
-	var aimed := driving == null and shooter.aiming()
+	shooter.sprinting = sprint_requested or driving != null or vault_active  # V15: requesting sprint drops ADS immediately
+	var aimed := driving == null and not vault_active and shooter.aiming()
 	sim.guns.aiming = aimed
 	p.aiming = aimed
-	p.set_blocking(driving == null and melee.blocking())
+	p.set_blocking(driving == null and not vault_active and melee.blocking())
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -596,7 +613,7 @@ func _sync_player() -> void:
 		Engine.time_scale = float(sim.data.survival["sleep_time_scale"]) if p.asleep else 1.0
 	if driving != null and p.dead:
 		_exit_car()
-	if not sim.player.dead and driving == null:
+	if not sim.player.dead and driving == null and not vault_active and not player.vaulting:
 		sim.player_pos = player.global_position  # while driving, the car reports where you are
 	sim.player_lit = player.flashlight.visible
 	var cam := get_viewport().get_camera_3d()
@@ -687,6 +704,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not InputSetup.captured():
 		return
+	if event.is_action_pressed("jump") and not sim.player.dead and driving == null:
+		interactor.update_target()
+		if interactor.target_key != "" and sim.build.is_broken(interactor.target_key):
+			sim.player_pos = player.global_position
+			var aiming_now := shooter.aiming()
+			sim.guns.aiming = aiming_now
+			sim.player.aiming = aiming_now
+			var why := sim.start_vault(interactor.target_key)
+			if why != "":
+				sim.add_message(why, 2.5)
+			else:
+				shooter.cancel_inspect()
+				melee.cancel_inspect()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("inspect") and not sim.player.dead and driving == null:
 		if sim.guns.in_hand():
 			shooter.start_inspect()
@@ -1057,6 +1089,37 @@ func _stand_inside(n: int, prop := "") -> void:
 		player.position = cell_mid - out * 0.75
 		var d := fridge - player.position
 		player.set_look(rad_to_deg(atan2(-d.x, -d.z)), -12.0)
+
+
+## V17 --vault-at=T: compose the screenshot at the nearest window already broken by --break-windows,
+## stand on its nearer side, face it, start the real sim action, then hold that action at T.
+func _setup_vault_shot(fraction: float) -> void:
+	var nearest := ""
+	var best := INF
+	for key: String in sim.build.pieces:
+		if not sim.build.is_broken(key):
+			continue
+		var distance := sim.build.piece_center(key).distance_squared_to(player.global_position)
+		if distance < best:
+			best = distance
+			nearest = key
+	if nearest == "":
+		push_warning("--vault-at needs a broken window; combine it with --break-windows")
+		return
+	var piece: Dictionary = sim.build.pieces[nearest]
+	var center := sim.build.piece_center(nearest)
+	var yaw := sim.build.yaw_for(piece["id"], piece["cell"], piece["side"])
+	var normal := Basis(Vector3.UP, deg_to_rad(yaw)).z
+	var side := 1.0 if (player.global_position - center).dot(normal) >= 0.0 else -1.0
+	player.global_position = Vector3(center.x, player.global_position.y, center.z) + normal * side * 1.05
+	var toward := center - player.global_position
+	player.set_look(rad_to_deg(atan2(-toward.x, -toward.z)), 0.0)
+	sim.player_pos = player.global_position
+	var why := sim.start_vault(nearest)
+	if why == "":
+		sim.set_vault_fraction(fraction)
+	else:
+		push_warning("--vault-at could not start: " + why)
 
 
 func _build_building(args: Dictionary) -> void:

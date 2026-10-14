@@ -39,6 +39,8 @@ var marker_color := Color.WHITE
 var bob_phase := 0.0
 var bob_amp := 0.0              # eased toward bob_amplitude(...)
 var sway := Vector2.ZERO        # x = yaw lag, y = pitch lag, radians
+## V17: set by main while the sim's window vault is active; -1 otherwise.
+var vault_fraction := -1.0
 var _time := 0.0
 var _last_health := -1.0
 var _noise := FastNoiseLite.new()
@@ -140,10 +142,14 @@ func vignette_strength(health: float) -> float:
 
 ## Where held items sit relative to their rest pose: bob plus sway.
 func hold_position_offset() -> Vector3:
+	var vault_lower := Vector3.ZERO
+	if vault_fraction >= 0.0:
+		var arc := sin(PI * clampf(vault_fraction, 0.0, 1.0))
+		vault_lower = Vector3(0.0, -0.28 * arc, 0.08 * arc)
 	if not Settings.head_bob:
-		return Vector3.ZERO
+		return vault_lower
 	var b := bob_amp * HOLD_BOB_SCALE
-	return Vector3(sin(bob_phase) * b * 0.8 - sway.x * 0.25, -absf(sin(bob_phase)) * b + sway.y * 0.25, 0.0)
+	return Vector3(sin(bob_phase) * b * 0.8 - sway.x * 0.25, -absf(sin(bob_phase)) * b + sway.y * 0.25, 0.0) + vault_lower
 
 
 func hold_rotation_offset() -> Vector3:
@@ -199,6 +205,8 @@ func _apply_camera() -> void:
 				deg_to_rad(SHAKE_MAX_DEG.y) * s * _noise.get_noise_1d(_time * SHAKE_SPEED + 100.0),
 				deg_to_rad(SHAKE_MAX_DEG.z) * s * _noise.get_noise_1d(_time * SHAKE_SPEED + 200.0))
 		pos = Vector3(sin(bob_phase) * bob_amp * 0.5, -absf(sin(bob_phase)) * bob_amp, 0.0)
+	if vault_fraction >= 0.0:
+		pos.y -= sin(PI * clampf(vault_fraction, 0.0, 1.0)) * 0.07
 	camera.rotation = rot
 	camera.position = pos
 

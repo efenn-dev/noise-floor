@@ -132,9 +132,9 @@ func test_version_14_fixture_moves_gun_and_best_bag_without_loss() -> void:
 	near(sim.carry_limit(), float(sim.data.survival["carry_base"]) + sim.skills.bonus("carry_kg") + 18.0,
 			"the migrated worn bag supplies capacity (the fixture's Strength adds its bonus too)")
 	var current := SaveGame.to_dict(sim)
-	eq(int(current["version"]), 15, "it saves back as version 15")
+	eq(int(current["version"]), SaveGame.VERSION, "it saves back as the current version")
 	var round_trip := SimWorld.new(8.0, null, int(d["seed"]))
-	eq(SaveGame.apply(round_trip, current), "", "the version-15 result loads again")
+	eq(SaveGame.apply(round_trip, current), "", "the current result loads again")
 	eq(round_trip.gear.equipped["back"], "hiking_pack", "the worn bag survives a current round trip")
 	eq(round_trip.gear.equipped["sidearm"]["base"], "pistol", "the sidearm survives too")
 	var rifle_save := d.duplicate(true)
