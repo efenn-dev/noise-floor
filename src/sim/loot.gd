@@ -7,6 +7,7 @@ extends RefCounted
 
 var data: GameData
 var seed_value: int
+var difficulty: Difficulty
 ## V18: id -> {table: String, pos: Vector3, searched: bool, items: Inventory, gear: Array};
 ## revealed contents stay here until the player chooses what to take.
 var containers: Dictionary = {}
@@ -16,20 +17,23 @@ var progress := 0.0     # seconds into the current search
 var skills: Skills
 
 
-func _init(p_data: GameData, p_seed: int = 1) -> void:
+func _init(p_data: GameData, p_seed: int = 1, p_difficulty: Difficulty = null) -> void:
 	data = p_data
 	seed_value = p_seed
+	difficulty = p_difficulty
 
 
 ## Rolls a table: `rolls` picks, each a weighted item and an amount. Returns {item: count}.
 ## A1: a table's optional "empty" weight is the chance a pick finds nothing (trash cans).
-static func roll(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+static func roll(table: Dictionary, rng: RandomNumberGenerator, abundance: float = 1.0) -> Dictionary:
 	var out := {}
 	var entries: Array = table["items"]
 	var total := float(table.get("empty", 0.0))
 	for e: Dictionary in entries:
 		total += float(e["weight"])
-	for i in rng.randi_range(int(table["rolls"][0]), int(table["rolls"][1])):
+	var roll_min := maxi(1, roundi(float(table["rolls"][0]) * abundance))
+	var roll_max := maxi(roll_min, roundi(float(table["rolls"][1]) * abundance))
+	for _i in rng.randi_range(roll_min, roll_max):
 		var pick := rng.randf() * total
 		for e: Dictionary in entries:
 			pick -= float(e["weight"])
@@ -110,7 +114,8 @@ func reveal(id: String) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, id])
 	var table: Dictionary = data.loot[c["table"]]
-	var items := roll(table, rng)
+	var abundance := difficulty.multiplier("loot_abundance") if difficulty != null else 1.0
+	var items := roll(table, rng, abundance)
 	var lucky := skills != null and rng.randf() < skills.bonus("lucky_find")
 	if lucky:  # one more pick from the same table
 		var one := table.duplicate()

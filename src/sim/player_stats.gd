@@ -23,6 +23,7 @@ const AIM_SPEED_MULT := 0.7  # V15: careful sight footwork, independent of carry
 const BLOCK_SPEED_MULT := 0.6
 
 var cfg: Dictionary = {}
+var difficulty: Difficulty
 
 var max_health := 100.0
 var health := 100.0
@@ -61,6 +62,10 @@ var _rested := 0.0  # seconds since stamina was last used
 
 func _c(key: String, fallback: float = 0.0) -> float:
 	return float(cfg.get(key, fallback))
+
+
+func _drain(key: String) -> float:
+	return difficulty.scale("needs_drain", _c(key)) if difficulty != null else _c(key)
 
 
 ## Q5: a new cut; restarts the clock if you were already bleeding.
@@ -185,14 +190,14 @@ func tick(dt: float) -> void:
 		if respawn_timer <= 0.0:
 			_respawn()
 		return
-	food = maxf(0.0, food - _c("food_drain") * dt)
-	water = maxf(0.0, water - _c("water_drain") * dt)
+	food = maxf(0.0, food - _drain("food_drain") * dt)
+	water = maxf(0.0, water - _drain("water_drain") * dt)
 	if asleep:
 		energy = minf(100.0, energy + _c("energy_sleep_gain") * dt)
 		if energy >= 100.0:
 			wake()
 	else:
-		energy = maxf(0.0, energy - _c("energy_drain") * dt)
+		energy = maxf(0.0, energy - _drain("energy_drain") * dt)
 	if sprinting and not asleep and can_sprint():
 		stamina = maxf(0.0, stamina - _c("sprint_cost") * dt * maxf(1.0, carry_ratio))
 		_rested = 0.0

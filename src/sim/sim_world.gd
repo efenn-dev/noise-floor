@@ -18,6 +18,7 @@ signal container_searched(id: String)  # V18: the world opens this container's l
 
 var clock: GameClock
 var data: GameData
+var difficulty: Difficulty
 var inventory := Inventory.new()
 var build: BuildGrid
 var factory: Factory
@@ -93,10 +94,13 @@ var paused := false
 var _accumulator := 0.0
 
 
-func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) -> void:
+func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
+		p_difficulty: String = Difficulty.DEFAULT) -> void:
 	seed_value = p_seed
 	clock = GameClock.new(start_hour)
 	data = p_data if p_data != null else GameData.load_default()
+	difficulty = Difficulty.new(data.difficulty)
+	apply_difficulty(p_difficulty)
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
 	power = PowerGrid.new(data, build, factory)
@@ -105,10 +109,10 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 		clock.set_calendar(data.seasons)  # M16: four seasons; sunrise and sunset follow them
 		player.cold_cfg = data.seasons["warmth"]
 	defense = Defense.new(data, build, factory)
-	horde = Horde.new(data, seed_value)
+	horde = Horde.new(data, seed_value, difficulty)
 	noise = NoiseField.new(data, build)
-	director = Director.new(data, seed_value)
-	loot = Loot.new(data, seed_value)
+	director = Director.new(data, seed_value, difficulty)
+	loot = Loot.new(data, seed_value, difficulty)
 	vehicles = Vehicles.new(data)
 	hotbar = Hotbar.new(data)
 	scares = Scares.new()
@@ -132,12 +136,19 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	defense.gear = gear  # M15: turret suppressors and scopes are gear pieces
 	_day = clock.day
 	player.cfg = data.survival
+	player.difficulty = difficulty
 	_rng.seed = hash([seed_value, "sim"])
 	player.died.connect(_on_player_died)
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
 	build.piece_removed.connect(_on_piece_removed)
 	build.piece_built.connect(_on_piece_built)
+
+
+## V29: the single sim entry point for selecting a tuning table. Call before spawning/restoring zombies;
+## all participating rules hold this same Difficulty object and read through it.
+func apply_difficulty(chosen: String) -> void:
+	difficulty.set_id(chosen)
 
 
 ## Starting materials for testing builds (data/debug_kit.json).
@@ -185,6 +196,7 @@ func step() -> void:
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
 	_note_noise()
+	_tick_first_night()
 	player.carry_ratio = carry_ratio()
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
 	player.heal_mult = 1.0 + skills.bonus("heal_rate")
@@ -215,7 +227,7 @@ func step() -> void:
 		if e["target"] == "scream":
 			noise.emit(z.pos, float(z.stats["scream_loudness"]), "scream")  # pulls in everything nearby
 		elif e["target"] == "player" and vehicles.driving != "":
-			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
+			vehicles.damage(vehicles.driving, z.attack_damage())  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
 			zombie_hit_player(z)
@@ -227,7 +239,7 @@ func step() -> void:
 				base_log.add_once("hit:" + target, float(data.defense["log"]["attack_every"]), "%s under attack: %s" % [
 						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
 			var was_window := build.kind_of(build.pieces[target]["id"]) == "window"
-			if build.damage(target, int(z.stats["structure_damage"])):
+			if build.damage(target, maxi(1, roundi(z.structure_damage()))):
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.tick(TICK, horde, noise)
@@ -252,7 +264,7 @@ func step() -> void:
 		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
 				Director.EDGES[Director.EDGE_NAMES.find(wave["edge"])])
 	_radio()
-	guidance.tick(TICK, clock, build, int(tally["deaths"]))
+	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
@@ -330,6 +342,34 @@ func _cold_messages() -> void:
 ## the indoor fog go by.
 func is_indoors(at: Vector3) -> bool:
 	return ZombieBrain._indoors(build.pieces, at)
+
+
+## V29: the Director owns the one-shot dusk/night/morning state; the sim supplies shelter and player noise,
+## then turns its events into presentation-neutral messages and a sting request.
+func _tick_first_night() -> void:
+	var sheltered := guidance.is_sheltered(build, player_pos)
+	for event: Dictionary in director.first_night_events(clock, player_pos, sheltered, _player_made_noise(),
+			int(tally["deaths"]), horde):
+		match str(event["kind"]):
+			"warning":
+				add_message("It'll be dark at 21:00. Find shelter: a bed inside walls with a door", 10.0)
+			"night":
+				add_message("Night falls", 4.0)
+				scares.fire("night", player_pos)
+				var wave: Dictionary = event["wave"]
+				stats.note_wave("first_night", "nearby")
+				base_log.add("Night falls: %d zombies are closing in" % int(wave["size"]), player_pos)
+			"morning":
+				add_message("You made it to morning", 6.0)
+
+
+func _player_made_noise() -> bool:
+	for sound: Dictionary in noise.recent:
+		if float(sound.get("age", 1.0)) > TICK or sound.get("kind", "") in ["zombie_bash", "scream"]:
+			continue
+		if _flat_dist(sound["pos"], player_pos) <= 4.0:
+			return true
+	return false
 
 
 ## M16: E on a stove: loads planks from your pockets and nearby crates. Returns a message.
@@ -441,7 +481,7 @@ func bleed_chance() -> float:
 ## V15: resolves one zombie hit against the held guard. Returns the outcome for headless tests and future
 ## presentation; the ordinary horde path uses the same method. Armour reduces the hit before the guard.
 func zombie_hit_player(z: ZombieBrain) -> Dictionary:
-	var damage := float(z.stats["damage"]) * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
+	var damage := z.attack_damage() * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
 	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage}
 	var w: Dictionary = weapon_stats()
 	if player.blocking and not guns.in_hand() and block_faces(player_facing, player_pos, z.pos) \
@@ -965,8 +1005,17 @@ static func park_crate_pos(c: Dictionary) -> Vector3:
 ## Only for a new game, or a save from before the park; a save brings its own back.
 func spawn_park_zombies(plan: Dictionary) -> Array:
 	var ids: Array = []
-	for pz: Dictionary in plan["zombies"]:
+	var planned: Array = plan["zombies"]
+	if planned.is_empty():
+		return ids
+	var count := difficulty.count("zombie_count", planned.size())
+	for i in count:
+		var pz: Dictionary = planned[i % planned.size()]
 		var z := horde.spawn(pz["type"], pz["pos"])
+		if i >= planned.size():
+			z.pos += Vector3(float(i) / float(planned.size()) + 1.0, 0.0, 0.5)
+			z.home = z.pos
+			z.target_pos = z.pos
 		z.facing = pz["facing"]
 		ids.append(z.id)
 	return ids
@@ -976,8 +1025,17 @@ func spawn_park_zombies(plan: Dictionary) -> Array:
 ## new game: a save keeps its zombies (house ones included) and brings them back itself.
 func spawn_house_zombies(plan: Dictionary) -> Array:
 	var ids: Array = []
-	for hz: Dictionary in plan["zombies"]:
+	var planned: Array = plan["zombies"]
+	if planned.is_empty():
+		return ids
+	var count := difficulty.count("zombie_count", planned.size())
+	for i in count:
+		var hz: Dictionary = planned[i % planned.size()]
 		var z := horde.spawn("shambler", hz["pos"])
+		if i >= planned.size():
+			z.pos += Vector3(0.45, 0.0, 0.45)
+			z.home = z.pos
+			z.target_pos = z.pos
 		z.facing = hz["facing"]
 		ids.append(z.id)
 	return ids
@@ -1882,11 +1940,11 @@ func _search_guns(found: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, found.get("id", ""), "guns"])
 	for kind: String in ["gun", "part"]:
-		if rng.randf() < float(table.get(kind, 0.0)):
+		if rng.randf() < difficulty.chance("loot_abundance", float(table.get(kind, 0.0))):
 			out["pieces"].append(_found_gun(rng, kind, false, found.get("table", "")))
-	if rng.randf() < float(data.guns["police_find"]):
+	if rng.randf() < difficulty.chance("loot_abundance", float(data.guns["police_find"])):
 		out["pieces"].append(_found_gun(rng, "gun" if rng.randf() < 0.5 else "part", true))
-	if rng.randf() < float(table.get("ammo", 0.0)):
+	if rng.randf() < difficulty.chance("loot_abundance", float(table.get("ammo", 0.0))):
 		var span: Array = data.guns["ammo_found"]
 		out["items"]["ammo_standard"] = rng.randi_range(int(span[0]), int(span[1]))
 	return out
@@ -1955,6 +2013,10 @@ func _on_player_died() -> void:
 	clearing_glass = {}
 	stats.note_death(player.last_cause, when_text())
 	tally["deaths"] += 1
+	if not difficulty.keeps_skills_on_death():
+		skills.xp.clear()
+		skills.perks.clear()
+		skills.perk_points = 0
 	var items := _counts_of(inventory)
 	var pieces := gear.pieces.duplicate()
 	if not items.is_empty() or not pieces.is_empty():
@@ -2147,7 +2209,8 @@ func _add_corpse(z: ZombieBrain) -> void:
 ## Gear a finished search turns up: the container's chance (gear.json "containers"), rolled again on
 ## a Lucky Find. Its own seeded stream, so the same seed finds the same gear.
 func _search_gear(found: Dictionary) -> Array:
-	var chance := float(data.gear["containers"].get(found.get("table", ""), 0.0))
+	var chance := difficulty.chance("loot_abundance",
+			float(data.gear["containers"].get(found.get("table", ""), 0.0)))
 	var out := []
 	if chance <= 0.0:
 		return out
@@ -2168,7 +2231,8 @@ func _zombie_drop(z: ZombieBrain, cid: String) -> void:
 	var unique: String = data.gear["zombie_uniques"].get(z.type, "")
 	if unique != "":
 		piece = gear.roll_unique(rng, unique)
-	elif rng.randf() < float(data.gear["zombie_drop"].get(z.type, data.gear["zombie_drop"]["default"])):
+	elif rng.randf() < difficulty.chance("loot_abundance",
+			float(data.gear["zombie_drop"].get(z.type, data.gear["zombie_drop"]["default"]))):
 		piece = gear.roll_piece(rng, "zombie")
 	if piece.is_empty():
 		return

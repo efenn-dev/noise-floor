@@ -62,9 +62,9 @@ func refresh() -> void:
 	visible = not suppressed and g.active and not g.completed and (Settings.show_objectives or force_visible)
 	if not visible:
 		return
-	var current := g.step(sim.build)
+	var current := g.step(sim.build, sim.player_pos)
 	var labels := ["Find food and water", "Find a bed (sleep when tired)",
-			"Before dark (21:00): shelter a bed with walls and a door", "Survive the night"]
+			"Before dark (21:00): get inside a closed shelter with a bed", "Survive the night"]
 	for i in _lines.size():
 		var done := i < current
 		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
@@ -73,7 +73,7 @@ func refresh() -> void:
 		_detail.text = "%s Eat something    %s Drink something" % [_tick(g.ate), _tick(g.drank)]
 	elif current == 2:
 		var p := g.shelter_progress(sim.build)
-		_detail.text = "%s Foundation  %s Bed inside  %s Walls %d  %s Door\nClose every side · B opens the build menu" % [
+		_detail.text = "%s Foundation  %s Bed inside  %s Walls %d  %s Closed door\nBuild it, or use a town house with intact windows" % [
 				_tick(bool(p[0])), _tick(bool(p[1])), _tick(bool(p[4])), int(p[2]), _tick(bool(p[3]))]
 	elif current == 3:
 		_detail.text = "Night is 21:00 to dawn. Keep yourself and the shelter standing."

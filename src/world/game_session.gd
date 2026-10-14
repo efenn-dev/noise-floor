@@ -25,6 +25,7 @@ static var legacy_save_path := LEGACY_SAVE_PATH
 ## The selected profile. Every save/load route, including F5/F9 and autosave, uses save_path.
 static var current_slot := 1
 static var current_slot_name := "Slot 1"
+static var current_difficulty := Difficulty.DEFAULT
 static var slot_real_seconds := 0.0
 
 ## Where play.bat writes the build being played: one line, "<short commit> <commit title>".
@@ -45,11 +46,13 @@ static func select_slot(slot: int) -> void:
 	save_path = slot_path(current_slot)
 	var meta := meta_for_path(save_path, current_slot)
 	current_slot_name = clean_name(str(meta.get("name", "")), current_slot)
+	current_difficulty = Difficulty.DEFAULT if not Difficulty.ORDER.has(str(meta.get("difficulty", ""))) \
+			else str(meta["difficulty"])
 	slot_real_seconds = float(meta.get("real_seconds", 0.0))
 
 
 ## Starts a confirmed new game in this slot. The caller owns the overwrite confirmation.
-static func start_new_slot(slot: int, profile_name: String) -> String:
+static func start_new_slot(slot: int, profile_name: String, chosen_difficulty: String = Difficulty.DEFAULT) -> String:
 	var chosen := clampi(slot, 1, SLOT_COUNT)
 	var path := slot_path(chosen)
 	if FileAccess.file_exists(path):
@@ -59,6 +62,7 @@ static func start_new_slot(slot: int, profile_name: String) -> String:
 	current_slot = chosen
 	save_path = path
 	current_slot_name = clean_name(profile_name, current_slot)
+	current_difficulty = chosen_difficulty if Difficulty.ORDER.has(chosen_difficulty) else Difficulty.DEFAULT
 	slot_real_seconds = 0.0
 	return ""
 
@@ -74,6 +78,7 @@ static func delete_slot(slot: int) -> String:
 		return "Couldn't delete slot %d (%s)" % [chosen, error_string(err)]
 	if chosen == current_slot:
 		current_slot_name = "Slot %d" % chosen
+		current_difficulty = Difficulty.DEFAULT
 		slot_real_seconds = 0.0
 	return ""
 
@@ -82,6 +87,7 @@ static func delete_slot(slot: int) -> String:
 static func make_meta(sim: SimWorld) -> Dictionary:
 	return {
 		"name": clean_name(current_slot_name, current_slot),
+		"difficulty": sim.difficulty.id,
 		"day": sim.clock.day,
 		"time": sim.clock.time_of_day,
 		"real_seconds": slot_real_seconds,
@@ -119,6 +125,11 @@ static func _meta_from_data(data: Dictionary, slot: int) -> Dictionary:
 	var meta: Dictionary = raw if raw is Dictionary else {}
 	var clock: Dictionary = data.get("clock", {})
 	var tally: Dictionary = data.get("stats", {})
+	var difficulty := Difficulty.DEFAULT
+	if int(data.get("version", 0)) >= 20:
+		difficulty = str(meta.get("difficulty", data.get("difficulty", Difficulty.DEFAULT)))
+		if not Difficulty.ORDER.has(difficulty):
+			difficulty = Difficulty.DEFAULT
 	return {
 		"name": clean_name(str(meta.get("name", "Slot %d" % slot)), slot),
 		"day": int(meta.get("day", clock.get("day", 1))),
@@ -126,13 +137,16 @@ static func _meta_from_data(data: Dictionary, slot: int) -> Dictionary:
 		"real_seconds": maxf(0.0, float(meta.get("real_seconds", 0.0))),
 		"last_played": str(meta.get("last_played", "Unknown")),
 		"zombies_killed": int(meta.get("zombies_killed", tally.get("kills", 0))),
+		"difficulty": difficulty,
 	}
 
 
 static func summary_text(meta: Dictionary) -> String:
 	if bool(meta.get("unreadable", false)):
 		return "Unreadable save"
-	return "Day %d, %s  ·  %s played\n%d zombies killed  ·  Last played %s" % [
+	var difficulty := str(meta.get("difficulty", Difficulty.DEFAULT))
+	return "%s  ·  Day %d, %s  ·  %s played\n%d zombies killed  ·  Last played %s" % [
+			difficulty.capitalize(),
 			int(meta.get("day", 1)), clock_text(float(meta.get("time", 8.0))),
 			played_text(float(meta.get("real_seconds", 0.0))), int(meta.get("zombies_killed", 0)),
 			str(meta.get("last_played", "Unknown"))]

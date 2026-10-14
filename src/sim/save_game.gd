@@ -48,7 +48,9 @@ extends RefCounted
 ## (Hotbar.load_saved), so no version check is needed to read it.
 ## 19 = V25 first-hour guidance: objective progress and the current better-gear suggestion. Version-18 and
 ## older saves are established games, so their missing guidance loads inactive instead of restarting it.
-const VERSION := 19
+## 20 = V29 difficulty and the one-shot first-night warning/wave/morning state. Older saves are Normal and
+## their elapsed day-one beats are marked sent so migration never invents a wave on load.
+const VERSION := 20
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -132,6 +134,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	var p := sim.player
 	return {
 		"version": VERSION,
+		"difficulty": sim.difficulty.id,
 		"seed": sim.seed_value,
 		"ticks": sim.ticks,
 		"clock": {"time": sim.clock.time_of_day, "day": sim.clock.day},
@@ -172,6 +175,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
+		"first_night": sim.director.first_night_state(),
 		"bags": bags,
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
@@ -184,6 +188,9 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	var version := int(d.get("version", 0))
 	if version < 1 or version > VERSION:  # unknown or from a newer game: refuse rather than guess
 		return "This save is from a different version (%s)" % str(d.get("version", "?"))
+	# Difficulty did not exist before V29; the version gate is the migration, even if a hand-edited
+	# old save happens to contain a field with that name.
+	sim.apply_difficulty(str(d.get("difficulty", Difficulty.DEFAULT)) if version >= 20 else Difficulty.DEFAULT)
 	sim.ticks = int(d["ticks"])
 	sim.clock.time_of_day = float(d["clock"]["time"])
 	sim.clock.day = int(d["clock"]["day"])
@@ -329,6 +336,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))
 	sim.director.unlocked = Array(d.get("unlocked", []))
+	sim.director.load_first_night_state(d.get("first_night", {}), sim.clock, version < 20)
 	sim._day = sim.clock.day
 	for id: String in d.get("car_fuel", {}):  # saves from before M10c kept only the gas
 		if sim.vehicles.cars.has(id):

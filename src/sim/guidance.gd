@@ -56,7 +56,7 @@ func clear_better_gear() -> void:
 
 
 ## Called once per fixed sim tick. Shelter progress is derived, never copied into another rule state.
-func tick(dt: float, clock: GameClock, build: BuildGrid, deaths: int) -> void:
+func tick(dt: float, clock: GameClock, build: BuildGrid, deaths: int, player_pos: Vector3 = Vector3.INF) -> void:
 	better_gear_seconds = maxf(0.0, better_gear_seconds - dt)
 	if not active or completed:
 		return
@@ -74,28 +74,28 @@ func tick(dt: float, clock: GameClock, build: BuildGrid, deaths: int) -> void:
 			survived_night = true
 		saw_night = false
 		night_failed = false
-	update_completion(build)
+	update_completion(build, player_pos)
 
 
-func step(build: BuildGrid) -> int:
+func step(build: BuildGrid, player_pos: Vector3 = Vector3.INF) -> int:
 	if not ate or not drank:
 		return 0
 	if not bed_found:
 		return 1
-	if not shelter_complete(build):
+	if not shelter_complete(build, player_pos):
 		return 2
 	if not survived_night:
 		return 3
 	return COMPLETE
 
 
-func update_completion(build: BuildGrid) -> void:
-	if active and survived_night and shelter_complete(build) and ate and drank and bed_found:
+func update_completion(build: BuildGrid, player_pos: Vector3 = Vector3.INF) -> void:
+	if active and survived_night and shelter_complete(build, player_pos) and ate and drank and bed_found:
 		completed = true
 
 
-## [foundation, bed, wall count around that bed, door, enclosed]. Only the player's pieces count: town houses
-## should teach where beds are, not finish the game's base-building half for the player.
+## [foundation, bed, wall count around that bed, closed door, enclosed] for the build-it-yourself detail row.
+## V29 also accepts a closed town house while the player is standing inside it (shelter_complete).
 func shelter_progress(build: BuildGrid) -> Array:
 	var has_foundation := false
 	var has_bed := false
@@ -124,9 +124,20 @@ func shelter_progress(build: BuildGrid) -> Array:
 	return [has_foundation, has_bed, best_walls, has_door, has_complete_room]
 
 
-func shelter_complete(build: BuildGrid) -> bool:
+func shelter_complete(build: BuildGrid, player_pos: Vector3 = Vector3.INF) -> bool:
 	var p := shelter_progress(build)
-	return bool(p[4])
+	return bool(p[4]) or (player_pos != Vector3.INF and _town_sheltered(build, player_pos))
+
+
+## V29: whether the player is protected from the first-night wave right now. Unlike objective progress,
+## a finished hut elsewhere does not protect you: you must be standing inside it.
+func is_sheltered(build: BuildGrid, player_pos: Vector3) -> bool:
+	var cell := BuildGrid.world_to_cell(player_pos)
+	if _player_foundation(build, cell):
+		var room := _room(build, cell)
+		return bool(room["enclosed"]) and bool(room["door"]) and int(room["walls"]) >= 3 \
+				and _room_has_player_bed(build, room["cells"])
+	return _town_sheltered(build, player_pos)
 
 
 ## Floods the connected, unwalled player foundations containing the bed, then checks every outside edge.
@@ -161,8 +172,10 @@ func _room(build: BuildGrid, start: Vector2i) -> Dictionary:
 			var kind := build.kind_of(build.pieces[edge_key]["id"])
 			if kind == "wall":
 				walls += 1
-			elif kind == "door":
+			elif kind == "door" and not bool(build.pieces[edge_key].get("open", false)):
 				door = true
+			elif kind == "door":
+				enclosed = false
 			else:
 				enclosed = false
 	return {"cells": cells, "walls": walls, "door": door, "enclosed": enclosed}
@@ -181,6 +194,48 @@ func _player_foundation(build: BuildGrid, cell: Vector2i) -> bool:
 	var key := build.key_for("foundation", cell)
 	return build.pieces.has(key) and build.pieces[key]["id"] == "foundation" \
 			and not build.pieces[key].get("town", false)
+
+
+## A town house is its connected patch of town floors. Interior dividers do not split the house; every
+## outside edge must still stand, every outside door must be closed, and every outside window intact.
+func _town_sheltered(build: BuildGrid, player_pos: Vector3) -> bool:
+	var start := BuildGrid.world_to_cell(player_pos)
+	if not _town_floor(build, start):
+		return false
+	var pending: Array[Vector2i] = [start]
+	var cells: Dictionary = {}
+	cells[start] = true
+	while not pending.is_empty():
+		var cell: Vector2i = pending.pop_front()
+		for dir: Vector2i in CELL_DIRS:
+			var neighbor := cell + dir
+			if not cells.has(neighbor) and _town_floor(build, neighbor):
+				cells[neighbor] = true
+				pending.append(neighbor)
+	var bed := false
+	for cell: Vector2i in cells:
+		var bed_key := build.key_for("bed", cell)
+		bed = bed or (build.pieces.has(bed_key) and build.kind_of(build.pieces[bed_key]["id"]) == "bed")
+		for side in 4:
+			if cells.has(cell + CELL_DIRS[side]):
+				continue
+			var edge_key := BuildGrid.key_for_wall_edge(cell, side)
+			if not build.pieces.has(edge_key):
+				return false
+			var piece: Dictionary = build.pieces[edge_key]
+			var kind := build.kind_of(piece["id"])
+			if kind == "door" and bool(piece.get("open", false)):
+				return false
+			if kind == "window" and int(piece.get("hp", 0)) <= 0:
+				return false
+			if not kind in ["wall", "door", "window"]:
+				return false
+	return bed
+
+
+func _town_floor(build: BuildGrid, cell: Vector2i) -> bool:
+	var piece: Variant = build.pieces.get("f:%d:%d" % [cell.x, cell.y])
+	return piece is Dictionary and piece.get("id", "") == "town_floor"
 
 
 func to_dict() -> Dictionary:

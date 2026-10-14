@@ -156,7 +156,8 @@ func _ready() -> void:
 		save = SaveGame.read(GameSession.pending_load)
 		GameSession.pending_load = ""
 		_loaded = not save.is_empty()
-	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)))
+	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)),
+			GameSession.current_difficulty)
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
 	if args.has("day"):
 		sim.clock.day = maxi(1, int(args["day"]))  # M16: --day=16 starts in winter (a save sets its own day)
@@ -880,6 +881,7 @@ func _build_menus(args: Dictionary) -> void:
 			get_tree().paused = true
 	elif args.has("pause"):
 		menus.set_stats(sim.stats_text())
+		menus.set_difficulty(sim.difficulty.display_name())
 		menus.show_pause(has_save)
 	elif args.has("settings"):
 		menus.show_settings("pause")
@@ -887,9 +889,9 @@ func _build_menus(args: Dictionary) -> void:
 		GameSession.started = true
 
 
-func _start_new_game(slot: int, profile_name: String) -> void:
+func _start_new_game(slot: int, profile_name: String, difficulty: String) -> void:
 	session_log.finish()  # finish the old profile's log before the selected slot name changes
-	var why := GameSession.start_new_slot(slot, profile_name)
+	var why := GameSession.start_new_slot(slot, profile_name, difficulty)
 	if why != "":
 		menus.set_status(why)
 		return
@@ -905,6 +907,7 @@ func continue_game(slot: int) -> void:
 
 func _open_pause() -> void:
 	menus.set_stats(sim.stats_text())
+	menus.set_difficulty(sim.difficulty.display_name())
 	menus.show_pause(FileAccess.file_exists(GameSession.save_path))
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1356,7 +1359,9 @@ func _build_zombies(args: Dictionary) -> void:
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
 	if not _loaded:
-		sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
+		var street_count := int(args["zombies"]) if args.has("zombies") \
+				else sim.difficulty.count("zombie_count", DEFAULT_ZOMBIES)
+		sim.horde.spawn_town(street_count)
 		if args.get("zombies", "") != "0":
 			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
 			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe

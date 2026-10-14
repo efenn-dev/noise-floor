@@ -2,7 +2,7 @@ class_name Menus
 extends CanvasLayer
 ## Title screen, pause menu and settings panel, built in code. Runs while the game is paused.
 
-signal new_game(slot: int, profile_name: String)
+signal new_game(slot: int, profile_name: String, difficulty: String)
 signal continue_game(slot: int)
 signal delete_slot_requested(slot: int)
 signal resume
@@ -20,12 +20,14 @@ var _slot_heading: Label
 var _new_profile: Control
 var _new_heading: Label
 var _profile_name: LineEdit
+var _difficulty: OptionButton
 var _confirm: ConfirmationDialog
 var _heading: Label
 var _version: Label  # the build being played, small in the bottom-right corner of the title screen
 var _stats_label: Label
 var _flicker := 0.0
 var _pause: Control
+var _difficulty_label: Label
 var _settings: Control
 var _status: Label
 var _continue_button: Button
@@ -89,6 +91,17 @@ func _init() -> void:
 	_profile_name.add_theme_font_size_override("font_size", 22)
 	_profile_name.text_submitted.connect(func(_text: String) -> void: start_new_profile())
 	_new_profile.get_child(0).add_child(_profile_name)
+	_new_profile.get_child(0).add_child(_label("Difficulty", 20))
+	_difficulty = OptionButton.new()
+	_difficulty.name = "Difficulty"
+	for id: String in Difficulty.ORDER:
+		_difficulty.add_item(id.capitalize())
+		_difficulty.set_item_metadata(_difficulty.get_item_count() - 1, id)
+	_difficulty.select(Difficulty.ORDER.find(Difficulty.DEFAULT))
+	_difficulty.custom_minimum_size = Vector2(420, 48)
+	_difficulty.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_difficulty.add_theme_font_size_override("font_size", 22)
+	_new_profile.get_child(0).add_child(_difficulty)
 	_button(_new_profile, "Start new game", start_new_profile)
 	_button(_new_profile, "Back", func() -> void: open_slots(true))
 
@@ -100,6 +113,9 @@ func _init() -> void:
 
 	_pause = _screen()
 	_pause.get_child(0).add_child(_label("Paused", 48))
+	_difficulty_label = _label("Difficulty: Normal", 20)
+	_difficulty_label.modulate = Color(1, 1, 1, 0.75)
+	_pause.get_child(0).add_child(_difficulty_label)
 	_pause.get_child(0).add_child(_spacer())
 	_button(_pause, "Resume", func() -> void: resume.emit())
 	_button(_pause, "Save game", func() -> void: save_requested.emit())
@@ -212,7 +228,8 @@ func start_new_profile(_submitted: String = "") -> void:
 		return
 	var slot := _pending_slot
 	_pending_slot = 0
-	new_game.emit(slot, GameSession.clean_name(_profile_name.text, slot))
+	new_game.emit(slot, GameSession.clean_name(_profile_name.text, slot),
+			str(_difficulty.get_item_metadata(_difficulty.selected)))
 
 
 func slot_text(slot: int) -> String:
@@ -233,6 +250,10 @@ func show_pause(has_save: bool) -> void:
 	_load_button.disabled = not has_save
 	_status.text = ""
 	_pause.visible = true
+
+
+func set_difficulty(name: String) -> void:
+	_difficulty_label.text = "Difficulty: " + name
 
 
 func show_settings(back_to: String) -> void:
@@ -276,6 +297,7 @@ func _show_name_entry(slot: int) -> void:
 	_pending_slot = slot
 	_new_heading.text = "New game — slot %d" % slot
 	_profile_name.text = ""
+	_difficulty.select(Difficulty.ORDER.find(Difficulty.DEFAULT))
 	hide_all()
 	_new_profile.visible = true
 	_profile_name.grab_focus()

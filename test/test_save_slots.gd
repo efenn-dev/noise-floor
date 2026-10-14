@@ -18,6 +18,7 @@ func _reset_slots() -> void:
 	GameSession.legacy_save_path = LEGACY
 	GameSession.current_slot = 1
 	GameSession.current_slot_name = "Slot 1"
+	GameSession.current_difficulty = Difficulty.DEFAULT
 	GameSession.slot_real_seconds = 0.0
 	GameSession.save_path = GameSession.slot_path(1)
 	for slot in range(1, GameSession.SLOT_COUNT + 1):
@@ -35,6 +36,7 @@ func _restore_slots() -> void:
 	GameSession.legacy_save_path = GameSession.LEGACY_SAVE_PATH
 	GameSession.current_slot = 1
 	GameSession.current_slot_name = "Slot 1"
+	GameSession.current_difficulty = Difficulty.DEFAULT
 	GameSession.slot_real_seconds = 0.0
 	GameSession.save_path = GameSession.SAVE_PATH
 	GameSession.pending_load = ""
@@ -114,9 +116,9 @@ func test_used_new_game_and_delete_need_confirmation() -> void:
 	tree.root.add_child(menus)
 	menus.show_title(GameSession.slot_summaries())
 	var new_calls := []
-	menus.new_game.connect(func(slot: int, profile_name: String) -> void:
-		new_calls.append([slot, profile_name])
-		GameSession.start_new_slot(slot, profile_name))
+	menus.new_game.connect(func(slot: int, profile_name: String, difficulty: String) -> void:
+		new_calls.append([slot, profile_name, difficulty])
+		GameSession.start_new_slot(slot, profile_name, difficulty))
 	menus.open_slots(true)
 	menus.choose_slot(1)
 	eq(new_calls.size(), 0, "choosing a used slot does not start or replace it")
@@ -126,7 +128,7 @@ func test_used_new_game_and_delete_need_confirmation() -> void:
 	check(FileAccess.file_exists(GameSession.slot_path(1)), "confirming the warning alone still keeps the save")
 	(menus.find_child("ProfileName", true, false) as LineEdit).text = "Dad's new run"
 	menus.start_new_profile()
-	eq(new_calls, [[1, "Dad's new run"]], "the confirmed named game starts in slot 1")
+	eq(new_calls, [[1, "Dad's new run", "normal"]], "the confirmed named game starts on Normal in slot 1")
 	check(not FileAccess.file_exists(GameSession.slot_path(1)), "the confirmed new game replaces the old slot")
 	var delete_calls := []
 	menus.update_slots(GameSession.slot_summaries())

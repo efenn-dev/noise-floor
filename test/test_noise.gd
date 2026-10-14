@@ -15,6 +15,10 @@ func _run(sim: SimWorld, seconds: float) -> void:
 ## A sim with a smelter at cell (0, 0) (centre 1, 1) that keeps working.
 func _smelter_sim(hour := 10.0) -> SimWorld:
 	var sim := SimWorld.new(hour)
+	if hour >= 21.0:  # these tests isolate ordinary heat/hearing waves from V29's scripted first night
+		sim.director.first_night_warning_sent = true
+		sim.director.first_night_wave_sent = true
+		sim.director.first_morning_sent = true
 	sim.power.free = true  # these tests are about noise, not power
 	sim.give_debug_kit()
 	sim.inventory.add("plank", 200)
@@ -210,6 +214,9 @@ func test_director_sends_waves_by_heat_and_time_of_day() -> void:
 	eq(horde.horde.zombies.size(), 8, "night, heat ~102 at the check: a horde of 8")
 	check(horde.director.heat < 70.0, "sending 8 spent 40 heat (%.1f)" % horde.director.heat)
 	var quiet := SimWorld.new(23.0)
+	quiet.director.first_night_warning_sent = true
+	quiet.director.first_night_wave_sent = true
+	quiet.director.first_morning_sent = true
 	quiet.director.heat = 100.0
 	_run(quiet, 30.1)
 	eq(quiet.horde.zombies.size(), 0, "no machines running: nothing to lure them to")

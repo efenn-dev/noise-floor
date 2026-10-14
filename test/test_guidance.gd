@@ -236,7 +236,7 @@ func test_guidance_save_round_trip() -> void:
 	a.gear.pieces.append(boots)
 	a.guidance.note_better_gear(int(boots["uid"]))
 	var data: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(data["version"]), 19, "guidance bumps the save to version 19")
+	eq(int(data["version"]), 20, "V29 difficulty bumps the save to version 20")
 	var b := SimWorld.new(8.0, null, 25)
 	eq(SaveGame.apply(b, data), "", "the current save loads")
 	check(b.guidance.active and b.guidance.ate and b.guidance.bed_found, "objective progress survives")

@@ -184,6 +184,9 @@ func test_waves_from_the_north_spawn_past_the_park() -> void:
 	var seen_north := false
 	for s: int in [1, 2, 3, 4, 5, 6]:
 		var w := SimWorld.new(23.0, null, s)
+		w.director.first_night_warning_sent = true
+		w.director.first_night_wave_sent = true  # this test isolates the existing road wave
+		w.director.first_morning_sent = true
 		w.power.free = true
 		w.give_debug_kit()
 		w.build.place("foundation", Vector2i(10, -25), BuildGrid.Side.NORTH, w.inventory)

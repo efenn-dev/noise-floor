@@ -7,6 +7,9 @@ const E := BuildGrid.Side.EAST
 
 
 func _next_day(sim: SimWorld) -> void:
+	sim.director.first_night_warning_sent = true
+	sim.director.first_night_wave_sent = true  # day/rot tests are not first-night tests
+	sim.director.first_morning_sent = true
 	sim.clock.time_of_day = 23.9999
 	sim.step()
 

@@ -26,6 +26,7 @@ var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actio
 var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
 var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
+var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
 var load_errors: PackedStringArray = []
 
 
@@ -46,6 +47,7 @@ static func load_default() -> GameData:
 	data.seasons = _read_json(DIR + "seasons.json", data)
 	data.projects = _read_json(DIR + "projects.json", data)
 	data.projects.erase("_about")
+	data.difficulty = _read_json(DIR + "difficulty.json", data)
 	return data
 
 
@@ -237,6 +239,7 @@ func validate() -> PackedStringArray:
 		_check_defense(errors, self)
 	_check_seasons(errors, self)
 	_check_projects(errors, self)
+	_check_difficulty(errors, difficulty)
 	return errors
 
 
@@ -261,6 +264,21 @@ const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudn
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
 		"heat_per_zombie", "lure_time"]
+
+
+## V29: every choice has the same complete, positive rule table. Runner count may be zero.
+static func _check_difficulty(errors: PackedStringArray, defs: Dictionary) -> void:
+	for id: String in Difficulty.ORDER:
+		var cfg: Dictionary = defs.get(id, {})
+		if not cfg.has("name"):
+			errors.append("difficulty '%s' needs a name" % id)
+		for key: String in Difficulty.REQUIRED:
+			if not cfg.has(key) or float(cfg.get(key, 0.0)) <= 0.0:
+				if key == "first_night_runners" and int(cfg.get(key, -1)) == 0:
+					continue
+				errors.append("difficulty '%s' needs positive '%s'" % [id, key])
+		if not cfg.get("death_keeps_skills") is bool:
+			errors.append("difficulty '%s' needs boolean death_keeps_skills" % id)
 
 
 ## M12: every skill in "order" has a name, xp and effects; every tree's perks exist with effects.
