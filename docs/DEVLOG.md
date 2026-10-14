@@ -2,6 +2,21 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V12 First-person hands (Sprint 4)
+
+Emmitt: "work on the animations". Hand models by Codex (one job on his ChatGPT plan); attachment and fists by Claude Opus 5.5.
+
+**Built:**
+- **Hands on every weapon.** Gloved hands with a jacket sleeve (`tools/art/fp_hand_right.py`, `fp_hand_left.py`): the hand grips a handle along its own +Y through the origin and the forearm runs back toward +Z. `Hands.attach` makes them children of each weapon, so they follow every swing, kick and reload the weapon already does: the right hand on every grip, a left hand on the bat and axe handles and under the pistol and the rifle's fore-end (`Hands.MELEE`, `Hands.GUNS`).
+- **Forearms leave the bottom of the screen.** Each hand is rolled about its handle (`Hands.best_roll`) so that, with the weapon in its resting pose, the forearm runs toward the bottom corner on its own side instead of up past the camera. The handle crosses the palm at a 25° slant (`WRIST_TILT`), like a real grip.
+- **Bare fists.** With no weapon, two gloved fists hold a raised guard and the right one jabs (the "punch" style).
+- Materials: gloves get the leather photo, sleeves the canvas cloth; skin is left plain (`Hands.LOOKS`). Placeholder boxes stand in when the models are missing (cloud sessions).
+- `--fists` flag (start bare-handed). `test/test_hands.gd`: every weapon has its hands, forearms go down and toward their own side at rest, materials are mapped, fists show only bare-handed and the jab moves forward.
+
+**Try it on the PC:** `play.bat --weapon=axe`, `play.bat --gun=rifle`, `play.bat --fists`.
+
+**Known gaps:** the hands are rigid (no finger or wrist animation); the left hand doesn't let go during a reload; elbows and upper arms are never seen.
+
 ## 2026-10-13 — S5 Physics: grounded bodies, the stuck car, Jolt Physics
 
 Built by Claude Opus 5.5 from Emmitt's notes on the #51 build: "when you walk over a slain zombie you push the dead bodies. Can you make them much more grounded... Is there any physics engine we could use? also I got in the car but was not able to drive."
