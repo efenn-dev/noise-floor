@@ -738,6 +738,56 @@ func move_container_gear(id: String, uid: int, to_pockets: bool) -> Dictionary:
 	return {"moved": true, "why": ""}
 
 
+## V27 (Emmitt: "we can't immediately equip items, it has to go to inventory before being equipped"): "" if
+## the gear piece `uid` in the open container `id` can be worn straight into `slot` ("" = its own slot),
+## otherwise why not. Worn gear doesn't count toward carry weight, so only an old piece coming off can be a
+## weight problem, and that one just stays in the container instead.
+func can_equip_from_container(id: String, uid: int, slot: String = "") -> String:
+	if not container_exists(id):
+		return "Container closed"
+	if not container_in_reach(id):
+		return "Too far away"
+	for piece: Dictionary in container_gear(id):
+		if int(piece["uid"]) != uid:
+			continue
+		var own := gear.slot_of(piece)
+		if own == "part":
+			return "Fit it on a gun"
+		if slot != "" and slot != own:
+			return "Doesn't fit that slot"
+		return ""
+	return "Nothing to take"
+
+
+## V27: wears the gear piece `uid` straight out of the open container `id`. What you wore in that slot goes
+## into your pockets, or back into the container if your pockets can't take it. Returns a message.
+func equip_from_container(id: String, uid: int, slot: String = "") -> String:
+	var why := can_equip_from_container(id, uid, slot)
+	if why != "":
+		return why
+	var held := container_gear(id)
+	var piece := {}
+	for i in held.size():
+		if int(held[i]["uid"]) == uid:
+			piece = held[i]
+			held.remove_at(i)
+			break
+	var own := gear.slot_of(piece)
+	var old: Variant = gear.equipped.get(own)
+	gear.pieces.append(piece)
+	why = gear.equip(uid)
+	if why != "":
+		gear.take(uid)
+		held.append(piece)
+		return why
+	if old is Dictionary and carried_kg() > carry_limit() + 0.001:
+		var taken := gear.take(int((old as Dictionary)["uid"]))
+		held.append(taken)
+		return "Equipped %s (your %s stayed in the %s: too heavy to carry)" % [piece["name"], taken["name"],
+				container_name(id).to_lower()]
+	return "Equipped " + String(piece["name"])
+
+
 func can_take_container_gear(id: String, uid: int) -> String:
 	if not container_exists(id):
 		return "Container closed"
