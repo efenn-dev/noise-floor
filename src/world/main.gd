@@ -1321,9 +1321,13 @@ func _build_hud() -> void:
 
 	_message_label = _outlined_label(26)
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_message_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_message_label.position.y += 60
-	_message_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# Q5: a centred column between the top-left and top-right blocks that wraps, so a long message
+	# ("Smelter placed. It needs power: ...") can't run under the clock or the pockets.
+	_message_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_message_label.offset_left = MATERIALS_WIDTH + 32.0
+	_message_label.offset_right = -(MATERIALS_WIDTH + 32.0)
+	_message_label.offset_top = 60.0
+	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	layer.add_child(_message_label)
 

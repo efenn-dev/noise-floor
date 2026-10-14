@@ -14,6 +14,7 @@
 	"swing_cost": 12,
 	"bleed_chance": 0.3,
 	"bleed_damage": 0.5,
+	"bleed_time": 40,
 	"sleep_time_scale": 8,
 	"sleep_below_energy": 90,
 	"search_time": 2.5,

@@ -179,7 +179,10 @@ func step() -> void:
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
 			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
+	var was_bleeding := player.bleeding
 	player.tick(TICK)
+	if was_bleeding and not player.bleeding and not player.dead:
+		add_message("The bleeding stopped", 3.0)  # Q5: on its own (a bandage clears it outside the tick)
 	_cold_messages()
 	guns.tick(TICK, inventory)
 	if sprinted:
@@ -468,7 +471,7 @@ func zombie_hit_player(z: ZombieBrain) -> Dictionary:
 	if damage > 0.0 and not player.dead and _rng.randf() < bleed_chance():
 		if not player.bleeding:
 			add_message("You're bleeding (H to bandage)", 4.0)
-		player.bleeding = true
+		player.start_bleeding()
 	return result
 
 
@@ -855,6 +858,8 @@ func sleep_in(key: String) -> String:
 	spawn_point = build.piece_center(key) + Vector3(1.2, -build.piece_center(key).y, 0)
 	if player.energy >= float(data.survival["sleep_below_energy"]):
 		return "Not tired. You'll wake up here if you die"
+	if player.bleeding:
+		return "You're bleeding. Bandage first (H)"  # Q5: bleeding would wake you the same tick
 	player.sleep()
 	return ""
 
