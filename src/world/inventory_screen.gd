@@ -10,7 +10,7 @@ class CharacterSilhouette:
 	extends Control
 
 	func _draw() -> void:
-		var ink := Color(0.42, 0.43, 0.46, 0.32)
+		var ink := Color(0.42, 0.43, 0.46, 0.14)  # faint: the slot tiles are what you read
 		draw_circle(Vector2(164, 48), 28.0, ink)
 		draw_rect(Rect2(136, 77, 56, 112), ink, true)
 		draw_line(Vector2(137, 96), Vector2(87, 170), ink, 20.0, true)
@@ -336,10 +336,10 @@ static func gear_icon(color: Color, base_name: String, size: Vector2, item_id: S
 		var picture := TextureRect.new()
 		picture.name = "Icon"
 		picture.texture = texture
+		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # first: otherwise the 256 px picture sets a minimum size
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		picture.position = Vector2(4, 4)
 		picture.size = size - Vector2(8, 8)
-		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.add_child(picture)
 	else:
@@ -374,8 +374,9 @@ func _fill_wearing() -> void:
 		var value: Variant = sim.gear.equipped.get(slot)
 		if value == null:
 			b.text = SLOT_NAMES[slot]
-			b.modulate = Color(1, 1, 1, 0.38)
 			b.disabled = true
+			b.add_theme_stylebox_override("disabled", _empty_slot_style())
+			b.add_theme_color_override("font_disabled_color", Color(0.6, 0.6, 0.62, 0.55))
 		elif slot == "back":
 			var item := str(value)
 			b.tooltip_text = sim.data.item_name(item)
@@ -406,6 +407,16 @@ func _fill_wearing() -> void:
 			condition.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			b.add_child(condition)
 		_wearing.add_child(b)
+
+
+## V14: an empty slot is a dark tile with a thin grey edge, so you can see where things go.
+static func _empty_slot_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.07, 0.08, 0.9)
+	style.border_color = Color(0.45, 0.45, 0.48, 0.7)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	return style
 
 
 func _show_bag(item: String) -> void:
@@ -566,7 +577,7 @@ static func clear_cache() -> void:
 
 func _build() -> void:
 	_root = ColorRect.new()
-	(_root as ColorRect).color = Color(0.02, 0.02, 0.03, 0.55)
+	(_root as ColorRect).color = Color(0.02, 0.02, 0.03, 0.82)  # V14: dark enough that the world and held weapon don't show through the doll
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP  # clicks off the panels mustn't reach the game
 	add_child(_root)
