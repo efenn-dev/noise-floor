@@ -285,10 +285,13 @@ def swing() -> np.ndarray:
 
 
 def hit_body() -> np.ndarray:
-    """Pipe hitting a zombie: a heavy dull thud with a wet slap."""
-    n = seconds(0.3)
+    """Pipe hitting a zombie: a heavy dull thud with a wet slap. V4: a deeper body thump and a short
+    crunch underneath, so it lands with weight."""
+    n = seconds(0.36)
     slap = oneshot_noise(n, bp(1100, 0.8)) * decay(n, 0.018)
-    return fade_edges(normalize(thump(0.3, 140, 55, 0.08) + 0.5 * normalize(slap, 0), -3))
+    crunch = oneshot_noise(n, bp(320, 1.0)) * decay(n, 0.03, attack=0.003)
+    out = thump(0.36, 140, 55, 0.08) + 0.7 * thump(0.36, 75, 38, 0.12) + 0.5 * normalize(slap, 0)         + 0.35 * normalize(crunch, 0)
+    return fade_edges(normalize(out, -2))
 
 
 def bash() -> np.ndarray:
@@ -344,9 +347,36 @@ def gunshot(rifle: bool, suppressed: bool) -> np.ndarray:
         return fade_edges(normalize(out, -6))
     crack = oneshot_noise(n, hp(1800)) * decay(n, 0.006, attack=0.0005)
     boom = thump(length, 110 if rifle else 150, 38 if rifle else 50, 0.16 if rifle else 0.1)
+    sub = thump(length, 62 if rifle else 75, 30, 0.22 if rifle else 0.14)  # V4: chest-thump weight
     tail = oneshot_noise(n, lp(700 if rifle else 1000, 2)) * decay(n, 0.45 if rifle else 0.3, attack=0.02)
-    out = normalize(crack, 0) + 1.2 * boom + 0.45 * normalize(tail, 0)
+    out = normalize(crack, 0) + 1.2 * boom + 0.8 * sub + 0.45 * normalize(tail, 0)
+    # V4: two dull slaps back off the houses across the street, a beat after the shot
+    for delay_s, gain in ((0.11, 0.3), (0.26, 0.16)):
+        echo = shape(np.concatenate([np.zeros(seconds(delay_s)), out])[:n], lp(1200, 2))
+        out = out + gain * echo
     return fade_edges(normalize(out, -1))
+
+
+def creak() -> np.ndarray:
+    """V4 ambience: an old house settling, a slow low wooden creak with a wobble."""
+    n = seconds(1.4)
+    t = t_axis(n)
+    rate = 28 + 14 * np.sin(2 * np.pi * 0.7 * t) + 6 * shape(noise(n), lp(8, 2)) / 0.02
+    phase = np.cumsum(np.clip(rate, 10, 80)) / SR
+    grain = shape(((phase % 1.0) < 0.12).astype(float) - 0.12, bp(700, 0.8))
+    grain *= np.sin(np.pi * np.clip(t / 1.3, 0, 1)) ** 2
+    body = shape(grain, lp(1800, 2))
+    return fade_edges(normalize(body, -10))
+
+
+def clang_far() -> np.ndarray:
+    """V4 ambience: something metal falling over far away, a dull clang that rings out through the haze."""
+    ring = clank(2.4, [(310, 1.0, 0.5), (742, 0.6, 0.35), (1290, 0.35, 0.22), (2210, 0.15, 0.12)])
+    n = len(ring)
+    knock = thump(2.4, 120, 50, 0.08)
+    out = shape(ring + 0.6 * knock, lp(1500, 2))  # distance takes the top off
+    pre = np.zeros(seconds(0.05))
+    return fade_edges(normalize(np.concatenate([pre, out])[:n], -9))
 
 
 def reload_click() -> np.ndarray:
@@ -418,7 +448,8 @@ def main() -> None:
              "shot_pistol": lambda: gunshot(False, False), "shot_rifle": lambda: gunshot(True, False),
              "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
              "reload": reload_click,
-             "sting_close": sting_close, "sting_horde": sting_horde}  # S4: jumpscares
+             "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
+             "creak": creak, "clang_far": clang_far}  # V4: ambience
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:

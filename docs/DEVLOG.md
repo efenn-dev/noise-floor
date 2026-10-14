@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V4 Sound (Sprint 4)
+
+Built by Claude Opus 5.5 in a local session, stacked on V3. Nobody could listen to it while it was built (no speakers in the loop), so the numbers are checked by tests and the ear test is Emmitt's (V8).
+
+**Built:**
+- **Walls muffle what you hear.** Every world sound (machine hums, footsteps, hits, bashes, doors, gunshots, turret shots, screams) is turned down and dulled by the walls between your ears and it, counted with the same `NoiseField.walls_between` the zombies' hearing uses. So a generator behind a wall really sounds like it's behind a wall, and what you hear still matches what they hear. `SoundView.OCCLUSION`: one wall -7 dB and dull, two -12 dB, three or more -16 dB. Hums re-count four times a second.
+- **Echo indoors.** World sounds play on a new World bus with a reverb that follows how far under a roof you are (main.gd's eased indoor value): a small, damped room inside, a faint slap off the houses outside.
+- **Wind dulls indoors.** The wind plays on a new Ambience bus whose low-pass and volume follow the same value.
+- **Background sound.** Now and then a far-off zombie moan or a metal clang plays 35 to 60 m away (every 12 to 30 s at night, 35 to 75 s by day), or a house creaks near you when you're inside. Atmosphere only: the zombies don't hear these.
+- **Heavier hits and guns** (`tools/audio/synth.py`): the pipe hit has a deeper body thump and a crunch; open gunshots have a sub-bass thump and two dull echoes off the houses. New sounds: `creak`, `clang_far`. Re-made only those five with `--only`; the other sounds are unchanged.
+- `test/test_sound_space.gd` (occlusion table, a real wall muffling a real smelter hum, indoor echo, buses made once, background scheduling).
+
+**Try it on the PC:** `play.bat --demo-factory`, then walk behind a house wall and listen to the press, and into a house (echo, quieter wind). Stand outside at night for a minute for the background sounds. Fire a gun in the street and then inside a house.
+
+**Known gaps:** sound bends round corners only as far as the wall count allows (an open doorway next to you counts as open). The indoor echo is the same for every room size. No music.
+
+**Next:** V2 (Codex art) lands, then V5 art direction and V6 first-person arms in Codex, and V7 zombie hits and deaths.
+
 ## 2026-10-13 — V3 Game feel (Sprint 4)
 
 Built by Claude Opus 5.5 in a local session, stacked on V1. Most of this is motion and timing, which still screenshots can't show, so the maths has checks (test_view_feel.gd) and Emmitt's hands decide the rest (V8).
