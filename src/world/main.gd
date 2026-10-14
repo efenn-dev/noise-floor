@@ -9,6 +9,8 @@ extends Node3D
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
+##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
+##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
@@ -230,6 +232,14 @@ func _ready() -> void:
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
 		skills_screen.open()  # --skills, for screenshots
+	if args.has("weapon"):  # V11: --weapon=axe holds a mint melee weapon of that base (pipe, bat, axe, machete, knife)
+		var base := str(args["weapon"])
+		if sim.data.gear["bases"].has(base) and sim.data.gear["bases"][base]["slot"] == "weapon":
+			var piece := sim.gear.make(base, "civilian", "white")
+			sim.gear.pieces.append(piece)
+			sim.gear.equip(piece["uid"])
+	if args.has("swing-at"):
+		melee.hold_at = clampf(float(args["swing-at"]), 0.0, 1.0)  # V11: freeze the swing there, for screenshots
 	if args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
 	if args.has("window"):
