@@ -92,13 +92,15 @@ func test_no_crate_in_reach() -> void:
 func test_bag_raises_the_limit_shown() -> void:
 	_setup()
 	screen.open()
+	near(sim.carry_limit(), float(sim.data.survival["carry_base"]), "a bag in pockets gives no capacity")
+	eq(sim.equip_bag("hiking_pack"), "Equipped Hiking pack", "equip it from the screen's rule")
 	near(sim.carry_limit(), float(sim.data.survival["carry_base"]) + sim.data.item_value("hiking_pack", "bag"),
-			"the hiking pack adds to what you can carry")
+			"the worn hiking pack adds to what you can carry")
 	_teardown()
 
 
 ## M13: a gear piece shows in your pockets in its rarity colour; clicking it shows its stats, and the
-## Equip button puts it on (the Wearing column then shows it, in colour).
+## Equip button puts it on (the paper doll then shows it, in colour).
 func test_gear_piece_in_colour_and_equip_on_click() -> void:
 	_setup()
 	var piece := sim.gear.make("hard_hat", "civilian", "yellow", {"carry_kg": 8.0, "strength": 1.0, "durability": 0.2}, 0.7, "Grim Lid")
@@ -109,7 +111,12 @@ func test_gear_piece_in_colour_and_equip_on_click() -> void:
 	var icon: Panel = tile.get_child(0)
 	var style: StyleBoxFlat = icon.get_theme_stylebox("panel")
 	eq(style.border_color, sim.gear.color(piece), "drawn in its rarity colour")
-	eq((icon.get_child(0) as Label).text, "H", "with its base's first letter")
+	var picture := icon.find_child("Icon", true, false) as TextureRect
+	var placeholder := icon.find_child("Placeholder", true, false) as Label
+	if InventoryScreen.icon_for("hard_hat") != null:
+		check(picture != null and picture.texture != null, "with the base's icon when one exists")
+	else:
+		eq(placeholder.text, "H", "otherwise with its base's first letter")
 	eq((tile.get_child(1) as Label).text, "70%", "and its condition")
 	tile.pressed.emit()
 	var details := screen.find_children("*", "Label", true, false).filter(
@@ -125,8 +132,8 @@ func test_gear_piece_in_colour_and_equip_on_click() -> void:
 	equip.pressed.emit()
 	eq(sim.gear.equipped.get("head", {}).get("uid"), piece["uid"], "Equip puts it on")
 	near(sim.carry_limit(), limit + 8.0 + 3.0, "+8 kg and +1 Strength (3 kg) now count")
-	var row: Button = screen.find_child("Wear_head", true, false)
-	eq(row.text, "Head: Grim Lid", "the Wearing column shows it")
+	var row: Button = screen.find_child("Slot_head", true, false)
+	check(row.tooltip_text.begins_with("Grim Lid"), "the paper doll shows it")
 	eq(row.get_theme_color("font_color"), sim.gear.color(piece), "in colour")
 	sim.inventory.add("repair_kit", 1)
 	screen.refresh()
@@ -137,8 +144,8 @@ func test_gear_piece_in_colour_and_equip_on_click() -> void:
 	(screen.find_child("Gear%d" % piece["uid"], true, false) as Button).pressed.emit()
 	_button("Drop").pressed.emit()
 	eq(sim.bags.size(), 1, "Drop puts it in a bag at your feet")
-	var weapon: Button = screen.find_child("Wear_weapon", true, false)
-	eq(weapon.text, "Weapon: Pipe", "you hold the pipe")
+	var weapon: Button = screen.find_child("Slot_weapon", true, false)
+	check(weapon.tooltip_text.begins_with("Pipe"), "the melee tile holds the pipe")
 	_teardown()
 
 

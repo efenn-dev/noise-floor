@@ -299,7 +299,7 @@ func _give_rolled_gear(rarity: String) -> void:
 	inventory_screen.select_gear(piece["uid"])
 
 
-## --gun[=pistol|rifle|pete]: a gun (pistol by default; pete = Old Pete's Deer Rifle) in your gun slot,
+## --gun[=pistol|rifle|pete]: a gun (pistol by default; pete = Old Pete's Deer Rifle) in its gun slot,
 ## loaded, raised and in your hands, with 30 standard rounds. --workbench also gives the parts and casings
 ## the bench uses, fits a crude suppressor and opens the workbench screen (for screenshots and trying it).
 func _give_gun(which: String, bench: bool) -> void:
@@ -308,10 +308,11 @@ func _give_gun(which: String, bench: bool) -> void:
 		piece = sim.gear.roll_unique(RandomNumberGenerator.new(), "petes_deer_rifle")
 	else:
 		piece = sim.gear.make("hunting_rifle" if which == "rifle" else "pistol", "civilian", "white")
-	sim.gear.equipped["gun"] = piece
+	sim.gear.pieces.append(piece)
+	sim.gear.equip(int(piece["uid"]))  # V14: a pistol lands in the sidearm slot, a rifle in primary
 	piece["loaded"] = int(sim.gear.gun_stats(piece)["magazine"])
 	sim.inventory.add("ammo_standard", 30)
-	if sim.guns.hands != "gun":
+	if not sim.guns.in_hand():
 		sim.swap_hands()
 	sim.guns.raising = 0.0
 	if bench:

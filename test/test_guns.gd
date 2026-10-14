@@ -48,7 +48,8 @@ func test_guns_json_is_valid() -> void:
 	near(float(d.guns["guns"]["hunting_rifle"]["loudness"]), 95.0, "a rifle is 95 loud")
 	check(float(d.guns["guns"]["pistol"]["loudness"]) > float(d.buildables["generator"]["loudness"]),
 			"a shot is louder than a generator")
-	eq(d.gear["bases"]["pistol"]["slot"], "gun", "guns are gear in the gun slot")
+	eq(d.gear["bases"]["pistol"]["slot"], "sidearm", "pistols are sidearms")
+	eq(d.gear["bases"]["hunting_rifle"]["slot"], "primary", "rifles are primary weapons")
 	eq(d.gear["bases"]["scope"]["slot"], "part", "parts are gear in the part slot")
 	check(d.guns["ammo"]["ammo_ap"].get("reserved", false), "armour-piercing is reserved")
 	var broken := GameData.load_default()
@@ -82,7 +83,7 @@ func test_gun_numbers_are_base_plus_parts() -> void:
 	eq(sim.detach_part("sight"), "Took off Scope", "take the scope off")
 	near(sim.gear.gun_stats(gun)["range"], float(base["range"]), "range back to base")
 	var crude: Dictionary = sim.gear.pieces.filter(func(p: Dictionary) -> bool: return p["base"] == "oil_filter_suppressor")[0]
-	eq(sim.equip_gear(crude["uid"]), "Attach it to a gun at a workbench", "a part can't be worn")
+	eq(sim.equip_gear(crude["uid"]), "Attach it to a firearm at a workbench", "a part can't be worn")
 	var rolled := sim.gear.make("pistol", "civilian", "blue", {"gun_damage": 0.2, "gun_quiet": 4.0})
 	near(sim.gear.gun_stats(rolled)["damage"], float(base["damage"]) * 1.2, "a rolled +20% gun damage counts")
 	near(sim.gear.gun_stats(rolled)["loudness"], 81.0, "a rolled 4 quieter shots counts")
@@ -211,7 +212,7 @@ func test_magazine_reload_and_ammo() -> void:
 	eq(sim.gear.gun()["loaded"], 8, "taking the extended magazine off leaves 8")
 	eq(sim.inventory.count("ammo_subsonic"), 4, "the other 4 go in your pockets")
 	eq(sim.swap_hands(), "Pipe in hand", "Q: back to the pipe")
-	eq(sim.fire(), "No gun in hand (Q)", "no shooting with the pipe out")
+	eq(sim.fire(), "No firearm in hand (Q)", "no shooting with the pipe out")
 	eq(sim.swap_hands(), "Pistol in hand", "Q: the gun again")
 	eq(sim.fire(), "Not ready", "it takes a moment to raise")
 	_run(sim, 0.4)
@@ -383,13 +384,13 @@ func test_loot_rolls_guns_parts_and_ammo() -> void:
 		var g := sim.gear.roll_gun_piece(rng, "gun")
 		for s: String in g["stats"]:
 			rolled += 1
-			if not sim.data.gear["stats"][s].get("slots", []).has("gun"):
+			if not sim.data.gear["stats"][s].get("slots", []).has(sim.gear.slot_of(g)):
 				wrong += 1
 	check(rolled > 50, "guns roll stats (%d)" % rolled)
 	eq(wrong, 0, "but only gun stats")
 	var guns_in_gear := 0
 	for i in 300:
-		if sim.gear.slot_of(sim.gear.roll_piece(rng, "car_trunk")) in ["gun", "part"]:
+		if sim.gear.slot_of(sim.gear.roll_piece(rng, "car_trunk")) in ["primary", "sidearm", "part"]:
 			guns_in_gear += 1
 	eq(guns_in_gear, 0, "ordinary gear finds never roll a gun or part")
 
@@ -433,13 +434,13 @@ func test_save_keeps_guns_parts_and_ammo() -> void:
 	var b := SimWorld.new()
 	eq(SaveGame.apply(b, d), "", "loads")
 	var gun := b.gear.gun()
-	eq(gun["name"], "Hunting rifle", "the rifle is in the gun slot")
+	eq(gun["name"], "Hunting rifle", "the rifle is in the primary slot")
 	eq(gun["loaded"], 4, "4 rounds still in it")
 	eq(gun["ammo"], "ammo_standard", "standard")
 	eq(gun["parts"].keys().size(), 2, "both parts attached")
 	near(gun["parts"]["muzzle"]["condition"], a.gear.gun()["parts"]["muzzle"]["condition"], "suppressor wear kept")
 	near(b.gear.gun_stats(gun)["loudness"], 75.0, "still suppressed")
-	eq(b.guns.hands, "gun", "still in your hands")
+	eq(b.guns.hands, "primary", "still in your hands")
 	eq(b.inventory.count("ammo_standard"), 8, "standard rounds in pockets")
 	eq(b.inventory.count("ammo_subsonic"), 4, "subsonic too")
 	eq(b.gear.pieces.size(), 2, "the spare pistol and the magazine in your pockets")
@@ -456,7 +457,7 @@ func test_version_7_save_loads_with_an_empty_gun_slot() -> void:
 	check(sim.gear.gun().is_empty(), "no gun")
 	eq(sim.guns.hands, "melee", "the pipe in hand")
 	eq(sim.gear.weapon_name(), "Pipe", "your pipe")
-	eq(sim.swap_hands(), "No gun (equip one from Tab)", "Q with no gun says so")
+	eq(sim.swap_hands(), "No firearm equipped (Tab)", "Q with no firearm says so")
 	eq(sim.build.pieces.size(), d["pieces"].size() - 2, "every piece, once (less the two walls of the hall's north doorway, opened by M17a)")
 	var again: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
 	eq(int(again["version"]), SaveGame.VERSION, "saved again as the current version")

@@ -386,7 +386,7 @@ func status_text() -> String:
 		lines.append("Power pole · links anything within %d m" % int(sim.data.buildables["power_pole"]["reach"]))
 		lines.append(_network_line(sim.power.network_of(target_key)))
 	elif kind == "workbench":
-		lines.append("Workbench · gun parts and ammo by hand")
+		lines.append("Workbench · firearm parts and ammo by hand")
 		lines.append("[E] use it")
 	elif kind == "bed":
 		lines.append("Bed · energy %d" % roundi(sim.player.energy))

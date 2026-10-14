@@ -1,6 +1,6 @@
 class_name WorkbenchScreen
 extends CanvasLayer
-## M14: E on a workbench. Left: the gun you have equipped, its numbers (Gear.gun_stats) and its four part
+## M14/V14 slots: E on a workbench. Left: the selected primary or sidearm, its numbers and its four part
 ## slots (click a slot to take the part off). Middle: the gun parts in your pockets (click one to attach it).
 ## Right: what the bench makes by hand (ammo from casings, suppressors, a stock), greyed out with the reason
 ## when you can't. The rules are in the sim (SimWorld.attach_part, detach_part, bench_craft); this only shows them.
@@ -86,7 +86,7 @@ func refresh() -> void:
 			child.queue_free()
 	var gun := sim.gear.gun()
 	if gun.is_empty():
-		_gun_label.text = "No gun equipped.\nEquip one from your pockets (Tab), then come back."
+		_gun_label.text = "No firearm equipped.\nEquip a primary or sidearm from your pockets (Tab), then come back."
 		_gun_label.remove_theme_color_override("font_color")
 	else:
 		_gun_label.text = "\n".join(PackedStringArray([gun["name"]] + sim.gear.stat_lines(gun).filter(
@@ -113,7 +113,7 @@ func refresh() -> void:
 		b.pressed.connect(attach.bind(int(p["uid"])))
 		_parts.add_child(b)
 	if not any:
-		_parts.add_child(_small("No gun parts in your pockets. Factory crates and car trunks have them; the bench makes some.", 15))
+		_parts.add_child(_small("No firearm parts in your pockets. Factory crates and car trunks have them; the bench makes some.", 15))
 	for r: String in sim.bench_recipes():
 		var rec: Dictionary = sim.data.recipes[r]
 		var why := sim.can_bench_craft(r, bench_pos())
@@ -150,7 +150,7 @@ func _build() -> void:
 	row.add_theme_constant_override("separation", 40)
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(row)
-	var left := _column(row, "Your gun")
+	var left := _column(row, "Selected firearm")
 	_gun_label = Label.new()
 	_gun_label.add_theme_font_size_override("font_size", 18)
 	left.add_child(_gun_label)

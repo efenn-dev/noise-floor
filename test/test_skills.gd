@@ -228,7 +228,8 @@ func test_strength_carry_limit() -> void:
 	_set_level(sim, "strength", 10)
 	near(sim.carry_limit(), 50.0, "50 kg at Strength 10")
 	sim.inventory.add("hiking_pack", 1)
-	near(sim.carry_limit(), 50.0 + sim.data.item_value("hiking_pack", "bag"), "bags still add on top")
+	sim.equip_bag("hiking_pack")
+	near(sim.carry_limit(), 50.0 + sim.data.item_value("hiking_pack", "bag"), "a worn bag still adds on top")
 
 
 func test_melee_damage_and_knockback() -> void:

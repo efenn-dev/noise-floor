@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V14 Character slots and item pictures (Sprint 4)
+
+Emmitt: "character slots available in our game for equipment and weapons. a lot of the items still need thumbnail images." Slots, character screen and pictures by Codex (two jobs on his ChatGPT plan); fixes, layout and checks by Claude Opus 5.5.
+
+**Built:**
+- **Ten slots instead of six.** Head, body, hands, **legs**, **feet**, **back**, light, plus **Melee**, **Primary** (rifles) and **Sidearm** (pistols); the single gun slot is split. Q cycles melee -> primary -> sidearm and skips empty slots (fists when there's no melee weapon). `Gear.gun()` is still "the gun in your hands", so the gun code didn't change.
+- **New clothing:** work pants, cargo pants (a little extra carry), work boots, sneakers (quieter footsteps), with rarities, rolls and loot drops like the other clothing.
+- **Bags go on your back.** Only the worn bag adds carrying capacity now (before, the best bag in your pockets counted). Double-click a bag to wear it.
+- **Character screen.** The text list of worn gear is now a figure with a tile per slot: the item's picture, its rarity colour as the border and a condition bar; empty slots are dark tiles with their name. Double-click equips from your pockets and unequips from the figure. The backdrop is darker, so the world doesn't show through.
+- **29 new item pictures** (Codex image generation, cut out by `tools/art/make_icon.py`): ammo, bolts, the repair kit, radio, wall panel, every melee weapon, all clothing, the pistol, the rifle and every gun part. Gear tiles in your pockets and crates now show the picture too (they were coloured letters).
+- **Saves:** VERSION 15. A version-14 save moves its gun to Primary or Sidearm and wears your best bag; nothing is lost (`test/fixtures/save_v14.json`).
+
+**Try it on the PC:** `play.bat --gear=yellow` (a rare piece in your pockets and the character screen open), or Tab in any game. `play.bat --gun` now puts the pistol in the Sidearm slot.
+
+**Tests:** 9,288 green (`test_equipment_slots.gd` is new: slots, Q cycling, worn-bag capacity, new clothing, the v14 migration, every tile on the figure).
+
+**Known gaps:** no drag and drop yet (double-click instead). The figure is drawn shapes, not a picture of your character. A second gun of the same kind can't be carried as a backup in the other gun slot (a pistol only fits Sidearm).
+
+**Next:** V13 (rigged arms with reload and inspect) and V15 (right click to aim or block) are on the `v13-arms` branch.
+
 ## 2026-10-13 — V12 First-person hands (Sprint 4)
 
 Emmitt: "work on the animations". Hand models by Codex (one job on his ChatGPT plan); attachment and fists by Claude Opus 5.5.

@@ -296,9 +296,9 @@ func _p3_lines() -> PackedStringArray:
 		pk.append(_words(perk) + ((" x%d" % perks_spent[perk]) if int(perks_spent[perk]) > 1 else ""))
 	out.append("Perk points earned: %d, spent: %d%s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else ""])
 	if guns.is_empty():
-		out.append("Guns: never fired.")
+		out.append("Firearms: never fired.")
 	else:
-		out.append("Guns (shots, hits, kills):")
+		out.append("Firearms (shots, hits, kills):")
 		var names := guns.keys()
 		names.sort_custom(func(a: String, b: String) -> bool: return int(guns[a]["shots"]) > int(guns[b]["shots"]))
 		for i in mini(names.size(), GUNS_SHOWN):

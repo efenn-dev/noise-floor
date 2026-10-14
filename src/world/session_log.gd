@@ -85,8 +85,13 @@ func lines() -> PackedStringArray:
 	out.append("")
 	var worn := PackedStringArray()  # P3: what you wear (and hold) right now
 	for slot: String in sim.gear.equipped:
-		var piece: Dictionary = sim.gear.equipped[slot]
-		worn.append("%s (%s)" % [piece.get("name", slot), piece.get("rarity", "white")])
+		var value: Variant = sim.gear.equipped[slot]
+		if value is Dictionary:
+			var piece: Dictionary = value
+			worn.append("%s: %s (%s)" % [InventoryScreen.SLOT_NAMES.get(slot, slot.capitalize()),
+					piece.get("name", slot), piece.get("rarity", "white")])
+		else:
+			worn.append("%s: %s" % [InventoryScreen.SLOT_NAMES.get(slot, slot.capitalize()), sim.data.item_name(str(value))])
 	sim.stats.worn = worn
 	out.append_array(sim.stats.summary_lines())
 	return out
