@@ -417,8 +417,26 @@ func wear_shot(gun_piece: Dictionary) -> Array:
 
 
 ## One hit's wear on the weapon. Returns true if that hit wore it out (crossed broken_below).
-func wear_weapon() -> bool:
-	return equipped.has("weapon") and _wear(equipped["weapon"], float(g()["wear_per_hit"]))
+## V9: one hit's wear on the melee weapon: its own rate (weapons.json "wear"; a knife goes fast, a
+## pipe lasts), cut by `wear_cut` (Maintenance) and its Lasting roll. Returns "" (fine), "worn" (just
+## dropped below broken_below: its bonuses stop) or "broke" (it hit 0 and is gone: back to fists).
+func wear_weapon(wear_cut: float = 0.0) -> String:
+	if not equipped.has("weapon"):
+		return ""
+	var piece: Dictionary = equipped["weapon"]
+	var rate := float(data.weapons[base_of(piece)["weapon"]].get("wear", g()["wear_per_hit"]))
+	var worn_now := _wear(piece, rate * (1.0 - clampf(wear_cut, 0.0, 0.9)))
+	if float(piece["condition"]) <= 0.0:
+		equipped.erase("weapon")
+		return "broke"
+	return "worn" if worn_now else ""
+
+
+## V10: which weapon skill the melee weapon in hand trains ("blunt", "blade", "axe"; "fists" bare-handed).
+func weapon_class() -> String:
+	if not equipped.has("weapon"):
+		return "fists"
+	return String(data.weapons[base_of(equipped["weapon"])["weapon"]].get("class", "blunt"))
 
 
 ## A day's wear on everything worn but the weapon. Returns the pieces that just wore out.

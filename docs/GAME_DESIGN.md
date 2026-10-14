@@ -93,7 +93,7 @@ One real minute = one in-game hour, so a full day is 24 real minutes. The sun is
 - **Stats screen:** days survived, deaths, kills, total noise made.
 
 ### Skills and perks (Zomboid × Diablo 2)
-- **Skills level by doing** (0–10, Zomboid style): Strength, Fitness, Building, Mechanics, Scavenging, Sneaking, Melee, Firearms, First Aid, Farming.
+- **Skills level by doing** (0–10, Zomboid style): Strength, Fitness, Building, Mechanics, Scavenging, Sneaking, Blunt, Blades, Axe, Maintenance, Firearms, First Aid, Farming. (V10, Emmitt 2026-10-13: Melee split Zomboid-style into a skill per kind of weapon, each giving more damage and quicker swings; Maintenance makes weapons wear slower. Weapons wear at their own rate and break at 0, so you need a new one now and then.)
 - **Every 3 skill levels earn 1 perk point** to spend in one of three trees. Each perk has ranks 1–5.
   - **Engineer:** faster building, faster machines, quieter machines, faster belts, cheaper mufflers.
   - **Ghost:** silent footsteps, faster searching, better loot rolls, see noise rings, harder to spot.

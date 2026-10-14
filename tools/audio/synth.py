@@ -388,6 +388,16 @@ def headshot() -> np.ndarray:
     return fade_edges(normalize(out, -2))
 
 
+def weapon_break() -> np.ndarray:
+    """V9: a weapon giving out: a sharp crack and a splintering rattle, then a dull clatter."""
+    n = seconds(0.6)
+    crack = oneshot_noise(n, bp(2200, 1.0)) * decay(n, 0.01, attack=0.0005)
+    splinter = oneshot_noise(n, bp(4200, 1.2)) * decay(n, 0.08, attack=0.003)
+    out = normalize(crack, 0) + 0.5 * normalize(splinter, 0)
+    place(out, clank(0.3, [(420, 1.0, 0.05), (980, 0.5, 0.03)]), 0.22, wrap=False)
+    return fade_edges(normalize(out, -3))
+
+
 def reload_click() -> np.ndarray:
     """A magazine going in and the slide racking: two metal clicks."""
     n = seconds(0.45)
@@ -459,7 +469,8 @@ def main() -> None:
              "reload": reload_click,
              "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
              "creak": creak, "clang_far": clang_far,  # V4: ambience
-             "headshot": headshot}  # V7
+             "headshot": headshot,  # V7
+             "weapon_break": weapon_break}  # V9
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:

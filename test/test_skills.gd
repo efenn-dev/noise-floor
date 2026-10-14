@@ -27,10 +27,11 @@ func _said(sim: SimWorld, text: String) -> bool:
 
 # --- Data and levels -----------------------------------------------------------
 
-func test_all_ten_skills_in_data() -> void:
+func test_all_skills_in_data() -> void:
 	var sim := SimWorld.new(10.0)
-	eq(sim.skills.ids(), ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "melee",
-			"firearms", "first_aid", "farming"], "the ten skills, in the screen's order")
+	# V10: Melee became Blunt, Blades and Axe, plus Maintenance.
+	eq(sim.skills.ids(), ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "blunt", "blades",
+			"axe", "maintenance", "firearms", "first_aid", "farming"], "the thirteen skills, in the screen's order")
 	eq(sim.data.validate(), PackedStringArray(), "skills.json passes validation")
 	check(not sim.skills.is_disabled("firearms"), "Firearms works since M14")
 	check(not sim.data.skills["skills"]["firearms"]["xp"].is_empty(), "and shots give Firearms xp")
@@ -57,7 +58,7 @@ func test_level_thresholds() -> void:
 
 # --- XP per action ---------------------------------------------------------------
 
-func test_swinging_and_hitting_train_strength_and_melee() -> void:
+func test_swinging_and_hitting_train_strength_and_blunt() -> void:
 	var sim := SimWorld.new(10.0)
 	var z := sim.horde.spawn("shambler", Vector3(0, 0, -1.5))
 	check(sim.swing(), "a swing")
@@ -65,9 +66,9 @@ func test_swinging_and_hitting_train_strength_and_melee() -> void:
 	check(not sim.swing(), "not ready again at once")
 	near(sim.skills.xp["strength"], _xp(sim, "strength", "swing"), "and a swing that didn't happen doesn't")
 	sim.hit_zombie(z.id, false)
-	near(sim.skills.xp["melee"], _xp(sim, "melee", "hit"), "a hit trains Melee")
+	near(sim.skills.xp["blunt"], _xp(sim, "blunt", "hit"), "a hit with the pipe trains Blunt")
 	check(sim.hit_zombie(z.id, true), "the head hit kills it")
-	near(sim.skills.xp["melee"], 2.0 * _xp(sim, "melee", "hit") + _xp(sim, "melee", "kill"), "a kill is worth more")
+	near(sim.skills.xp["blunt"], 2.0 * _xp(sim, "blunt", "hit") + _xp(sim, "blunt", "kill"), "a kill is worth more")
 
 
 func test_heavy_loads_train_strength() -> void:
@@ -172,11 +173,11 @@ func test_harvesting_trains_farming() -> void:
 func test_level_up_and_perk_point_messages() -> void:
 	var sim := SimWorld.new(10.0)
 	_set_level(sim, "strength", 2)
-	_set_level(sim, "melee", 0)
-	sim.skills.xp["melee"] = float(sim.data.skills["levels"][1]) - 0.5
+	_set_level(sim, "blunt", 0)
+	sim.skills.xp["blunt"] = float(sim.data.skills["levels"][1]) - 0.5
 	var z := sim.horde.spawn("shambler", Vector3(0, 0, -1.5))
 	sim.hit_zombie(z.id, false)
-	check(_said(sim, "Melee 1"), "says the new level")
+	check(_said(sim, "Blunt 1"), "says the new level")
 	check(_said(sim, "Perk point earned: K to spend"), "3 levels in all: says so")
 	eq(sim.skills.perk_points, 1, "and the point is there")
 
@@ -236,13 +237,13 @@ func test_melee_damage_and_knockback() -> void:
 	near(sim.melee_damage(), base, "the pipe's damage at 0")
 	_set_level(sim, "strength", 5)
 	near(sim.melee_damage(), base * 1.25, "Strength 5: +25%")
-	_set_level(sim, "melee", 5)
-	near(sim.melee_damage(), base * 1.45, "and Melee 5: +20% more (they stack)")
+	_set_level(sim, "blunt", 5)
+	near(sim.melee_damage(), base * 1.55, "and Blunt 5 with the pipe: +30% more (they stack)")
 	sim.skills.perks["heavy_swing"] = 2
-	near(sim.melee_damage(), base * 1.65, "Heavy Swing 2: +20% more")
+	near(sim.melee_damage(), base * 1.75, "Heavy Swing 2: +20% more")
 	var z := sim.horde.spawn("shambler", Vector3(0, 0, -1.5))
 	sim.hit_zombie(z.id, false)
-	near(z.hp, float(z.stats["hp"]) - base * 1.65, "the zombie takes it")
+	near(z.hp, float(z.stats["hp"]) - base * 1.75, "the zombie takes it")
 	near(z.knockback.length(), float(sim.weapon_stats()["knockback"]) * 1.25, "Strength 5 knocks back 25% further", 0.01)
 
 

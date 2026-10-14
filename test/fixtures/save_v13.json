@@ -1,0 +1,99 @@
+{
+	"automation": {
+		"floodlights": {},
+		"locked": [],
+		"noisemakers": {},
+		"sensors": {}
+	},
+	"bags": [],
+	"base_log": [],
+	"belts": [],
+	"bins": [],
+	"clock": {
+		"day": 3,
+		"time": 8.0
+	},
+	"crates": {},
+	"gear": {
+		"equipped": {
+			"weapon": {
+				"base": "pipe",
+				"condition": 0.6,
+				"name": "Pipe",
+				"rarity": "white",
+				"set": "",
+				"stats": {},
+				"tier": "civilian",
+				"uid": 1
+			}
+		},
+		"next_uid": 2,
+		"pieces": []
+	},
+	"generators": {},
+	"hands": "melee",
+	"heat": 0.0,
+	"hotbar": [
+		"build:foundation",
+		"build:wall",
+		"build:door",
+		"build:storage",
+		"build:smelter",
+		"build:belt",
+		"build:press",
+		"build:generator",
+		"build:bed",
+		"item:bandage"
+	],
+	"infamy": 0.0,
+	"inventory": {},
+	"machines": [],
+	"next_bag": 1,
+	"next_zombie": 1,
+	"perk_points": 0,
+	"perks": {},
+	"pieces": [],
+	"player": {
+		"bleeding": false,
+		"dead": false,
+		"deaths": 0,
+		"energy": 100.0,
+		"food": 100.0,
+		"health": 100.0,
+		"respawn_timer": 0.0,
+		"stamina": 100.0,
+		"warmth": 100.0,
+		"water": 100.0
+	},
+	"player_pos": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"projects": {},
+	"projects_done": [],
+	"rng_state": "-8228445403435405002",
+	"searched": [],
+	"seed": 1,
+	"skills": {
+		"melee": 300.0,
+		"strength": 40.0
+	},
+	"spawn_point": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"sprung": [],
+	"stats": {
+		"deaths": 0,
+		"kills": 0
+	},
+	"stoves": {},
+	"ticks": 0,
+	"turrets": [],
+	"unlocked": [],
+	"vehicles": {},
+	"version": 13,
+	"zombies": []
+}

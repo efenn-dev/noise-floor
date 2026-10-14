@@ -37,13 +37,15 @@ extends RefCounted
 ## project at phase 0.
 ## 13 = S3: the hotbar (ten slots, "build:<piece>" / "item:<item>" / ""), and a door's "swing" (which way it
 ## opened). A save from before 13 gets the default hotbar and its open doors swing the default way.
-const VERSION := 13
+const VERSION := 14
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
 const FIRST_WITH_FACTORY := 4
+## 14 = V10: Melee split into Blunt, Blades and Axe (a save from before 14 gives its Melee xp to all three),
+## plus Maintenance. Weapons wear at their own rate and break at 0 (no new saved fields).
 
 
 ## True if the save already holds the town's houses as pieces, so the world must not lay them again.
@@ -266,6 +268,11 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	if d.has("vehicles"):
 		sim.vehicles.load_dict(d["vehicles"])
 	for s: String in d.get("skills", {}):
+		if s == "melee":
+			# V10 (14): Melee split into Blunt, Blades and Axe. What you'd earned counts toward all three.
+			for into: String in ["blunt", "blades", "axe"]:
+				sim.skills.xp[into] = maxf(float(sim.skills.xp.get(into, 0.0)), float(d["skills"][s]))
+			continue
 		sim.skills.xp[s] = float(d["skills"][s])
 	sim.skills.perks = {}
 	for perk: String in d.get("perks", {}):
