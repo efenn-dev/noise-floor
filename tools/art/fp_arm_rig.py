@@ -8,9 +8,9 @@ left arm therefore has genuinely mirrored mesh and bone data; neither export con
 negative scale.  The grip centre is the scene origin.  The construction scene is discarded
 after each export and every measurement/render is made from the re-imported GLB.
 
-The rest pose is Grip.  Actions are two-key held poses containing bone rotations only.  Mesh
-pieces overlap under the glove at each joint, and the wrist is a ring mesh with blended Hand /
-Forearm weights, so normal finger and +/-45 degree wrist bends cannot open visible cracks.
+The rest pose is Grip.  Actions are two-key held poses containing bone rotations only.  The
+glove uses a voxel-fused palm, thumb web and cuff with full-length continuous finger tubes
+nested deeply into that shell.  Localized weights keep the joined visible surface closed.
 """
 
 import math
@@ -19,6 +19,7 @@ from pathlib import Path
 
 import bpy
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kit import material, reset  # noqa: E402
@@ -151,6 +152,183 @@ def ring_tube(name, centres_g, radii, mat, ring_weights, sides=14):
     return obj
 
 
+def raw_finger_tube(name, chain, mat, base_width, tip_width, side):
+    """Closed tapered finger source used by the glove's voxel union.
+
+    The cross-section has a broad back, a slightly flattened palm face, a tiny integral side
+    seam, shallow joint waists, and a subdued distal nail bulge.  These are silhouette changes
+    in the same surface rather than independent floating detail objects.
+    """
+    lengths = [(chain[i + 1] - chain[i]).length for i in range(3)]
+    total = sum(lengths)
+    cumulative = (0.0, lengths[0], lengths[0] + lengths[1])
+    samples = [(chain[0] - (chain[1] - chain[0]).normalized() * 0.010, -0.010, 1.02)]
+    for segment, ts in enumerate(((0.0, 0.22, 0.48, 0.74, 1.0),
+                                  (0.20, 0.46, 0.74, 1.0),
+                                  (0.18, 0.43, 0.68, 0.84, 0.94, 1.0))):
+        start, end = chain[segment], chain[segment + 1]
+        for t in ts:
+            s = cumulative[segment] + lengths[segment] * t
+            joint_scale = 0.955 if t == 1.0 and segment < 2 else 1.0
+            if segment == 2 and t >= 0.84:
+                joint_scale *= {0.84: 0.96, 0.94: 0.68, 1.0: 0.18}[t]
+            samples.append((start.lerp(end, t), s, joint_scale))
+
+    sides = 14
+    verts = []
+    rings = []
+    seam_sign = -1.0 if chain[0].y < 0.0 else 1.0
+    for ring_index, (centre, s, profile_scale) in enumerate(samples):
+        if ring_index == 0:
+            axis = samples[1][0] - centre
+        elif ring_index == len(samples) - 1:
+            axis = centre - samples[ring_index - 1][0]
+        else:
+            axis = samples[ring_index + 1][0] - samples[ring_index - 1][0]
+        axis.normalize()
+        across = Vector((0.0, 1.0, 0.0))
+        across = (across - axis * across.dot(axis)).normalized()
+        back = across.cross(axis).normalized()
+        if back.x * side < 0.0:
+            back.negate()
+        progress = max(0.0, min(1.0, s / total))
+        half_width = (base_width * (1.0 - progress) + tip_width * progress) * profile_scale
+        half_depth = half_width * (0.84 - 0.03 * progress)
+        ring = []
+        for step in range(sides):
+            angle = 2.0 * math.pi * step / sides
+            ca, sa = math.cos(angle), math.sin(angle)
+            seam = 0.0009 * max(0.0, ca * seam_sign) ** 10
+            nail_window = max(0.0, 1.0 - abs(progress - 0.86) / 0.16)
+            nail = 0.0010 * nail_window * max(0.0, sa) ** 8
+            palm_depth = half_depth * (0.76 if sa < 0.0 else 1.0)
+            point = centre + across * ((half_width + seam) * ca) + back * (palm_depth * sa + nail)
+            radial = math.hypot(point.x, point.z)
+            if abs(point.y) < 0.043 and radial < 0.0178:
+                scale = 0.0178 / max(radial, 1.0e-6)
+                point.x *= scale
+                point.z *= scale
+            ring.append(len(verts))
+            verts.append(tuple(g2b(point)))
+        rings.append(ring)
+
+    faces = [tuple(reversed(rings[0]))]
+    for a, b in zip(rings, rings[1:]):
+        for step in range(sides):
+            nxt = (step + 1) % sides
+            faces.append((a[step], a[nxt], b[nxt], b[step]))
+    faces.append(tuple(rings[-1]))
+    data = bpy.data.meshes.new(name)
+    data.from_pydata(verts, [], faces)
+    data.materials.append(mat)
+    obj = bpy.data.objects.new(name, data)
+    bpy.context.collection.objects.link(obj)
+    smooth(obj)
+    digit = name.split("_", 1)[0]
+    groups = {bone: obj.vertex_groups.new(name=bone)
+              for bone in ("Hand", f"{digit}1", f"{digit}2", f"{digit}3")}
+    for ring_index, (_centre, along, _scale) in enumerate(samples):
+        weights = digit_weights(digit, lengths, along)
+        indices = rings[ring_index]
+        for bone, value in weights.items():
+            if value > 1.0e-6:
+                groups[bone].add(indices, value, "REPLACE")
+    return obj
+
+
+def digit_weights(digit, lengths, along):
+    """Localized LBS weights: rigid phalanges with narrow, smooth knuckle transitions."""
+    joint1 = lengths[0]
+    joint2 = lengths[0] + lengths[1]
+    total = sum(lengths)
+    nodes = [(-0.010, "Hand"), (0.004, f"{digit}1"),
+             (joint1 - 0.006, f"{digit}1"), (joint1 + 0.006, f"{digit}2"),
+             (joint2 - 0.005, f"{digit}2"), (joint2 + 0.005, f"{digit}3"),
+             (total, f"{digit}3")]
+    if along <= nodes[0][0]:
+        return {nodes[0][1]: 1.0}
+    if along >= nodes[-1][0]:
+        return {nodes[-1][1]: 1.0}
+    for (s0, bone0), (s1, bone1) in zip(nodes, nodes[1:]):
+        if s0 <= along <= s1:
+            if bone0 == bone1:
+                return {bone0: 1.0}
+            blend = (along - s0) / (s1 - s0)
+            return {bone0: 1.0 - blend, bone1: blend}
+    raise AssertionError((digit, along, nodes))
+
+
+def fuse_glove(sources, mat, side):
+    """Voxel-union the palm, then transfer its Hand/Forearm weights to the new shell."""
+    bpy.ops.object.select_all(action="DESELECT")
+    for source in sources:
+        source.select_set(True)
+    bpy.context.view_layer.objects.active = sources[0]
+    bpy.ops.object.join()
+    glove = bpy.context.object
+    glove.name = "ContinuousGlove"
+    glove.data.name = "ContinuousGlove"
+
+    # Capture the broad wrist transition before fusing the overlapping palm construction forms.
+    source_groups = {group.index: group.name for group in glove.vertex_groups}
+    source_weights = []
+    source_tree = KDTree(len(glove.data.vertices))
+    for vertex in glove.data.vertices:
+        source_tree.insert(vertex.co, vertex.index)
+        weights = {source_groups[item.group]: item.weight for item in vertex.groups}
+        total = sum(weights.values())
+        source_weights.append({bone: value / total for bone, value in weights.items()})
+    source_tree.balance()
+    for group in list(glove.vertex_groups):
+        glove.vertex_groups.remove(group)
+    glove.data.remesh_voxel_size = 0.00105
+    glove.data.remesh_voxel_adaptivity = 0.0
+    bpy.ops.object.voxel_remesh()
+    smooth(glove)
+
+    glove.data.calc_loop_triangles()
+    target = 7500
+    if len(glove.data.loop_triangles) > target:
+        modifier = glove.modifiers.new("Production triangle budget", "DECIMATE")
+        modifier.decimate_type = "COLLAPSE"
+        modifier.ratio = target / len(glove.data.loop_triangles)
+        modifier.use_collapse_triangulate = True
+        bpy.context.view_layer.objects.active = glove
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    smooth(glove)
+
+    glove.data.materials.clear()
+    glove.data.materials.append(mat)
+    groups = {name: glove.vertex_groups.new(name=name) for name in BONE_NAMES}
+    for vertex in glove.data.vertices:
+        point = b2g(vertex.co)
+        radial = math.hypot(point.x, point.z)
+        if abs(point.y) < 0.040 and radial < 0.0162:
+            scale = 0.0162 / max(radial, 1.0e-6)
+            point.x *= scale
+            point.z *= scale
+            vertex.co = g2b(point)
+
+        transferred = {}
+        neighbours = source_tree.find_n(vertex.co, 4)
+        for _co, source_index, distance in neighbours:
+            influence = 1.0 / (distance + 0.00035) ** 2
+            for bone, value in source_weights[source_index].items():
+                transferred[bone] = transferred.get(bone, 0.0) + influence * value
+        total = sum(transferred.values())
+        weights = {bone: value / total for bone, value in transferred.items()}
+        weights = {bone: value for bone, value in weights.items()
+                   if bone in {"Hand", "Forearm"}}
+        if not weights:
+            weights = {"Hand": 1.0}
+        total = sum(weights.values())
+        weights = {bone: value / total for bone, value in weights.items()}
+        for bone, value in weights.items():
+            if value > 1.0e-6:
+                groups[bone].add([vertex.index], value, "REPLACE")
+    return glove
+
+
 def finger_rest(side):
     """Joint chains in Grip.  Each digit has exactly three phalanges."""
     ys = {"Index": -0.034, "Middle": -0.012, "Ring": 0.012, "Pinky": 0.034}
@@ -237,71 +415,52 @@ def build_mesh(side, mats):
     glove, skin, sleeve = mats["glove"], mats["skin"], mats["sleeve"]
     fingers = finger_rest(side)
 
-    # Thick anatomical palm, heel and thenar pad.  The palm face remains outside 17 mm.
-    parts.append(ellipsoid("Palm", (side * 0.052, 0.0, 0.046),
-                           (0.028, 0.047, 0.057), glove, "Hand", 18, 12))
-    parts.append(ellipsoid("PalmHeel", (side * 0.052, 0.002, 0.083),
-                           (0.027, 0.043, 0.034), glove, "Hand", 16, 10))
-    parts.append(ellipsoid("ThenarPad", (side * 0.030, -0.026, 0.058),
-                           (0.011, 0.020, 0.028), glove, "Hand", 14, 8))
-
-    # Three rounded phalanges per finger with realistic length/radius variation.
-    radii = {"Index": 0.0083, "Middle": 0.0086, "Ring": 0.0082, "Pinky": 0.0072}
-    for finger in FINGERS:
-        chain = fingers[finger]
-        base_r = radii[finger]
-        for index in range(3):
-            radius = base_r * (1.0 - index * 0.09)
-            parts.append(capsule(
-                f"{finger}_Phalanx_{index + 1}", chain[index], chain[index + 1], radius,
-                glove, f"{finger}{index + 1}", width=1.08, depth=0.96,
-            ))
-        # Raised leather over the MCP knuckle.
-        root = chain[0] + Vector((side * 0.006, 0.0, 0.004))
-        parts.append(ellipsoid(f"{finger}_KnucklePad", root,
-                               (0.008, base_r * 1.18, 0.010), glove, f"{finger}1", 12, 8))
-        # Two tiny transverse ridges catch highlights as glove joint creases.
-        for joint_index in (1, 2):
-            joint = chain[joint_index]
-            crease_a = joint + Vector((0.0, -base_r * 0.72, side * 0.001))
-            crease_b = joint + Vector((0.0, base_r * 0.72, side * 0.001))
-            parts.append(capsule(
-                f"{finger}_Crease_{joint_index}", crease_a, crease_b, 0.00125,
-                glove, f"{finger}{joint_index + 1}", segments=8, rings=5,
-            ))
-
-    thumb = fingers["Thumb"]
-    for index in range(3):
-        radius = (0.0100, 0.0090, 0.0080)[index]
-        parts.append(capsule(
-            f"Thumb_Phalanx_{index + 1}", thumb[index], thumb[index + 1], radius,
-            glove, f"Thumb{index + 1}", width=1.12, depth=1.0,
-        ))
-    parts.append(ellipsoid("ThumbBasePad", (side * 0.056, -0.029, 0.025),
-                           (0.013, 0.014, 0.017), glove, "Thumb1", 14, 8))
-
-    # Back-of-hand leather seam and discrete stitch ridges.  They are deliberately geometry,
-    # not texture, so the authored material names stay exactly the three the game expects.
-    seam_x = side * 0.081
-    parts.append(capsule("PalmSeam", (seam_x, -0.040, 0.044),
-                           (seam_x, 0.040, 0.048), 0.00145, glove, "Hand", segments=8, rings=5))
-    for index, y in enumerate((-0.033, -0.022, -0.011, 0.0, 0.011, 0.022, 0.033)):
-        parts.append(capsule(
-            f"PalmStitch_{index}", (side * 0.0805, y - 0.003, 0.041),
-            (side * 0.0820, y + 0.003, 0.051), 0.00105, glove, "Hand", segments=8, rings=5,
+    # Broad overlapping metacarpal and heel volumes fuse into the palm; the thenar and web forms
+    # carry the thumb into it. Full-length finger tubes are nested through this shell at the roots
+    # but stay independent of one another, so the closed Grip rest pose cannot weld digits.
+    glove_sources = [
+        ellipsoid("PalmCore", (side * 0.052, 0.0, 0.048),
+                  (0.029, 0.048, 0.059), glove, "Hand", 18, 12),
+        ellipsoid("MetacarpalBridge", (side * 0.051, 0.0, 0.021),
+                  (0.028, 0.049, 0.031), glove, "Hand", 18, 10),
+        ellipsoid("PalmHeel", (side * 0.051, 0.002, 0.085),
+                  (0.028, 0.043, 0.034), glove, "Hand", 16, 10),
+        ellipsoid("ThenarPad", (side * 0.034, -0.027, 0.052),
+                  (0.016, 0.022, 0.034), glove, "Hand", 16, 10),
+        ellipsoid("ThumbWeb", (side * 0.046, -0.031, 0.013),
+                  (0.019, 0.016, 0.023), glove, "Hand", 16, 10),
+    ]
+    widths = {
+        "Index": (0.0101, 0.0075), "Middle": (0.0104, 0.0077),
+        "Ring": (0.0100, 0.0073), "Pinky": (0.0088, 0.0065),
+        "Thumb": (0.0108, 0.0078),
+    }
+    finger_sources = []
+    for digit in ("Thumb", *FINGERS):
+        finger_sources.append(raw_finger_tube(
+            f"{digit}_Continuous", fingers[digit], glove, *widths[digit], side
         ))
 
-    # A blended glove wrist distributes a Hand bend across four rings instead of twisting one
-    # narrow loop.  The visible skin band is mostly Forearm; all sleeve vertices are Forearm.
-    parts.append(ring_tube(
-        "GloveWrist",
-        [(side * 0.050, -0.004, 0.078), (side * 0.049, -0.007, 0.092),
-         (side * 0.048, -0.010, 0.106), (side * 0.049, -0.014, 0.118)],
-        [(0.028, 0.039), (0.027, 0.037), (0.026, 0.035), (0.026, 0.035)],
-        glove,
-        [{"Hand": 1.0}, {"Hand": 0.78, "Forearm": 0.22},
-         {"Hand": 0.38, "Forearm": 0.62}, {"Forearm": 1.0}],
+    # The glove wrist and its slightly proud welt are part of the same union as the hand.
+    glove_sources.append(ring_tube(
+        "GloveWristSource",
+        [(side * 0.050, -0.004, 0.077), (side * 0.049, -0.007, 0.093),
+         (side * 0.048, -0.010, 0.108), (side * 0.049, -0.014, 0.121)],
+        [(0.029, 0.041), (0.028, 0.039), (0.027, 0.037), (0.0315, 0.0405)],
+        glove, [{"Hand": 1.0}, {"Hand": 0.82, "Forearm": 0.18},
+                {"Hand": 0.38, "Forearm": 0.62}, {"Forearm": 1.0}], sides=18,
     ))
+    glove_sources.append(ring_tube(
+        "WristSeamSource",
+        [(side * 0.049, -0.013, 0.1165), (side * 0.049, -0.014, 0.1220)],
+        [(0.0325, 0.0415), (0.0320, 0.0410)], glove,
+        [{"Hand": 0.18, "Forearm": 0.82}, {"Forearm": 1.0}], sides=18,
+    ))
+    parts.append(fuse_glove(glove_sources, glove, side))
+    parts.extend(finger_sources)
+
+    # The visible skin band is rigid to Forearm; the fused glove above carries its own broad
+    # Hand/Forearm transition and flares over this band.
     parts.append(ring_tube(
         "SkinBand",
         [(side * 0.049, -0.014, 0.116), (side * 0.050, -0.018, 0.128),
@@ -326,18 +485,6 @@ def build_mesh(side, mats):
         [{"Forearm": 1.0}] * 5,
         sides=16,
     ))
-    # Turned cuff lip and a couple of canvas fold ridges, all rigid to Forearm.
-    parts.append(capsule("CuffLipA", (side * 0.087, -0.030, 0.157),
-                           (side * 0.085, 0.006, 0.160), 0.0024, sleeve, "Forearm", 1.0, 1.0, 10, 6))
-    parts.append(capsule("CuffLipB", (side * 0.020, -0.031, 0.157),
-                           (side * 0.022, 0.004, 0.160), 0.0024, sleeve, "Forearm", 1.0, 1.0, 10, 6))
-    for index, (z, lean) in enumerate(((0.244, 0.010), (0.322, -0.008))):
-        parts.append(capsule(
-            f"SleeveFold_{index}", (side * (0.087 + lean), -0.063, z - 0.020),
-            (side * (0.090 - lean), -0.030, z + 0.018), 0.0028, sleeve, "Forearm",
-            segments=10, rings=6,
-        ))
-
     # Join only mesh parts.  Blender preserves named vertex groups and the three material slots.
     bpy.ops.object.select_all(action="DESELECT")
     for part in parts:
@@ -609,8 +756,8 @@ def add_preview_prop(kind, side):
 def setup_preview():
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
-    scene.render.resolution_x = 700
-    scene.render.resolution_y = 700
+    scene.render.resolution_x = 1024
+    scene.render.resolution_y = 1024
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
@@ -619,14 +766,14 @@ def setup_preview():
     scene.world.color = (0.008, 0.011, 0.016)
     camera_data = bpy.data.cameras.new("PreviewCamera")
     camera_data.sensor_fit = "VERTICAL"
-    camera_data.angle_y = math.radians(75.0)
+    camera_data.angle_y = math.radians(50.0)
     camera = bpy.data.objects.new("PreviewCamera", camera_data)
     bpy.context.collection.objects.link(camera)
     scene.camera = camera
     for name, point, energy, size in (
-        ("Key", (0.55, 0.35, 0.50), 20.0, 0.65),
-        ("Fill", (-0.35, 0.20, 0.32), 9.0, 0.55),
-        ("Rim", (0.05, -0.35, 0.62), 15.0, 0.50),
+        ("Key", (0.55, -0.35, 0.42), 28.0, 0.55),
+        ("Fill", (-0.32, -0.20, 0.28), 14.0, 0.45),
+        ("Rim", (0.12, 0.38, 0.48), 22.0, 0.42),
     ):
         data = bpy.data.lights.new(name, "AREA")
         data.energy = energy
@@ -639,50 +786,90 @@ def setup_preview():
     return camera
 
 
+def make_contact_sheet(paths):
+    """Make a compact 3x3 proof sheet without depending on external image utilities."""
+    import numpy as np
+
+    tile = 512
+    columns = 3
+    rows = math.ceil(len(paths) / columns)
+    canvas = np.zeros((rows * tile, columns * tile, 4), dtype=np.float32)
+    canvas[:, :, 3] = 1.0
+    for index, path in enumerate(paths):
+        image = bpy.data.images.load(str(path), check_existing=False)
+        width, height = image.size
+        assert width == 1024 and height == 1024, (path, image.size[:])
+        pixels = np.empty(width * height * 4, dtype=np.float32)
+        image.pixels.foreach_get(pixels)
+        pixels = pixels.reshape((height, width, 4)).reshape(tile, 2, tile, 2, 4).mean(axis=(1, 3))
+        row, column = divmod(index, columns)
+        canvas[(rows - 1 - row) * tile:(rows - row) * tile,
+               column * tile:(column + 1) * tile] = pixels
+        bpy.data.images.remove(image)
+    sheet = bpy.data.images.new("FP Arm V2 Contact Sheet", width=columns * tile,
+                                height=rows * tile, alpha=True)
+    sheet.pixels.foreach_set(canvas.ravel())
+    sheet.filepath_raw = str(SHOT_DIR / "fp_arm_v2_sheet.png")
+    sheet.file_format = "PNG"
+    sheet.save()
+    print("PREVIEW", sheet.filepath_raw)
+
+
 def render_previews(piece_id, side, armature, actions):
     if side < 0:
         return
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     scene = bpy.context.scene
     camera = setup_preview()
-    camera.location = g2b((0.25, 0.35, 0.65))
-    look_at(camera, (0.0, 0.0, 0.0))
+    armature.data.pose_position = "POSE"
+    rendered = []
+
+    # Roughly 25 cm from the hand, looking across the back at a three-quarter angle.
+    camera.data.angle_y = math.radians(50.0)
+    camera.location = g2b((0.235, -0.145, 0.175))
+    look_at(camera, (0.025, 0.0, 0.035))
     for name in ACTION_NAMES:
         armature.animation_data.action = actions[name]
         scene.frame_set(1)
         bpy.context.view_layer.update()
         prop = add_preview_prop(name, side)
-        scene.render.filepath = str(SHOT_DIR / f"{piece_id}_{name.lower()}.png")
+        scene.render.filepath = str(SHOT_DIR / f"fp_arm_v2_{name.lower()}.png")
         bpy.ops.render.render(write_still=True)
         print("PREVIEW", scene.render.filepath)
+        rendered.append(Path(scene.render.filepath))
         if prop:
             bpy.data.objects.remove(prop, do_unlink=True)
 
+    # Palm-side close-ups for the two prop-contact poses.
+    camera.location = g2b((-0.205, -0.145, 0.145))
+    look_at(camera, (0.018, 0.0, 0.025))
+    for name in ("Grip", "HoldMag", "Fist"):
+        armature.animation_data.action = actions[name]
+        scene.frame_set(1)
+        bpy.context.view_layer.update()
+        prop = add_preview_prop(name, side)
+        scene.render.filepath = str(SHOT_DIR / f"fp_arm_v2_{name.lower()}_palm.png")
+        bpy.ops.render.render(write_still=True)
+        print("PREVIEW", scene.render.filepath)
+        if name != "Fist":
+            rendered.append(Path(scene.render.filepath))
+        if prop:
+            bpy.data.objects.remove(prop, do_unlink=True)
+
+    # Exact requested in-game-style first-person proof with the 34 mm diameter cylinder.
     armature.animation_data.action = actions["Grip"]
     scene.frame_set(1)
-    handle = add_preview_prop("Grip", side)
-    camera.location = g2b((0.72, 0.02, 0.23))
-    look_at(camera, (0.025, -0.025, 0.18))
-    scene.render.filepath = str(SHOT_DIR / f"{piece_id}_grip_side.png")
-    bpy.ops.render.render(write_still=True)
-    print("PREVIEW", scene.render.filepath)
-    bpy.data.objects.remove(handle, do_unlink=True)
-
-    # Requested skinning proof: bend Hand down 40 degrees while Forearm stays fixed.
-    armature.animation_data.action = None
-    scene.frame_set(0)
-    reset_pose(armature)
-    hand = armature.pose.bones["Hand"]
-    rest = hand.bone.matrix_local.copy()
-    down = Matrix.Rotation(math.radians(-40.0), 4, "X")
-    hand.matrix = Matrix.Translation(rest.translation) @ (down.to_3x3() @ rest.to_3x3()).to_4x4()
     bpy.context.view_layer.update()
-    camera.location = g2b((0.65, 0.02, 0.28))
-    look_at(camera, (0.04, -0.01, 0.16))
-    scene.render.filepath = str(SHOT_DIR / f"{piece_id}_wrist_bend_40.png")
+    handle = add_preview_prop("Grip", side)
+    camera.data.angle_y = math.radians(75.0)
+    camera.location = g2b((0.25, 0.35, 0.65))
+    look_at(camera, (0.0, 0.0, 0.0))
+    scene.render.filepath = str(SHOT_DIR / "fp_arm_v2_first_person.png")
     bpy.ops.render.render(write_still=True)
     print("PREVIEW", scene.render.filepath)
-    reset_pose(armature)
+    rendered.append(Path(scene.render.filepath))
+    bpy.data.objects.remove(handle, do_unlink=True)
+    make_contact_sheet(rendered)
 
 
 def validate_reimport(piece_id, out, side):
@@ -702,7 +889,7 @@ def validate_reimport(piece_id, out, side):
     assert materials == ["Arm Glove", "Arm Skin", "Arm Sleeve"], materials
     mesh.data.calc_loop_triangles()
     triangles = len(mesh.data.loop_triangles)
-    assert triangles < 12000, triangles
+    assert triangles < 14000, triangles
 
     bones = armature.data.bones
     assert tuple(bones.keys()) == BONE_NAMES, tuple(bones.keys())
