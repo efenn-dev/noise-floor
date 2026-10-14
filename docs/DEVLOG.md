@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V18 Loot window: hotkeys and drag and drop (Sprint 4)
+
+Emmitt: "make looting open the containers so you can choose what to loot with hotkeys and click and drag function." Built by Codex (one job on his ChatGPT plan); fixes, the merge with V17 and checks by Claude Opus 5.5.
+
+**Built:**
+- **Searching opens the container.** E on a fridge, cabinet, shelf, crate, car trunk or corpse searches it as before; when the search ends the inventory opens with that container on the right ("Fridge", "Corpse", "Trunk"), the mouse freed and the game still running. Already-searched containers open at once. Walking out of reach or getting hurt closes it with a message. Built storage crates now open the same way (they used to take your materials automatically).
+- **Hotkeys:** E or double-click moves the picked stack between the container and your pockets; **R takes everything that fits** and says what didn't; Ctrl-click moves one, Shift-click the stack; 1-9/0 put the picked item on the hotbar; Tab/Esc close. Shown on the screen and in Help.
+- **Drag and drop:** container <-> pockets, pockets -> a character slot (equips if it fits), slot -> pockets (unequips), pocket item -> a hotbar key; a picture of the item follows the mouse; a bad drop snaps back with "Too heavy" or "Doesn't fit that slot". Ctrl-drag moves one.
+- **Saves:** VERSION 17: searched containers keep what's left in them (including gear). This branch also contains V17 window climbing (save 16 = window glass).
+- Fix found on the way: putting on gear you carry was refused as "Too heavy" when you were already over the limit, though wearing it makes you lighter.
+
+**Try it on the PC:** search any fridge or cabinet in a house; `play.bat --loot` opens a searched fridge.
+
+**Tests:** 11,671 green (new `test_loot_screen.gd`).
+
+**Known gaps:** no grid/Tetris inventory (items are tiles, not shapes); no item tooltips on hover yet.
+
 ## 2026-10-14 — V17 Climbing through windows (Sprint 4)
 
 Emmitt: "we need to add a vault mechanic for windows because you can just run through broken windows." Built by Codex (one job on his ChatGPT plan); test fixes, checks and screenshots by Claude Opus 5.5.
