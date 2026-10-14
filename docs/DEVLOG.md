@@ -2,6 +2,28 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V3 Game feel (Sprint 4)
+
+Built by Claude Opus 5.5 in a local session, stacked on V1. Most of this is motion and timing, which still screenshots can't show, so the maths has checks (test_view_feel.gd) and Emmitt's hands decide the rest (V8).
+
+**Built:**
+- **`ViewFeel`** (new, `src/world/view_feel.gd`), one node that owns how the view moves and reacts:
+  - **Head bob** with your steps: stronger sprinting, softer crouched, nothing in the air or standing still, easing in and out.
+  - **The pipe and the guns** bob with your steps and lag the mouse (sway). Guns are steady while scoped.
+  - **Screen shake** ("trauma", squared so small knocks stay small): a pistol shot, a bigger one for the rifle, a pipe hit on a zombie, a swing into a wall, and taking damage. It settles within about a second.
+  - **The gun's kick** now goes through ViewFeel, so it adds to the shake instead of fighting it.
+  - **A hit marker** at the crosshair: white for a body hit, yellow for the head, red for a kill.
+  - **A dark red screen edge** when you take damage, which pulses while health is under 35 (`hurt_vignette.gdshader`). ViewFeel watches health itself, so every kind of damage counts.
+- **`ImpactFx`** (new): blood droplets that fall where a pipe or a round hits a zombie, and a slow dust puff where a swing or a shot hits anything else. CPU particles, so they work in every renderer, and each frees itself.
+- **Settings → "Head bob and camera shake"** (on by default). Off removes the bob, sway and shake for anyone who gets motion sick; the kick, the marker and the red edge stay.
+- Melee and Shooter report hits to ViewFeel. Both still work without it, for the tests that build them alone.
+
+**Try it on the PC:** `play.bat`, New game. Walk, then sprint, and watch the pipe. Hit a wall and a zombie with it. `play.bat --gun --zombie=0,-6` and shoot. Take a hit from a zombie. Settings → untick head bob to compare.
+
+**Known gaps:** no blood on the ground or on walls yet (decals are V7, with hit reactions). The hit marker is easy to miss under the blood at close range. No landing dip after a jump.
+
+**Next:** V4 sound, and V2's Codex art when its run finishes.
+
 ## 2026-10-13 — V1 Lighting and atmosphere (Sprint 4)
 
 Built by Claude Opus 5.5 in a local session, the first task of Sprint 4 ("the first 30 minutes", see DIRECTION.md). Judged on Forward+ screenshots on Emmitt's GPU, before and after: 10:00, 20:30, 06:00, 23:00 on the street, 22:00 and 13:00 inside a house, the factory at 21:30, and the night street on each quality preset.

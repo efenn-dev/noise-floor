@@ -165,6 +165,12 @@ func _build_settings(box: VBoxContainer) -> void:
 	full.add_theme_font_size_override("font_size", 22)
 	full.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(full)
+	var bob := CheckBox.new()
+	bob.text = "Head bob and camera shake"
+	bob.button_pressed = Settings.head_bob
+	bob.add_theme_font_size_override("font_size", 22)
+	bob.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(bob)
 	var refresh := func() -> void:
 		sens_label.text = "Mouse sensitivity: %.1fx" % Settings.mouse_sensitivity
 		vol_label.text = "Volume: %d%%" % roundi(Settings.volume * 100.0)
@@ -182,6 +188,9 @@ func _build_settings(box: VBoxContainer) -> void:
 		settings_changed.emit())
 	gfx.item_selected.connect(func(i: int) -> void:
 		Settings.graphics = Atmosphere.QUALITIES[i]
+		settings_changed.emit())
+	bob.toggled.connect(func(on: bool) -> void:
+		Settings.head_bob = on
 		settings_changed.emit())
 	full.toggled.connect(func(on: bool) -> void:
 		Settings.fullscreen = on
