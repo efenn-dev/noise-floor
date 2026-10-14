@@ -12,8 +12,11 @@ const LOOKS := {
 	"materials": {
 		"Arm Glove": {"texture": "leather_boot", "tile_m": 0.08, "tint": Color(0.78, 0.58, 0.4), "metallic": 0.0, "roughness": 0.8},
 		"Arm Sleeve": {"texture": "cloth_cotton", "tile_m": 0.1, "tint": Color(0.3, 0.27, 0.22), "metallic": 0.0, "roughness": 0.95},
+		# V22: the bare-wrist band is an open ring that showed as a peach scroll from some angles; it's the
+		# jacket's cuff now, so the sleeve meets the glove.
+		"Arm Skin": {"texture": "cloth_cotton", "tile_m": 0.1, "tint": Color(0.26, 0.23, 0.19), "metallic": 0.0, "roughness": 0.95},
 	},
-	"untextured": ["Arm Skin"],
+	"untextured": [],
 }
 ## Where each hand goes on each weapon: [position, rotation in degrees] in the weapon model's own space.
 ## Melee models: grip at the origin, pointing up +Y (tools/art/melee_common.py). Gun grips are Codex's
@@ -40,6 +43,10 @@ const FOREARM := Vector3(0.0, -0.2588, 0.9659)  # the model's forearm direction:
 ## A real grip holds a handle at a slant across the palm, not square to the forearm: the hand is tipped this
 ## much about its own X, which also swings the forearm back toward you.
 const WRIST_TILT := deg_to_rad(25.0)
+## V22: where each shoulder is, in camera space (below and beside the eye, a little behind it), and how far a hand
+## must move off its grip before its forearm swings fully toward that shoulder.
+const SHOULDER := {"right": Vector3(0.22, -0.38, 0.12), "left": Vector3(-0.22, -0.38, 0.12)}
+const FREE_AT := 0.06
 
 
 ## The hand's basis in the weapon: the config's alignment, the roll about the handle, then the wrist's slant.
@@ -99,6 +106,27 @@ static func reaim(holder: Node3D, cam_basis: Basis) -> void:
 		var side: String = hand.get_meta("side")
 		hand.position = position
 		hand.basis = hand_basis(base, best_roll(base, cam_basis, ARM_DIR[side].normalized()))
+		var free := 0.0
+		if hand.has_meta("target_base"):
+			free = clampf(float(hand.get_meta("target_weight", 1.0)) * position.distance_to(hand.get_meta("grip_position", position))
+					/ FREE_AT, 0.0, 1.0)
+		if free > 0.0:
+			_point_at_shoulder(hand, holder, cam_basis, side, free)
+
+
+## V22: a hand that has let go of the weapon (reaching for a magazine, racking the slide, loading rounds) turns
+## so its forearm runs back toward that side's shoulder, below and beside the eye, the way a real arm hangs;
+## otherwise a keyframed hand near the camera could point its sleeve straight at you. `amount` 0-1 blends it in
+## as the hand leaves the grip, so a hand on the grip keeps its exact hold.
+static func _point_at_shoulder(hand: Node3D, holder: Node3D, cam_basis: Basis, side: String, amount: float) -> void:
+	var hand_cam := holder.position + cam_basis * hand.position
+	var shoulder: Vector3 = SHOULDER[side]
+	var want := (shoulder - hand_cam).normalized()
+	var now := (cam_basis * hand.basis * FOREARM).normalized()
+	if now.dot(want) > 0.9999:
+		return
+	var turn := Basis(Quaternion.IDENTITY.slerp(Quaternion(now, want), amount))
+	hand.basis = (cam_basis.inverse() * turn * cam_basis * hand.basis).orthonormalized()
 
 
 ## V13: an absolute target in the holder's space. reaim() blends from the authored grip, then rolls the
@@ -134,12 +162,134 @@ static func set_pose(hand: Node3D, pose: String, blend: float = 0.12) -> void:
 		player.play(pose, blend)
 
 
+## V22 (Emmitt: "fix the hands in the engine"): the finger poses are built here from the rig's own rest pose
+## instead of using the animations baked in Blender (every Blender pass bent some finger the wrong way once it
+## reached Godot). The rest pose is the grip round a 34 mm handle; each pose gives, per finger, how bent each
+## joint should be (degrees between a bone and the one before it: knuckle, middle, tip), and each joint is
+## turned about that finger's own curl axis, measured from the rest bones, by the difference.
+const FINGERS := {
+	"Thumb": ["Thumb1", "Thumb2", "Thumb3"], "Index": ["Index1", "Index2", "Index3"],
+	"Middle": ["Middle1", "Middle2", "Middle3"], "Ring": ["Ring1", "Ring2", "Ring3"],
+	"Pinky": ["Pinky1", "Pinky2", "Pinky3"],
+}
+## Bends per pose; "*" is every finger but the thumb unless the finger is listed. "Grip" is the rest pose.
+const POSE_BENDS := {
+	"Grip": {},
+	"Fist": {"*": [88.0, 100.0, 62.0], "Thumb": [40.0, 50.0, 38.0]},
+	"Open": {"*": [14.0, 18.0, 10.0], "Thumb": [16.0, 8.0, 4.0]},
+	"Flat": {"*": [2.0, 2.0, 2.0], "Thumb": [8.0, 2.0, 0.0]},
+	"Pinch": {"Index": [38.0, 48.0, 30.0], "Middle": [46.0, 58.0, 36.0], "Ring": [54.0, 66.0, 40.0],
+			"Pinky": [60.0, 70.0, 44.0], "Thumb": [34.0, 32.0, 26.0]},
+	"HoldMag": {"*": [44.0, 34.0, 38.0], "Index": [20.0, 18.0, 12.0], "Thumb": [26.0, 23.0, 4.0]},
+}
+const SKELETON_PATH := "Armature/Skeleton3D"
+## The jacket sleeve carries on past the end of the model's forearm (toward the shoulder), so the arm always runs
+## off the screen and never looks cut off: a tapered tube on the Forearm bone, measured to meet the sleeve's end
+## (radius 5.2-6.0 cm at the bone's head).
+const SLEEVE_EXTENSION := {"length": 0.45, "top_radius": 0.058, "bottom_radius": 0.066, "overlap": 0.03}
+static var _pose_libraries: Dictionary = {}  # side -> AnimationLibrary, built once
+
+
+## How bent each joint of `bones` is in the rest pose (degrees between a bone and its parent), and the finger's
+## curl axis in skeleton space (the sum of the joints' bend axes, so a nearly straight joint doesn't decide it).
+static func finger_rest(sk: Skeleton3D, bones: Array) -> Dictionary:
+	var dirs: Array[Vector3] = []
+	var parent := sk.get_bone_parent(sk.find_bone(bones[0]))
+	dirs.append(sk.get_bone_global_rest(parent).basis.y.normalized())
+	for b: String in bones:
+		dirs.append(sk.get_bone_global_rest(sk.find_bone(b)).basis.y.normalized())
+	var axis := Vector3.ZERO
+	var bends: Array[float] = []
+	for j in bones.size():
+		axis += dirs[j].cross(dirs[j + 1])
+		bends.append(rad_to_deg(dirs[j].angle_to(dirs[j + 1])))
+	return {"axis": axis.normalized() if axis.length() > 0.0001 else Vector3.UP, "bends": bends}
+
+
+## The local rotation that bends `bone` by `delta_deg` about the skeleton-space `axis`, starting from its rest.
+static func bent_rotation(sk: Skeleton3D, bone: int, axis: Vector3, delta_deg: float) -> Quaternion:
+	var rest_global := sk.get_bone_global_rest(bone).basis.orthonormalized()
+	var local_axis := (rest_global.inverse() * axis).normalized()
+	var rest_local := sk.get_bone_rest(bone).basis.orthonormalized().get_rotation_quaternion()
+	return rest_local * Quaternion(local_axis, deg_to_rad(delta_deg))
+
+
+## The six hand poses as one-key animations on this rig (every finger bone keyed in each, so cross-fades blend
+## cleanly). Built from `sk`'s rest pose.
+static func build_pose_library(sk: Skeleton3D) -> AnimationLibrary:
+	var lib := AnimationLibrary.new()
+	var rests := {}
+	for finger: String in FINGERS:
+		rests[finger] = finger_rest(sk, FINGERS[finger])
+	for pose: String in POSE_BENDS:
+		var spec: Dictionary = POSE_BENDS[pose]
+		var anim := Animation.new()
+		anim.length = 0.1
+		for finger: String in FINGERS:
+			var bones: Array = FINGERS[finger]
+			var rest: Dictionary = rests[finger]
+			var want: Array = spec.get(finger, spec.get("*", []) if finger != "Thumb" else [])
+			for j in bones.size():
+				var bone := sk.find_bone(bones[j])
+				var delta := 0.0 if want.is_empty() else float(want[j]) - float(rest["bends"][j])
+				var track := anim.add_track(Animation.TYPE_ROTATION_3D)
+				anim.track_set_path(track, NodePath("%s:%s" % [SKELETON_PATH, bones[j]]))
+				anim.rotation_track_insert_key(track, 0.0, bent_rotation(sk, bone, rest["axis"], delta))
+		lib.add_animation(pose, anim)
+	return lib
+
+
+## Swaps the rig's baked poses for the engine-built ones and adds the sleeve extension. Does nothing to a model
+## without the V13 skeleton (the V12 static hands, the placeholder).
+static func _prepare_rig(node: Node3D, side: String) -> void:
+	var sk := node.get_node_or_null(SKELETON_PATH) as Skeleton3D
+	var player := node.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if sk == null or player == null or sk.find_bone("Forearm") < 0:
+		return
+	if not _pose_libraries.has(side):
+		_pose_libraries[side] = build_pose_library(sk)
+	for lib_name: StringName in player.get_animation_library_list():
+		player.remove_animation_library(lib_name)
+	player.add_animation_library("", _pose_libraries[side])
+	var attach := BoneAttachment3D.new()
+	attach.name = "SleeveExtension"
+	attach.bone_name = "Forearm"
+	sk.add_child(attach)
+	var tube := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = SLEEVE_EXTENSION["bottom_radius"]  # the cylinder's top is the shoulder end (-Y, away from the wrist)
+	mesh.bottom_radius = SLEEVE_EXTENSION["top_radius"]
+	mesh.height = SLEEVE_EXTENSION["length"]
+	mesh.radial_segments = 20
+	mesh.rings = 2
+	tube.mesh = mesh
+	tube.position = Vector3(0.0, -float(SLEEVE_EXTENSION["length"]) / 2.0 + float(SLEEVE_EXTENSION["overlap"]), 0.0)
+	tube.rotation.x = PI  # flip so the wide end goes toward the shoulder
+	tube.material_override = _sleeve_material(node)
+	tube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	attach.add_child(tube)
+
+
+## The arm's own (already textured) sleeve material, so the extension matches it.
+static func _sleeve_material(node: Node3D) -> Material:
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for i in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(i)
+			if source != null and source.resource_name == "Arm Sleeve":
+				var over := mesh.get_surface_override_material(i)
+				return over if over != null else source
+	return null
+
+
 ## One hand: prefer the V13 rigged arm, then the V12 static hand, else a placeholder; shadows stay off.
 static func make(side: String) -> Node3D:
 	var node: Node3D
 	if ResourceLoader.exists(ARM_MODELS[side]):
 		node = (load(ARM_MODELS[side]) as PackedScene).instantiate() as Node3D
 		apply_materials(node)
+		_prepare_rig(node, side)  # V22: engine-built finger poses and the sleeve on to the shoulder
 	elif ResourceLoader.exists(MODELS[side]):
 		node = (load(MODELS[side]) as PackedScene).instantiate() as Node3D
 		apply_materials(node)
@@ -160,7 +310,7 @@ static func apply_materials(node: Node3D) -> void:
 				continue
 			var m: Dictionary = LOOKS["materials"][source.resource_name]
 			var mat := Shooter._gun_material(source, String(m["texture"]), float(m["tile_m"]), m.get("tint", Color.WHITE), m)
-			if source.resource_name == "Arm Sleeve" and mat.cull_mode != BaseMaterial3D.CULL_DISABLED:
+			if source.resource_name in ["Arm Sleeve", "Arm Skin"] and mat.cull_mode != BaseMaterial3D.CULL_DISABLED:
 				mat = mat.duplicate() as StandardMaterial3D
 				mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # V16: when a pose turns the open end of the sleeve toward you, you see cloth, not a hole
 			mesh.set_surface_override_material(i, mat)

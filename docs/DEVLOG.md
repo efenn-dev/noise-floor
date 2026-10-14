@@ -2,6 +2,22 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
+
+Emmitt: "fix the hands in the engine". Every Blender pass bent some finger the wrong way once it reached Godot, so the poses are now built in Godot, where they can be measured. By Claude Opus 5.5.
+
+**Built:**
+- **Finger poses made in the engine** (`Hands.build_pose_library`): the arm's rest pose is the grip round a 34 mm handle; each pose says how bent each joint should be (knuckle, middle, tip) per finger, and each joint is turned about its finger's own curl axis, measured from the rest bones, by the difference. The fist is fully closed (88/100/62 degrees) with the thumb across; Flat is straight; Open, Pinch and HoldMag are relaxed versions. The baked Blender poses are replaced when the arm loads; nothing else changed for the code that asks for poses.
+- **The arm reaches the shoulder:** a 45 cm sleeve continues the jacket past the end of the model's forearm (a tube on the Forearm bone in the sleeve's own cloth), so the arm always runs off the screen.
+- **A free hand's forearm points at the shoulder:** when the left hand lets go of the gun (magazine, slide, cartridges) it turns so its forearm runs back toward that side's shoulder, below and beside the eye, instead of pointing up the sleeve at you; on the grip the hold is exactly as before.
+- The bare-wrist band (an open ring that showed as a peach scroll) is the jacket's cuff now.
+
+**Try it on the PC:** `play.bat --gun` then R (reload) and V; `play.bat --fists` and hold right click; `play.bat --gun=rifle` then R.
+
+**Tests:** 11,856 green (new `test_hand_poses.gd`: each pose bends each joint by what it asks for, the fist closes, flat is straight, the sleeve, the free forearm). Test lesson: a Skeleton3D only recomputes global poses inside the tree, and reading one before that freezes the cache.
+
+**Known gaps:** the hand model itself is still MakeHuman's with a glove texture (no stitched seams up close); the ADS pistol grip shows both hands large at the bottom edge.
+
 ## 2026-10-14 — V20 Realistic zombies: MakeHuman bodies with motion capture (Sprint 4)
 
 Emmitt: "more realistic ... zombies". Bodies and animation by Codex (three jobs on his ChatGPT plan, one cut off by the weekly limit and resumed); review in the game and the pick by Claude Opus 5.5.
