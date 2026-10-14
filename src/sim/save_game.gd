@@ -372,10 +372,21 @@ static func _mark_town(sim: SimWorld) -> void:
 static func write(sim: SimWorld, path: String, extra: Dictionary = {}) -> String:
 	var d := to_dict(sim)
 	d.merge(extra)
+	return write_dict(d, path)
+
+
+## Writes an already assembled save dictionary (V26 migration uses this without rebuilding a SimWorld).
+static func write_dict(d: Dictionary, path: String) -> String:
+	var folder := path.get_base_dir()
+	if folder != "":
+		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+		if dir_error != OK:
+			return "Couldn't make %s (%s)" % [folder, error_string(dir_error)]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return "Couldn't write %s (%s)" % [path, error_string(FileAccess.get_open_error())]
 	f.store_string(JSON.stringify(d, "\t"))
+	f.close()
 	return ""
 
 

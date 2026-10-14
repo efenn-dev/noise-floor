@@ -29,6 +29,7 @@ extends Node3D
 ##   --noise-overlay       start with the noise overlay (N) on
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
+##   --slots                         open the title screen's save-slot picker (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
 ##   --loot[=KIND]                   start beside searched loot of KIND (fridge by default), with it open
 ##   --skills                        open the skills and perks screen (K in game)
@@ -139,6 +140,10 @@ func _ready() -> void:
 	InputSetup.register()
 	Settings.load_settings()
 	var args := _parse_user_args()
+	if not GameSession.skip_menu:
+		var migration_error := GameSession.migrate_legacy_save()
+		if migration_error != "":
+			push_warning(migration_error)
 	if args.has("graphics"):
 		Settings.graphics = Atmosphere.valid_quality(str(args["graphics"]))  # V1: this run only, not saved
 	var save := {}
@@ -155,6 +160,7 @@ func _ready() -> void:
 		sim.paused = true
 	session_log = SessionLog.new()
 	session_log.enabled = _shot_path == "" and DisplayServer.get_name() != "headless"
+	SessionLog.prepare_slot()
 	if session_log.enabled and SessionLog.carried != null:
 		sim.stats = SessionLog.carried  # loading a save or quitting to the title is still the same sitting
 	sim.stats.muted = true  # building the town, a save or a demo base isn't the player's doing
@@ -503,7 +509,9 @@ func _process(delta: float) -> void:
 		sound_view.indoor = indoor_fog  # V4: indoor echo and muffled wind follow the same eased value
 	if _shot_path == "":
 		if not sim.paused:
-			sim.stats.add_real_time(delta / maxf(Engine.time_scale, 1.0))  # sleeping speeds time up
+			var played := delta / maxf(Engine.time_scale, 1.0)  # sleeping speeds time up
+			sim.stats.add_real_time(played)
+			GameSession.slot_real_seconds += played
 		if sim.update(delta) > 0:
 			_apply_time()
 		return
@@ -808,8 +816,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _build_menus(args: Dictionary) -> void:
 	menus = Menus.new()
 	add_child(menus)
-	menus.new_game.connect(_start_playing)
-	menus.continue_game.connect(func() -> void: _reload_with(GameSession.save_path))
+	menus.new_game.connect(_start_new_game)
+	menus.continue_game.connect(continue_game)
+	menus.delete_slot_requested.connect(func(slot: int) -> void:
+		var why := GameSession.delete_slot(slot)
+		menus.update_slots(GameSession.slot_summaries())
+		if why != "":
+			menus.set_status(why))
 	menus.resume.connect(_resume)
 	menus.save_requested.connect(func() -> void:
 		var why := save_game()
@@ -827,15 +840,17 @@ func _build_menus(args: Dictionary) -> void:
 		menus.hide_all()
 		help_screen.open(from))
 	help_screen.closed.connect(func(from: String) -> void:  # back to the menu it was opened from
-		var saved := FileAccess.file_exists(GameSession.save_path)
 		if from == "title":
-			menus.show_title(saved)
+			menus.show_title(GameSession.slot_summaries())
 		elif from == "pause":
-			menus.show_pause(saved))
+			menus.show_pause(FileAccess.file_exists(GameSession.save_path)))
 	var has_save := FileAccess.file_exists(GameSession.save_path)
-	var flags := not args.is_empty() and not (args.size() == 1 and args.has("title"))
-	if args.has("title") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
-		menus.show_title(has_save)
+	var title_only := args.size() == 1 and (args.has("title") or args.has("slots"))
+	var flags := not args.is_empty() and not title_only
+	if args.has("title") or args.has("slots") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
+		menus.show_title(GameSession.slot_summaries())
+		if args.has("slots"):
+			menus.open_slots(false)
 		_title_view(true)
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
@@ -848,12 +863,20 @@ func _build_menus(args: Dictionary) -> void:
 		GameSession.started = true
 
 
-func _start_playing() -> void:
+func _start_new_game(slot: int, profile_name: String) -> void:
+	session_log.finish()  # finish the old profile's log before the selected slot name changes
+	var why := GameSession.start_new_slot(slot, profile_name)
+	if why != "":
+		menus.set_status(why)
+		return
 	GameSession.started = true
-	_title_view(false)
-	menus.hide_all()
-	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_reload_with("")  # rebuild a truly fresh world before play starts
+
+
+func continue_game(slot: int) -> void:
+	session_log.finish()
+	GameSession.select_slot(slot)
+	_reload_with(GameSession.save_path)
 
 
 func _open_pause() -> void:
@@ -881,7 +904,8 @@ func _apply_settings() -> void:
 func save_game() -> String:
 	sim.player_pos = player.global_position
 	return SaveGame.write(sim, GameSession.save_path,
-			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x]})
+			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x],
+			"meta": GameSession.make_meta(sim)})
 
 
 ## Loads the last save: the scene restarts and lays the save over a freshly built town.

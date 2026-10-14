@@ -12,6 +12,7 @@ const FOLDER := "user://sessions"
 ## Survives scene reloads (loading a save, quitting to the title), so one sitting is one log.
 static var carried: RunStats = null
 static var _stamp := ""
+static var _slot_name := ""
 
 var sim: SimWorld
 var enabled := false
@@ -21,9 +22,18 @@ var _deaths_written := 0
 var _quit_written := false
 
 
+static func prepare_slot() -> void:
+	if _slot_name == GameSession.current_slot_name:
+		return
+	_slot_name = GameSession.current_slot_name
+	carried = null
+	_stamp = ""  # changing profiles starts a distinct, clearly named session log
+
+
 func setup(p_sim: SimWorld) -> void:
 	sim = p_sim
 	_deaths_written = sim.stats.deaths.size()
+	prepare_slot()
 	if _stamp == "":
 		var t := Time.get_datetime_dict_from_system()
 		_stamp = "%04d-%02d-%02d_%02d%02d" % [t["year"], t["month"], t["day"], t["hour"], t["minute"]]
@@ -48,6 +58,10 @@ func _exit_tree() -> void:
 	_write_on_quit()
 
 
+func finish() -> void:
+	_write_on_quit()
+
+
 func _write_on_quit() -> void:
 	if _quit_written or sim == null:
 		return
@@ -56,7 +70,7 @@ func _write_on_quit() -> void:
 		carried = sim.stats
 	var written := write()
 	if written != "" and enabled:
-		print("Session log: " + ProjectSettings.globalize_path(written))
+		print("Session log: %s — %s" % [GameSession.current_slot_name, ProjectSettings.globalize_path(written)])
 
 
 ## Writes the summary now. Returns the path written, or "" if logging is off or nothing was played yet.
@@ -81,7 +95,8 @@ func lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	out.append("Noise Floor session log, written %s" % Time.get_datetime_string_from_system(false, true))
 	out.append("Build: " + GameSession.version_line())
-	out.append("Started %s. World seed %d, game clock now %s." % [_stamp, sim.seed_value, sim.when_text()])
+	out.append("Started %s. Save slot: %s. World seed %d, game clock now %s." % [
+			_stamp, GameSession.current_slot_name, sim.seed_value, sim.when_text()])
 	out.append("")
 	var worn := PackedStringArray()  # P3: what you wear (and hold) right now
 	for slot: String in sim.gear.equipped:
