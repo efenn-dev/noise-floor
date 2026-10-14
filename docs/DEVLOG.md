@@ -2,6 +2,20 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V29 Difficulty, and a first night that matters (Sprint 4)
+
+Nobody had died in nine sessions and nobody built a shelter, because nothing forced it; Emmitt wanted the first night to matter and an easier setting for his son. Built by Codex (one job on his ChatGPT plan, on top of V26 save slots and V25 objectives); a test fix, a screenshot flag and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Easy / Normal / Hard**, chosen on the New game screen after the slot name, saved with the game (VERSION 20; older saves load as Normal) and shown in the slot summary and pause menu. One `Difficulty` object (data in `data/difficulty.json`) scales zombie damage (0.5 / 1 / 1.5x), health (0.6 / 1 / 1.4x), counts and night waves (0.6 / 1 / 1.5x), Director heat (0.6 / 1 / 1.5x), hunger/thirst/energy drain (0.6 / 1 / 1.4x), loot (1.5 / 1 / 0.7x) and how much better zombies hear and move at night. Skills are kept on death on every setting.
+- **The first night:** at 19:00 a warning ("It'll be dark at 21:00. Find shelter: a bed inside walls with a door"); at 21:00 "Night falls" and a wave (Easy 3 slow ones, Normal 5, Hard 8 with a runner). Caught outside, they hunt you; in a shelter (a bed in a closed player-built room, or a closed town house with intact windows) they mill around outside unless you make noise. At 06:00 "You made it to morning". Later nights keep the heat-driven waves, more dangerous than days.
+- `--new-game[=SLOT]` opens the New game screen for screenshots.
+- Test fix: the road-horde tests start at 23:00 on day 1, so the first-night wave joined them; they mark the first night as done.
+
+**Try it on the PC:** New game, pick a difficulty, and see if you can get a bed behind walls and a door before 21:00. The 1-day soak bot survives (2 waves, 1 death).
+
+**Tests:** 12,116 green (new `test_difficulty.gd`, fixture `save_v19.json`).
+
 ## 2026-10-14 — V27 Take all button, wear gear straight from a container (Sprint 4)
 
 Emmitt: "a loot all button might help, I also noticed that we can't immediately equip items, it has to go to inventory before being equipped". By Claude Opus 5.5.

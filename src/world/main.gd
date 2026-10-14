@@ -870,12 +870,16 @@ func _build_menus(args: Dictionary) -> void:
 		elif from == "pause":
 			menus.show_pause(FileAccess.file_exists(GameSession.save_path)))
 	var has_save := FileAccess.file_exists(GameSession.save_path)
-	var title_only := args.size() == 1 and (args.has("title") or args.has("slots"))
+	var title_only := args.size() == 1 and (args.has("title") or args.has("slots") or args.has("new-game"))
 	var flags := not args.is_empty() and not title_only
-	if args.has("title") or args.has("slots") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
+	if args.has("title") or args.has("slots") or args.has("new-game") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
 		menus.show_title(GameSession.slot_summaries())
 		if args.has("slots"):
 			menus.open_slots(false)
+		elif args.has("new-game"):  # V29: the New game screen (name and difficulty) for that slot, for screenshots
+			var slot_arg := str(args["new-game"])
+			menus.open_slots(true)
+			menus.choose_slot(int(slot_arg) if slot_arg.is_valid_int() else 2)
 		_title_view(true)
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
