@@ -18,6 +18,7 @@
 		"bat": {"name": "Baseball bat", "slot": "weapon", "weapon": "bat", "weight": 1.0},
 		"axe": {"name": "Axe", "slot": "weapon", "weapon": "axe", "weight": 2.0},
 		"machete": {"name": "Machete", "slot": "weapon", "weapon": "machete", "weight": 0.8},
+		"knife": {"name": "Knife", "slot": "weapon", "weapon": "knife", "weight": 0.3},
 		"hard_hat": {"name": "Hard hat", "slot": "head", "weight": 0.4, "base": {"damage_cut": 0.05}},
 		"cap": {"name": "Cap", "slot": "head", "weight": 0.1, "base": {"walk_quiet": 1}},
 		"hi_vis_vest": {"name": "Hi-vis vest", "slot": "body", "weight": 0.3, "base": {"carry_kg": 3}},

@@ -711,12 +711,14 @@ func unequip_gear(slot: String) -> String:
 	return why if why != "" else "Took off " + piece["name"]
 
 
-## Repairs a piece (carried or worn) to mint with one repair kit from your pockets. Trains Mechanics.
+## Repairs a piece (carried or worn) to mint with one repair kit from your pockets. Trains Mechanics
+## and (V10) Maintenance.
 func repair_gear(uid: int) -> String:
 	var why := gear.repair(uid, inventory)
 	if why != "":
 		return why
 	_practice("mechanics", "repair")
+	_practice("maintenance", "repair")
 	return "Repaired " + gear.find(uid)["name"]
 
 
@@ -1098,15 +1100,28 @@ func fit_muffler(cell: Vector2i) -> String:
 ## Starts a melee swing if the weapon is ready and there's stamina (PlayerStats.try_swing). Swinging
 ## trains Strength. Returns true if it swung.
 func swing() -> bool:
-	if not player.try_swing(float(weapon_stats()["cooldown"])):
+	if not player.try_swing(swing_cooldown()):
 		return false
 	_practice("strength", "swing")
 	return true
 
 
-## Melee damage of one body hit: the weapon's, plus Strength, Melee and Heavy Swing.
+## Melee damage of one body hit: the weapon's, plus Strength, Heavy Swing and (V10) the skill for this
+## kind of weapon (Blunt, Blades or Axe).
 func melee_damage() -> float:
-	return float(weapon_stats()["damage"]) * (1.0 + skills.bonus("melee_damage"))
+	var cls := gear.weapon_class()
+	return float(weapon_stats()["damage"]) * (1.0 + skills.bonus("melee_damage") + skills.bonus(cls + "_damage"))
+
+
+## V10: seconds between swings: the weapon's, quicker with its skill (never below half).
+func swing_cooldown() -> float:
+	var cut := minf(0.5, skills.bonus(gear.weapon_class() + "_speed"))
+	return float(weapon_stats()["cooldown"]) * (1.0 - cut)
+
+
+## V10: the skill that a hit with the weapon in hand trains ("" bare-handed).
+func weapon_skill() -> String:
+	return String({"blunt": "blunt", "blade": "blades", "axe": "axe"}.get(gear.weapon_class(), ""))
 
 
 ## The player hits zombie `id` with their weapon (call after swing() succeeds and the swing
@@ -1118,13 +1133,23 @@ func hit_zombie(id: int, head: bool) -> bool:
 	var w := weapon_stats()
 	var dmg := melee_damage() * (float(w["head_multiplier"]) if head else 1.0)
 	noise.emit(z.pos, noise_loudness("melee_hit"), "melee_hit")
-	if gear.wear_weapon():
-		add_message("Your %s is worn out: its bonuses stop until you repair it" % gear.weapon_name(), 5.0)
+	var skill := weapon_skill()  # before the wear: a weapon that breaks on this hit still trains its skill
+	var name := gear.weapon_name()
+	match gear.wear_weapon(skills.bonus("wear_cut")):
+		"worn":
+			add_message("Your %s is worn out: its bonuses stop, and it'll break soon (repair kit from the Press)" % name, 6.0)
+		"broke":
+			add_message("Your %s broke! Find another weapon" % name, 7.0)
+			noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
+			stats.note("broke a " + name.to_lower())
 	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]) * (1.0 + skills.bonus("knockback")))
 	stats.note("hit a zombie")
-	_practice("melee", "hit")
+	if skill != "":
+		_practice(skill, "hit")
+	_practice("maintenance", "hit")
 	if killed:
-		_practice("melee", "kill")
+		if skill != "":
+			_practice(skill, "kill")
 		stats.note_kill()
 		stats.note("killed a " + z.type)
 	return killed

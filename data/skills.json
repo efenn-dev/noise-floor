@@ -1,6 +1,6 @@
 {
 	"levels": [0, 30, 80, 150, 240, 350, 480, 630, 800, 1000, 1250],
-	"order": ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "melee", "firearms", "first_aid", "farming"],
+	"order": ["strength", "fitness", "building", "mechanics", "scavenging", "sneaking", "blunt", "blades", "axe", "maintenance", "firearms", "first_aid", "farming"],
 	"skills": {
 		"strength": {
 			"name": "Strength",
@@ -38,11 +38,29 @@
 			"xp": { "sneak_second": 2 },
 			"effects": { "walk_quiet": 1 }
 		},
-		"melee": {
-			"name": "Melee",
-			"text": "+4% melee damage per level",
+		"blunt": {
+			"name": "Blunt",
+			"text": "With pipes and bats: +6% damage and swings 4% quicker per level",
 			"xp": { "hit": 4, "kill": 10 },
-			"effects": { "melee_damage": 0.04 }
+			"effects": { "blunt_damage": 0.06, "blunt_speed": 0.04 }
+		},
+		"blades": {
+			"name": "Blades",
+			"text": "With machetes and knives: +6% damage and swings 4% quicker per level",
+			"xp": { "hit": 4, "kill": 10 },
+			"effects": { "blade_damage": 0.06, "blade_speed": 0.04 }
+		},
+		"axe": {
+			"name": "Axe",
+			"text": "With axes: +6% damage and swings 4% quicker per level",
+			"xp": { "hit": 4, "kill": 10 },
+			"effects": { "axe_damage": 0.06, "axe_speed": 0.04 }
+		},
+		"maintenance": {
+			"name": "Maintenance",
+			"text": "Weapons wear 7% slower per level",
+			"xp": { "hit": 1, "repair": 10 },
+			"effects": { "wear_cut": 0.07 }
 		},
 		"firearms": {
 			"name": "Firearms",

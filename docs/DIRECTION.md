@@ -22,6 +22,8 @@ Real AAA is a hundred-million-dollar budget and hundreds of people. The target i
 
 The board is in `docs/SPRINT.md`. In order of impact: lighting and atmosphere, textured zombies and guns, game feel, sound, a written art direction, first-person arms, zombie hit reactions and deaths, then the playtest.
 
+**Added by Emmitt the same night (an exception to the freeze, his call):** attack animations, weapons that wear out and break, and Zomboid weapon skills (Blunt, Blades, Axe, plus Maintenance). Board items V9 to V11.
+
 ## Update, evening of 2026-10-13: where things stand
 
 In the thirty hours after this file was written, builders (Claude Opus 5.5, one at a time, each from a plan by the lead) delivered the whole long-game list except outposts: W1a–W1c (houses with rooms, loot, furniture, a zombie in some, the factory hall, hordes down the road), M12–M16 (skills and perks, loot with rarity and gear, guns and the workbench, automated defense with sensors and the base log, seasons with cold and the stove), M17a (the industrial park and the water tower project), two art passes (street dressing, five zombie bodies), three polish passes (gun feel, playtest readiness with a help screen, soak fixes) and three QA passes (a stress test, a bot that plays game-days headless, a twelve-shot tour). Every one is a pull request against `main` with tests; the suite is past seven thousand checks.

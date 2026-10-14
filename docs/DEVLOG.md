@@ -2,6 +2,22 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V9 + V10 Weapons wear out, Zomboid weapon skills (Sprint 4)
+
+Built by Claude Opus 5.5 from Emmitt's ask: "adding durability to items so we need to get a new weapon every so often. I want zomboid like skills where you level up your blunt, blades, axe, etc skills and do more damage/faster attacks."
+
+**Built:**
+- **Weapons wear at their own rate and break.** `weapons.json` gives each a `wear` per hit: pipe 0.008 (about 125 hits), axe 0.010, bat 0.012, machete 0.014, knife 0.02 (about 50). Dropping below `broken_below` warns you it'll break soon (its bonuses stop, as before). At 0 it snaps: it's gone from your hands, a loud crack (`weapon_break`, 55 loud, new synth sound), and you're back to fists. Repair kits from the Press still restore one. The HUD's weapon line shows the condition once it has some wear ("Weapon: Bat 60%", "... 20% worn out").
+- **Blunt, Blades and Axe replace Melee.** Each weapon has a `class` (pipe and bat blunt; machete and the new knife blade; axe axe). A hit with it trains its skill. Each level gives +6% damage and swings 4% quicker with that kind of weapon (`<class>_damage`, `<class>_speed`; never quicker than half). `SimWorld.swing_cooldown()` and `weapon_skill()`. Strength and the Fighter perks still add to every weapon.
+- **Maintenance:** 7% less wear per level. Every hit gives a little xp, a repair more.
+- **The knife:** a fast, short blade (22 damage, 0.4 s, 2.5x on the head) that wears quickly. It's a gear base, so it turns up in loot like the others.
+- **Save version 14:** a save from before gives its Melee xp to all three weapon skills (`test/fixtures/save_v13.json`, written by the pre-V10 code). Swing `style` per weapon is in `weapons.json` for V11.
+- `test/test_weapon_skills.gd` (50 checks); `test_skills.gd` and `test_gear.gd` updated to the new skills and wear rates.
+
+**Try it on the PC:** `play.bat`, fight with the pipe until it wears (watch the HUD line), K for the skills screen (Blunt, Blades, Axe, Maintenance), find a machete or a knife and feel the difference.
+
+**Known gaps:** every weapon still looks and swings the same until V11 lands (Codex is making the models). No spears or long blades yet. Repairs still restore a weapon fully; Zomboid lowers the maximum each time, so tune after Playtest #2.
+
 ## 2026-10-13 — S3-1c Textured zombies, varied clothes and textured guns
 
 Built by Codex from Emmitt's Playtest #1 request for better zombie and gun textures. No save change: each look is derived from the zombie id already in the save.

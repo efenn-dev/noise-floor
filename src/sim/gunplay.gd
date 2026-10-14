@@ -202,10 +202,22 @@ func _load(inv: Inventory) -> int:
 	return n
 
 
+## V9: " 60%" once the melee weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
+func weapon_condition_text() -> String:
+	if not gear.equipped.has("weapon"):
+		return ""
+	var piece: Dictionary = gear.equipped["weapon"]
+	var c := float(piece["condition"])
+	if c >= 0.995:
+		return ""
+	return " %d%%%s" % [roundi(c * 100.0), "" if gear.working(piece) else " worn out"]
+
+
 ## The HUD line: "Pistol 6/8 standard (R reload, Q pipe)" or "Pipe (Q: Pistol)".
 func hands_text() -> String:
 	if not in_hand():
-		return "Weapon: %s%s" % [gear.weapon_name(), ("   (Q: %s)" % gear.gun_name()) if not gun().is_empty() else ""]
+		return "Weapon: %s%s%s" % [gear.weapon_name(), weapon_condition_text(),
+				("   (Q: %s)" % gear.gun_name()) if not gun().is_empty() else ""]
 	var piece := gun()
 	var state := ""
 	if reloading > 0.0:
