@@ -379,6 +379,15 @@ def clang_far() -> np.ndarray:
     return fade_edges(normalize(np.concatenate([pre, out])[:n], -9))
 
 
+def headshot() -> np.ndarray:
+    """V7: a head hit: a sharp crack of bone, a wet splat and a low knock, so it reads over the gunshot."""
+    n = seconds(0.4)
+    crack = oneshot_noise(n, bp(2800, 0.9)) * decay(n, 0.006, attack=0.0005)
+    splat = oneshot_noise(n, bp(700, 1.2)) * decay(n, 0.05, attack=0.004)
+    out = normalize(crack, 0) + 0.8 * normalize(splat, 0) + 0.7 * thump(0.4, 120, 50, 0.06)
+    return fade_edges(normalize(out, -2))
+
+
 def reload_click() -> np.ndarray:
     """A magazine going in and the slide racking: two metal clicks."""
     n = seconds(0.45)
@@ -449,7 +458,8 @@ def main() -> None:
              "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
              "reload": reload_click,
              "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
-             "creak": creak, "clang_far": clang_far}  # V4: ambience
+             "creak": creak, "clang_far": clang_far,  # V4: ambience
+             "headshot": headshot}  # V7
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:

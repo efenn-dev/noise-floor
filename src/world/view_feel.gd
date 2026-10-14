@@ -100,10 +100,24 @@ func hit_zombie(killed: bool, head: bool) -> void:
 	marker_color = Color(0.95, 0.15, 0.1) if killed else (Color(1.0, 0.85, 0.2) if head else Color.WHITE)
 
 
-## A puff where something was struck: "blood" on a zombie, "dust" on anything else.
+## A puff where something was struck: "blood" on a zombie ("blood_head" for the head), "dust" on anything
+## else. V7: blood also leaves a stain on the ground below the hit.
 func impact(pos: Vector3, normal: Vector3, kind: String) -> void:
 	var parent := get_parent() if get_parent() != null else self
 	ImpactFx.spawn(parent, pos, normal, kind)
+	if kind.begins_with("blood"):
+		stain_below(pos, 0.9 if kind == "blood_head" else 0.55)
+
+
+## V7: a blood stain on whatever is under `pos` (ground or floor, not zombies), up to 3 m down.
+func stain_below(pos: Vector3, size_m: float) -> void:
+	var vp := get_viewport()
+	if vp == null or vp.world_3d == null:
+		return
+	var q := PhysicsRayQueryParameters3D.create(pos + Vector3.UP * 0.1, pos + Vector3.DOWN * 3.0, Layers.WORLD | Layers.BUILT)
+	var hit := vp.world_3d.direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		ImpactFx.stain(get_parent() if get_parent() != null else self, hit["position"], hit["normal"], size_m)
 
 
 ## Health watching: a drop flashes the red edge and shakes the view; a rise (healing, respawn) doesn't.

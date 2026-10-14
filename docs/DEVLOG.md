@@ -2,6 +2,22 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V7 Hits and deaths (Sprint 4)
+
+Built by Claude Opus 5.5, stacked on the car fix. The zombie rig already had hit-react and death animations; this pass makes hits and kills read.
+
+**Built:**
+- **Blood stains.** A hit on a zombie leaves a stain on the ground below it (bigger for the head), and a pool spreads under a body over four seconds and stays as long as the body does. `ImpactFx.stain` places Decals of a procedural splat (`tools/art/make_blood_splat.py`, free). They fade after three minutes, and at most 48 exist at once (the oldest go first). Decals need Forward+; cloud screenshots won't show them.
+- **Bodies fall away from the blow.** The Death animation tips a zombie forward, so a dying zombie now turns to face the way it was knocked (away from you if nothing knocked it) and slides back a little as it drops, instead of falling onto you.
+- **Headshots read.** A bigger blood burst (`blood_head`), a bigger stain, and a new `headshot` sound (a bone crack, a wet splat and a knock, from synth.py) for pipe and gun hits to the head.
+- `test/test_hits_deaths.gd` (stain orientation, the cap, a pool spreading, a zombie hit from the east falling and sliding west with a pool under it).
+
+**Try it on the PC:** `play.bat`, then hit zombies with the pipe (aim for the head) and shoot one with `play.bat --gun --zombie=0,-6`. Watch the body fall away and the pool spread.
+
+**Known gaps:** no full ragdoll (bodies use the animation). No blood on walls behind a shot. Stains go through thin floors onto the ground below (rare).
+
+**Next:** Emmitt's new asks: attack animations, weapons that wear out, and Zomboid weapon skills.
+
 ## 2026-10-13 — Fix: the game stalled after getting into a car
 
 Built by Claude Opus 5.5, from Emmitt's report on the V3 build (1c6ffcd): "when I got into the car the game bugged out".
