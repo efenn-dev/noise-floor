@@ -70,7 +70,8 @@ func _nav_around_window(broken: bool) -> float:
 	scene.add_child(nav)
 	nav.setup(scene, AABB(Vector3(-3, -1, -4), Vector3(8, 5, 8)))
 	nav.bake_now()
-	await tree.physics_frame
+	for i in 12:  # the map takes a few frames to sync after a bake (test_zombie_world waits 0.2 s)
+		await tree.physics_frame
 	var map := scene.get_world_3d().navigation_map
 	var path := NavigationServer3D.map_get_path(map, Vector3(1, 0, 1.8), Vector3(1, 0, -1.8), true)
 	var detour := 0.0
@@ -102,8 +103,8 @@ func test_player_vault_takes_about_point_nine_seconds_costs_stamina_and_makes_no
 	eq(sim.start_vault("w:0:0:n"), "", "Space starts the climb")
 	near(float(sim.player_vault["duration"]), 0.9, "base vault time", 0.001)
 	near(sim.player.stamina, before - float(sim.data.survival["vault_stamina"]), "stamina paid", 0.001)
-	check(sim.noise.recent.any(func(s: Dictionary) -> bool: return s["kind"] == "vault"), "vault noise emitted")
 	_run(sim, 0.85)
+	check(sim.noise.recent.any(func(s: Dictionary) -> bool: return s["kind"] == "vault"), "vault noise emitted")  # one-offs land in `recent` on the next tick
 	check(not sim.player_vault.is_empty(), "still crossing before 0.9 s")
 	_run(sim, 0.1)
 	check(sim.player_vault.is_empty(), "finished at about 0.9 s")
