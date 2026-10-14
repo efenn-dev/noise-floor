@@ -59,6 +59,9 @@ var _slept := false
 var _saved_snapshot := {}
 var _dying := false                  # the day-3 step: stand still, don't fight back
 var _swings := 0
+var _bandaged := 0                   # Q5: bandages used (H) when a hit made the bot bleed
+var _bleeds_unbandaged := 0          # Q5: times it bled with no bandage to use
+var _was_bleeding := false
 var _removed := 0
 var _waves_before := -1
 var _waves_carried := 0              # Q3: RunStats is new after a load (headless has no session log to carry it)
@@ -392,11 +395,19 @@ func _save_load() -> String:
 func _wave() -> String:
 	await _walk_to(Vector3(0, 0, 6))
 	var stock := sim.stock_at(main.player.global_position)
-	sim.power.load_fuel(sim.build.key_for("generator", Vector2i(-2, 1)), stock)
+	# A chasing zombie may have wrecked a machine since day 1 (allowed); rebuild it, as a player would.
+	var rebuilt := PackedStringArray()
+	for m: Array in [["smelter", Vector2i(-2, 0)], ["generator", Vector2i(-2, 1)]]:
+		if not sim.build.pieces.has(sim.build.key_for(m[0], m[1])):
+			var err: String = sim.build.place(m[0], m[1], BuildGrid.Side.EAST, stock)
+			rebuilt.append(m[0] + ("" if err == "" else " (failed: %s)" % err))
+	var cans := sim.power.load_fuel(sim.build.key_for("generator", Vector2i(-2, 1)), stock)
 	sim.machine_interact(Vector2i(-2, 0), main.player.global_position)
 	sim.director.heat = 100.0
 	_waves_before = _waves()
-	return "heat %.0f, %d machine noise source(s), waves so far %d" % [sim.director.heat, sim.noise.continuous.size(), _waves()]
+	await _frames(30)
+	return "heat %.0f, %d machine noise source(s), %d gas can(s) loaded, rebuilt [%s], waves so far %d" % [
+			sim.director.heat, sim.noise.continuous.size(), cans, ", ".join(rebuilt), _waves()]
 
 
 func _die() -> String:
@@ -711,6 +722,13 @@ func _frames(n: int) -> void:
 func _fight_back() -> void:
 	if _dying or sim.player.dead or sim.player.asleep or main.driving != null:
 		return
+	# Q5: H when bleeding, as the HUD tells a player to; count the bleeds it had nothing for.
+	if sim.player.bleeding and not _was_bleeding:
+		if sim.use_bandage().begins_with("Bandaged"):
+			_bandaged += 1
+		else:
+			_bleeds_unbandaged += 1
+	_was_bleeding = sim.player.bleeding
 	var at: Vector3 = main.player.global_position
 	for id: int in sim.horde.zombies:
 		var z: ZombieBrain = sim.horde.zombies[id]
@@ -1011,8 +1029,9 @@ func _finish() -> void:
 	var recovered := 0
 	for zb: ZombieBody in main.zombie_view.get("_bodies").values():
 		recovered += zb.nan_recoveries
-	var summary := "NaN moves undone %d; %d game-day(s) in %.0f s wall (%.0f s per game-day); deaths %d, kills %d, waves %d, swings %d, gear %d, pieces %d, bag %s" % [
-			recovered, days, wall, wall / maxf(0.01, (_abs_hours() - _start_abs) / 24.0), sim.tally["deaths"], sim.tally["kills"], _waves(), _swings, _gear_count(), sim.build.pieces.size(),
+	var summary := "NaN moves undone %d; %d game-day(s) in %.0f s wall (%.0f s per game-day); deaths %d, kills %d, waves %d, swings %d, bandaged %d, bled with no bandage %d, gear %d, pieces %d, bag %s" % [
+			recovered, days, wall, wall / maxf(0.01, (_abs_hours() - _start_abs) / 24.0), sim.tally["deaths"], sim.tally["kills"], _waves(), _swings,
+			_bandaged, _bleeds_unbandaged, _gear_count(), sim.build.pieces.size(),
 			"taken" if _bag_taken else "-"]
 	if failures.is_empty():
 		print("SOAK OK: " + summary)

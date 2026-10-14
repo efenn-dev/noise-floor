@@ -3,11 +3,12 @@ extends RefCounted
 ## Rolls loot tables (data/loot.json) and keeps track of every searchable container in the world.
 ## Searching takes search_time seconds, makes a little noise, and stops if you walk off
 ## (further than search_range). Each container's loot is fixed by the world seed and its id,
-## and a searched container stays empty (loot never respawns).
+## and a searched container keeps the rolled contents until the player takes them (loot never respawns).
 
 var data: GameData
 var seed_value: int
-## id -> {table: String, pos: Vector3, searched: bool}
+## V18: id -> {table: String, pos: Vector3, searched: bool, items: Inventory, gear: Array};
+## revealed contents stay here until the player chooses what to take.
 var containers: Dictionary = {}
 var active := ""        # id being searched now, "" if none
 var progress := 0.0     # seconds into the current search
@@ -39,10 +40,10 @@ static func roll(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 
 
 func add(id: String, table: String, pos: Vector3) -> void:
-	containers[id] = {"table": table, "pos": pos, "searched": false, "extra": {}, "gear": []}
+	containers[id] = {"table": table, "pos": pos, "searched": false, "extra": {}, "items": Inventory.new(), "gear": []}
 
 
-## S4: gear pieces a search hands over as well (what a dead zombie carried).
+## S4/V18: gear pieces waiting in a container (including what a dead zombie carried).
 func add_gear(id: String, pieces: Array) -> void:
 	containers[id]["gear"].append_array(pieces)
 
@@ -65,13 +66,21 @@ func display_name(id: String) -> String:
 	return data.loot[containers[id]["table"]]["name"] if containers.has(id) else ""
 
 
+func inventory(id: String) -> Inventory:
+	return containers[id]["items"] if containers.has(id) else null
+
+
+func in_reach(id: String, player_pos: Vector3) -> bool:
+	return containers.has(id) and _flat_dist(containers[id]["pos"], player_pos) <= float(data.survival["search_range"])
+
+
 ## Starts searching container `id`. Returns "" or why not.
 func start(id: String, player_pos: Vector3) -> String:
 	if not containers.has(id):
 		return "Nothing to search"
 	if containers[id]["searched"]:
 		return "Already searched"
-	if _flat_dist(containers[id]["pos"], player_pos) > float(data.survival["search_range"]):
+	if not in_reach(id, player_pos):
 		return "Too far away"
 	if active != id:
 		active = id
@@ -90,8 +99,16 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	progress += dt
 	if progress < search_time() - 1e-6:
 		return {}
+	return reveal(active)
+
+
+## Rolls and marks one container searched immediately. SimWorld adds gear/guns and announces it.
+func reveal(id: String) -> Dictionary:
+	if not containers.has(id) or containers[id]["searched"]:
+		return {}
+	var c: Dictionary = containers[id]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed_value, active])
+	rng.seed = hash([seed_value, id])
 	var table: Dictionary = data.loot[c["table"]]
 	var items := roll(table, rng)
 	var lucky := skills != null and rng.randf() < skills.bonus("lucky_find")
@@ -103,8 +120,9 @@ func tick(dt: float, player_pos: Vector3) -> Dictionary:
 	for item: String in c.get("extra", {}):
 		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
-	var done := {"id": active, "items": items, "table": c["table"], "lucky": lucky, "gear": c.get("gear", [])}
+	var done := {"id": id, "items": items, "table": c["table"], "lucky": lucky}
 	active = ""
+	progress = 0.0
 	return done
 
 

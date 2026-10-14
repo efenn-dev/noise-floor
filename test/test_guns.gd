@@ -416,6 +416,7 @@ func test_old_pete_carries_his_deer_rifle() -> void:
 	eq(sim.search(cid), "", "search the body")
 	for i in roundi(sim.loot.search_time() / SimWorld.TICK) + 2:
 		sim.step()
+	sim.take_all(cid)
 	eq(sim.inventory.count("ammo_standard"), 10, "the rounds are in your pockets")
 	sim.equip_gear(rifle["uid"])
 	sim.skills.perks["steady_hands"] = 1

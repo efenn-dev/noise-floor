@@ -14,7 +14,8 @@
 		"sense_radius": 3.0,
 		"hearing_day": 20.0,
 		"hearing_night": 14.0,
-		"investigate_speed": 0.95
+		"investigate_speed": 0.95,
+		"climb_seconds": 2.5
 	},
 	"runner": {
 		"name": "Runner",
@@ -31,7 +32,8 @@
 		"sense_radius": 3.0,
 		"hearing_day": 20.0,
 		"hearing_night": 14.0,
-		"investigate_speed": 1.8
+		"investigate_speed": 1.8,
+		"climb_seconds": 2.5
 	},
 	"screamer": {
 		"name": "Screamer",
@@ -49,6 +51,7 @@
 		"hearing_day": 20.0,
 		"hearing_night": 14.0,
 		"investigate_speed": 0.95,
+		"climb_seconds": 2.5,
 		"scream_loudness": 88,
 		"scream_time": 1.4,
 		"scream_cooldown": 25
@@ -68,6 +71,7 @@
 		"sense_radius": 3.0,
 		"hearing_day": 20.0,
 		"hearing_night": 14.0,
-		"investigate_speed": 0.9
+		"investigate_speed": 0.9,
+		"climb_seconds": 2.5
 	}
 }

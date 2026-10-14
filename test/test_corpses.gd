@@ -51,16 +51,11 @@ func test_loot_table_and_what_it_carried() -> void:
 		var z := sim.horde.spawn("shambler", Vector3(10 + i, 0, -6))
 		sim.player_pos = z.pos
 		var cid := _kill(sim, z)
-		var before := sim.inventory.items().size()
-		var counts := {}
-		for item: String in sim.inventory.items():
-			counts[item] = sim.inventory.count(item)
 		_search(sim, cid)
 		var got := false
-		for item: String in sim.inventory.items():
-			if sim.inventory.count(item) > int(counts.get(item, 0)):
-				found[item] = true
-				got = true
+		for item: String in sim.loot.inventory(cid).items():
+			found[item] = true
+			got = true
 		if not got:
 			empties += 1
 		sim.horde.zombies.erase(z.id)

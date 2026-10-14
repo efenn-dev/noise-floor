@@ -288,6 +288,8 @@ func test_old_pete_drops_his_axe() -> void:
 	for i in roundi(sim.loot.search_time() / SimWorld.TICK) + 2:
 		sim.step()
 	check(sim.loot.containers[cid]["searched"], "searched")
+	eq(sim.container_gear(cid).size(), 2, "the axe and deer rifle wait on the body")
+	sim.take_all(cid)
 	eq(sim.gear.pieces.size(), 2, "the axe (and, since M14, his deer rifle) are in your pockets")
 	eq(sim.equip_gear(axe["uid"]), "Equipped Pete's Fire Axe", "equip it")
 	eq(sim.gear.weapon_name(), "Pete's Fire Axe", "it's your weapon now")
@@ -340,19 +342,19 @@ func test_searches_turn_up_gear() -> void:
 	sim.loot.add("k", "kitchen", Vector3(1, 0, 0))
 	eq(sim.search("k"), "", "search")
 	_run(sim, 6.0)
-	eq(sim.gear.pieces.size(), 1, "a kitchen with a 100% chance gives a piece")
-	check(sim.messages.any(func(m: Dictionary) -> bool: return sim.gear.pieces[0]["name"] in m["text"]),
-			"the Found message names it")
+	eq(sim.container_gear("k").size(), 1, "a kitchen with a 100% chance gives a piece")
+	check(sim.messages.any(func(m: Dictionary) -> bool: return sim.container_gear("k")[0]["name"] in m["text"]),
+			"the find message names it")
 	sim.skills.perks["lucky_find"] = 5  # Lucky Find 100%: the gear roll happens twice
 	sim.loot.add("k2", "kitchen", Vector3(1, 0, 0))
 	sim.search("k2")
 	_run(sim, 6.0)
-	eq(sim.gear.pieces.size(), 3, "Lucky Find rolls for gear again")
+	eq(sim.container_gear("k2").size(), 2, "Lucky Find rolls for gear again")
 	var none := SimWorld.new()
 	none.loot.add("f", "fridge", Vector3(1, 0, 0))
 	none.search("f")
 	_run(none, 6.0)
-	eq(none.gear.pieces.size(), 0, "fridges hold no gear")
+	eq(none.container_gear("f").size(), 0, "fridges hold no gear")
 
 
 func test_carry_weight_counts_gear_in_your_pockets() -> void:

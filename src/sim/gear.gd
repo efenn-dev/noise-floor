@@ -266,9 +266,15 @@ func unequip(slot: String) -> String:
 func weight() -> float:
 	var kg := 0.0
 	for p: Dictionary in pieces:
-		kg += float(base_of(p)["weight"])
-		for slot: String in p.get("parts", {}):
-			kg += float(base_of(p["parts"][slot])["weight"])
+		kg += piece_weight(p)
+	return kg
+
+
+## V18: a piece plus the firearm parts fitted to it, used by container carry checks too.
+func piece_weight(piece: Dictionary) -> float:
+	var kg := float(base_of(piece)["weight"])
+	for slot: String in piece.get("parts", {}):
+		kg += float(base_of(piece["parts"][slot])["weight"])
 	return kg
 
 

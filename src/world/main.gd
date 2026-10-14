@@ -15,6 +15,7 @@ extends Node3D
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
 ##   --block               V15: hold the melee/fists guard pose, for screenshots
 ##   --break-windows[=R]   W2: break every window within R m (default 12) at the start, for screenshots
+##   --vault-at=T          V17: face the nearest broken window and freeze its climb at fraction T (0-1)
 ##   --fists               V12: start bare-handed (your weapon goes to your pockets)
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
@@ -29,6 +30,7 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --loot[=KIND]                   start beside searched loot of KIND (fridge by default), with it open
 ##   --skills                        open the skills and perks screen (K in game)
 ##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
 ##                                   shown in the inventory screen (M13)
@@ -175,6 +177,7 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	sim.container_searched.connect(_open_loot_container)
 	build_menu = BuildMenu.new()
 	add_child(build_menu)
 	build_menu.setup(sim, builder)
@@ -231,6 +234,8 @@ func _ready() -> void:
 		inventory_screen.open()
 		if args["inventory"] != "":
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
+	if args.has("loot"):
+		_setup_loot_flag(str(args["loot"]))
 	if args.has("build-menu"):
 		_open_build_menu()  # S3: --build-menu, for screenshots (B in game)
 	if args.has("gear"):
@@ -248,6 +253,8 @@ func _ready() -> void:
 		for key: String in sim.build.pieces.keys():
 			if sim.piece_material(key) == "glass" and sim.build.piece_center(key).distance_to(player.global_position) <= r:
 				sim.player_hit_piece(key, 50.0, "bullet")  # as a shot would: no weapon wear
+	if args.has("vault-at"):
+		_setup_vault_shot(clampf(float(args["vault-at"]), 0.0, 1.0))
 	if args.has("fists"):
 		sim.gear.unequip("weapon")  # V12: --fists starts bare-handed (the weapon goes to your pockets)
 	if args.has("swing-at"):
@@ -376,6 +383,59 @@ func _open_project(id: String) -> void:
 	project_screen.open(id)
 
 
+func _open_loot_container(id: String) -> void:
+	if not sim.container_exists(id):
+		return
+	if skills_screen.is_open():
+		skills_screen.close()
+	if build_menu.is_open():
+		build_menu.close()
+	if workbench_screen.is_open():
+		workbench_screen.close()
+	if sensor_screen.is_open():
+		sensor_screen.close()
+	if project_screen.is_open():
+		project_screen.close()
+	if base_log_screen.is_open():
+		base_log_screen.close()
+	if help_screen.is_open():
+		help_screen.close()
+	inventory_screen.open_container(id)
+
+
+func _open_storage(key: String) -> void:
+	_open_loot_container(key)
+
+
+## --loot[=KIND]: a deterministic searched container, open and within reach for layout screenshots.
+func _setup_loot_flag(requested: String) -> void:
+	var kind := requested if requested != "" else "fridge"
+	kind = str({"cabinet": "kitchen", "crate": "factory_crate", "trunk": "car_trunk",
+			"corpse": "zombie"}.get(kind, kind))
+	var id := ""
+	for candidate: String in sim.loot.containers:
+		if sim.loot.containers[candidate]["table"] == kind:
+			id = candidate
+			break
+	if id == "" and kind == "zombie":
+		var z := sim.horde.spawn("shambler", player.global_position + Vector3(0, 0, -2.0))
+		z.take_hit(1000.0, Vector3.ZERO, 0.0)
+		sim.step()
+		id = SimWorld.CORPSE + str(z.id)
+	if id == "":
+		sim.add_message("No loot container of kind " + kind, 5.0)
+		return
+	var at: Vector3 = sim.loot.containers[id]["pos"]
+	player.position = Vector3(at.x, 0.0, at.z + 1.5)
+	var look := at - player.position
+	player.set_look(rad_to_deg(atan2(-look.x, -look.z)), -12.0)
+	sim.player_pos = player.position
+	if sim.loot.containers[id]["searched"]:
+		_open_loot_container(id)
+	else:
+		sim.reveal_container(id)
+
+
 ## M17a --tower[=N]: N (0-3) of the water tower's phases already done, and what the next one needs in your
 ## pockets (phase 3's: a generator, a foundation for it, a power pole and gas). Stands you by the tower.
 func _setup_tower(arg: String) -> void:
@@ -418,7 +478,7 @@ func _fill_demo_log() -> void:
 func _wants_hints(args: Dictionary) -> bool:
 	if args.has("hints"):
 		return true
-	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or args.has("park") \
+	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or args.has("park") or args.has("loot") \
 			or args.has("tower") or GameSession.skip_hints:
 		return false
 	for key: String in args:
@@ -578,17 +638,31 @@ func _sync_player() -> void:
 		project_screen.close()
 	if build_menu.is_open() and (p.dead or p.asleep):
 		build_menu.close()
+	var vault_active := not sim.player_vault.is_empty()
+	if vault_active:
+		var key: String = sim.player_vault["key"]
+		if not player.vaulting:
+			player.begin_vault(build_view.body_for(key))
+		player.show_vault(sim.player_vault["from"] as Vector3, sim.player_vault["to"] as Vector3, sim.vault_fraction())
+		view_feel.vault_fraction = sim.vault_fraction()
+	elif player.vaulting:
+		var landing: Vector3 = sim.vault_landing if sim.vault_landing.is_finite() else player.global_position
+		player.end_vault(landing)
+		sim.vault_landing = Vector3.INF
+		view_feel.vault_fraction = -1.0
+	else:
+		view_feel.vault_fraction = -1.0
 	# no walking while sorting your pockets, spending perk points, at the workbench or in the build menu
 	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
-			or _m15_screen_open() or build_menu.is_open()
+			or _m15_screen_open() or build_menu.is_open() or vault_active
 	var sprint_requested := player.wish_sprint
 	if player.use_device_input:
 		sprint_requested = Input.is_action_pressed("sprint")
-	shooter.sprinting = sprint_requested or driving != null  # V15: requesting sprint drops ADS immediately
-	var aimed := driving == null and shooter.aiming()
+	shooter.sprinting = sprint_requested or driving != null or vault_active  # V15: requesting sprint drops ADS immediately
+	var aimed := driving == null and not vault_active and shooter.aiming()
 	sim.guns.aiming = aimed
 	p.aiming = aimed
-	p.set_blocking(driving == null and melee.blocking())
+	p.set_blocking(driving == null and not vault_active and melee.blocking())
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -596,7 +670,7 @@ func _sync_player() -> void:
 		Engine.time_scale = float(sim.data.survival["sleep_time_scale"]) if p.asleep else 1.0
 	if driving != null and p.dead:
 		_exit_car()
-	if not sim.player.dead and driving == null:
+	if not sim.player.dead and driving == null and not vault_active and not player.vaulting:
 		sim.player_pos = player.global_position  # while driving, the car reports where you are
 	sim.player_lit = player.flashlight.visible
 	var cam := get_viewport().get_camera_3d()
@@ -687,6 +761,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not InputSetup.captured():
 		return
+	if event.is_action_pressed("jump") and not sim.player.dead and driving == null:
+		interactor.update_target()
+		if interactor.target_key != "" and sim.build.is_broken(interactor.target_key):
+			sim.player_pos = player.global_position
+			var aiming_now := shooter.aiming()
+			sim.guns.aiming = aiming_now
+			sim.player.aiming = aiming_now
+			var why := sim.start_vault(interactor.target_key)
+			if why != "":
+				sim.add_message(why, 2.5)
+			else:
+				shooter.cancel_inspect()
+				melee.cancel_inspect()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("inspect") and not sim.player.dead and driving == null:
 		if sim.guns.in_hand():
 			shooter.start_inspect()
@@ -1059,6 +1148,37 @@ func _stand_inside(n: int, prop := "") -> void:
 		player.set_look(rad_to_deg(atan2(-d.x, -d.z)), -12.0)
 
 
+## V17 --vault-at=T: compose the screenshot at the nearest window already broken by --break-windows,
+## stand on its nearer side, face it, start the real sim action, then hold that action at T.
+func _setup_vault_shot(fraction: float) -> void:
+	var nearest := ""
+	var best := INF
+	for key: String in sim.build.pieces:
+		if not sim.build.is_broken(key):
+			continue
+		var distance := sim.build.piece_center(key).distance_squared_to(player.global_position)
+		if distance < best:
+			best = distance
+			nearest = key
+	if nearest == "":
+		push_warning("--vault-at needs a broken window; combine it with --break-windows")
+		return
+	var piece: Dictionary = sim.build.pieces[nearest]
+	var center := sim.build.piece_center(nearest)
+	var yaw := sim.build.yaw_for(piece["id"], piece["cell"], piece["side"])
+	var normal := Basis(Vector3.UP, deg_to_rad(yaw)).z
+	var side := 1.0 if (player.global_position - center).dot(normal) >= 0.0 else -1.0
+	player.global_position = Vector3(center.x, player.global_position.y, center.z) + normal * side * 1.05
+	var toward := center - player.global_position
+	player.set_look(rad_to_deg(atan2(-toward.x, -toward.z)), 0.0)
+	sim.player_pos = player.global_position
+	var why := sim.start_vault(nearest)
+	if why == "":
+		sim.set_vault_fraction(fraction)
+	else:
+		push_warning("--vault-at could not start: " + why)
+
+
 func _build_building(args: Dictionary) -> void:
 	# The debug kit waits in a crate next to the start; you carry a little food, water and a bandage.
 	# (A loaded save brings back its own crates and pockets instead.)
@@ -1086,6 +1206,8 @@ func _build_building(args: Dictionary) -> void:
 	interactor.opened_workbench.connect(_open_workbench)
 	interactor.opened_sensor.connect(_open_sensor)
 	interactor.opened_project.connect(_open_project)
+	interactor.opened_container.connect(_open_loot_container)
+	interactor.opened_storage.connect(_open_storage)
 	defense_view = DefenseView.new()
 	add_child(defense_view)
 	defense_view.setup(sim, build_view)
@@ -1321,9 +1443,13 @@ func _build_hud() -> void:
 
 	_message_label = _outlined_label(26)
 	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_message_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_message_label.position.y += 60
-	_message_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# Q5: a centred column between the top-left and top-right blocks that wraps, so a long message
+	# ("Smelter placed. It needs power: ...") can't run under the clock or the pockets.
+	_message_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_message_label.offset_left = MATERIALS_WIDTH + 32.0
+	_message_label.offset_right = -(MATERIALS_WIDTH + 32.0)
+	_message_label.offset_top = 60.0
+	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	layer.add_child(_message_label)
 
@@ -1522,22 +1648,28 @@ func _open_build_menu() -> void:
 	build_menu.open()
 
 
-## S3: a hotbar key on foot. A piece: build mode with it (the same key again stops building). An item: use
-## it (eat, drink, bandage). An empty key says how to fill it.
+## S3: a hotbar key on foot. V19: in build mode the keys read the build bar (a piece: build it; the same key
+## again stops building); otherwise the hands bar (a weapon slot: draw that weapon; an item: use it). An empty
+## key says how to fill it.
 func _hotbar_press(i: int) -> void:
-	match sim.hotbar.kind(i):
+	var bar := Hotbar.BUILD_BAR if builder.active else Hotbar.HANDS_BAR
+	match sim.hotbar.kind(i, bar):
 		"build":
-			var id := sim.hotbar.id(i)
+			var id := sim.hotbar.id(i, bar)
 			if builder.active and builder.piece() == id:
 				builder.set_active(false)
 			else:
 				builder.select_id(id)
 				builder.set_active(true)
 		"item":
-			sim.add_message(sim.use_item(sim.hotbar.id(i)), 2.5)
+			sim.add_message(sim.use_item(sim.hotbar.id(i, bar)), 2.5)
+		"slot":
+			sim.add_message(sim.draw_weapon(sim.hotbar.id(i, bar)), 2.0)
 		_:
-			sim.add_message("Key %s is empty: press it on a piece in the build menu (B) or on an item in your pockets (Tab)"
-					% Hotbar.key_name(i), 4.0)
+			if bar == Hotbar.BUILD_BAR:
+				sim.add_message("Key %s is empty on the build bar: press it on a piece in the build menu (B)" % Hotbar.key_name(i), 4.0)
+			else:
+				sim.add_message("Key %s is empty: press it on an item or a weapon in your pockets (Tab)" % Hotbar.key_name(i), 4.0)
 
 
 ## Get into a car: its camera takes over and the walker is switched off until you get out.

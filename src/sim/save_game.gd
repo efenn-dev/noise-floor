@@ -41,7 +41,12 @@ extends RefCounted
 ## plus Maintenance. Weapons wear at their own rate and break at 0 (no new saved fields).
 ## 15 = V14 slots: the old gun moves to primary or sidearm by its base, and the best carried bag moves to
 ## the back slot. The other bags stay in the inventory and no item is discarded.
-const VERSION := 15
+## 16 = V17 window vaulting: broken windows save whether their sharp glass remnants have been cleared.
+## A broken window from any older save loads with shards, matching a newly smashed window.
+## 17 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
+## 18 = V19 two hotbars: "hotbar" is {"hands": [...], "build": [...]}; an older single bar is split by kind
+## (Hotbar.load_saved), so no version check is needed to read it.
+const VERSION := 18
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -76,7 +81,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		var p: Dictionary = sim.build.pieces[key]
 		pieces.append({"key": key, "id": p["id"], "cell": _v2(p["cell"]), "side": p["side"], "hp": p["hp"],
 				"open": p.get("open", false), "wear": p.get("wear", 0.0), "town": p.get("town", false),
-				"swing": p.get("swing", 1)})
+				"swing": p.get("swing", 1), "shards": p.get("shards", false)})
 	var machines := []
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
@@ -98,8 +103,10 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		var bin: Factory.Bin = sim.factory.bins[cell]
 		bins.append({"cell": _v2(cell), "item": bin.item, "count": bin.count, "timer": bin.timer})
 	var crates := {}
+	var crate_gear := {}
 	for key: String in sim.storages:
 		crates[key] = _counts(sim.storages[key])
+		crate_gear[key] = sim.storage_gear.get(key, []).duplicate(true)
 	var zombies := []
 	for id: int in sim.horde.zombies:
 		var z: ZombieBrain = sim.horde.zombies[id]
@@ -111,9 +118,12 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 				zd["guard"] = {"area": [g.position.x, g.position.y, g.size.x, g.size.y], "spot": _v3(z.guard_spot)}
 			zombies.append(zd)
 	var searched := []
+	var loot_contents := {}
 	for id: String in sim.loot.containers:
 		if sim.loot.containers[id]["searched"]:
 			searched.append(id)
+			loot_contents[id] = {"items": _counts(sim.loot.inventory(id)),
+					"gear": sim.loot.containers[id]["gear"].duplicate(true)}
 	var bags := []
 	for b: Dictionary in sim.bags:
 		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"], "gear": b.get("gear", []).duplicate(true)})
@@ -131,7 +141,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
 		"spawn_point": _v3(sim.spawn_point),
 		"pieces": pieces,
-		"hotbar": sim.hotbar.to_array(),  # S3
+		"hotbar": sim.hotbar.to_dict(),  # S3; V19: both bars
 		"machines": machines,
 		"belts": belts,
 		"turrets": turrets,
@@ -140,6 +150,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"sprung": sim.defense.sprung.keys(),
 		"base_log": sim.base_log.to_dict(),
 		"crates": crates,
+		"crate_gear": crate_gear,
 		"generators": sim.power.generators,
 		"stoves": sim.climate.to_dict(),
 		"projects": sim.projects.to_dict(),
@@ -148,6 +159,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
 		"searched": searched,
+		"loot_contents": loot_contents,
 		"vehicles": sim.vehicles.to_dict(),
 		"skills": sim.skills.xp,
 		"perks": sim.skills.perks,
@@ -187,6 +199,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for pd: Dictionary in d["pieces"]:
 		var piece := {"id": pd["id"], "cell": _to_v2(pd["cell"]), "side": int(pd["side"]),
 				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])}
+		if piece["id"] == "window" and piece["hp"] <= 0:
+			piece["shards"] = bool(pd.get("shards", version < 16))
 		if bool(pd.get("town", false)):
 			piece["town"] = true
 		if pd.has("swing"):  # S3: before 13 every open door swung the default way
@@ -231,7 +245,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			bin.put(str(bd["item"]), int(bd["count"]))
 		if bin != null:
 			bin.timer = float(bd.get("timer", 0.0))
-	sim.hotbar.load_array(d.get("hotbar", []))  # S3: defaults before 13
+	sim.hotbar.load_saved(d.get("hotbar", []))  # S3: defaults before 13; V19: an old single bar is split
 	sim.automation.load_dict(d.get("automation", {}))
 	sim.defense.sprung = {}
 	for key: String in d.get("sprung", []):
@@ -241,6 +255,10 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for key: String in d["crates"]:
 		if sim.storages.has(key):
 			sim.storages[key].give_all(_ints(d["crates"][key]))
+	for key: String in d.get("crate_gear", {}):
+		if sim.storage_gear.has(key):
+			for gp: Dictionary in d["crate_gear"][key]:
+				sim.storage_gear[key].append(Gear.clean(gp))
 	for key: String in d["generators"]:
 		if sim.power.generators.has(key):
 			var g: Dictionary = d["generators"][key]
@@ -265,6 +283,14 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for id: String in d["searched"]:
 		if sim.loot.containers.has(id):
 			sim.loot.containers[id]["searched"] = true
+	for id: String in d.get("loot_contents", {}):
+		if not sim.loot.containers.has(id):
+			continue
+		var saved: Dictionary = d["loot_contents"][id]
+		sim.loot.inventory(id).give_all(_ints(saved.get("items", {})))
+		sim.loot.containers[id]["gear"] = []
+		for gp: Dictionary in saved.get("gear", []):
+			sim.loot.containers[id]["gear"].append(Gear.clean(gp))
 	if d.has("vehicles"):
 		sim.vehicles.load_dict(d["vehicles"])
 	for s: String in d.get("skills", {}):

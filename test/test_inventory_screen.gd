@@ -16,7 +16,9 @@ func _setup() -> void:
 	sim.build.place("foundation", Vector2i(0, 0), N, sim.inventory)
 	sim.build.place("storage", Vector2i(0, 0), BuildGrid.Side.WEST, sim.inventory)
 	crate_key = sim.build.key_for("storage", Vector2i(0, 0))
-	sim.inventory.give_all({"chips": 3, "clean_water": 2, "hiking_pack": 1})
+	for item: String in sim.inventory.items():
+		sim.inventory.remove(item, sim.inventory.count(item))
+	sim.inventory.give_all({"plank": 2, "chips": 3, "clean_water": 2, "hiking_pack": 1})
 	sim.player_pos = sim.build.piece_center(crate_key) + Vector3(1.0, 0, 0)
 	screen = InventoryScreen.new()
 	tree.root.add_child(screen)
@@ -85,7 +87,7 @@ func test_no_crate_in_reach() -> void:
 	screen.message.connect(func(t: String) -> void: messages.append(t))
 	screen.move("chips", InventoryScreen.POCKETS, true)
 	eq(sim.inventory.count("chips"), 3, "nothing moves")
-	eq(messages, ["No crate within reach"], "and it says why")
+	eq(messages, ["No container within reach"], "and it says why")
 	_teardown()
 
 

@@ -93,7 +93,7 @@ func note_death(cause: String, when: String) -> void:
 	note("died (%s)" % cause_text(cause))
 
 
-## E on a storage crate (the first hint asks for it).
+## V18: E opening a storage crate (the first hint asks for it), plus legacy/direct deposits.
 func note_crate() -> void:
 	if muted:
 		return

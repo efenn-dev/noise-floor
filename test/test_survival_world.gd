@@ -1,5 +1,5 @@
 extends "res://test/base_test.gd"
-## Scripted run: look at a cabinet and search it, put things in a crate, sleep in a bed.
+## Scripted run: look at a cabinet and search it, open storage, move things, and sleep in a bed.
 
 var _scene: Node3D
 
@@ -26,6 +26,10 @@ func test_search_store_and_sleep_with_e() -> void:
 	var interactor := Interactor.new()
 	_scene.add_child(interactor)
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
+	var opened := ["", ""]
+	sim.container_searched.connect(func(id: String) -> void: opened[0] = id)
+	interactor.opened_container.connect(func(id: String) -> void: opened[0] = id)
+	interactor.opened_storage.connect(func(id: String) -> void: opened[1] = id)
 
 	var cabinet := StaticBody3D.new()  # a kitchen cabinet 2 m ahead
 	cabinet.position = Vector3(1, 0.8, 3)
@@ -47,8 +51,13 @@ func test_search_store_and_sleep_with_e() -> void:
 	eq(interactor.interact(), "", "E starts the search")
 	for i in 60:  # 3 s of ticks
 		sim.step()
-	check(sim.inventory.items().size() > 0, "found something: %s" % str(sim.inventory.items()))
+	check(sim.loot.inventory("test_cabinet").items().size() > 0,
+			"found something in the cabinet: %s" % str(sim.loot.inventory("test_cabinet").items()))
+	eq(opened[0], "test_cabinet", "finishing asks the world to open that container")
 	check("searched" in interactor.status_text(), "HUD says it's been searched")
+	opened[0] = ""
+	eq(interactor.interact(), "", "E on searched loot opens it immediately")
+	eq(opened[0], "test_cabinet", "the same cabinet opens")
 	cabinet.queue_free()
 
 	var stash := sim.place_start_stash(Vector2i(0, 1))  # crate at x 0..2, z 2..4: ahead of the player
@@ -58,8 +67,13 @@ func test_search_store_and_sleep_with_e() -> void:
 	player.set_look(0, -25)  # the crate is only 1 m tall
 	interactor.update_target()
 	eq(interactor.target_key, stash, "looking at the crate")
-	check(interactor.interact().begins_with("Stored"), "E puts materials in the crate")
-	eq(sim.storages[stash].count("scrap_metal"), sim.data.debug_kit["scrap_metal"] + 5, "scrap is in the crate")
+	eq(interactor.interact(), "", "E opens the storage crate")
+	eq(opened[1], stash, "it names the crate to open")
+	var scrap := sim.inventory.count("scrap_metal")
+	var stored_before: int = sim.storages[stash].count("scrap_metal")
+	eq(sim.move_container_item(stash, "scrap_metal", scrap, false)["moved"], scrap,
+			"the loot-screen sim path moves the stack into storage")
+	eq(sim.storages[stash].count("scrap_metal"), stored_before + scrap, "scrap is in the crate")
 	sim.build.remove(stash, sim.stock_at(Vector3.ZERO))
 	sim.bags.clear()
 	sim.give_debug_kit()
