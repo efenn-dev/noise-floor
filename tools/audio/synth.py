@@ -398,6 +398,35 @@ def weapon_break() -> np.ndarray:
     return fade_edges(normalize(out, -3))
 
 
+def glass_break() -> np.ndarray:
+    """W2: a window going: a bright crash, then pieces tinkling down for a second."""
+    n = seconds(1.3)
+    crash = oneshot_noise(n, hp(2500)) * decay(n, 0.05, attack=0.001)
+    body = oneshot_noise(n, bp(1800, 1.2)) * decay(n, 0.12, attack=0.002)
+    out = normalize(crash, 0) + 0.6 * normalize(body, 0)
+    t = t_axis(n)
+    for i in range(18):  # shards landing: short high pings at random moments
+        at = 0.08 + rng.uniform(0, 1.0)
+        f = rng.uniform(3500, 8000)
+        start = seconds(at)
+        if start >= n:
+            continue
+        m = n - start
+        ping = np.sin(2 * np.pi * f * t[:m]) * decay(m, rng.uniform(0.01, 0.04), attack=0.0005)
+        out[start:] += rng.uniform(0.08, 0.25) * ping
+    return fade_edges(normalize(out, -2))
+
+
+def wood_break() -> np.ndarray:
+    """W2: a door giving way: a heavy crack, splintering, and the boards falling."""
+    knock = clank(0.8, [(160, 1.0, 0.1), (370, 0.6, 0.06), (720, 0.3, 0.04)])
+    n = len(knock)
+    crack = oneshot_noise(n, bp(1500, 1.0)) * decay(n, 0.02, attack=0.001)
+    splinter = oneshot_noise(n, bp(3800, 1.2)) * decay(n, 0.15, attack=0.01)
+    out = knock + 0.9 * normalize(crack, 0) + 0.4 * normalize(splinter, 0) + 0.7 * thump(0.8, 90, 40, 0.2)
+    return fade_edges(normalize(out, -2))
+
+
 def reload_click() -> np.ndarray:
     """A magazine going in and the slide racking: two metal clicks."""
     n = seconds(0.45)
@@ -470,7 +499,8 @@ def main() -> None:
              "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
              "creak": creak, "clang_far": clang_far,  # V4: ambience
              "headshot": headshot,  # V7
-             "weapon_break": weapon_break}  # V9
+             "weapon_break": weapon_break,  # V9
+             "glass_break": glass_break, "wood_break": wood_break}  # W2
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:
