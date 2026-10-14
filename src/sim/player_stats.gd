@@ -5,7 +5,7 @@ extends RefCounted
 ##   food and water drain over time; at 0 you lose health until you eat or drink
 ##   energy drains while awake and refills while asleep in a bed; at 0 you can't sprint
 ##   stamina: sprinting and swinging use it; it refills after stamina_regen_delay seconds of rest
-##   bleeding (from zombie hits) drains health until you use a bandage
+##   bleeding (from zombie hits) drains health for bleed_time seconds, or until you use a bandage
 ##   carry_ratio (carried kg / limit, set by SimWorld): over 1 you're slower and tire faster;
 ##   at carry_no_sprint you can't sprint at all
 ##   M16 warmth: moves by warmth_rate (per second, set by SimWorld from Climate each tick); below cold_at
@@ -33,6 +33,9 @@ var warmth_rate := 0.0    # M16: per second, + or - (written by SimWorld each ti
 var cold_cfg: Dictionary = {}  # M16: data/seasons.json "warmth"
 var _freeze_timer := 0.0
 var bleeding := false
+## Q5: seconds of bleeding left; a cut stops on its own after bleed_time. 0 while not bleeding, and a
+## bleeding with 0 left (set directly, or from a save, which doesn't keep this) gets the full bleed_time.
+var bleed_left := 0.0
 var asleep := false
 var sprinting := false   # written by the world each frame
 var carry_ratio := 0.0   # written by SimWorld each tick
@@ -53,6 +56,12 @@ var _rested := 0.0  # seconds since stamina was last used
 
 func _c(key: String, fallback: float = 0.0) -> float:
 	return float(cfg.get(key, fallback))
+
+
+## Q5: a new cut; restarts the clock if you were already bleeding.
+func start_bleeding() -> void:
+	bleeding = true
+	bleed_left = _c("bleed_time")
 
 
 func damage(amount: float, cause: String = "unknown") -> void:
@@ -167,8 +176,15 @@ func tick(dt: float) -> void:
 		hurt += _c("starve_damage") * dt
 		cause = "starvation" if food <= 0.0 else "dehydration"
 	if bleeding:
+		if bleed_left <= 0.0:
+			bleed_left = _c("bleed_time")
 		hurt += _c("bleed_damage") * dt
 		cause = "bleeding"
+		bleed_left -= dt
+		if bleed_left <= 0.0:
+			bleeding = false  # Q5: it stops on its own (the wound is still counted as hurt this tick)
+	if not bleeding:
+		bleed_left = 0.0
 	if hurt > 0.0:
 		var was_asleep := asleep
 		damage(hurt, cause)

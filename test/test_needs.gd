@@ -82,6 +82,7 @@ func test_bites_cause_bleeding_and_bandages_stop_it() -> void:
 	var hp := sim.player.health
 	_run(sim, 10.0)
 	near(sim.player.health, hp - 5.0, "bleeding: 0.5 health a second", 0.05)
+	check(sim.player.bleeding, "still bleeding after 10 s")
 	eq(sim.use_bandage(), "No bandages", "need a bandage")
 	sim.inventory.add("bandage", 1)
 	eq(sim.use_bandage(), "Bandaged", "bandage it")
@@ -127,3 +128,35 @@ func test_respawn_tops_up_needs() -> void:
 	near(sim.player.food, 50.0, "food back to at least 50", 0.1)
 	check(sim.player.water > 65.0, "water kept when higher")
 	check(not sim.player.bleeding, "no longer bleeding")
+
+
+## Q5: a cut stops bleeding on its own after bleed_time (40 s, 20 health), a new cut restarts the clock,
+## and a bandage still stops it at once.
+func test_bleeding_stops_on_its_own() -> void:
+	var sim := _sim()
+	sim.horde.zombies.clear()
+	var t := float(sim.data.survival["bleed_time"])
+	var per_s := float(sim.data.survival["bleed_damage"])
+	eq(t, 40.0, "a cut bleeds for 40 s")
+	sim.player.start_bleeding()
+	_run(sim, t - 5.0)
+	check(sim.player.bleeding, "still bleeding 5 s before the end")
+	sim.player.start_bleeding()  # hit again
+	_run(sim, 10.0)
+	check(sim.player.bleeding, "a second cut restarts the clock")
+	sim.player.health = 100.0
+	_run(sim, t - 10.0 + 0.5)
+	check(not sim.player.bleeding, "stops on its own")
+	near(sim.player.health, 100.0 - per_s * (t - 10.0), "lost only the rest of the cut", 0.6)
+	var stopped := false
+	for m: Dictionary in sim.messages:
+		stopped = stopped or m["text"] == "The bleeding stopped"
+	check(stopped, "says so")
+	var hp := sim.player.health
+	_run(sim, 10.0)
+	check(sim.player.health >= hp, "no more loss once it stopped")
+	sim.player.bleeding = true  # set directly (as a save load does): gets the full time
+	_run(sim, t - 1.0)
+	check(sim.player.bleeding, "set directly: full bleed_time")
+	_run(sim, 2.0)
+	check(not sim.player.bleeding, "and then stops")

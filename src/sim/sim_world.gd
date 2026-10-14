@@ -176,7 +176,10 @@ func step() -> void:
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
 			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
+	var was_bleeding := player.bleeding
 	player.tick(TICK)
+	if was_bleeding and not player.bleeding and not player.dead:
+		add_message("The bleeding stopped", 3.0)  # Q5: on its own (a bandage clears it outside the tick)
 	_cold_messages()
 	guns.tick(TICK, inventory)
 	if sprinted:
@@ -226,7 +229,7 @@ func step() -> void:
 			if not player.dead and _rng.randf() < bleed_chance():
 				if not player.bleeding:
 					add_message("You're bleeding (H to bandage)", 4.0)
-				player.bleeding = true
+				player.start_bleeding()
 		elif build.pieces.has(e["target"]):
 			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
