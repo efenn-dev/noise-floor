@@ -253,6 +253,7 @@ func test_crawler_low_shot_hit_and_low_headshot() -> void:
 	var data := GameData.load_default()
 	var brain := ZombieBrain.new(1, "crawler", data.zombies["crawler"], Vector3.ZERO, 1)
 	var body := ZombieBody.new()
+	body.disable_mode = CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE  # a disabled body is otherwise taken out of physics
 	body.process_mode = Node.PROCESS_MODE_DISABLED
 	tree.root.add_child(body)
 	body.setup(brain, null)
@@ -273,9 +274,11 @@ func test_crawler_low_shot_hit_and_low_headshot() -> void:
 	var sim := _armed()
 	var head := sim.horde.spawn("crawler", Vector3.ZERO)
 	var torso := sim.horde.spawn("crawler", Vector3.ZERO)
+	head.hp = 1000.0  # so neither shot kills (a kill would cap the damage at the crawler's 70 hp)
+	torso.hp = 1000.0
 	sim.shoot_zombie(head.id, true)
 	sim.shoot_zombie(torso.id, false)
-	near(70.0 - head.hp, 2.0 * (70.0 - torso.hp), "low headshot gets the gun head multiplier")
+	near(1000.0 - head.hp, 2.0 * (1000.0 - torso.hp), "low headshot gets the gun head multiplier")
 
 
 func test_bodies_use_crawl_and_heavy_scaled_looks() -> void:
@@ -311,6 +314,7 @@ func test_kill_stats_session_text_and_noise_labels_name_the_new_types() -> void:
 	eq(sim.stats.timeline[-1][1], "killed a crawler", "kill timeline names the crawler")
 	check("1 crawler" in "\n".join(sim.stats.summary_lines()), "session kill breakdown names the crawler")
 	sim.horde.spawn("brute", Vector3(0, 0, -3))
+	sim.horde.spawn("crawler", Vector3(0, 0, -4))  # a live one: the dead crawler above isn't listed
 	var overlay := NoiseOverlay.new()
 	overlay.setup(sim)
 	overlay.visible = true
