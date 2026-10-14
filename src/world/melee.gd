@@ -1,6 +1,12 @@
 class_name Melee
 extends Node3D
-## Left-click (outside build mode) swings the pipe. A hit above a zombie's shoulders is a head hit.
+## Left-click (outside build mode) swings the melee weapon in your hands. A hit above a zombie's shoulders
+## is a head hit.
+## V11 (Sprint 4, Emmitt: "work on the attack animations"): each weapon has its own model (tools/art/
+## pipe|bat|axe|machete|knife.py) and each kind of weapon its own swing (weapons.json "style"): a wind-up,
+## the strike, a recovery, quicker with the weapon's skill. Whether a swing hits is still decided at the
+## click (so the rules and tests are unchanged); what you see and hear of the hit (blood, the marker, the
+## shake, the crunch) waits for the strike moment of the animation.
 
 var sim: SimWorld
 var camera: Camera3D
@@ -8,12 +14,62 @@ var builder: BuildController
 var exclude: Array[RID] = []
 var last_message := ""
 var feel: ViewFeel  # V3: bob, sway, hit marker, impact puffs (null in tests that build Melee alone)
+var hold_at := -1.0  # V11: >= 0 freezes the swing at that fraction (--swing-at, for screenshots)
 
-var _pipe: MeshInstance3D
+## Weapon id (weapons.json) -> model. Fists have none.
+const MODELS := {"pipe": "res://assets/models/pipe.glb", "bat": "res://assets/models/bat.glb",
+		"axe": "res://assets/models/axe.glb", "machete": "res://assets/models/machete.glb",
+		"knife": "res://assets/models/knife.glb"}
+const PLACEHOLDER_LENGTH := {"pipe": 0.6, "bat": 0.85, "axe": 0.75, "machete": 0.6, "knife": 0.3}
+## Weapon materials by name, drawn with the gun and cloth photos (Shooter._gun_material does the work).
+const WEAPON_LOOKS := {
+	"materials": {
+		"Weapon Metal": {"texture": "gun_metal", "tile_m": 0.2, "tint": Color(0.72, 0.66, 0.6), "metallic": 0.5, "roughness": 0.6},
+		"Weapon Wood": {"texture": "gun_wood", "tile_m": 0.25, "tint": Color(1.0, 0.9, 0.78)},
+		"Weapon Grip": {"texture": "cloth_cotton", "tile_m": 0.08, "tint": Color(0.36, 0.34, 0.31), "metallic": 0.0, "roughness": 0.95},
+		"Weapon Edge": {"texture": "gun_metal", "tile_m": 0.1, "tint": Color(1.0, 1.0, 1.0), "metallic": 0.8, "roughness": 0.25},
+	},
+	"untextured": [],
+}
+## The weapon points up its local +Y from the grip at the origin, its striking side toward -Z.
+## Each style: total seconds at the weapon's own swing speed, the strike moment (0-1), and keyframes of
+## [t, position, rotation in degrees] in camera space; t = 0 and t = 1 are the resting pose.
+const STYLES := {
+	"diagonal": {"time": 0.32, "strike": 0.48, "keys": [
+		[0.0, Vector3(0.3, -0.34, -0.5), Vector3(-58, 0, 28)],
+		[0.34, Vector3(0.42, -0.12, -0.42), Vector3(15, 10, -35)],
+		[0.52, Vector3(-0.06, -0.4, -0.7), Vector3(-95, 0, 50)],
+		[1.0, Vector3(0.3, -0.34, -0.5), Vector3(-58, 0, 28)]]},
+	"side": {"time": 0.36, "strike": 0.5, "keys": [
+		[0.0, Vector3(0.32, -0.36, -0.5), Vector3(-55, 0, 25)],
+		[0.34, Vector3(0.55, -0.22, -0.32), Vector3(-15, 55, -70)],
+		[0.54, Vector3(-0.3, -0.24, -0.66), Vector3(-15, -45, -80)],
+		[1.0, Vector3(0.32, -0.36, -0.5), Vector3(-55, 0, 25)]]},
+	"overhead": {"time": 0.45, "strike": 0.55, "keys": [
+		[0.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 0, 22)],
+		[0.38, Vector3(0.18, 0.12, -0.34), Vector3(40, 0, -5)],
+		[0.58, Vector3(0.06, -0.48, -0.68), Vector3(-105, 0, 5)],
+		[1.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 0, 22)]]},
+	"slash": {"time": 0.26, "strike": 0.45, "keys": [
+		[0.0, Vector3(0.3, -0.33, -0.48), Vector3(-55, 0, 25)],
+		[0.3, Vector3(0.4, -0.18, -0.42), Vector3(5, 15, -45)],
+		[0.5, Vector3(-0.14, -0.34, -0.68), Vector3(-85, -10, 65)],
+		[1.0, Vector3(0.3, -0.33, -0.48), Vector3(-55, 0, 25)]]},
+	"stab": {"time": 0.22, "strike": 0.45, "keys": [
+		[0.0, Vector3(0.24, -0.3, -0.45), Vector3(-80, 0, -10)],
+		[0.3, Vector3(0.26, -0.28, -0.34), Vector3(-85, 0, -5)],
+		[0.48, Vector3(0.14, -0.24, -0.68), Vector3(-90, 0, 0)],
+		[1.0, Vector3(0.24, -0.3, -0.45), Vector3(-80, 0, -10)]]},
+	"punch": {"time": 0.22, "strike": 0.45, "keys": [
+		[0.0, Vector3(0.25, -0.35, -0.45), Vector3.ZERO], [1.0, Vector3(0.25, -0.35, -0.45), Vector3.ZERO]]},
+}
+
+var _models: Dictionary = {}  # weapon id -> Node3D under the camera
 var _swing := 1.0  # 0 -> 1 over one swing animation
+var _swing_time := 0.32
+var _style := "diagonal"
+var _pending: Array = []  # V11: hit feedback waiting for the strike: {at: seconds left, ...}
 var _message_time := 0.0
-
-const SWING_TIME := 0.25
 
 
 func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_exclude: Array[RID]) -> void:
@@ -21,19 +77,80 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	camera = p_camera
 	builder = p_builder
 	exclude = p_exclude
-	_pipe = MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.025
-	mesh.bottom_radius = 0.025
-	mesh.height = 0.6
-	_pipe.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.45, 0.45, 0.48)
-	mat.metallic = 0.6
-	_pipe.material_override = mat
-	_pipe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # no flashlight shadow across the view
-	camera.add_child(_pipe)
+	for id: String in MODELS:
+		var node: Node3D
+		if ResourceLoader.exists(MODELS[id]):
+			node = (load(MODELS[id]) as PackedScene).instantiate() as Node3D
+			apply_weapon_materials(node)
+		else:  # placeholder until the model exists: a plain rod of the right length, grip at the origin
+			var m := MeshInstance3D.new()
+			var rod := CylinderMesh.new()
+			rod.top_radius = 0.022
+			rod.bottom_radius = 0.022
+			rod.height = PLACEHOLDER_LENGTH[id]
+			m.mesh = rod
+			m.position.y = rod.height * 0.35
+			node = Node3D.new()
+			node.add_child(m)
+		node.name = "Weapon_" + id
+		node.visible = false
+		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # no flashlight shadow across the view
+		camera.add_child(node)
+		_models[id] = node
 	_pose(1.0)
+
+
+## Textures a weapon model's materials by name (WEAPON_LOOKS), like the guns'.
+static func apply_weapon_materials(node: Node3D) -> void:
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for i in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(i) as StandardMaterial3D
+			if source == null or not WEAPON_LOOKS["materials"].has(source.resource_name):
+				continue
+			var m: Dictionary = WEAPON_LOOKS["materials"][source.resource_name]
+			mesh.set_surface_override_material(i, Shooter._gun_material(source, String(m["texture"]), float(m["tile_m"]),
+					m.get("tint", Color.WHITE), m))
+
+
+## The weapon id (weapons.json) in your hands, "" bare-handed.
+func weapon_id() -> String:
+	if not sim.gear.equipped.has("weapon"):
+		return ""
+	return String(sim.gear.base_of(sim.gear.equipped["weapon"])["weapon"])
+
+
+## The swing style of the weapon in your hands.
+func style() -> String:
+	var id := weapon_id()
+	var w: Dictionary = sim.data.weapons.get(id if id != "" else "fists", {})
+	var s := String(w.get("style", "diagonal"))
+	return s if STYLES.has(s) else "diagonal"
+
+
+## Seconds one swing animation takes: the style's, sped up by the weapon's skill like the swing itself.
+func swing_seconds() -> float:
+	var id := weapon_id()
+	var base_cd := float(sim.data.weapons.get(id if id != "" else "fists", {}).get("cooldown", 0.7))
+	var k := sim.swing_cooldown() / maxf(0.01, base_cd)
+	return float(STYLES[style()]["time"]) * k
+
+
+## [position, rotation in radians] of a style's keyframes at fraction t (smooth between keys).
+static func pose_at(style_id: String, t: float) -> Array:
+	var keys: Array = STYLES[style_id]["keys"]
+	var tt := clampf(t, 0.0, 1.0)
+	for i in range(1, keys.size()):
+		var a: Array = keys[i - 1]
+		var b: Array = keys[i]
+		if tt <= float(b[0]) or i == keys.size() - 1:
+			var span := maxf(0.0001, float(b[0]) - float(a[0]))
+			var u := smoothstep(0.0, 1.0, clampf((tt - float(a[0])) / span, 0.0, 1.0))
+			var rot: Vector3 = (a[2] as Vector3).lerp(b[2], u)
+			return [(a[1] as Vector3).lerp(b[1], u), Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z))]
+	return [keys[0][1], keys[0][2]]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -42,10 +159,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	_pipe.visible = not builder.active and not sim.player.dead and sim.gear.equipped.has("weapon") \
-			and not sim.guns.in_hand()  # bare fists: no pipe; M14: not while the gun is out
-	_swing = minf(1.0, _swing + delta / SWING_TIME)
+	var id := weapon_id()
+	var show := not builder.active and not sim.player.dead and id != "" and not sim.guns.in_hand()  # M14: not while the gun is out
+	for w: String in _models:
+		_models[w].visible = show and w == id
+	_swing = hold_at if hold_at >= 0.0 else minf(1.0, _swing + delta / maxf(0.05, _swing_time))
 	_pose(_swing)
+	for p: Dictionary in _pending:
+		p["at"] -= delta
+	while not _pending.is_empty() and _pending[0]["at"] <= 0.0:
+		_land(_pending.pop_front())
 	_message_time -= delta
 	if _message_time <= 0.0:
 		last_message = ""
@@ -55,16 +178,18 @@ func _process(delta: float) -> void:
 func swing() -> int:
 	if not sim.swing():
 		return -2
+	_style = style()
+	_swing_time = swing_seconds()
 	_swing = 0.0
+	var strike_in := _swing_time * float(STYLES[_style]["strike"])
 	SoundView.play_at(self, "swing", camera.global_position, -8.0, randf_range(0.9, 1.1))
 	var from := camera.global_position
 	var to := from - camera.global_basis.z * float(sim.weapon_stats()["range"])
 	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT | Layers.ZOMBIE, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
-		if not hit.is_empty() and feel != null:  # V3: a swing into a wall puffs dust and jars the view
-			feel.impact(hit["position"], hit["normal"], "dust")
-			feel.add_trauma(ViewFeel.TRAUMA_MELEE_WALL)
+		if not hit.is_empty():  # V3: a swing into a wall puffs dust and jars the view (at the strike)
+			_pending.append({"at": strike_in, "kind": "wall", "pos": hit["position"], "normal": hit["normal"]})
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
@@ -72,20 +197,35 @@ func swing() -> int:
 	var killed := sim.hit_zombie(id, head)
 	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
 	_message_time = 1.0
-	if feel != null:
-		feel.impact(hit["position"], hit["normal"], "blood_head" if head else "blood")
-		feel.hit_zombie(killed, head)
-		feel.add_trauma(ViewFeel.TRAUMA_MELEE_HIT)
-	if head:
-		SoundView.play_at(self, "headshot", hit["position"], -4.0, randf_range(0.9, 1.1))  # V7: a head hit reads
+	_pending.append({"at": strike_in, "kind": "zombie", "pos": hit["position"], "normal": hit["normal"],
+			"killed": killed, "head": head})
 	return id
 
 
-## Resting pose at the lower right; mid-swing it sweeps down and across.
+## What you see and hear of a hit, at the strike moment of the swing.
+func _land(p: Dictionary) -> void:
+	if p["kind"] == "wall":
+		if feel != null:
+			feel.impact(p["pos"], p["normal"], "dust")
+			feel.add_trauma(ViewFeel.TRAUMA_MELEE_WALL)
+		return
+	if feel != null:
+		feel.impact(p["pos"], p["normal"], "blood_head" if p["head"] else "blood")
+		feel.hit_zombie(p["killed"], p["head"])
+		feel.add_trauma(ViewFeel.TRAUMA_MELEE_HIT)
+	if p["head"]:
+		SoundView.play_at(self, "headshot", p["pos"], -4.0, randf_range(0.9, 1.1))  # V7: a head hit reads
+
+
+## The weapon's place in view: the style's pose at swing fraction t, plus bob and sway.
 func _pose(t: float) -> void:
-	var arc := sin(t * PI)
-	_pipe.position = Vector3(0.32 - 0.3 * arc, -0.38 + 0.05 * arc, -0.6 - 0.15 * arc)
-	_pipe.rotation = Vector3(deg_to_rad(-55.0 - 45.0 * arc), 0.0, deg_to_rad(35.0 + 30.0 * arc))
-	if feel != null:  # V3: the pipe bobs with your steps and lags the mouse
-		_pipe.position += feel.hold_position_offset()
-		_pipe.rotation += feel.hold_rotation_offset()
+	var id := weapon_id()
+	if id == "" or not _models.has(id):
+		return
+	var node: Node3D = _models[id]
+	var pr: Array = pose_at(_style if _swing < 1.0 and hold_at < 0.0 else style(), t)
+	node.position = pr[0]
+	node.rotation = pr[1]
+	if feel != null:  # V3: the weapon bobs with your steps and lags the mouse
+		node.position += feel.hold_position_offset()
+		node.rotation += feel.hold_rotation_offset()

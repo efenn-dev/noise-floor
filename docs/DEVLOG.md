@@ -2,6 +2,21 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V11 Attack animations (Sprint 4)
+
+Emmitt: "Lets also work on the attack animations". Models by Codex (one job on his ChatGPT plan); swings and wiring by Claude Opus 5.5.
+
+**Built:**
+- **Real weapon models** for the pipe, bat, axe, machete and knife (`tools/art/<id>.py` on `melee_common.py`; grip at the origin, pointing up +Y, striking side toward -Z; 600 to 2,800 triangles each). Their materials (Weapon Metal, Wood, Grip, Edge) are textured with the gun and cloth photos (`Melee.WEAPON_LOOKS`, through `Shooter._gun_material`).
+- **A swing per kind of weapon** (`weapons.json` "style", `Melee.STYLES`): the pipe's diagonal, the bat's wide side swing, the axe's overhead chop, the machete's quick slash, the knife's stab. Each is keyframes of wind-up, strike and recovery, smoothed between keys, and quicker with the weapon's skill (`swing_seconds()` follows `swing_cooldown()`).
+- **Hits land at the strike.** Whether a swing hits is still decided at the click (rules and tests unchanged). The blood, the hit marker, the shake and the head crunch wait for the strike moment of the animation.
+- `--weapon=pipe|bat|axe|machete|knife` and `--swing-at=T` flags, for screenshots of any weapon at any point in its swing.
+- `test/test_melee_styles.gd`: every weapon has a style and a model, poses are finite and start and end at rest, weapon materials are mapped, Blades 5 makes the animation 20% quicker, the hit marker waits for the strike.
+
+**Try it on the PC:** `play.bat --weapon=axe`, `play.bat --weapon=bat`, `play.bat --weapon=knife` and swing at a zombie.
+
+**Known gaps:** no hands yet (V6 first-person arms is next for Codex). Fists show nothing when you punch.
+
 ## 2026-10-13 — V9 + V10 Weapons wear out, Zomboid weapon skills (Sprint 4)
 
 Built by Claude Opus 5.5 from Emmitt's ask: "adding durability to items so we need to get a new weapon every so often. I want zomboid like skills where you level up your blunt, blades, axe, etc skills and do more damage/faster attacks."
