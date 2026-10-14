@@ -51,6 +51,26 @@ Emmitt: "we need to add a vault mechanic for windows because you can just run th
 **Tests:** 11,584 green (new `test_vault.gd`; its navmesh checks wait a few frames for the map to sync).
 
 **Known gaps:** no vaulting over fences or barricades (they're 1.3-1.5 m, too tall for a vault). The climb is a camera move, no arm animation on the sill yet. Zombies use a code-driven lean while the new zombie models are being made.
+## 2026-10-14 — Q5 Pre-playtest check (Sprint 4)
+
+The check DIRECTION.md asks for before every playtest, on `main` at #55, by Claude Opus 5.5 in a cloud session.
+
+**Found and fixed:**
+- **Sleeping while bleeding woke you at once, with no reason given** (the bleed damage each tick wakes you). The bed now says "You're bleeding. Bandage first (H)". Test in `test_needs.gd`.
+- **Long messages ran under the clock and the pockets** (tour tile 06: "Smelter placed. It needs power: ..."). Messages are now a centred column between the top-left and top-right blocks that wraps. `test_hud_layout.gd` checks the longest real message at 1600x900 and 1280x720.
+- **Bleeding stops on its own (Emmitt's call).** A cut bleeds for 40 seconds (`bleed_time` in `data/survival.json`), about 20 health, then "The bleeding stopped". A new cut restarts the 40 seconds; a bandage still stops it at once and heals. Before, it bled until you died (full health to dead in about 3.5 minutes) and you start with one bandage. The time left isn't saved: a save loaded while bleeding gets a fresh 40 s. Test in `test_needs.gd`.
+- **Soak bot:** it now bandages when it bleeds (H, as the HUD says), and counts the bleeds it had no bandage for; on day 2 it rebuilds a machine a zombie wrecked before the dusk wave check (that made the soak fail: a chasing zombie broke the smelter on day 1, so no machine was running for the wave to home in on).
+
+**Found, not changed (for Playtest #2 to judge):**
+- **A soak game-day now takes about 177 s instead of 87 s**, and memory starts at about 260 MB instead of 115 MB (S5's Jolt Physics and W2's breakable glass and doors are the likely causes). One 94 ms physics spike on day 1. Fine in play so far; worth a look before the world grows.
+- **Respawning into the zombies that killed you.** On day 3 the bot died at house 1 three times in about 30 game-minutes: it wakes at its bed with the zombies that killed it still in the room. Worth a short grace period or a safer respawn if Playtest #2 hits it.
+- **The hands sit low on the melee weapons:** with the axe or pipe the gripping hand is mostly below the screen and the left hand doesn't show. Judge on the PC (Forward+), not from cloud shots.
+
+**Result:** `tools/soak.sh --days=3` reports SOAK OK (189 s per game-day; 5 deaths: 4 shambler on day 3, the bot's planned death and three at its bed after respawning, and 1 dehydration on day 4; **no bleeding deaths**: it bandaged twice and bled out of bandages twice and lived). Before the bleeding change the same run had a bleeding death on day 1. `tools/test.sh`: 9215 passed. Tour checked.
+
+**Try it on the PC:** `play.bat`, get hit until "BLEEDING (H)" shows, then press E on a bed; then wait about 40 seconds for "The bleeding stopped". `play.bat --demo-factory` for the message column.
+
+**Next:** Playtest #2 (V8).
 
 ## 2026-10-14 — V16 MakeHuman arms, reload sounds, rifle sights (Sprint 4)
 
