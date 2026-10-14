@@ -13,7 +13,7 @@ const TIMELINE_SECONDS := 300.0
 const TIMELINE_MAX := 15
 const DEATHS_SHOWN := 8
 const AWAY_SHOWN := 5  # P3: the most important base-log events while you were far from your base
-const GUNS_SHOWN := 3
+const GUNS_SHOWN := 6
 ## P3: how much a base-log event matters, by what its text says (first match wins; anything else is 1).
 const AWAY_WEIGHTS := [["destroyed", 6], ["under attack", 5], ["coming from", 4], [" out of ", 4],
 		["Old Pete", 3], ["worn out", 3], ["caught", 2], ["rang", 2], ["went off", 2]]
@@ -49,6 +49,8 @@ var perk_points_earned := 0
 var perks_spent: Dictionary = {}
 ## P3: gun name -> {"shots", "hits", "kills"}.
 var guns: Dictionary = {}
+## V30: throwable name -> throws. Pipe-bomb kills are also credited in `guns`, the existing per-weapon table.
+var throws: Dictionary = {}
 ## P3: the most important base-log events that happened more than the radio's range from you:
 ## [{"text", "when", "weight"}], best first, at most AWAY_SHOWN. away_total counts them all.
 var away: Array = []
@@ -159,6 +161,13 @@ func note_gun_hit(gun: String, killed: bool) -> void:
 	g["hits"] += 1
 	if killed:
 		g["kills"] += 1
+
+
+func note_throw(item_name: String) -> void:
+	if muted:
+		return
+	throws[item_name] = int(throws.get(item_name, 0)) + 1
+	_gun(item_name)["shots"] += 1
 
 
 func _gun(gun: String) -> Dictionary:
@@ -296,14 +305,18 @@ func _p3_lines() -> PackedStringArray:
 		pk.append(_words(perk) + ((" x%d" % perks_spent[perk]) if int(perks_spent[perk]) > 1 else ""))
 	out.append("Perk points earned: %d, spent: %d%s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else ""])
 	if guns.is_empty():
-		out.append("Firearms: never fired.")
+		out.append("Weapons: never fired or thrown.")
 	else:
-		out.append("Firearms (shots, hits, kills):")
+		out.append("Weapons (shots/throws, hits, kills):")
 		var names := guns.keys()
 		names.sort_custom(func(a: String, b: String) -> bool: return int(guns[a]["shots"]) > int(guns[b]["shots"]))
 		for i in mini(names.size(), GUNS_SHOWN):
 			var g: Dictionary = guns[names[i]]
 			out.append("  %s: %d, %d, %d" % [names[i], g["shots"], g["hits"], g["kills"]])
+	var thrown := PackedStringArray()
+	for item_name: String in throws:
+		thrown.append("%s %d" % [item_name, throws[item_name]])
+	out.append(("Throws: " + ", ".join(thrown) + ".") if not thrown.is_empty() else "Throws: none.")
 	if away_total == 0:
 		out.append("At your base while you were away: nothing logged.")
 	else:

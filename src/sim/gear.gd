@@ -72,7 +72,7 @@ func make(base: String, tier: String, rarity: String, stats: Dictionary = {}, co
 	if slot_of(piece) in FIREARM_SLOTS:
 		piece["parts"] = {}
 		piece["loaded"] = 0
-		piece["ammo"] = data.guns["ammo_order"][0]
+		piece["ammo"] = str(data.guns["guns"][base_of(piece)["gun"]].get("ammo", data.guns["ammo_order"][0]))
 	return piece
 
 
@@ -123,11 +123,14 @@ func _roll_as(rng: RandomNumberGenerator, base: String, tier: String, rarity: St
 ## chance, or `police` forced), a rarity by weight (no sets), stats from the gun stats only.
 func roll_gun_piece(rng: RandomNumberGenerator, kind: String, police: bool = false, source: String = "") -> Dictionary:
 	var tier := "police" if police or rng.randf() < police_chance(source) else "civilian"
-	var weights := {}
+	var rarity_weights := {}
 	for r: String in ["white", "blue", "yellow"]:
-		weights[r] = float(g()["rarities"][r]["weight"])
-	var rarity: String = _weighted(rng, weights)
-	var base: String = _weighted(rng, data.guns["gun_weights" if kind == "gun" else "part_weights"])
+		rarity_weights[r] = float(g()["rarities"][r]["weight"])
+	var rarity: String = _weighted(rng, rarity_weights)
+	var base_weights: Dictionary = data.guns["gun_weights" if kind == "gun" else "part_weights"]
+	if kind == "gun" and data.guns.get("gun_weights_by_source", {}).has(source):
+		base_weights = data.guns["gun_weights_by_source"][source]
+	var base: String = _weighted(rng, base_weights)
 	return _roll_as(rng, base, tier, rarity)
 
 
@@ -408,6 +411,7 @@ func gun_stats(piece: Dictionary, include_parts: bool = true) -> Dictionary:
 	var recoil := 0.0
 	var mag := 0.0
 	var muzzle := 0.0
+	var spread := 0.0
 	var all := [piece]
 	if include_parts:
 		for slot: String in piece.get("parts", {}):
@@ -424,11 +428,13 @@ func gun_stats(piece: Dictionary, include_parts: bool = true) -> Dictionary:
 		recoil += float(pd.get("recoil", 0.0))
 		mag += float(pd.get("magazine", 0.0))
 		muzzle += float(pd.get("loudness", 0.0))
+		spread += float(pd.get("spread", 0.0))
 	s["damage"] = float(s["damage"]) * tier_mult(piece) * (1.0 + dmg)
 	s["range"] = float(s["range"]) * (1.0 + acc)
 	s["recoil"] = float(s["recoil"]) * maxf(0.2, 1.0 + recoil)
 	s["magazine"] = floori(float(s["magazine"]) * (1.0 + mag))
 	s["loudness"] = maxf(0.0, float(s["loudness"]) + muzzle - quiet)
+	s["spread"] = float(s["spread"]) * maxf(0.2, 1.0 + spread)
 	s["suppressed"] = muzzle < 0.0
 	var m: Dictionary = piece.get("parts", {}).get("muzzle", {}) if include_parts else {}
 	s["muzzle_wear"] = float(part_def(m).get("wear_per_shot", 0.0)) * (1.0 - float(piece["stats"].get("threaded", 0.0)))
@@ -490,6 +496,10 @@ func can_attach(gun_piece: Dictionary, part_uid: int, into_slot: String = "") ->
 		return "%s fits the %s slot, not %s" % [part["name"], slot, into_slot]
 	if not slot in gun_part_slots(gun_piece):
 		return "%s has no %s slot" % [gun_piece["name"], slot]
+	var gun_id := str(base_of(gun_piece).get("gun", ""))
+	var fits: Array = part_def(part).get("guns", [])
+	if not fits.is_empty() and not gun_id in fits:
+		return "%s does not fit %s" % [part["name"], gun_piece["name"]]
 	return ""
 
 
@@ -650,6 +660,8 @@ func part_text(piece: Dictionary) -> String:
 		bits.append("+%d%% accuracy at range" % roundi(float(pd["range"]) * 100.0))
 	if pd.has("recoil"):
 		bits.append("%d%% less recoil" % roundi(-float(pd["recoil"]) * 100.0))
+	if pd.has("spread"):
+		bits.append("%d%% tighter pellet cone" % roundi(-float(pd["spread"]) * 100.0))
 	return "%s: %s" % [str(pd.get("slot", "")).capitalize(), ", ".join(bits)]
 
 
@@ -664,6 +676,8 @@ func part_fit_text(piece: Dictionary) -> String:
 		return "+%d%% accuracy at range" % roundi(float(pd["range"]) * 100.0)
 	if pd.has("recoil"):
 		return "%d%% less recoil" % roundi(-float(pd["recoil"]) * 100.0)
+	if pd.has("spread"):
+		return "%d%% tighter pellet cone" % roundi(-float(pd["spread"]) * 100.0)
 	return "ready"
 
 

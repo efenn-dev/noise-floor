@@ -17,7 +17,7 @@ func test_every_model_material_is_accounted_for() -> void:
 			check(ZombieBody.LOOK_DATA["materials"].has(material_name)
 					or material_name in ZombieBody.LOOK_DATA["untextured"],
 					"%s material '%s' is textured or explicitly untextured" % [path, material_name])
-	for path: String in Shooter.MODELS.values() + Shooter.PART_MODELS.values():
+	for path: String in Shooter.MODELS.values() + Shooter.PART_MODELS.values() + Thrower.MODELS.values():
 		for material_name: String in _material_names(path):
 			check(Shooter.GUN_LOOKS["materials"].has(material_name)
 					or material_name in Shooter.GUN_LOOKS["untextured"],
@@ -60,7 +60,7 @@ func test_runtime_materials_use_object_space_triplanar_and_normals() -> void:
 	_check_overrides(body._model, ZombieBody.LOOK_DATA["materials"], "zombie")
 	body.free()
 
-	for path: String in Shooter.MODELS.values() + Shooter.PART_MODELS.values():
+	for path: String in Shooter.MODELS.values() + Shooter.PART_MODELS.values() + Thrower.MODELS.values():
 		var gun := (load(path) as PackedScene).instantiate() as Node3D
 		Shooter.apply_textured_materials(gun)
 		_check_overrides(gun, Shooter.GUN_LOOKS["materials"], path)

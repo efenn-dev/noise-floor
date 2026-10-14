@@ -21,14 +21,16 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"],
 		# M14: guns (the sim's shot loudness sets the volume) and the reload click
 		"gunshot_pistol": ["shot_pistol"], "gunshot_rifle": ["shot_rifle"],
+		"gunshot_shotgun": ["shot_shotgun"], "gunshot_crossbow": ["shot_crossbow"],
 		"gunshot_pistol_suppressed": ["shot_pistol_suppressed"], "gunshot_rifle_suppressed": ["shot_rifle_suppressed"],
 		"reload": ["reload"], "gun_mod": ["click"],  # V23: a small part-fit handling click
 		# M15: a decoy noisemaker is a horn; a tripwire bell borrows the click until it gets its own sound
 		"noisemaker": ["horn"], "bell": ["click"],
 		"weapon_break": ["weapon_break"],  # V9: a weapon snapping
+		"bottle_break": ["bottle_break"], "pipe_bomb": ["pipe_bomb"],
 		"glass_break": ["glass_break"], "glass_clear": ["glass_break"],
 		"vault": STEPS, "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2, V17
-const CHOREOGRAPHED_RELOADS: Array[String] = ["pistol", "hunting_rifle"]  # V16: Shooter supplies timed mechanics
+const CHOREOGRAPHED_RELOADS: Array[String] = ["pistol", "hunting_rifle", "shotgun", "crossbow"]
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0
 ## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones

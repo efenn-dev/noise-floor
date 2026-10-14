@@ -190,8 +190,9 @@ func test_part_models_use_each_guns_measured_mounts() -> void:
 	for gun_id: String in Shooter.MODELS:
 		var gun_node: Node3D = shooter._models[gun_id]
 		for part_id: String in Shooter.PART_MODELS:
-			var slot := str(sim.data.guns["parts"][part_id]["slot"])
-			if not slot in sim.data.guns["guns"][gun_id]["part_slots"]:
+			var part_def: Dictionary = sim.data.guns["parts"][part_id]
+			var slot := str(part_def["slot"])
+			if not slot in sim.data.guns["guns"][gun_id]["part_slots"] or gun_id not in part_def.get("guns", []):
 				continue
 			var mount := gun_node.find_child("AttachmentMount_" + part_id, true, false) as Node3D
 			check(mount != null, "%s has a mount for %s" % [gun_id, part_id])
@@ -206,6 +207,9 @@ func test_part_models_use_each_guns_measured_mounts() -> void:
 
 func test_scoped_ads_centres_the_optic_within_three_mm() -> void:
 	for gun_id: String in Shooter.MODELS:
+		if gun_id not in GameData.load_default().guns["parts"]["scope"]["guns"]:
+			check(not Shooter.SCOPE_SIGHT_POINTS.has(gun_id), gun_id + " correctly has no scope sight line")
+			continue
 		var pose := Shooter.aim_pose(gun_id, true)
 		var position: Vector3 = pose["position"]
 		var rotation: Vector3 = pose["rotation"]

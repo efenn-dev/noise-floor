@@ -10,6 +10,8 @@ extends Node3D
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
+##   --gun=BASE            V30: hold pistol, rifle, shotgun or crossbow (pete is the unique rifle)
+##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
@@ -65,6 +67,7 @@ var nav: NavBaker
 var zombie_view: ZombieView
 var melee: Melee
 var shooter: Shooter  # M14: the gun in your hands
+var thrower: Thrower  # V30: throwable input, arc and projectile presentation
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
@@ -264,6 +267,13 @@ func _ready() -> void:
 		_give_mod_screen(str(args["mod-screen"]))
 	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("throw"):
+		var throwable := str(args["throw"])
+		if throwable not in ["pipe_bomb", "bottle"]:
+			throwable = "pipe_bomb"
+		sim.inventory.add(throwable, 1)
+		thrower.ready(throwable)
+		thrower.hold_preview = true
 	if args.has("window"):
 		var wh: PackedStringArray = str(args["window"]).split("x")  # P2: --window=1280x720, a smaller window
 		if wh.size() == 2:
@@ -283,7 +293,9 @@ func _ready() -> void:
 		shooter.hold_reload_at = clampf(float(args["reload-at"]), 0.0, 1.0)
 	if args.has("inspect-at"):
 		var at := clampf(float(args["inspect-at"]), 0.0, 1.0)
-		if sim.guns.in_hand():
+		if sim.ready_throw != "":
+			parts.append_array(["LMB hold/release throw", "RMB cancel"])
+		elif sim.guns.in_hand():
 			shooter.hold_inspect_at = at
 			shooter.start_inspect()
 		else:
@@ -326,28 +338,32 @@ func _give_rolled_gear(rarity: String) -> void:
 	inventory_screen.select_gear(piece["uid"])
 
 
-## --gun[=pistol|rifle|pete]: a gun (pistol by default; pete = Old Pete's Deer Rifle) in its gun slot,
-## loaded, raised and in your hands, with 30 standard rounds. --workbench also gives the parts and casings
+## --gun[=pistol|rifle|shotgun|crossbow|pete]: a loaded gun in its slot, raised and in your hands.
+## It also supplies that gun's ammo. --workbench gives every part and the crafting ingredients
 ## the bench uses, fits a crude suppressor and opens the workbench screen (for screenshots and trying it).
 func _give_gun(which: String, bench: bool) -> void:
 	var piece := {}
 	if which == "pete":
 		piece = sim.gear.roll_unique(RandomNumberGenerator.new(), "petes_deer_rifle")
 	else:
-		piece = sim.gear.make("hunting_rifle" if which == "rifle" else "pistol", "civilian", "white")
+		var gun_base := {"rifle": "hunting_rifle", "shotgun": "shotgun", "crossbow": "crossbow"}.get(which, "pistol")
+		piece = sim.gear.make(gun_base, "civilian", "white")
 	sim.gear.pieces.append(piece)
 	sim.gear.equip(int(piece["uid"]))  # V14: a pistol lands in the sidearm slot, a rifle in primary
 	piece["loaded"] = int(sim.gear.gun_stats(piece)["magazine"])
-	sim.inventory.add("ammo_standard", 30)
+	var ammo := str(sim.data.guns["guns"][piece["base"]].get("ammo", "ammo_standard"))
+	sim.inventory.add(ammo, 24 if ammo == "shells" else (12 if ammo == "bolt" else 30))
 	if not sim.guns.in_hand():
 		sim.swap_hands()
 	sim.guns.raising = 0.0
 	if bench:
-		for base: String in ["oil_filter_suppressor", "scope", "extended_mag", "padded_stock"]:
+		for base: String in ["oil_filter_suppressor", "scope", "extended_mag", "padded_stock", "choke"]:
 			sim.gear.pieces.append(sim.gear.make(base, "civilian", "blue" if base == "scope" else "white",
 					{"accuracy": 0.1} if base == "scope" else {}))
-		sim.attach_part(sim.gear.pieces[sim.gear.pieces.size() - 4]["uid"])
-		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 6, "nails": 12, "plank": 4})
+		var first_part := sim.gear.pieces.size() - 5
+		if sim.gear.can_attach(piece, int(sim.gear.pieces[first_part]["uid"])) == "":
+			sim.attach_part(int(sim.gear.pieces[first_part]["uid"]))
+		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 8, "gunpowder": 3, "nails": 16, "plank": 5})
 		sim.player_pos = player.global_position
 		_open_workbench("")
 
@@ -760,6 +776,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
+		thrower.cancel()
 		shooter.cancel_inspect()
 		melee.cancel_inspect()
 		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
@@ -948,7 +965,7 @@ func _update_hud(delta: float) -> void:
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
-	var gun_up := driving == null and sim.guns.in_hand() and not builder.active and not sim.player.dead
+	var gun_up := driving == null and sim.guns.in_hand() and sim.ready_throw == "" and not builder.active and not sim.player.dead
 	crosshair.visible = gun_up and (not shooter.aiming() or sim.guns.scoped())  # V15: irons hide it, a scope keeps it as the reticle
 	_dot.visible = not gun_up
 	if gun_up:
@@ -1325,11 +1342,15 @@ func _build_zombies(args: Dictionary) -> void:
 	shooter = Shooter.new()
 	add_child(shooter)
 	shooter.setup(sim, player.camera, builder, [player.get_rid()])
+	thrower = Thrower.new()
+	add_child(thrower)
+	thrower.setup(sim, player.camera, builder)
 	view_feel = ViewFeel.new()
 	add_child(view_feel)
 	view_feel.setup(sim, player)
 	melee.feel = view_feel
 	shooter.feel = view_feel
+	thrower.feel = view_feel
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
@@ -1679,7 +1700,10 @@ func _hotbar_press(i: int) -> void:
 				builder.select_id(id)
 				builder.set_active(true)
 		"item":
-			sim.add_message(sim.use_item(sim.hotbar.id(i, bar)), 2.5)
+			var item := sim.hotbar.id(i, bar)
+			sim.add_message(sim.use_item(item), 2.5)
+			if sim.ready_throw == item:
+				thrower.hold_preview = true
 		"slot":
 			sim.add_message(sim.draw_weapon(sim.hotbar.id(i, bar)), 2.0)
 		_:

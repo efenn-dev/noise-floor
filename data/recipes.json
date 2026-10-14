@@ -55,8 +55,9 @@
 	},
 	"press_bolts": {
 		"name": "Crossbow bolts",
-		"time": 3.0,
-		"in": { "metal_plate": 1 },
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "plank": 1, "nails": 2 },
 		"out": { "bolt": 6 }
 	},
 	"press_wall_panel": {
@@ -101,5 +102,26 @@
 		"time": 1.0,
 		"in": { "plank": 2, "nails": 6 },
 		"gear": "padded_stock"
+	},
+	"bench_gunpowder": {
+		"name": "Gunpowder",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "ammo_casing": 8, "scrap_metal": 1 },
+		"out": { "gunpowder": 2 }
+	},
+	"bench_shells": {
+		"name": "Shotgun shells",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "ammo_casing": 6, "gunpowder": 1 },
+		"out": { "shells": 6 }
+	},
+	"bench_pipe_bomb": {
+		"name": "Pipe bomb",
+		"station": "workbench",
+		"time": 1.0,
+		"in": { "scrap_metal": 3, "gunpowder": 2, "nails": 8 },
+		"out": { "pipe_bomb": 1 }
 	}
 }

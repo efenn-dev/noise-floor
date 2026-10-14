@@ -126,10 +126,19 @@ func test_gun_models_load() -> void:
 		var aabb := AABB()
 		for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
 			aabb = aabb.merge(mi.get_aabb()) if aabb.size != Vector3.ZERO else mi.get_aabb()
-		check(aabb.size.z > aabb.size.x * 3.0, "%s is long front to back (%s)" % [path, aabb.size])
-		check(aabb.size.z < 1.15, "%s fits in your hands" % path)
+		if path.ends_with("crossbow.glb"):
+			check(aabb.size.x > 0.6 and aabb.size.z > aabb.size.x * 1.4,
+					"%s has a wide bow and a longer stock (%s)" % [path, aabb.size])
+			check(aabb.size.z < 1.25, "%s fits in your hands" % path)
+		elif path.ends_with("shotgun.glb"):
+			check(aabb.size.z > aabb.size.x * 3.0, "%s is long front to back (%s)" % [path, aabb.size])
+			check(aabb.size.z < 1.30, "%s fits in your hands" % path)
+		else:
+			check(aabb.size.z > aabb.size.x * 3.0, "%s is long front to back (%s)" % [path, aabb.size])
+			check(aabb.size.z < 1.15, "%s keeps the original pistol/rifle size limit" % path)
 		root.free()
-	for kind: String in ["gunshot_pistol", "gunshot_rifle", "gunshot_pistol_suppressed", "gunshot_rifle_suppressed", "reload", "gun_mod"]:
+	for kind: String in ["gunshot_pistol", "gunshot_rifle", "gunshot_shotgun", "gunshot_crossbow",
+			"gunshot_pistol_suppressed", "gunshot_rifle_suppressed", "reload", "gun_mod"]:
 		check(SoundView.EVENTS.has(kind) and SoundView.stream(SoundView.EVENTS[kind][0]) != null,
 				"a %s noise plays its synth.py sound" % kind)
 

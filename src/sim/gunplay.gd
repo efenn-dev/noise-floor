@@ -18,12 +18,15 @@ var cooldown := 0.0    # seconds until the next shot
 var raising := 0.0     # seconds until the gun is up after Q
 var reloading := 0.0   # seconds left of a reload (0 = not reloading)
 var aiming := false    # V15: written by the world; spread remains a deterministic sim rule
+var _rng := RandomNumberGenerator.new()  # deterministic pellet cone and projectile launch spread
+var _last_fired_spread := 0.0  # cone captured before this trigger pull adds recoil bloom
 
 
 func _init(p_data: GameData, p_gear: Gear, p_skills: Skills) -> void:
 	data = p_data
 	gear = p_gear
 	skills = p_skills
+	_rng.seed = 30030
 
 
 func gun() -> Dictionary:
@@ -97,7 +100,11 @@ func tick(dt: float, inv: Inventory) -> int:
 		reloading -= dt
 		if reloading <= 0.0:
 			reloading = 0.0
-			return _load(inv)
+			var loaded := _load_step(inv)
+			if reload_mode() == "shell" and loaded > 0 and int(gun()["loaded"]) < int(stats()["magazine"]) \
+					and inv.count(str(gun()["ammo"])) > 0:
+				reloading = reload_time()  # another short, independently interruptible shell step
+			return loaded
 	return 0
 
 
@@ -159,16 +166,56 @@ func shot_kind() -> String:
 
 
 ## Damage of one body hit: the gun (base + parts) times gun_damage bonuses times the ammo.
-func damage() -> float:
+func damage(distance: float = -1.0) -> float:
 	var ammo: Dictionary = data.guns["ammo"][gun()["ammo"]]
-	return float(stats()["damage"]) * (1.0 + skills.bonus("gun_damage")) * float(ammo["damage"])
+	var out := float(stats()["damage"]) * (1.0 + skills.bonus("gun_damage")) * float(ammo["damage"])
+	var st := stats()
+	if distance >= 0.0 and st.has("falloff_start") and distance > float(st["falloff_start"]):
+		var span := maxf(0.001, float(st["falloff_end"]) - float(st["falloff_start"]))
+		var t := clampf((distance - float(st["falloff_start"])) / span, 0.0, 1.0)
+		out *= lerpf(1.0, float(st.get("min_damage", 0.25)), t)
+	return out
+
+
+func base_id() -> String:
+	return str(gun().get("base", ""))
+
+
+func reload_mode() -> String:
+	return str(stats().get("reload_mode", "magazine")) if not gun().is_empty() else "magazine"
+
+
+func pellet_count() -> int:
+	return int(stats().get("pellets", 1)) if not gun().is_empty() else 0
+
+
+## Deterministic directions for every pellet/bolt, owned by the sim rather than presentation physics.
+func shot_directions(forward: Vector3, from_fired_shot: bool = false) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var count := pellet_count()
+	var half_angle := deg_to_rad(_last_fired_spread if from_fired_shot else spread_deg())
+	for _i in count:
+		out.append(_in_cone(forward.normalized(), half_angle))
+	return out
+
+
+func _in_cone(dir: Vector3, half_angle: float) -> Vector3:
+	if half_angle <= 0.0:
+		return dir
+	var side := dir.cross(Vector3.UP).normalized()
+	if side.length() < 0.5:
+		side = Vector3.RIGHT
+	var up := side.cross(dir).normalized()
+	var r := tan(half_angle) * sqrt(_rng.randf())
+	var a := _rng.randf() * TAU
+	return (dir + side * cos(a) * r + up * sin(a) * r).normalized()
 
 
 ## "" if a shot can be fired now, otherwise why not.
 func can_fire() -> String:
 	if not in_hand():
 		return "No firearm in hand (Q)"
-	if reloading > 0.0:
+	if reloading > 0.0 and not (reload_mode() == "shell" and int(gun()["loaded"]) > 0):
 		return "Reloading..."
 	if raising > 0.0 or cooldown > 0.0:
 		return "Not ready"
@@ -182,7 +229,9 @@ func can_fire() -> String:
 func fire() -> Array:
 	var st := stats()
 	var piece := gun()
+	_last_fired_spread = spread_deg()
 	piece["loaded"] = int(piece["loaded"]) - 1
+	reloading = 0.0  # a shotgun trigger pull interrupts the next shell step
 	var kick := float(st["recoil"]) * maxf(0.2, 1.0 - skills.bonus("recoil_cut"))
 	bloom = minf(float(data.guns["max_bloom"]), bloom + kick)
 	cooldown = float(st["cooldown"])
@@ -219,7 +268,10 @@ func start_reload(inv: Inventory) -> String:
 
 
 func _other_ammo(inv: Inventory, current: String) -> String:
-	var order: Array = data.guns["ammo_order"]
+	var gun_def: Dictionary = data.guns["guns"].get(base_id(), {})
+	var order: Array = gun_def.get("ammo_types", [gun_def.get("ammo", data.guns["ammo_order"][0])])
+	if not gun_def.has("ammo"):
+		order = data.guns["ammo_order"]
 	var i := order.find(current)
 	for k in range(1, order.size()):
 		var a: String = order[(i + k) % order.size()]
@@ -238,6 +290,17 @@ func _load(inv: Inventory) -> int:
 	inv.remove(piece["ammo"], n)
 	piece["loaded"] = int(piece["loaded"]) + n
 	return n
+
+
+func _load_step(inv: Inventory) -> int:
+	if reload_mode() in ["shell", "single"]:
+		var piece := gun()
+		if piece.is_empty() or int(piece["loaded"]) >= int(stats()["magazine"]) or inv.count(piece["ammo"]) <= 0:
+			return 0
+		inv.remove(piece["ammo"], 1)
+		piece["loaded"] = int(piece["loaded"]) + 1
+		return 1
+	return _load(inv)
 
 
 ## V9: " 60%" once the held weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
