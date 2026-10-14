@@ -2,8 +2,9 @@ class_name Menus
 extends CanvasLayer
 ## Title screen, pause menu and settings panel, built in code. Runs while the game is paused.
 
-signal new_game
-signal continue_game
+signal new_game(slot: int, profile_name: String)
+signal continue_game(slot: int)
+signal delete_slot_requested(slot: int)
 signal resume
 signal save_requested
 signal load_requested
@@ -13,6 +14,13 @@ signal quit_to_title
 signal settings_changed
 
 var _title: Control
+var _slot_picker: Control
+var _slot_rows: VBoxContainer
+var _slot_heading: Label
+var _new_profile: Control
+var _new_heading: Label
+var _profile_name: LineEdit
+var _confirm: ConfirmationDialog
 var _heading: Label
 var _version: Label  # the build being played, small in the bottom-right corner of the title screen
 var _stats_label: Label
@@ -23,6 +31,10 @@ var _status: Label
 var _continue_button: Button
 var _load_button: Button
 var _settings_back_to := ""  # "title" or "pause"
+var _slot_summaries: Array = []
+var _slot_mode := "continue"
+var _pending_action := ""
+var _pending_slot := 0
 
 
 func _init() -> void:
@@ -38,8 +50,8 @@ func _init() -> void:
 	_title.get_child(0).add_child(heading)
 	_title.get_child(0).add_child(_label("Machines make noise. Noise draws the dead.", 22))
 	_title.get_child(0).add_child(_spacer())
-	_continue_button = _button(_title, "Continue", func() -> void: continue_game.emit())
-	_button(_title, "New game", func() -> void: new_game.emit())
+	_continue_button = _button(_title, "Continue", func() -> void: open_slots(false))
+	_button(_title, "New game", func() -> void: open_slots(true))
 	_button(_title, "Settings", func() -> void: show_settings("title"))
 	_button(_title, "Controls", func() -> void: help_requested.emit("title"))
 	_button(_title, "Quit", func() -> void: get_tree().quit())
@@ -51,6 +63,39 @@ func _init() -> void:
 	_version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
 	_version.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_version.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+	_slot_picker = _screen()
+	_slot_heading = _label("Choose a save", 48)
+	_slot_picker.get_child(0).add_child(_slot_heading)
+	_slot_picker.get_child(0).add_child(_label("Each person gets their own slot.", 20))
+	_slot_picker.get_child(0).add_child(_spacer())
+	_slot_rows = VBoxContainer.new()
+	_slot_rows.add_theme_constant_override("separation", 12)
+	_slot_rows.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_slot_picker.get_child(0).add_child(_slot_rows)
+	_button(_slot_picker, "Back", func() -> void: show_title(_slot_summaries))
+
+	_new_profile = _screen()
+	_new_heading = _label("New game", 48)
+	_new_profile.get_child(0).add_child(_new_heading)
+	_new_profile.get_child(0).add_child(_label("Name this save (for example, Dad or Kaleb)", 20))
+	_profile_name = LineEdit.new()
+	_profile_name.name = "ProfileName"
+	_profile_name.placeholder_text = "Slot name"
+	_profile_name.max_length = 24
+	_profile_name.custom_minimum_size = Vector2(420, 48)
+	_profile_name.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_profile_name.add_theme_font_size_override("font_size", 22)
+	_profile_name.text_submitted.connect(func(_text: String) -> void: start_new_profile())
+	_new_profile.get_child(0).add_child(_profile_name)
+	_button(_new_profile, "Start new game", start_new_profile)
+	_button(_new_profile, "Back", func() -> void: open_slots(true))
+
+	_confirm = ConfirmationDialog.new()
+	_confirm.name = "SlotConfirmation"
+	_confirm.title = "Confirm save slot"
+	_confirm.confirmed.connect(confirm_pending)
+	add_child(_confirm)
 
 	_pause = _screen()
 	_pause.get_child(0).add_child(_label("Paused", 48))
@@ -83,17 +128,103 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _settings.visible:
 		Settings.save_settings()
 		if _settings_back_to == "title":
-			show_title(not _continue_button.disabled)
+			show_title(_slot_summaries)
 		else:
 			show_pause(not _load_button.disabled)
 		get_viewport().set_input_as_handled()
+	elif _new_profile.visible:
+		open_slots(true)
+		get_viewport().set_input_as_handled()
+	elif _slot_picker.visible:
+		show_title(_slot_summaries)
+		get_viewport().set_input_as_handled()
 
 
-func show_title(has_save: bool) -> void:
+func show_title(slots: Variant) -> void:
+	if slots is Array:
+		_slot_summaries = slots.duplicate(true)
+	else:
+		_slot_summaries = []
 	hide_all()
-	_continue_button.disabled = not has_save
+	_continue_button.disabled = not _slot_summaries.any(
+			func(slot: Dictionary) -> bool: return bool(slot.get("used", false)))
 	_version.text = GameSession.version_line()
 	_title.visible = true
+
+
+## V26 title flow: Continue and New game both lead to the same three data-driven rows.
+func open_slots(for_new_game: bool = false) -> void:
+	_slot_mode = "new" if for_new_game else "continue"
+	_slot_heading.text = "Choose a slot for a new game" if for_new_game else "Choose a save to continue"
+	_rebuild_slot_rows()
+	hide_all()
+	_slot_picker.visible = true
+
+
+func update_slots(slots: Array) -> void:
+	_slot_summaries = slots.duplicate(true)
+	if _slot_picker.visible:
+		_rebuild_slot_rows()
+
+
+func choose_slot(slot: int) -> void:
+	var info := _slot_info(slot)
+	if _slot_mode == "continue":
+		if bool(info.get("used", false)):
+			continue_game.emit(slot)
+		return
+	if bool(info.get("used", false)):
+		_pending_action = "overwrite"
+		_pending_slot = slot
+		_confirm.dialog_text = "Replace '%s'?\nEverything currently in slot %d will be overwritten." % [
+				str(info.get("name", "Slot %d" % slot)), slot]
+		_confirm.popup_centered()
+	else:
+		_show_name_entry(slot)
+
+
+func request_delete(slot: int) -> void:
+	var info := _slot_info(slot)
+	if not bool(info.get("used", false)):
+		return
+	_pending_action = "delete"
+	_pending_slot = slot
+	_confirm.dialog_text = "Delete '%s'?\nThis cannot be undone." % str(info.get("name", "Slot %d" % slot))
+	_confirm.popup_centered()
+
+
+## Public so the headless UI test can prove that no destructive signal fires before confirmation.
+func confirm_pending() -> void:
+	_confirm.hide()
+	var action := _pending_action
+	var slot := _pending_slot
+	_pending_action = ""
+	_pending_slot = 0
+	if action == "overwrite":
+		_show_name_entry(slot)
+	elif action == "delete":
+		delete_slot_requested.emit(slot)
+
+
+func start_new_profile(_submitted: String = "") -> void:
+	if _pending_slot < 1:
+		return
+	var slot := _pending_slot
+	_pending_slot = 0
+	new_game.emit(slot, GameSession.clean_name(_profile_name.text, slot))
+
+
+func slot_text(slot: int) -> String:
+	var button := _slot_rows.get_node_or_null("Slot%d" % slot) as Button
+	return button.text if button != null else ""
+
+
+func slot_picker_open() -> bool:
+	return _slot_picker.visible
+
+
+func new_profile_open() -> bool:
+	return _new_profile.visible
 
 
 func show_pause(has_save: bool) -> void:
@@ -114,12 +245,12 @@ func set_status(text: String) -> void:
 
 
 func hide_all() -> void:
-	for c in [_title, _pause, _settings]:
+	for c in [_title, _slot_picker, _new_profile, _pause, _settings]:
 		c.visible = false
 
 
 func is_open() -> bool:
-	return _title.visible or _pause.visible or _settings.visible
+	return _title.visible or _slot_picker.visible or _new_profile.visible or _pause.visible or _settings.visible
 
 
 func title_open() -> bool:
@@ -129,6 +260,58 @@ func title_open() -> bool:
 ## The build line in the title screen's corner (for tests).
 func version_text() -> String:
 	return _version.text
+
+
+func _slot_info(slot: int) -> Dictionary:
+	for info: Dictionary in _slot_summaries:
+		if int(info.get("slot", 0)) == slot:
+			return info
+	return {"slot": slot, "used": false, "name": "", "summary": "Empty"}
+
+
+func _show_name_entry(slot: int) -> void:
+	_pending_action = ""
+	_pending_slot = slot
+	_new_heading.text = "New game — slot %d" % slot
+	_profile_name.text = ""
+	hide_all()
+	_new_profile.visible = true
+	_profile_name.grab_focus()
+
+
+func _rebuild_slot_rows() -> void:
+	for child: Node in _slot_rows.get_children():
+		_slot_rows.remove_child(child)
+		child.queue_free()
+	for slot in range(1, GameSession.SLOT_COUNT + 1):
+		var info := _slot_info(slot)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var choose := Button.new()
+		choose.name = "Slot%d" % slot
+		choose.text = _slot_button_text(info)
+		choose.custom_minimum_size = Vector2(650, 82)
+		choose.add_theme_font_size_override("font_size", 20)
+		choose.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		choose.pressed.connect(choose_slot.bind(slot))
+		row.add_child(choose)
+		var remove := Button.new()
+		remove.name = "Delete%d" % slot
+		remove.text = "Delete"
+		remove.custom_minimum_size = Vector2(110, 82)
+		remove.add_theme_font_size_override("font_size", 18)
+		remove.disabled = not bool(info.get("used", false))
+		remove.pressed.connect(request_delete.bind(slot))
+		row.add_child(remove)
+		_slot_rows.add_child(row)
+
+
+func _slot_button_text(info: Dictionary) -> String:
+	var slot := int(info.get("slot", 0))
+	if not bool(info.get("used", false)):
+		return "Slot %d  —  Empty" % slot
+	return "Slot %d  —  %s\n%s" % [slot, str(info.get("name", "Slot %d" % slot)),
+			str(info.get("summary", ""))]
 
 
 func _build_settings(box: VBoxContainer) -> void:
@@ -204,7 +387,7 @@ func _build_settings(box: VBoxContainer) -> void:
 	back.pressed.connect(func() -> void:
 		Settings.save_settings()
 		if _settings_back_to == "title":
-			show_title(not _continue_button.disabled)
+			show_title(_slot_summaries)
 		else:
 			show_pause(not _load_button.disabled))
 	box.add_child(back)
