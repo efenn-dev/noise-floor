@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V13 Rigged arms, reload and inspect + V15 Right click to aim or block (Sprint 4)
+
+Emmitt: "more realistic hands, reload/inspect mechanics" and "use right click to defend or ADS/scope in". Arm rig and code by Codex (four jobs on his ChatGPT plan); testing, sight measurements and fixes by Claude Opus 5.5.
+
+**Built:**
+- **Rigged arms** (`tools/art/fp_arm_rig.py` -> `fp_arm_right.glb` / `fp_arm_left.glb`): a skeleton with a forearm, wrist and three joints per finger and thumb, skinned, with six hand poses (Grip, Open, Flat, HoldMag, Pinch, Fist). Same grip frame as V12's hands, so `Hands.make` prefers them and falls back to the V12 models. A second pass made the fingers continuous tubes instead of stacked capsules.
+- **Reload you can see.** Pistol: the gun tilts, the old magazine drops away, the left hand goes to your belt, comes back holding a fresh one, seats it and racks the slide. Rifle: the left hand presses three cartridges into the action, then the bolt is worked. Keyed to the sim's reload time (`Shooter.reload_pose`), so Quick Hands speeds it up too. The left hand can leave its grip (`Hands.set_target`) and always returns exactly.
+- **Inspect (V).** The gun or melee weapon comes closer and turns over, with a message: name, condition and rounds ("Pistol 100% · 8/8 rounds"). Attacking, reloading, swapping or aiming cancels it.
+- **Aim down sights (right click, every gun).** The gun comes to the centre with its sights on the crosshair (heights measured from the exported models), the view narrows 15%, sway nearly stops, you walk at 70%, sprinting drops it. Aimed shots have half the spread (sim: `guns.json` `ads_spread`). With a scope: the old zoom, the gun gets out of the way and the crosshair is the reticle.
+- **Block (right click with melee or fists).** A guard pose; a hit from the front (within 70 degrees) loses 70% (blunt, axe), 50% (blades) or 30% (fists), costs stamina and wears the weapon. Raise it within 0.25 s of the hit for a **parry**: no damage and the zombie staggers back. No stamina, no block. You can't attack while blocking and move at 60%.
+
+**Try it on the PC:** `play.bat --gun` then R (reload), V (inspect), hold right click (aim); `play.bat --gun=rifle`; `play.bat --weapon=axe` and hold right click to block; `play.bat --fists`. Screenshot flags: `--reload-at=T`, `--inspect-at=T`, `--aim=irons`, `--block`.
+
+**Tests:** 11,353 green (new: `test_reload_inspect.gd`, `test_aim_block.gd`).
+
+**Known gaps:** the hands still don't look truly realistic (thin fingers, a puffy back of the glove); a procedural Blender script has hit its limit here, and the next step is a CC0 sculpted base (MakeHuman/MPFB, whose output is CC0) if Emmitt agrees. With the rifle's iron sights the stock fills the bottom of the view. The fingers don't animate within a reload beyond the pose changes. No new sounds for magazine and bolt (the existing reload sound plays).
+
+**Next:** Playtest #2 (V8).
+
 ## 2026-10-13 — V12 First-person hands (Sprint 4)
 
 Emmitt: "work on the animations". Hand models by Codex (one job on his ChatGPT plan); attachment and fists by Claude Opus 5.5.
