@@ -1,0 +1,50 @@
+{
+	"automation": {"floodlights": {}, "locked": [], "noisemakers": {}, "sensors": {}},
+	"bags": [],
+	"base_log": [],
+	"belts": [],
+	"bins": [],
+	"clock": {"day": 4, "time": 14.5},
+	"crates": {},
+	"gear": {
+		"equipped": {
+			"back": "hiking_pack",
+			"weapon": {"base": "pipe", "condition": 0.75, "name": "Pipe", "rarity": "white", "set": "", "stats": {}, "tier": "civilian", "uid": 1},
+			"sidearm": {"ammo": "ammo_standard", "base": "pistol", "condition": 0.8, "loaded": 6, "name": "Pistol", "parts": {}, "rarity": "blue", "set": "", "stats": {"gun_quiet": 3.0}, "tier": "civilian", "uid": 2}
+		},
+		"next_uid": 3,
+		"pieces": []
+	},
+	"generators": {},
+	"hands": "sidearm",
+	"heat": 0.0,
+	"hotbar": ["build:foundation", "build:wall", "build:door", "build:storage", "build:smelter", "build:belt", "build:press", "build:generator", "build:bed", "item:bandage"],
+	"infamy": 0.0,
+	"inventory": {"school_bag": 1, "ammo_standard": 12},
+	"machines": [],
+	"next_bag": 1,
+	"next_zombie": 1,
+	"perk_points": 0,
+	"perks": {},
+	"pieces": [
+		{"key": "w:0:0:n", "id": "window", "cell": [0, 0], "side": 0, "hp": 0, "open": false, "wear": 0.0, "town": true, "swing": 1}
+	],
+	"player": {"bleeding": false, "dead": false, "deaths": 0, "energy": 100.0, "food": 90.0, "health": 100.0, "respawn_timer": 0.0, "stamina": 100.0, "warmth": 100.0, "water": 85.0},
+	"player_pos": [1.0, 0.0, 1.0],
+	"projects": {},
+	"projects_done": [],
+	"rng_state": "123456789",
+	"searched": [],
+	"seed": 15,
+	"skills": {"blunt": 100.0, "strength": 40.0},
+	"spawn_point": [0.0, 0.0, 0.0],
+	"sprung": [],
+	"stats": {"deaths": 0, "kills": 2},
+	"stoves": {},
+	"ticks": 120,
+	"turrets": [],
+	"unlocked": [],
+	"vehicles": {},
+	"version": 15,
+	"zombies": []
+}

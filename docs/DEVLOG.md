@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V17 Climbing through windows (Sprint 4)
+
+Emmitt: "we need to add a vault mechanic for windows because you can just run through broken windows." Built by Codex (one job on his ChatGPT plan); test fixes, checks and screenshots by Claude Opus 5.5.
+
+**Built:**
+- **Windows always block.** Intact or broken, a window stops you and zombies (collision and the navmesh: zombies path around instead of through).
+- **Climb through a broken window (Space).** Looking at one within 2.2 m: "Space: climb through". A scripted 0.9 s move over the sill (3% faster per Fitness level), 14 stamina, a little noise (30). Not while aiming, reloading, swinging, blocking or over-encumbered.
+- **Glass.** A broken window keeps its shards until you clear them (E, 1.5 s, faster with a melee weapon in hand, a glass noise). Climbing over shards cuts you: 5 damage and bleeding, like Zomboid.
+- **Zombies climb too**, slowly (2.5 s), leaning over the sill and unable to attack until through, so a window is a choke point you can defend.
+- **Saves:** VERSION 16; broken windows from older saves load with shards (`test/fixtures/save_v15.json`).
+
+**Try it on the PC:** `play.bat --inside=0 --break-windows`, walk at a window (you can't pass), press E to clear the glass, then Space. Screenshot flag `--vault-at=T`.
+
+**Tests:** 11,584 green (new `test_vault.gd`; its navmesh checks wait a few frames for the map to sync).
+
+**Known gaps:** no vaulting over fences or barricades (they're 1.3-1.5 m, too tall for a vault). The climb is a camera move, no arm animation on the sill yet. Zombies use a code-driven lean while the new zombie models are being made.
+
 ## 2026-10-14 — V16 MakeHuman arms, reload sounds, rifle sights (Sprint 4)
 
 Emmitt: "merge the branches then work on the human model generator and the rest of the things still not right". #57 and #58 merged. MakeHuman installed with his OK; arms and sounds by Codex (four jobs on his ChatGPT plan), testing, picks and fixes by Claude Opus 5.5.

@@ -41,8 +41,10 @@ extends RefCounted
 ## plus Maintenance. Weapons wear at their own rate and break at 0 (no new saved fields).
 ## 15 = V14 slots: the old gun moves to primary or sidearm by its base, and the best carried bag moves to
 ## the back slot. The other bags stay in the inventory and no item is discarded.
-## 16 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
-const VERSION := 16
+## 16 = V17 window vaulting: broken windows save whether their sharp glass remnants have been cleared.
+## A broken window from any older save loads with shards, matching a newly smashed window.
+## 17 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
+const VERSION := 17
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -77,7 +79,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		var p: Dictionary = sim.build.pieces[key]
 		pieces.append({"key": key, "id": p["id"], "cell": _v2(p["cell"]), "side": p["side"], "hp": p["hp"],
 				"open": p.get("open", false), "wear": p.get("wear", 0.0), "town": p.get("town", false),
-				"swing": p.get("swing", 1)})
+				"swing": p.get("swing", 1), "shards": p.get("shards", false)})
 	var machines := []
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
@@ -195,6 +197,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for pd: Dictionary in d["pieces"]:
 		var piece := {"id": pd["id"], "cell": _to_v2(pd["cell"]), "side": int(pd["side"]),
 				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])}
+		if piece["id"] == "window" and piece["hp"] <= 0:
+			piece["shards"] = bool(pd.get("shards", version < 16))
 		if bool(pd.get("town", false)):
 			piece["town"] = true
 		if pd.has("swing"):  # S3: before 13 every open door swung the default way

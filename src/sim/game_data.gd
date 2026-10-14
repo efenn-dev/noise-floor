@@ -242,15 +242,18 @@ func validate() -> PackedStringArray:
 
 const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "attack_interval", "damage",
 		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius", "hearing_day",
-		"hearing_night", "investigate_speed"]
+		"hearing_night", "investigate_speed", "climb_seconds"]
 const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback", "block_reduction", "block_stamina"]
 const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sleep_gain", "starve_damage",
 		"respawn_minimum", "heal_rate", "heal_sleep_rate", "heal_min", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
+		"vault_seconds", "vault_stamina", "vault_reach", "vault_clearance", "vault_cut_damage", "clear_glass_seconds",
+		"clear_glass_weapon_mult",
 		"bleed_damage", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
 		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance",
 		"gas_stale_day", "found_food_rots_day"]
-const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "block", "zombie_bash", "wreck", "door", "horn"]
+const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "block", "zombie_bash", "wreck", "door", "horn",
+		"vault", "glass_clear"]
 ## Each car has its own key: item id "car_key:<car id>" (not in items.json).
 const CAR_KEY := "car_key:"
 const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudness", "hp", "ram_damage", "mass",

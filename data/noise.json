@@ -14,6 +14,8 @@
 		"block": 40,
 		"weapon_break": 55,
 		"glass_break": 62,
+		"glass_clear": 38,
+		"vault": 30,
 		"wood_hit": 38,
 		"wood_break": 50,
 		"zombie_bash": 50,

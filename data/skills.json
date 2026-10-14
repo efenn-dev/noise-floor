@@ -10,9 +10,9 @@
 		},
 		"fitness": {
 			"name": "Fitness",
-			"text": "Stamina comes back 5% faster per level",
+			"text": "Stamina comes back 5% faster and window vaults are 3% quicker per level",
 			"xp": { "sprint_second": 1 },
-			"effects": { "stamina_regen": 0.05 }
+			"effects": { "stamina_regen": 0.05, "vault_speed": 0.03 }
 		},
 		"building": {
 			"name": "Building",

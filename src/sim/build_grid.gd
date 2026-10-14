@@ -6,7 +6,7 @@ extends RefCounted
 ## are edge pieces too (one per edge, same rules as walls).
 ## Edges are stored once, so "south of cell A" and "north of the cell below A" are the same wall.
 ## Windows (W1a, town houses only) are edge pieces too: intact they block sound but not sight; broken
-## (hp 0) they stay as a piece but are an opening, until a barricade is built over them.
+## (hp 0) they stop sound-blocking but the frame always blocks walking until something climbs through it.
 ## Town pieces (town_floor, town_wall, window) are "player_placeable": false: the town plan lays them
 ## with restore(), the player can't place them, but can remove them for a small refund.
 ## Machines and belts ("objects") stand on a foundation, one per cell, facing a side.
@@ -97,9 +97,36 @@ func edge_blocks(key: String, for_sight: bool = false) -> bool:
 	return true
 
 
+## V17: whether an edge is a physical walking barrier. Unlike sound/sight, a window frame always blocks ordinary
+## movement after its glass breaks; player and zombie vaults explicitly pass that one collider.
+func edge_blocks_walk(key: String) -> bool:
+	if not pieces.has(key):
+		return false
+	var kind := _kind(pieces[key]["id"])
+	if kind in GROUND_EDGES:
+		return false
+	if kind == "door":
+		return not pieces[key].get("open", false)
+	return true
+
+
 ## A window whose glass is gone (hp 0). It stays in `pieces` so a barricade can board it up.
 func is_broken(key: String) -> bool:
 	return pieces.has(key) and _kind(pieces[key]["id"]) == "window" and pieces[key]["hp"] <= 0
+
+
+## V17: broken glass leaves sharp remnants in the frame until the player clears them. Saves before V16 have no
+## field, so a broken window defaults to shards (the migration makes that explicit when it loads).
+func has_shards(key: String) -> bool:
+	return is_broken(key) and bool(pieces[key].get("shards", true))
+
+
+func clear_shards(key: String) -> bool:
+	if not has_shards(key):
+		return false
+	pieces[key]["shards"] = false
+	piece_changed.emit(key)
+	return true
 
 
 ## False for town pieces (data "player_placeable": false): the build menu never offers them.
@@ -269,7 +296,7 @@ func refund_for(piece: Dictionary) -> Dictionary:
 
 
 ## Zombies hitting a piece. Returns true if that destroyed it (see destroy) or broke a window.
-## A window at hp 0 isn't removed: it becomes an opening (piece_changed) and takes no more damage.
+## A window at hp 0 isn't removed: it becomes a climbable broken frame (piece_changed) and takes no more damage.
 func damage(key: String, amount: int) -> bool:
 	if not pieces.has(key) or amount <= 0 or is_broken(key):
 		return false
@@ -278,6 +305,7 @@ func damage(key: String, amount: int) -> bool:
 		return false
 	if _kind(pieces[key]["id"]) == "window":
 		pieces[key]["hp"] = 0
+		pieces[key]["shards"] = true
 		piece_changed.emit(key)
 		return true
 	destroy(key)

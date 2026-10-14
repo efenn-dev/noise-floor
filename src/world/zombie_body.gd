@@ -84,6 +84,7 @@ var _voice: AudioStreamPlayer3D
 var _next_moan := 3.0
 var _was_attacking := false
 var _said_death := false
+var _climb_body: PhysicsBody3D
 
 ## Shared by every body with the same material name, source colour and deterministic look. Set only in
 ## setup(), never per frame. This keeps a street full of matching outfits to one material apiece.
@@ -238,10 +239,18 @@ func _init() -> void:
 func _physics_process(delta: float) -> void:
 	if brain == null:
 		return
+	if brain.climb_landing.is_finite():
+		global_position = brain.climb_landing
+		brain.climb_landing = Vector3.INF
+		_end_climb_collision()
 	_animate(delta)
 	_speak(delta)
 	if brain.is_dead():
+		_end_climb_collision()
 		_lie_down(delta)
+		return
+	if brain.state == ZombieBrain.State.CLIMB:
+		_climb_window()
 		return
 	brain.pos = global_position
 	brain.facing = -global_basis.z
@@ -287,6 +296,33 @@ func _physics_process(delta: float) -> void:
 	if face.length_squared() > 1e-4:
 		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), clampf(6.0 * delta, 0.0, 1.0))
 	brain.blocked_by = _blocking_piece(dir)
+
+
+## V17: code-driven climb, independent of model animation names. The sim supplies its deterministic
+## 2.5-second fraction; this body leans and arcs over the sill while ignoring only that window body.
+func _climb_window() -> void:
+	if _climb_body == null or not is_instance_valid(_climb_body) \
+			or str(_climb_body.get_meta("piece_key", "")) != brain.climb_key:
+		_end_climb_collision()
+		for node: Node in get_tree().get_nodes_in_group("build_pieces"):
+			if node is PhysicsBody3D and str(node.get_meta("piece_key", "")) == brain.climb_key:
+				_climb_body = node as PhysicsBody3D
+				add_collision_exception_with(_climb_body)
+				break
+	var k := smoothstep(0.0, 1.0, brain.climb_fraction())
+	global_position = brain.climb_start.lerp(brain.climb_to, k) + Vector3.UP * sin(PI * k) * 0.45
+	brain.pos = global_position
+	velocity = Vector3.ZERO
+	var face := _flat(brain.climb_to - brain.climb_start)
+	if face.length_squared() > 1e-4:
+		rotation.y = atan2(-face.x, -face.z)
+	_last_good = global_position
+
+
+func _end_climb_collision() -> void:
+	if _climb_body != null and is_instance_valid(_climb_body):
+		remove_collision_exception_with(_climb_body)
+	_climb_body = null
 
 
 ## Next point to walk toward: the navmesh path if there is one, otherwise straight at the target.
@@ -434,12 +470,18 @@ func _animate(delta: float) -> void:
 	var want := "Idle"
 	var speed_scale := 1.0
 	var moving := Vector2(velocity.x, velocity.z).length()
+	var climbing := brain.state == ZombieBrain.State.CLIMB
+	_model.rotation.x = deg_to_rad(35.0) * sin(PI * brain.climb_fraction()) if climbing else 0.0
+	_model.position.y = -0.22 * sin(PI * brain.climb_fraction()) if climbing else 0.0
 	if brain.is_dead():
 		want = "Death"
 	elif brain.screaming > 0.0 and _anim.has_animation("Scream"):
 		want = "Scream"
 	elif _flinch > 0.0:
 		want = "HitReact"
+	elif climbing:
+		want = "Crawl" if _anim.has_animation("Crawl") else "Walk"
+		speed_scale = 0.7
 	elif brain.state == ZombieBrain.State.ATTACK or brain.state == ZombieBrain.State.BREAK:
 		want = "Punch"
 	elif moving > RUN_ABOVE and _anim.has_animation("Run"):
