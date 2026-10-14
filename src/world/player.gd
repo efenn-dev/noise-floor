@@ -5,6 +5,7 @@ extends CharacterBody3D
 
 const FLASHLIGHT_COOKIE := preload("res://assets/textures/flashlight_cookie.png")  # V1, tools/art/make_flashlight_cookie.py
 const WALK_SPEED := 4.0
+const MASK := Layers.WORLD | Layers.BUILT | Layers.ZOMBIE  # what the walker bumps into
 const SPRINT_SPEED := 7.0
 const CROUCH_SPEED := 2.0
 const ACCEL := 12.0
@@ -42,7 +43,7 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 
 
 
 func _init() -> void:
-	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
+	collision_mask = MASK
 	# Q1: nothing in the game is a moving platform, and a parked car you had driven could hand a body
 	# touching it a NaN platform velocity (see ZombieBody), so the player takes none either.
 	platform_floor_layers = 0

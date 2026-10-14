@@ -44,6 +44,7 @@ var _push := Vector3.ZERO
 var _last_good := Vector3.ZERO  # Q1: the last finite position after a move (see the NaN guard)
 ## Q1: how many times a move came back NaN and was undone (for tests and the soak).
 var nan_recoveries := 0
+var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
 var _frame := 0
 var _shape: CollisionShape3D
 var _corpse_shape: CollisionShape3D
@@ -173,9 +174,16 @@ func _physics_process(delta: float) -> void:
 		face = _flat(brain.target_pos - global_position)  # turn toward what it's hitting
 
 	if brain.knockback != Vector3.ZERO:
-		_push += brain.knockback
+		if brain.knockback.is_finite():
+			_push += brain.knockback
 		brain.knockback = Vector3.ZERO
 	var move := dir.normalized() * speed + _push
+	if not move.is_finite():
+		# Fix 2026-10-13: a NaN step must never reach the physics engine; it poisons whatever it touches
+		# (a car, then every zombie against the car). Stand still this frame instead.
+		move = Vector3.ZERO
+		_push = Vector3.ZERO
+		bad_moves += 1
 	_push = _push.move_toward(Vector3.ZERO, 10.0 * delta)
 	velocity.x = move.x
 	velocity.z = move.z
@@ -244,6 +252,8 @@ func _blocking_piece(dir: Vector3) -> String:
 
 
 func _lie_down(delta: float) -> void:
+	if not velocity.is_finite():
+		velocity = Vector3.ZERO  # Fix 2026-10-13: same guard for a body lying down
 	if collision_layer != Layers.BAG:
 		collision_layer = Layers.BAG  # S4: only the look ray sees a corpse (like a dropped bag)
 		collision_mask = Layers.WORLD
