@@ -151,6 +151,14 @@ func _build_settings(box: VBoxContainer) -> void:
 	days.custom_minimum_size = Vector2(420, 44)
 	days.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(days)
+	box.add_child(_label("Graphics quality (lower it if the game stutters)", 22))
+	var gfx := OptionButton.new()
+	for q: String in Atmosphere.QUALITIES:
+		gfx.add_item(q.capitalize() + (" (default)" if q == Atmosphere.DEFAULT_QUALITY else ""))
+	gfx.select(Atmosphere.QUALITIES.find(Settings.graphics))
+	gfx.custom_minimum_size = Vector2(420, 44)
+	gfx.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(gfx)
 	var full := CheckBox.new()
 	full.text = "Fullscreen"
 	full.button_pressed = Settings.fullscreen
@@ -171,6 +179,9 @@ func _build_settings(box: VBoxContainer) -> void:
 		settings_changed.emit())
 	days.item_selected.connect(func(i: int) -> void:
 		Settings.day_minutes = Settings.DAY_LENGTHS[i]
+		settings_changed.emit())
+	gfx.item_selected.connect(func(i: int) -> void:
+		Settings.graphics = Atmosphere.QUALITIES[i]
 		settings_changed.emit())
 	full.toggled.connect(func(on: bool) -> void:
 		Settings.fullscreen = on

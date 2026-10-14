@@ -8,6 +8,7 @@ extends Node3D
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
+##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
@@ -81,6 +82,7 @@ var driving: CarBody = null  # the car you're in, or null when walking
 var _sun: DirectionalLight3D
 var _moon: DirectionalLight3D
 var _env: Environment
+var _sky_mat: ProceduralSkyMaterial  # V1: its colours follow the sun (Atmosphere.sky_colors)
 var _ground_mesh: MeshInstance3D
 var season_shown := ""  # M16: the season whose look is applied (ground, trees, roofs, fog)
 ## Q2: under a roof the fog thins to INDOOR_FOG of outside's, eased over FOG_EASE seconds (Old Pete was
@@ -127,6 +129,8 @@ func _ready() -> void:
 	InputSetup.register()
 	Settings.load_settings()
 	var args := _parse_user_args()
+	if args.has("graphics"):
+		Settings.graphics = Atmosphere.valid_quality(str(args["graphics"]))  # V1: this run only, not saved
 	var save := {}
 	if GameSession.pending_load != "":
 		save = SaveGame.read(GameSession.pending_load)
@@ -414,19 +418,27 @@ func _apply_time() -> void:
 	var clock := sim.clock
 	var arc := clock.sun_arc_deg()
 	var light := clock.daylight()
+	var elev := clock.sun_elevation_deg()
+	var sky_l := Atmosphere.sky_light(elev)  # V1: keeps a glow through twilight, unlike daylight()
 	_sun.rotation_degrees = Vector3(-arc, -30.0, 0.0)
-	_sun.light_energy = light * 1.2
+	_sun.light_energy = 1.2 * Atmosphere.sun_strength(elev)  # V1: a low sun is still bright, just orange
+	_sun.light_color = Atmosphere.sun_color(elev)
 	_moon.rotation_degrees = Vector3(-(arc - 180.0), 150.0, 0.0)
 	_moon.light_energy = 0.12 if clock.is_night() else 0.0
-	_env.background_energy_multiplier = lerpf(0.04, 1.0, light)
-	_env.ambient_light_energy = lerpf(0.08, 1.0, light)
-	_env.fog_light_energy = lerpf(0.03, 1.0, light)
+	var sky: Array = Atmosphere.sky_colors(elev)
+	_sky_mat.sky_top_color = sky[0]
+	_sky_mat.sky_horizon_color = sky[1]
+	_sky_mat.ground_horizon_color = sky[1]
+	_env.background_energy_multiplier = lerpf(0.04, 1.0, sky_l)
+	_env.ambient_light_energy = lerpf(0.08, 1.0, sky_l)
+	_env.fog_light_energy = lerpf(0.03, 1.0, sky_l)
 	# Thicker, darker fog at night; the volumetric part (Forward+ only) is what shows the flashlight beam.
-	_fog_density = lerpf(0.02, 0.006, light)
+	_fog_density = lerpf(0.02, 0.006, sky_l)
 	if clock.season() != season_shown:
 		apply_season(clock.season())
-	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(SeasonLook.fog_day(season_shown), light)  # M16: colder in winter
-	_vol_fog_density = lerpf(0.022, 0.002, light)
+	var fog_day := Atmosphere.fog_tint(elev, SeasonLook.fog_day(season_shown))  # M16: colder in winter; V1: warm at dusk
+	_env.fog_light_color = Color(0.05, 0.06, 0.09).lerp(fog_day, sky_l)
+	_vol_fog_density = lerpf(0.022, 0.002, sky_l)
 	_apply_fog()
 	_hud.text = "Day %d · %s %s" % [clock.day, clock.season_name(), clock.clock_text()]
 
@@ -483,22 +495,20 @@ func _apply_fog() -> void:
 
 func _build_environment() -> void:
 	var sky := Sky.new()
-	sky.sky_material = ProceduralSkyMaterial.new()
+	_sky_mat = ProceduralSkyMaterial.new()
+	sky.sky_material = _sky_mat
 	_env = Environment.new()
 	_env.background_mode = Environment.BG_SKY
 	_env.sky = sky
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	Atmosphere.setup_environment(_env)  # V1: tone mapping, colour grade, effect strengths
 	_env.fog_enabled = true
 	_env.fog_density = 0.008
-	_env.fog_sky_affect = 0.5
+	_env.fog_sky_affect = 0.3  # V1: the sky shows through the day haze
 	_env.volumetric_fog_enabled = true  # Forward+ only; the Compatibility renderer (cloud screenshots) ignores it
 	_env.volumetric_fog_albedo = Color(0.8, 0.82, 0.85)
 	_env.volumetric_fog_length = 48.0
 	_env.glow_enabled = true  # machine lamps bloom a little at night
-	_env.glow_intensity = 0.6
-	_env.glow_bloom = 0.04
-	_env.ssao_enabled = true
 	var world_env := WorldEnvironment.new()
 	world_env.environment = _env
 	add_child(world_env)
@@ -509,6 +519,8 @@ func _build_environment() -> void:
 	_moon = DirectionalLight3D.new()
 	_moon.light_color = Color(0.55, 0.65, 1.0)
 	add_child(_moon)
+	_sun.directional_shadow_max_distance = 90.0
+	Atmosphere.apply_quality(_env, _sun, Settings.graphics)  # V1: SSAO, SSIL, SDFGI, volumetric fog per preset
 
 
 ## Tells the sim where the player is; freezes the player while dead.
@@ -716,6 +728,7 @@ func _apply_settings() -> void:
 	player.mouse_sensitivity = Player.MOUSE_SENSITIVITY * Settings.mouse_sensitivity
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
 	Settings.apply_engine()
+	Atmosphere.apply_quality(_env, _sun, Settings.graphics)
 
 
 ## Saves the game (sim state plus where you're looking). Returns "" or what went wrong.

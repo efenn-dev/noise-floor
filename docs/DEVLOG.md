@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — V1 Lighting and atmosphere (Sprint 4)
+
+Built by Claude Opus 5.5 in a local session, the first task of Sprint 4 ("the first 30 minutes", see DIRECTION.md). Judged on Forward+ screenshots on Emmitt's GPU, before and after: 10:00, 20:30, 06:00, 23:00 on the street, 22:00 and 13:00 inside a house, the factory at 21:30, and the night street on each quality preset.
+
+**Built:**
+- **Dusk and dawn glow.** The sky, ambient light and fog used to follow `daylight()` (the sine of the sun's arc), so at 20:30 the town was already black. `Atmosphere.sky_light(elevation)` keeps a glow through twilight, the low sun stays strong (`sun_strength`) and turns orange (`sun_color`), the sky's colours follow the sun (blue by day, a golden horizon at sunset, near black at night) and the fog warms at dusk. Night itself is as dark as before.
+- **A real flashlight beam.** Energy 8 to 5 (it whited out anything within two metres), a wider cone, and a projected beam pattern from `tools/art/make_flashlight_cookie.py`: hot spot, reflector ring, dim spill, lens smudges. The beam shows in the night fog.
+- **Colour and tone.** AgX tone mapping (bright lamps and the flashlight roll off instead of clipping), a slightly drained, slightly contrasty grade for a dead town, ambient occlusion and screen-space bounce light, softer sun shadows, glow only on things brighter than white.
+- **Graphics quality** in Settings: Low (plain fog, no ambient occlusion: for weak PCs), Medium (adds ambient occlusion and the volumetric fog), High (default: adds bounce light, soft shadows, a finer fog grid). `--graphics=low|medium|high` sets it for one run, for screenshots. `Atmosphere.PRESETS` is the table.
+- `test/test_atmosphere.gd` (65 checks); `test_indoor_fog.gd` now expects the new twilight formula.
+
+**Tried and dropped:** SDFGI (engine-wide bounce light). It shut the sky's light out of houses and left them black at noon, which matters in a game about searching houses.
+
+**Try it on the PC:** merge, then `play.bat`, New game. Wait for 20:30 (12 minutes in) and look west down the street, then turn the flashlight on (F) at night and inside a house. Settings → Graphics quality to compare. On High it held 240 fps (the monitor's cap) at night on the 5070 Ti.
+
+**Known gaps:** Low's flashlight is dim (no fog to show the beam). Interiors by day are lit by the sky's ambient light, not real light through the windows. The title screen keeps its own dusk look. No rain or wet roads yet.
+
+**Next:** V2 (textured zombies and guns, running in Codex), then V3 game feel and V4 sound.
+
 ## 2026-10-13 — S4 Playtest #1, second pass: pictures, a first-factory walkthrough, lootable zombies, jumpscares
 
 Built by Claude Fable 5.1 in the same local session as S3, from the rest of Emmitt's Playtest #1 notes: "give the hotbar pictures", "zombies look great but I want them to be lootable like in Zomboid", "jumpscare sounds when a zombie surprises you around a corner or a large mob gets aggroed like in Zomboid", and "I was also not able to figure out the building and machines". Stacked on S3 (branch `s3-playtest-fixes`); no save change (corpses are not saved: VERSION stays 13).

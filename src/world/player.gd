@@ -3,6 +3,7 @@ extends CharacterBody3D
 ## First-person walker: WASD, mouse look, sprint, jump, crouch, flashlight.
 ## Origin is at the feet. Set use_device_input = false and fill the wish_* fields to drive it from code (tests).
 
+const FLASHLIGHT_COOKIE := preload("res://assets/textures/flashlight_cookie.png")  # V1, tools/art/make_flashlight_cookie.py
 const WALK_SPEED := 4.0
 const SPRINT_SPEED := 7.0
 const CROUCH_SPEED := 2.0
@@ -66,12 +67,13 @@ func _init() -> void:
 	flashlight = SpotLight3D.new()
 	flashlight.position = Vector3(0.15, -0.1, 0.0)
 	flashlight.spot_range = 40.0
-	flashlight.spot_angle = 22.0
+	flashlight.spot_angle = 26.0
 	flashlight.spot_attenuation = 0.5
-	flashlight.light_energy = 8.0
+	flashlight.light_energy = 5.0  # V1: was 8, which whited out anything within a couple of metres
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
+	flashlight.light_projector = FLASHLIGHT_COOKIE  # V1: hot spot, reflector ring, dim spill (Forward+ only)
 	flashlight.shadow_enabled = true
-	flashlight.light_volumetric_fog_energy = 1.5  # the beam shows in night fog
+	flashlight.light_volumetric_fog_energy = 1.8  # the beam shows in night fog
 	flashlight.shadow_bias = 0.1
 	flashlight.shadow_normal_bias = 2.0
 	flashlight.visible = false

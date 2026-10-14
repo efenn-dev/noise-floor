@@ -9,6 +9,7 @@ static var mouse_sensitivity := 1.0  # multiplier on the base sensitivity, 0.2..
 static var volume := 0.8             # 0..1
 static var day_minutes := 24
 static var fullscreen := false
+static var graphics := Atmosphere.DEFAULT_QUALITY  # V1: "low", "medium" or "high" (Atmosphere.PRESETS)
 static var _loaded := false
 
 
@@ -25,6 +26,7 @@ static func load_settings() -> void:
 	if not day_minutes in DAY_LENGTHS:
 		day_minutes = 24
 	fullscreen = bool(cfg.get_value("video", "fullscreen", false))
+	graphics = Atmosphere.valid_quality(str(cfg.get_value("video", "graphics", Atmosphere.DEFAULT_QUALITY)))
 
 
 static func save_settings() -> void:
@@ -33,6 +35,7 @@ static func save_settings() -> void:
 	cfg.set_value("audio", "volume", volume)
 	cfg.set_value("game", "day_minutes", day_minutes)
 	cfg.set_value("video", "fullscreen", fullscreen)
+	cfg.set_value("video", "graphics", graphics)
 	cfg.save(PATH)
 
 
