@@ -68,6 +68,7 @@ VARIANTS = OrderedDict((
     }),
     ("heavy", {
         "height": 1.80,
+        "width": 1.06,
         "macro": {"gender": 0.92, "age": 0.56, "muscle": 0.34, "weight": 0.88,
                   "proportions": 0.45, "height": 0.50, "cupsize": 0.50, "firmness": 0.50},
         "sleeves": "short", "hair": "short", "extra": "hardhat", "vest": True,
@@ -81,14 +82,14 @@ VARIANTS = OrderedDict((
     ("short", {
         "height": 1.62,
         "macro": {"gender": 0.86, "age": 0.48, "muscle": 0.38, "weight": 0.52,
-                  "proportions": 0.42, "height": 0.16, "cupsize": 0.50, "firmness": 0.50},
+                  "proportions": 0.46, "height": 0.38, "cupsize": 0.50, "firmness": 0.50},
         "sleeves": "short", "hair": "short", "extra": "cap",
     }),
     ("woman", {
         "height": 1.70,
         "macro": {"gender": 0.08, "age": 0.50, "muscle": 0.28, "weight": 0.43,
                   "proportions": 0.55, "height": 0.45, "cupsize": 0.58, "firmness": 0.44},
-        "sleeves": "none", "hair": "long", "extra": None,
+        "sleeves": "short", "hair": "long", "extra": None,
     }),
 ))
 
@@ -139,7 +140,8 @@ def clean_scene(remove_actions=True):
         bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    for blocks in (bpy.data.meshes, bpy.data.armatures, bpy.data.cameras, bpy.data.lights):
+    for blocks in (bpy.data.meshes, bpy.data.armatures, bpy.data.cameras, bpy.data.lights,
+                   bpy.data.materials):
         for block in list(blocks):
             if block.users == 0:
                 blocks.remove(block)
@@ -404,6 +406,79 @@ def box_part(name, location, dimensions, mat, bone, bevel=0.0, rotation=(0.0, 0.
     return weighted_primitive(obj, mat, bone)
 
 
+def make_work_boot(name, foot, mat, bone):
+    """A rounded, foot-following work boot with a heel, collar, toe cap and lace bumps."""
+    # MPFB's foot bone points toward its heel in this construction space; the model faces -Y.
+    forward = (foot.head_local - foot.tail_local).copy()
+    forward.z = 0.0
+    forward.normalize()
+    lateral = Vector((-forward.y, forward.x, 0.0))
+    ankle = foot.head_local.copy()
+    sole_z = 0.012
+    # Back to front.  The raised instep and broad toe avoid the old flat-box silhouette.
+    sections = (
+        (0.075, 0.078, 0.115),
+        (0.025, 0.083, 0.145),
+        (-0.060, 0.087, 0.128),
+        (-0.130, 0.092, 0.110),
+        (-0.200, 0.094, 0.086),
+        (-0.265, 0.090, 0.065),
+    )
+    vertices = []
+    for along, half_width, height in sections:
+        centre = ankle + forward * along
+        # Six points make a softly squared leather cross-section with a curved crown.
+        for side, z_fraction in ((-1.0, 0.0), (-1.0, 0.55), (-0.55, 1.0),
+                                 (0.55, 1.0), (1.0, 0.55), (1.0, 0.0)):
+            point = centre + lateral * (half_width * side)
+            point.z = sole_z + height * z_fraction
+            vertices.append(tuple(point))
+    faces = []
+    ring = 6
+    faces.append(tuple(reversed(range(ring))))
+    for section in range(len(sections) - 1):
+        a = section * ring
+        b = (section + 1) * ring
+        for index in range(ring):
+            nxt = (index + 1) % ring
+            faces.append((a + index, a + nxt, b + nxt, b + index))
+    last = (len(sections) - 1) * ring
+    faces.append(tuple(last + index for index in range(ring)))
+    data = bpy.data.meshes.new(name)
+    data.from_pydata(vertices, [], faces)
+    boot = bpy.data.objects.new(name, data)
+    bpy.context.collection.objects.link(boot)
+    weighted_primitive(boot, mat, bone)
+    pieces = [boot]
+
+    midpoint = ankle + forward * -0.085
+    angle = math.atan2(forward.y, forward.x) + math.pi * 0.5
+    # A separate rubber sole and block heel make the shape read as a work boot at game distance.
+    pieces.append(box_part(f"{name} Sole", midpoint + Vector((0, 0, -0.002)),
+                          (0.190, 0.360, 0.024), mat, bone, bevel=0.010,
+                          rotation=(0.0, 0.0, angle)))
+    heel_centre = ankle + forward * 0.055
+    heel_centre.z = 0.022
+    pieces.append(box_part(f"{name} Heel", heel_centre, (0.145, 0.085, 0.045),
+                          mat, bone, bevel=0.010, rotation=(0.0, 0.0, angle)))
+    # Collar rolls and four broad lace bars are intentionally raised enough to survive texturing.
+    collar_centre = ankle + forward * 0.035
+    collar_centre.z = 0.132
+    pieces.append(ico_part(f"{name} Collar", collar_centre, (0.090, 0.073, 0.025),
+                          mat, bone, 2))
+    toe_centre = ankle + forward * -0.215
+    toe_centre.z = 0.075
+    pieces.append(ico_part(f"{name} Toe Cap", toe_centre, (0.082, 0.060, 0.035),
+                          mat, bone, 2))
+    for index, along in enumerate((-0.040, -0.082, -0.124)):
+        centre = ankle + forward * along
+        centre.z = 0.152 - index * 0.015
+        pieces.append(box_part(f"{name} Lace {index}", centre,
+                              (0.130, 0.012, 0.009), mat, bone, bevel=0.004,
+                              rotation=(0.0, 0.0, angle)))
+    return pieces
+
+
 def make_hat_dome(name, centre, radii, mat, bone, brim=False):
     vertices = []
     faces = []
@@ -453,24 +528,23 @@ def add_clothing_and_details(body, armature, spec, mats):
     boot_top = max(0.22, bones["LowerLeg.L"].tail_local.z + 0.10)
 
     def shirt_region(centre, scores, polygon_index):
-        torso = score(scores, "Spine", "Chest") > 0.42 and hips_z - 0.02 < centre.z < neck_z + 0.01
+        torso = score(scores, "Spine", "Chest") > 0.16 and hips_z - 0.055 < centre.z < neck_z + 0.015
         sleeve = False
         if spec["sleeves"] != "none":
             sleeve_score = score(scores, "UpperArm.L", "UpperArm.R")
             lower_score = score(scores, "LowerArm.L", "LowerArm.R")
             if spec["sleeves"] == "long":
-                sleeve = sleeve_score + lower_score > 0.50
+                sleeve = sleeve_score + lower_score > 0.28
             else:
-                # MPFB rests in a T pose: the shoulder half of each upper arm is a short sleeve.
-                shoulder_x = max(abs(bones["UpperArm.L"].head_local.x), 0.01)
-                sleeve = sleeve_score > 0.55 and abs(centre.x) < shoulder_x + 0.18
-        jagged_hem = centre.z > hips_z - 0.01 + 0.012 * math.sin(31.0 * centre.x + polygon_index)
-        chest_hole = (centre.y < -0.10 and ((centre.x + 0.10) / 0.065) ** 2
-                      + ((centre.z - (chest_z + 0.11)) / 0.10) ** 2 < 1.0)
-        ripped_right = centre.x < -0.34 and centre.y < -0.03 and polygon_index % 5 == 0
+                shoulders = (bones["UpperArm.L"].head_local, bones["UpperArm.R"].head_local)
+                sleeve = sleeve_score > 0.28 and min((centre - point).length for point in shoulders) < 0.22
+        jagged_hem = centre.z > hips_z - 0.045 + 0.018 * math.sin(31.0 * centre.x + polygon_index)
+        chest_hole = (centre.y < -0.11 and ((centre.x + 0.105) / 0.045) ** 2
+                      + ((centre.z - (chest_z + 0.11)) / 0.070) ** 2 < 1.0)
+        ripped_right = centre.x < -0.31 and centre.y < -0.045 and polygon_index % 7 == 0
         return (torso and jagged_hem or sleeve) and not chest_hole and not ripped_right
 
-    parts.append(make_shell(body, "Torn Shirt", mats["shirt"], 0.0065, shirt_region))
+    parts.append(make_shell(body, "Torn Shirt", mats["shirt"], 0.012, shirt_region))
 
     def jeans_region(centre, scores, polygon_index):
         leg = score(scores, "Hips", "UpperLeg.L", "UpperLeg.R", "LowerLeg.L", "LowerLeg.R") > 0.48
@@ -483,20 +557,15 @@ def add_clothing_and_details(body, armature, spec, mats):
     parts.append(make_shell(body, "Torn Jeans", mats["jeans"], 0.0075, jeans_region))
 
     def boot_region(centre, scores, _polygon_index):
-        return (score(scores, "Foot.L", "Foot.R") > 0.30
-                or score(scores, "LowerLeg.L", "LowerLeg.R") > 0.55 and centre.z < boot_top + 0.025)
+        return (score(scores, "Foot.L", "Foot.R") > 0.06
+                or score(scores, "LowerLeg.L", "LowerLeg.R") > 0.30 and centre.z < boot_top + 0.040)
 
     parts.append(make_shell(body, "Boot Leather", mats["boots"], 0.010, boot_region))
 
-    # Square, worn toes and soles stop the naked MPFB foot silhouette reading through the leather.
+    # Built-up work boots follow each foot bone; the underlying close shell fills any ankle gap.
     for side, bone_name in ((1, "Foot.L"), (-1, "Foot.R")):
         foot = bones[bone_name]
-        x = foot.head_local.x
-        y = (foot.head_local.y + foot.tail_local.y) * 0.5 - 0.015
-        parts.append(box_part(f"Boot Toe {side}", (x, y, 0.042), (0.145, 0.215, 0.070),
-                              mats["boots"], bone_name, bevel=0.018))
-        parts.append(box_part(f"Boot Sole {side}", (x, y + 0.005, 0.010), (0.155, 0.235, 0.018),
-                              mats["boots"], bone_name, bevel=0.008))
+        parts.extend(make_work_boot(f"Work Boot {side}", foot, mats["boots"], bone_name))
 
     lo, hi = body_bounds(body)
     head = bones["Head"]
@@ -553,11 +622,11 @@ def add_clothing_and_details(body, armature, spec, mats):
     if spec["hair"] == "long":
         for side in (-1, 1):
             parts.append(ico_part(f"Long Hair {side}",
-                                  (side * 0.125 * hair_scale, 0.065 * hair_scale, top - 0.20 * hair_scale),
-                                  (0.055 * hair_scale, 0.065 * hair_scale, 0.22 * hair_scale),
+                                  (side * 0.090 * hair_scale, 0.055 * hair_scale, top - 0.19 * hair_scale),
+                                  (0.045 * hair_scale, 0.050 * hair_scale, 0.16 * hair_scale),
                                   mats["hair"], "Head", 2))
-        parts.append(ico_part("Long Hair Back", (0.0, 0.105 * hair_scale, top - 0.21 * hair_scale),
-                              (0.145 * hair_scale, 0.045 * hair_scale, 0.23 * hair_scale),
+        parts.append(ico_part("Long Hair Back", (0.0, 0.095 * hair_scale, top - 0.20 * hair_scale),
+                              (0.110 * hair_scale, 0.038 * hair_scale, 0.17 * hair_scale),
                               mats["hair"], "Head", 2))
 
     if spec.get("vest"):
@@ -568,13 +637,14 @@ def add_clothing_and_details(body, armature, spec, mats):
         parts.append(make_shell(body, "Open Vest", mats["vest"], 0.016, vest_region))
 
     if spec.get("extra") == "hardhat":
-        parts.extend(make_hat_dome("Hard Hat Dome", Vector((0.0, 0.005, top - 0.015)),
-                                   Vector((0.165, 0.180, 0.105)), mats["hardhat"], "Head", brim=True))
+        parts.extend(make_hat_dome("Hard Hat Dome", Vector((0.0, 0.005, top - 0.075)),
+                                   Vector((0.145, 0.158, 0.082)), mats["hardhat"], "Head", brim=True))
     elif spec.get("extra") == "cap":
-        parts.extend(make_hat_dome("Cap Crown", Vector((0.0, 0.000, top - 0.018)),
-                                   Vector((0.155, 0.165, 0.078)), mats["cap"], "Head", brim=False))
-        parts.append(box_part("Cap Bill", (0.0, face_y - 0.085, top - 0.025),
-                              (0.17, 0.15, 0.018), mats["cap"], "Head", bevel=0.008,
+        face_y = min(vertex.co.y for vertex in body.data.vertices if vertex.co.z > top - 0.28)
+        parts.extend(make_hat_dome("Cap Crown", Vector((0.0, 0.000, top - 0.058)),
+                                   Vector((0.135, 0.145, 0.062)), mats["cap"], "Head", brim=False))
+        parts.append(box_part("Cap Bill", (0.0, face_y - 0.045, top - 0.072),
+                              (0.14, 0.09, 0.014), mats["cap"], "Head", bevel=0.006,
                               rotation=(math.radians(-7.0), 0.0, 0.0)))
     return parts
 
@@ -684,6 +754,12 @@ def apply_retarget(source_armature, source_action, source_frame, target_armature
             head = parent_pose.matrix @ relative_head
         target_pose.matrix = Matrix.Translation(head) @ desired_rotation.to_4x4()
         bpy.context.view_layer.update()
+        # UAL rests in a strict T pose while MPFB's game rig rests with bent, lowered arms.
+        # Applying the source delta to that A pose lowers the arms twice.  Match the posed
+        # anatomical direction explicitly while retaining the target rest roll and bone length.
+        source_direction = (source_pose.tail - source_pose.head).normalized()
+        aim_pose_bone(target_pose, source_direction)
+        bpy.context.view_layer.update()
 
 
 def rotate_pose_global(pose_bone, axis, angle):
@@ -710,10 +786,52 @@ def layer_run(target_armature):
     bpy.context.view_layer.update()
 
 
+def blend_pose_direction(target_armature, name, desired, strength):
+    pose_bone = target_armature.pose.bones[name]
+    current = (pose_bone.tail - pose_bone.head).normalized()
+    aim_pose_bone(pose_bone, current.lerp(Vector(desired).normalized(), strength).normalized())
+    bpy.context.view_layer.update()
+
+
+def layer_idle(target_armature, fraction):
+    """Turn UAL's crouched idle into a planted, loose-limbed zombie sway."""
+    bones = target_armature.data.bones
+    hips = target_armature.pose.bones["Hips"]
+    sway = math.sin(fraction * math.tau)
+    bob = math.sin(fraction * math.tau * 2.0)
+    rest_hips = bones["Hips"].head_local
+    location, rotation, scale = hips.matrix.decompose()
+    location.z = rest_hips.z - 0.016 + 0.008 * bob
+    location.x = rest_hips.x + 0.012 * sway
+    hips.matrix = (Matrix.Translation(location) @ rotation.to_matrix().to_4x4()
+                   @ Matrix.Diagonal((*scale, 1.0)))
+    bpy.context.view_layer.update()
+    # Straighten the source crouch but preserve enough asymmetry to look unwell, not posed.
+    for name, strength in (("Hips", 0.84), ("Spine", 0.72), ("Chest", 0.70),
+                           ("UpperLeg.L", 0.82), ("LowerLeg.L", 0.84),
+                           ("UpperLeg.R", 0.82), ("LowerLeg.R", 0.84),
+                           ("Foot.L", 0.75), ("Foot.R", 0.75)):
+        rest = bones[name]
+        blend_pose_direction(target_armature, name, rest.tail_local - rest.head_local, strength)
+    for name, direction in (("UpperArm.L", (0.20, -0.16, -0.97)),
+                            ("LowerArm.L", (0.04, -0.20, -0.98)),
+                            ("Hand.L", (0.02, -0.12, -0.99)),
+                            ("UpperArm.R", (-0.20, -0.16, -0.97)),
+                            ("LowerArm.R", (-0.04, -0.20, -0.98)),
+                            ("Hand.R", (-0.02, -0.12, -0.99))):
+        blend_pose_direction(target_armature, name, direction, 0.82)
+    # A little permanent hunch plus slow head lag reads clearly at distance.
+    rotate_pose_global(target_armature.pose.bones["Chest"], (1, 0, 0), math.radians(7.0))
+    rotate_pose_global(target_armature.pose.bones["Neck"], (0, 0, 1), math.radians(2.5) * sway)
+    rotate_pose_global(target_armature.pose.bones["Head"], (0, 0, 1), -math.radians(5.0) * sway)
+    bpy.context.view_layer.update()
+
+
 def apply_scream(source, target_armature, fraction):
     idle = source["actions"]["Zombie_Idle_Loop"]
     start, end = idle.frame_range
     apply_retarget(source["armature"], idle, start + (end - start) * fraction, target_armature)
+    layer_idle(target_armature, fraction)
     # Fast inhale, long shaking hold, then a short exhausted drop back toward idle.
     if fraction < 0.18:
         strength = fraction / 0.18
@@ -802,7 +920,9 @@ def bake_action(sources, target_armature, name, duration):
         else:
             source_frame = source_start + (source_end - source_start) * pose_fraction
             apply_retarget(source["armature"], source_action, source_frame, target_armature)
-            if name == "Run":
+            if name == "Idle":
+                layer_idle(target_armature, pose_fraction)
+            elif name == "Run":
                 layer_run(target_armature)
         key_pose(target_armature, frame)
     if hasattr(action, "use_cyclic"):
@@ -1182,6 +1302,18 @@ def build_variant(variant):
     source_armature = HumanService.add_builtin_rig(human, "game_engine", import_weights=True)
     assert source_armature is not None
     body, armature, _scale = build_body(human, source_armature, spec["height"], mats["skin"])
+    width = float(spec.get("width", 1.0))
+    if abs(width - 1.0) > 1.0e-6:
+        for vertex in body.data.vertices:
+            vertex.co.x *= width
+        bpy.context.view_layer.objects.active = armature
+        armature.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        for bone in armature.data.edit_bones:
+            bone.head.x *= width
+            bone.tail.x *= width
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.context.view_layer.update()
     parts = add_clothing_and_details(body, armature, spec, mats)
     zombie = join_and_bind(parts, armature)
     # MPFB is finished before UAL import/baking; remove its source objects and handlers.
