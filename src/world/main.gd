@@ -402,6 +402,8 @@ func _process(delta: float) -> void:
 		_footsteps(delta)
 	_update_hud(delta)
 	_update_indoor_fog(delta)
+	if sound_view != null:
+		sound_view.indoor = indoor_fog  # V4: indoor echo and muffled wind follow the same eased value
 	if _shot_path == "":
 		if not sim.paused:
 			sim.stats.add_real_time(delta / maxf(Engine.time_scale, 1.0))  # sleeping speeds time up
