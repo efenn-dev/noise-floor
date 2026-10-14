@@ -37,7 +37,8 @@ func test_fog_thins_under_a_roof_and_comes_back_outside() -> void:
 	eq(main.indoor_fog, 1.0, "fully thinned after half a second")
 	near(env.fog_density, main._fog_density * main.INDOOR_FOG, "fog density about a fifth of outside's", 1e-6)
 	near(env.volumetric_fog_density, main._vol_fog_density * main.INDOOR_FOG, "volumetric fog too", 1e-6)
-	near(env.fog_light_energy, lerpf(0.03, 1.0, main.sim.clock.daylight()), "night darkness (the fog's light) as outside", 1e-6)
+	# V1: the fog's light follows Atmosphere.sky_light (keeps a twilight glow), not daylight().
+	near(env.fog_light_energy, lerpf(0.03, 1.0, Atmosphere.sky_light(main.sim.clock.sun_elevation_deg())), "night darkness (the fog's light) as outside", 1e-6)
 
 	var f := TownPlan.factory_rect()
 	player.global_position = Vector3(f.get_center().x, 0.1, f.get_center().y)
