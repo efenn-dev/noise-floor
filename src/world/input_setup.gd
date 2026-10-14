@@ -41,6 +41,7 @@ const KEYS := {
 	"skills": [KEY_K],  # the skills and perks screen (M12)
 	"base_log": [KEY_L],  # M15: the base log screen
 	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
+	"inspect": [KEY_V],  # V13: turn the held gun or melee weapon over in your hands
 	"help": [KEY_F1],  # P3: the controls screen (HelpScreen describes every action here)
 }
 const MOUSE := {

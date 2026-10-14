@@ -41,6 +41,7 @@ const ROWS := [
 	["Fight (pipe and guns)", ["aim"], "", "hold to zoom, with a scope on your gun"],
 	["Fight (pipe and guns)", ["swap_hands"], "", "pipe or gun in your hands"],
 	["Fight (pipe and guns)", ["refuel"], "", "reload the gun in your hands (at a car: pour in gas)"],
+	["Fight (pipe and guns)", ["inspect"], "", "inspect the weapon and its condition"],
 	["Cars", [], "E", "get in or out (at the back: search the trunk)"],
 	["Cars", [], "W A S D", "drive and steer"],
 	["Cars", [], "Space", "handbrake"],

@@ -11,6 +11,8 @@ extends Node3D
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
+##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
+##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
 ##   --break-windows[=R]   W2: break every window within R m (default 12) at the start, for screenshots
 ##   --fists               V12: start bare-handed (your weapon goes to your pockets)
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
@@ -262,6 +264,16 @@ func _ready() -> void:
 		shooter.hold_aim = true
 	if args.has("shoot"):
 		shooter.fire.call_deferred()  # --shoot: fire once (screenshots of the HUD line after a shot)
+	if args.has("reload-at"):
+		shooter.hold_reload_at = clampf(float(args["reload-at"]), 0.0, 1.0)
+	if args.has("inspect-at"):
+		var at := clampf(float(args["inspect-at"]), 0.0, 1.0)
+		if sim.guns.in_hand():
+			shooter.hold_inspect_at = at
+			shooter.start_inspect()
+		else:
+			melee.hold_inspect_at = at
+			melee.start_inspect()
 	if args.has("sensor-screen"):
 		_open_sensor(_demo_sensor_key())  # M15: --sensor-screen (with --demo-defense), for screenshots
 	if args.has("base-log"):
@@ -643,6 +655,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
+		shooter.cancel_inspect()
+		melee.cancel_inspect()
 		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
 		get_viewport().set_input_as_handled()
 		return
@@ -658,6 +672,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not InputSetup.captured():
+		return
+	if event.is_action_pressed("inspect") and not sim.player.dead and driving == null:
+		if sim.guns.in_hand():
+			shooter.start_inspect()
+		else:
+			melee.start_inspect()
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("build_mode") and not sim.player.dead:
 		_open_build_menu()  # S3: B (the menu's own _input closes it)
@@ -1353,12 +1374,12 @@ func key_hint_text() -> String:
 	else:
 		parts.append_array(interactor.keys())
 		if sim.guns.in_hand():
-			parts.append_array(["LMB fire", "R reload"])
+			parts.append_array(["LMB fire", "R reload", "V inspect"])
 			if sim.guns.scoped():
 				parts.append("RMB zoom")
 			parts.append("Q pipe")
 		else:
-			parts.append("LMB swing")
+			parts.append_array(["LMB swing", "V inspect"])
 			if not sim.gear.gun().is_empty():
 				parts.append("Q gun")
 		parts.append_array(["WASD move", "E use", "B build", "1-0 hotbar", "Tab gear", "K skills", "L log", "F light"])

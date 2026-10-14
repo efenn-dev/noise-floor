@@ -202,13 +202,15 @@ func _load(inv: Inventory) -> int:
 	return n
 
 
-## V9: " 60%" once the melee weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
-func weapon_condition_text() -> String:
-	if not gear.equipped.has("weapon"):
+## V9: " 60%" once the held weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
+## V13: inspection asks for `always`, and while a gun is in hand this describes the gun instead of the
+## stowed melee weapon. This is display text only; wear and reload rules are unchanged.
+func weapon_condition_text(always: bool = false) -> String:
+	var piece: Dictionary = gun() if in_hand() else gear.equipped.get("weapon", {})
+	if piece.is_empty():
 		return ""
-	var piece: Dictionary = gear.equipped["weapon"]
 	var c := float(piece["condition"])
-	if c >= 0.995:
+	if c >= 0.995 and not always:
 		return ""
 	return " %d%%%s" % [roundi(c * 100.0), "" if gear.working(piece) else " worn out"]
 
