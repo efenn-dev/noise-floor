@@ -15,13 +15,14 @@ extends RefCounted
 ##                  if it was a machine, wrecks it (BREAK); otherwise looks around, then IDLE.
 ##                  W1b: hear_via() gives it a few waypoints to walk first (a Director wave walks the road),
 ##                  each consumed on arrival; then it heads for the sound itself
+##   a chaser/investigator at a broken window -> CLIMB for its data climb_seconds, unable to attack
 ##   hp 0 -> DEAD (the body lies there for CORPSE_TIME)
 ##   Q4: a guardian (Old Pete; TownPlan gives his hall as guard_area) never leaves its home area: it only
 ##                  hears sounds made inside it, only sees (and chases) a player inside it, gives up the moment
 ##                  the player steps out (at the doorway) and walks back to guard_spot, its place in the hall.
 
-enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, INVESTIGATE, DEAD }
-const STATE_NAMES := ["idle", "wander", "chase", "attack", "break", "investigate", "dead"]
+enum State { IDLE, WANDER, CHASE, ATTACK, BREAK, INVESTIGATE, CLIMB, DEAD }
+const STATE_NAMES := ["idle", "wander", "chase", "attack", "break", "investigate", "climb", "dead"]
 const LOSE_TIME := 4.0
 const CHASE_MEMORY := 20.0
 const SEARCH_RADIUS := 1.5  # "at the last-seen spot" for LOSE_TIME purposes
@@ -50,6 +51,14 @@ var break_from: int = State.CHASE  # Q2: what it was doing when it started break
 var sound_key := ""  # piece key of the machine it's walking toward, "" for other sounds
 var sound_pos: Vector3  # where the sound it's investigating came from (target_pos once the route is walked)
 var route: Array = []   # W1b: waypoints (Vector3) to walk before heading for sound_pos; target_pos = route[0]
+## V17: scripted crossing of a broken window. The body draws this state and ignores that one collider.
+var climb_key := ""
+var climb_from_state: int = State.CHASE
+var climb_start := Vector3.ZERO
+var climb_to := Vector3.ZERO
+var climb_landing := Vector3.INF
+var climb_elapsed := 0.0
+var climb_duration := 2.5
 var dead_time := 0.0
 var searched := false  # S4: the corpse has been looted
 var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
@@ -123,6 +132,7 @@ func hurt(damage: float) -> bool:
 	if hp <= 0.0:
 		hp = 0.0
 		state = State.DEAD
+		climb_key = ""
 		return true
 	return false
 
@@ -203,7 +213,8 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	# Q4: a guardian takes no notice of a player outside its home area, and gives up at once if it was after one.
 	if not in_guard(player_pos):
 		sees = false
-		if state == State.CHASE or state == State.ATTACK or (state == State.BREAK and break_from == State.CHASE):
+		if state == State.CHASE or state == State.ATTACK or state == State.CLIMB \
+				or (state == State.BREAK and break_from == State.CHASE):
 			_go_back()
 	# Screamers shriek when they spot you: a loud noise that pulls in everything within earshot.
 	if sees and stats.has("scream_loudness") and _scream_cd <= 0.0:
@@ -241,7 +252,9 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				_go_idle(false)
 		State.INVESTIGATE:
 			_timer -= dt
-			if blocked_by != "" and _standing(pieces, blocked_by):
+			if _broken_window(pieces, blocked_by):
+				_start_climb(blocked_by, pieces[blocked_by] as Dictionary)
+			elif blocked_by != "" and _standing(pieces, blocked_by):
 				_start_break(blocked_by)
 			elif not route.is_empty():
 				if _flat_dist(pos, target_pos) < ARRIVE * 2.0:  # reached a waypoint: on to the next, or the sound
@@ -258,10 +271,12 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 			target_pos = last_seen
 			if player_dead:
 				_go_idle(true)
-			elif sees and dist <= reach:
-				state = State.ATTACK
+			elif _broken_window(pieces, blocked_by):
+				_start_climb(blocked_by, pieces[blocked_by] as Dictionary)
 			elif blocked_by != "" and _standing(pieces, blocked_by):
 				_start_break(blocked_by)
+			elif sees and dist <= reach:
+				state = State.ATTACK
 			elif not sees:
 				_unseen += dt
 				if _flat_dist(pos, last_seen) < SEARCH_RADIUS:
@@ -278,7 +293,9 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				events.append({"target": "player"})
 				_cooldown = float(stats["attack_interval"])
 		State.BREAK:
-			if sees and dist <= reach:
+			if _broken_window(pieces, break_key):
+				_start_climb(break_key, pieces[break_key] as Dictionary, break_from)
+			elif sees and dist <= reach and not _window_piece(pieces, break_key):
 				state = State.ATTACK
 			elif not _standing(pieces, break_key):
 				_after_break()
@@ -290,6 +307,15 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 				elif _cooldown <= 0.0:
 					events.append({"target": break_key})
 					_cooldown = float(stats["attack_interval"])
+		State.CLIMB:
+			climb_elapsed = minf(climb_duration, climb_elapsed + dt)
+			if climb_elapsed >= climb_duration:
+				pos = climb_to
+				climb_landing = climb_to
+				state = climb_from_state
+				climb_key = ""
+				blocked_by = ""
+				target_pos = last_seen if state == State.CHASE else sound_pos
 	return events
 
 
@@ -320,8 +346,11 @@ func _clamp_guard(at: Vector3) -> Vector3:
 
 ## Q4: a guardian drops what it was doing and walks back to its spot (WANDER toward it, then IDLE there).
 func _go_back() -> void:
+	if state == State.CLIMB:
+		climb_landing = pos  # tells the body to restore the window collision exception
 	state = State.WANDER
 	break_key = ""
+	climb_key = ""
 	sound_key = ""
 	blocked_by = ""
 	route = []
@@ -347,6 +376,46 @@ static func _standing(pieces: Dictionary, key: String) -> bool:
 	return not (p is Dictionary and p.get("id", "") == "window" and int(p.get("hp", 1)) <= 0)
 
 
+static func _broken_window(pieces: Dictionary, key: String) -> bool:
+	return _window_piece(pieces, key) and int((pieces[key] as Dictionary).get("hp", 1)) <= 0
+
+
+static func _window_piece(pieces: Dictionary, key: String) -> bool:
+	if key == "" or not pieces.has(key):
+		return false
+	var p: Variant = pieces[key]
+	return p is Dictionary and p.get("id", "") == "window"
+
+
+## The climb path is derived only from saved piece data, keeping the rule headless and deterministic.
+func _start_climb(key: String, piece: Dictionary, from_state: int = -1) -> void:
+	if piece.get("id", "") != "window" or int(piece.get("hp", 1)) > 0:
+		return
+	climb_from_state = (break_from if state == State.BREAK else state) if from_state < 0 else from_state
+	if not climb_from_state in [State.CHASE, State.INVESTIGATE]:
+		return
+	var cell: Vector2i = piece["cell"]
+	var side := int(piece.get("side", BuildGrid.Side.NORTH))
+	var center := Vector3((float(cell.x) + 0.5) * BuildGrid.GRID, pos.y, float(cell.y) * BuildGrid.GRID)
+	var normal := Vector3(0, 0, 1)
+	if side == BuildGrid.Side.WEST:
+		center = Vector3(float(cell.x) * BuildGrid.GRID, pos.y, (float(cell.y) + 0.5) * BuildGrid.GRID)
+		normal = Vector3(1, 0, 0)
+	var side_sign := 1.0 if (pos - center).dot(normal) >= 0.0 else -1.0
+	climb_key = key
+	climb_start = pos
+	climb_to = center - normal * side_sign * 1.05
+	climb_elapsed = 0.0
+	climb_duration = float(stats["climb_seconds"])
+	target_pos = climb_to
+	state = State.CLIMB
+	break_key = ""
+
+
+func climb_fraction() -> float:
+	return clampf(climb_elapsed / maxf(0.001, climb_duration), 0.0, 1.0) if state == State.CLIMB else 0.0
+
+
 ## Hit by the player standing at `from`. Returns true if this killed it.
 func take_hit(damage: float, from: Vector3, push: float) -> bool:
 	if state == State.DEAD:
@@ -357,6 +426,7 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 	if hp <= 0.0:
 		hp = 0.0
 		state = State.DEAD
+		climb_key = ""
 		return true
 	if state == State.IDLE or state == State.WANDER or state == State.INVESTIGATE:
 		state = State.CHASE  # it knows where you are now
@@ -422,6 +492,7 @@ func _turn_away() -> void:
 func _go_idle(new_home: bool) -> void:
 	state = State.IDLE
 	break_key = ""
+	climb_key = ""
 	sound_key = ""
 	route = []
 	_timer = _rng.randf_range(2.0, 6.0)

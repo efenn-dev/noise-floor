@@ -33,7 +33,7 @@ func test_loot_never_comes_back() -> void:
 		sim.step()
 	for d in 30:
 		_next_day(sim)
-	eq(sim.search("box"), "Already searched", "a month later it's still empty")
+	eq(sim.search("box"), "Already searched", "a month later it is still searched")
 
 
 func test_fresh_food_rots_canned_keeps() -> void:

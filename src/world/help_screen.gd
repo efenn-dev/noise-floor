@@ -18,10 +18,14 @@ const ROWS := [
 	["Move and look", ["move_forward", "move_left", "move_back", "move_right"], "W A S D", "walk (arrow keys work too)"],
 	["Move and look", [], "Mouse", "look around"],
 	["Move and look", ["sprint"], "", "sprint (uses stamina)"],
-	["Move and look", ["jump"], "", "jump"],
+	["Move and look", ["jump"], "", "jump; at a broken window, climb through"],
 	["Move and look", ["crouch"], "", "crouch: quieter and harder to see"],
 	["Move and look", ["flashlight"], "", "flashlight on or off"],
-	["Use and search", ["interact"], "", "use what you look at: search, open doors, take from machines, sleep, get in a car"],
+	["Use and search", ["interact"], "", "use what you look at: search, open doors, clear broken-window glass, use machines, sleep, get in a car"],
+	["Use and search", [], "E / double-click in loot", "move the picked stack between the open container and your pockets"],
+	["Use and search", [], "R in loot", "take everything from the open container that fits"],
+	["Use and search", [], "Ctrl-click / drag", "move one item; Shift-click or a plain drag moves the whole stack"],
+	["Use and search", [], "Drag", "move loot, equip slots, or assign a pocket item to a hotbar key"],
 	["Use and search", ["upgrade"], "", "fit a muffler to the machine you look at"],
 	["Use and search", ["repair"], "", "repair the piece or car you look at"],
 	["Use and search", ["eat"], "", "eat the best food you carry"],
@@ -60,7 +64,7 @@ const ROWS := [
 ## S4: the six steps of a first factory, shown under the controls (Playtest #1: building and machines
 ## were not clear). test_help_screen.gd checks they're on screen.
 const GUIDE := [
-	"1. The crate beside you holds your starting kit: press E on it (Tab shows what's inside).",
+	"1. The crate beside you holds your starting kit: press E on it to open it.",
 	"2. Press 1 and click the ground to lay foundations. Everything you build stands on them.",
 	"3. Press B, click Smelter, then click a foundation to place it (R turns it). Esc stops building.",
 	"4. Machines need power: build a Generator and a Power pole beside the smelter (B, Power). E on the generator loads gas cans; the crate has some, G siphons more from cars.",

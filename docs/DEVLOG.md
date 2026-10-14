@@ -2,6 +2,55 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V19 Two hotbars: your hands and build mode (Sprint 4)
+
+Emmitt: "a build mode where the hotbar items are for building, then regular mode where the user can set items to their hotbar like weapons, meds, grenades... I keep wanting to hit 1 for a weapon but pull out a foundation." Built by Claude Opus 5.5 (Codex hit its weekly limit).
+
+**Built:**
+- **Two bars.** On foot the keys are your **hands bar**: 1 melee, 2 rifle (Primary), 3 pistol (Sidearm), 4 bandage, the rest yours to fill. A weapon key draws that weapon with the same raise and aim rules as Q (an empty slot says so); an item key eats, drinks or bandages. In build mode the keys are the **build bar** (foundation, wall, door, crate, smelter, belt, press, generator, bed); "BUILD" shows in front of it and the bar switches back when you stop building.
+- **Things go to the right bar by themselves.** A building piece can only be on the build bar and everything else only on the hands bar, so assigning never asks which: the build menu's number keys fill the build bar; the inventory's number keys (or dragging onto a key) fill the hands bar. A weapon picked in the inventory puts its slot on the key, so the key draws whatever is in that slot.
+- **The HUD** shows the bar you're using: weapon icons with the one in your hands in gold, item icons with counts.
+- **Saves:** VERSION 18. An old single bar splits itself: pieces keep their keys on the build bar, food and bandages move to the hands bar after the three weapon keys (keeping their key when free). `test/fixtures/save_v17.json` was written by the V18 code.
+
+**Try it on the PC:** press 1, 2, 3 on foot; open the build menu (B) and pick a piece, then 1-9 build.
+
+**Tests:** 11,722 green (test_hotbar and test_build_menu rewritten for two bars; the v17 split).
+
+**Known gaps:** no grenades yet (the bar takes new kinds by prefix when they exist); right-click-to-clear on the HUD isn't there (drag a new thing onto the key, or the inventory).
+
+## 2026-10-14 — V18 Loot window: hotkeys and drag and drop (Sprint 4)
+
+Emmitt: "make looting open the containers so you can choose what to loot with hotkeys and click and drag function." Built by Codex (one job on his ChatGPT plan); fixes, the merge with V17 and checks by Claude Opus 5.5.
+
+**Built:**
+- **Searching opens the container.** E on a fridge, cabinet, shelf, crate, car trunk or corpse searches it as before; when the search ends the inventory opens with that container on the right ("Fridge", "Corpse", "Trunk"), the mouse freed and the game still running. Already-searched containers open at once. Walking out of reach or getting hurt closes it with a message. Built storage crates now open the same way (they used to take your materials automatically).
+- **Hotkeys:** E or double-click moves the picked stack between the container and your pockets; **R takes everything that fits** and says what didn't; Ctrl-click moves one, Shift-click the stack; 1-9/0 put the picked item on the hotbar; Tab/Esc close. Shown on the screen and in Help.
+- **Drag and drop:** container <-> pockets, pockets -> a character slot (equips if it fits), slot -> pockets (unequips), pocket item -> a hotbar key; a picture of the item follows the mouse; a bad drop snaps back with "Too heavy" or "Doesn't fit that slot". Ctrl-drag moves one.
+- **Saves:** VERSION 17: searched containers keep what's left in them (including gear). This branch also contains V17 window climbing (save 16 = window glass).
+- Fix found on the way: putting on gear you carry was refused as "Too heavy" when you were already over the limit, though wearing it makes you lighter.
+
+**Try it on the PC:** search any fridge or cabinet in a house; `play.bat --loot` opens a searched fridge.
+
+**Tests:** 11,671 green (new `test_loot_screen.gd`).
+
+**Known gaps:** no grid/Tetris inventory (items are tiles, not shapes); no item tooltips on hover yet.
+
+## 2026-10-14 — V17 Climbing through windows (Sprint 4)
+
+Emmitt: "we need to add a vault mechanic for windows because you can just run through broken windows." Built by Codex (one job on his ChatGPT plan); test fixes, checks and screenshots by Claude Opus 5.5.
+
+**Built:**
+- **Windows always block.** Intact or broken, a window stops you and zombies (collision and the navmesh: zombies path around instead of through).
+- **Climb through a broken window (Space).** Looking at one within 2.2 m: "Space: climb through". A scripted 0.9 s move over the sill (3% faster per Fitness level), 14 stamina, a little noise (30). Not while aiming, reloading, swinging, blocking or over-encumbered.
+- **Glass.** A broken window keeps its shards until you clear them (E, 1.5 s, faster with a melee weapon in hand, a glass noise). Climbing over shards cuts you: 5 damage and bleeding, like Zomboid.
+- **Zombies climb too**, slowly (2.5 s), leaning over the sill and unable to attack until through, so a window is a choke point you can defend.
+- **Saves:** VERSION 16; broken windows from older saves load with shards (`test/fixtures/save_v15.json`).
+
+**Try it on the PC:** `play.bat --inside=0 --break-windows`, walk at a window (you can't pass), press E to clear the glass, then Space. Screenshot flag `--vault-at=T`.
+
+**Tests:** 11,584 green (new `test_vault.gd`; its navmesh checks wait a few frames for the map to sync).
+
+**Known gaps:** no vaulting over fences or barricades (they're 1.3-1.5 m, too tall for a vault). The climb is a camera move, no arm animation on the sill yet. Zombies use a code-driven lean while the new zombie models are being made.
 ## 2026-10-14 — Q5 Pre-playtest check (Sprint 4)
 
 The check DIRECTION.md asks for before every playtest, on `main` at #55, by Claude Opus 5.5 in a cloud session.

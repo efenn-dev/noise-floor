@@ -9,6 +9,8 @@ signal entered_car(id: String)
 signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
 signal opened_project(id: String)  # M17a: E on the water tower (main opens the project screen)
 signal opened_sensor(key: String)  # M15: E on a motion or noise sensor (main opens the sensor screen)
+signal opened_container(id: String)  # V18: searched world loot opens in the inventory screen
+signal opened_storage(key: String)  # V18: a built crate opens without a search
 
 const REACH := 4.0
 
@@ -40,7 +42,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not InputSetup.captured():
+	if not InputSetup.captured() or not sim.player_vault.is_empty():
 		return
 	if event.is_action_pressed("interact"):
 		var was_driving := sim.vehicles.driving
@@ -183,8 +185,17 @@ func interact() -> String:
 		return ""
 	if target_container != "":
 		var why := sim.search(target_container)
+		if why == "Already searched":
+			opened_container.emit(target_container)
+			last_message = ""
+			return ""
 		last_message = why
 		return why
+	if target_key != "" and sim.build.is_broken(target_key):
+		if sim.build.has_shards(target_key):
+			last_message = sim.start_clear_glass(target_key)
+			return last_message
+		return ""
 	if target_key != "" and sim.build.kind_of(sim.build.pieces[target_key]["id"]) == "door":
 		if door_blocked(target_key):
 			last_message = "Something's in the way of the door"
@@ -195,9 +206,10 @@ func interact() -> String:
 		return ""
 	match sim.build.kind_of(sim.build.pieces[target_key]["id"]):
 		"storage":
-			var put := sim.deposit(target_key)
-			last_message = ("Stored " + _list(put)) if not put.is_empty() else "Nothing to store (food, drink, bandages and bags stay with you)"
-			return last_message
+			sim.stats.note_crate()
+			opened_storage.emit(target_key)
+			last_message = ""
+			return ""
 		"bed":
 			var why := sim.sleep_in(target_key)
 			last_message = why if why != "" else "Sleeping... (any key wakes you)"
@@ -273,7 +285,7 @@ func status_text() -> String:
 		var c: Dictionary = sim.loot.containers.get(target_container, {})
 		var name := sim.loot.display_name(target_container)
 		if c.get("searched", false):
-			return "%s · searched%s" % [name, ("\n" + last_message) if last_message != "" else ""]
+			return "%s · searched\n[E] open%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 		if sim.loot.active == target_container:
 			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / sim.loot.search_time())]
 		return "%s\n[E] search (stay close; it makes a little noise)%s" % [name, ("\n" + last_message) if last_message != "" else ""]
@@ -284,6 +296,18 @@ func status_text() -> String:
 	if not has_target:  # a wall, door, barricade or foundation
 		var piece: Dictionary = sim.build.pieces[target_key]
 		var b: Dictionary = sim.data.buildables[piece["id"]]
+		if sim.build.is_broken(target_key):
+			lines.append("Broken window · frame blocks walking")
+			if sim.window_in_reach(target_key):
+				lines.append("Space: climb through")
+				if sim.build.has_shards(target_key):
+					if not sim.clearing_glass.is_empty() and sim.clearing_glass.get("key", "") == target_key:
+						lines.append("Clearing glass %d%%" % roundi(100.0 * sim.clear_glass_fraction()))
+					else:
+						lines.append("E: clear the glass")
+			if last_message != "":
+				lines.append(last_message)
+			return "\n".join(lines)
 		var line := "%s · %d/%d hp" % [b["name"], piece["hp"], b["hp"]]
 		if b["kind"] == "door":
 			line += " · %s   [E] %s" % ["open" if piece.get("open", false) else "closed", "close" if piece.get("open", false) else "open"]
@@ -306,7 +330,7 @@ func status_text() -> String:
 		for item: String in crate.items():
 			held[item] = crate.count(item)
 		lines.append("Storage crate · %s" % _list(held, "empty"))
-		lines.append("[E] put away building materials · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
+		lines.append("[E] open · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
 	elif kind == "turret":
 		var t: Factory.Turret = f.turrets[target_cell]
 		var tb: Dictionary = sim.data.buildables[t.id]
@@ -445,6 +469,10 @@ func project_status(id: String) -> String:
 
 func keys() -> PackedStringArray:
 	var out := PackedStringArray()
+	if target_key != "" and sim.build.is_broken(target_key) and sim.window_in_reach(target_key):
+		out.append("Space climb")
+		if sim.build.has_shards(target_key):
+			out.append("E clear glass")
 	for m: RegExMatch in _keys_re.search_all(status_text()):
 		var words := m.get_string(2)
 		if m.get_string(3) != "" and not m.get_string(3) in _FILLER:
@@ -489,7 +517,7 @@ func _car_status() -> String:
 		if sim.loot.active == target_car:
 			keys.append("searching the trunk %d%%" % roundi(100.0 * sim.loot.progress / sim.loot.search_time()))
 		elif trunk.get("searched", false):
-			keys.append("trunk searched")
+			keys.append("[E] open the trunk")
 		else:
 			keys.append("[E] search the trunk")
 	else:

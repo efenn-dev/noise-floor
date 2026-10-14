@@ -439,8 +439,8 @@ func test_lucky_find_uses_the_seeded_rng() -> void:
 		sim.search("house_3_w")
 		_run(sim, float(sim.data.survival["search_time"]) + 0.1)
 		var n := 0
-		for item: String in sim.inventory.items():
-			n += sim.inventory.count(item)
+		for item: String in sim.loot.inventory("house_3_w").items():
+			n += sim.loot.inventory("house_3_w").count(item)
 		counts.append(n)
 	eq(counts[0] + 1, counts[1], "Lucky Find 5 (100%): exactly one more item")
 	eq(counts[1], counts[2], "the same world seed gives the same lucky find")
@@ -452,7 +452,7 @@ func test_lucky_find_uses_the_seeded_rng() -> void:
 	sim.search("house_3_w")
 	_run(sim, float(sim.data.survival["search_time"]) + 0.1)
 	for item: String in base:
-		check(sim.inventory.count(item) >= base[item], "Lucky Find 0 finds the plain roll (%s)" % item)
+		check(sim.loot.inventory("house_3_w").count(item) >= base[item], "Lucky Find 0 finds the plain roll (%s)" % item)
 
 
 # --- Kept through death and saves ---------------------------------------------------

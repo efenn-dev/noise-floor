@@ -208,6 +208,7 @@ func _on_added(key: String) -> void:
 	shape.shape = box_shape
 	body.add_child(shape)
 	add_child(body)
+	body.add_to_group("build_pieces")  # ZombieBody finds the one window collider to ignore while climbing
 	_bodies[key] = body
 	if grid.is_broken(key):
 		_on_changed(key, false)  # a broken window from a save: no shatter, just the jagged edge
@@ -232,8 +233,9 @@ static func town_material(style: String) -> StandardMaterial3D:
 
 
 ## A window: wall below and above, posts each side, and a pane of glass ("Glass") in the middle.
-## The collider is the whole edge while the glass holds. Intact windows are see-through for zombie
-## sight rays (meta "see_through"); broken ones stop colliding at all (see _on_changed).
+## The collider is the whole edge even after the glass breaks: ordinary walking and navmesh paths remain
+## blocked by the sill/frame. Intact windows are see-through for zombie sight rays (meta "see_through");
+## a scripted player/zombie climb temporarily ignores this specific body.
 func _add_window(body: StaticBody3D, key: String, size: Vector3) -> void:
 	var mat := town_material(styles.get(key, "siding"))
 	var h := size.y / 2.0
@@ -269,17 +271,21 @@ func _on_changed(key: String, fx: bool = true) -> void:
 	var body: StaticBody3D = _bodies.get(key)
 	if body == null or not grid.pieces.has(key):
 		return
-	if grid.pieces[key]["id"] == "window":  # broken: the glass is gone and it's an opening
+	if grid.pieces[key]["id"] == "window":
 		var broken := grid.is_broken(key)
-		body.collision_layer = 0 if broken else Layers.BUILT
+		# The sim rule drives both CharacterBody collision and NavBaker's static-collider geometry.
+		body.collision_layer = Layers.BUILT if grid.edge_blocks_walk(key) else 0
 		var glass := body.get_node_or_null("Glass") as MeshInstance3D
 		if glass != null:
-			if broken and glass.visible and body.get_node_or_null("GlassShards") == null:
+			var shards := body.get_node_or_null("GlassShards")
+			if broken and grid.has_shards(key) and shards == null:
 				body.add_child(shard_ring(glass, key))  # W2: jagged glass left in the frame
 				if fx:  # W2: and a burst of glass, both ways (zombie or you, inside or out)
 					var n := body.global_basis.z
 					ImpactFx.spawn(get_parent() if get_parent() != null else self, glass.global_position, n, "glass")
 					ImpactFx.spawn(get_parent() if get_parent() != null else self, glass.global_position, -n, "glass")
+			elif shards != null and not grid.has_shards(key):
+				shards.queue_free()  # clearing glass keeps the frame and its collider, but removes the hazard
 			glass.visible = not broken
 		return
 	body.collision_layer = Layers.BUILT

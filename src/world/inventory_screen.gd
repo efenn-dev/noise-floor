@@ -3,8 +3,50 @@ extends CanvasLayer
 ## Tab: your pockets beside the nearest storage crate within reach. Click an item to see it and use,
 ## move or drop it; shift-click moves the whole stack to the other side, ctrl-click moves one.
 ## The game keeps running (a zombie can walk up while you sort). The rules are in the sim
-## (use_item, drop_items, Inventory.move_to, crates_near); this only shows them.
+## (use_item, drop_items, move_container_item/gear, take_all, equipment checks); this only shows them.
 ## M13/V14 slots: gear pieces sit after the stacks; the center paper doll shows every equipped slot.
+## V18: searched world loot uses the same screen, and every tile/slot/hotbar key is a drag target.
+
+class DragButton:
+	extends Button
+	var screen: InventoryScreen
+	var drag_value := ""
+	var drag_side := ""
+	var drop_target := ""
+
+	func _get_drag_data(_at_position: Vector2) -> Variant:
+		if screen == null or drag_value == "":
+			return null
+		var data := screen.drag_data(drag_value, drag_side, Input.is_key_pressed(KEY_CTRL))
+		if data.is_empty():
+			return null
+		screen.begin_drag(data)
+		set_drag_preview(screen.drag_preview(data))
+		return data
+
+	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+		if screen == null or not data is Dictionary:
+			return false
+		return screen.can_drop(data, drop_target)
+
+	func _drop_data(_at_position: Vector2, data: Variant) -> void:
+		if screen != null:
+			screen.drop_data(data, drop_target)
+
+
+class DropGrid:
+	extends GridContainer
+	var screen: InventoryScreen
+	var drop_target := ""
+
+	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+		if screen == null or not data is Dictionary:
+			return false
+		return screen.can_drop(data, drop_target)
+
+	func _drop_data(_at_position: Vector2, data: Variant) -> void:
+		if screen != null:
+			screen.drop_data(data, drop_target)
 
 class CharacterSilhouette:
 	extends Control
@@ -53,8 +95,13 @@ var _weight_bar: ProgressBar
 var _details: Label
 var _wearing: Control
 var _actions: HBoxContainer
+var _hotbar_targets: Array[Button] = []
 var _crates: Array = []  # crate keys within reach, nearest first
 var _crate_index := 0
+var _container_id := ""
+var _open_health := 0.0
+var _invalid_drop_shown := false
+var _drag_data: Dictionary = {}
 var _selected := ""
 var _selected_side := ""
 
@@ -73,7 +120,23 @@ func is_open() -> bool:
 func open() -> void:
 	_crates = sim.crates_near(sim.player_pos)
 	_crate_index = 0
+	_container_id = _crates[0] if not _crates.is_empty() else ""
 	_selected = ""
+	_selected_side = ""
+	_open_health = sim.player.health
+	_root.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	refresh()
+
+
+## E on a searched fridge, trunk, corpse or crate opens that exact container.
+func open_container(id: String) -> void:
+	_crates = []
+	_crate_index = 0
+	_container_id = id
+	_selected = ""
+	_selected_side = ""
+	_open_health = sim.player.health
 	_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	refresh()
@@ -81,14 +144,30 @@ func open() -> void:
 
 func close() -> void:
 	_root.visible = false
+	_container_id = ""
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 ## The crate on the right, or null if none is within reach.
 func crate() -> Inventory:
-	if _crates.is_empty():
+	if _container_id == "":
 		return null
-	return sim.storages.get(_crates[_crate_index])
+	return sim.container_inventory(_container_id)
+
+
+func container_id() -> String:
+	return _container_id
+
+
+func _process(_delta: float) -> void:
+	if not is_open() or _container_id == "":
+		return
+	if sim.player.health < _open_health - 0.001:
+		message.emit("Loot closed: you were hurt")
+		close()
+	elif not sim.container_exists(_container_id) or not sim.container_in_reach(_container_id):
+		message.emit("Loot closed: too far away")
+		close()
 
 
 func _input(event: InputEvent) -> void:
@@ -98,17 +177,52 @@ func _input(event: InputEvent) -> void:
 		close()
 		get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed("interact"):
+		take_selected()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("refuel") and _container_id != "":
+		take_everything()
+		get_viewport().set_input_as_handled()
+		return
 	var slot := InputSetup.hotbar_slot(event)
 	if slot != -1:
 		message.emit(assign_hotbar(slot))  # S3: 1-9, 0 puts the picked item on that key
 		get_viewport().set_input_as_handled()
 
 
-## S3: puts the selected pocket item on hotbar key `i` (0-9). Returns the message shown.
+## Godot only calls _drop_data for accepted targets. On a refused release, find the hovered target
+## after NOTIFICATION_DRAG_END and explain why the preview snapped back.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_DRAG_END or _drag_data.is_empty() or not is_inside_tree():
+		return
+	if not get_viewport().gui_is_drag_successful():
+		var hovered := get_viewport().gui_get_hovered_control()
+		var target := ""
+		if hovered is DragButton:
+			target = (hovered as DragButton).drop_target
+		elif hovered is DropGrid:
+			target = (hovered as DropGrid).drop_target
+		var why := drop_reason(_drag_data, target)
+		if why != "":
+			message.emit(why)
+	_drag_data = {}
+
+
+## S3: puts the selected pocket item on hotbar key `i` (0-9). V19: a selected weapon (worn or in your pockets)
+## puts its slot on the key instead, so the key draws whatever weapon you have in that slot. Returns the message.
 func assign_hotbar(i: int) -> String:
-	if _selected == "" or _selected_side != POCKETS or _selected.begins_with(GEAR):
+	if _selected.begins_with(GEAR):
+		var piece := selected_gear()
+		var slot := sim.gear.slot_of(piece) if not piece.is_empty() else ""
+		if not Hotbar.WEAPON_SLOTS.has(slot):
+			return "Only weapons, food, drink and bandages go on the hotbar"
+		var why_slot := sim.hotbar.assign(i, Hotbar.slot_entry(slot))
+		refresh()
+		return why_slot if why_slot != "" else "%s (%s) is on key %s" % [Hotbar.WEAPON_SLOTS[slot], piece["name"], Hotbar.key_name(i)]
+	if _selected == "" or _selected_side != POCKETS:
 		return "Click an item in your pockets first"
-	var why := sim.hotbar.assign(i, Hotbar.item_entry(_selected))
+	var why := sim.assign_hotbar_item(i, _selected)
 	refresh()
 	return why if why != "" else "%s is on key %s" % [_name(_selected), Hotbar.key_name(i)]
 
@@ -124,11 +238,12 @@ func select(item: String, side: String) -> void:
 ## Moves one or the whole stack of `item` from `side` to the other side.
 func move(item: String, side: String, whole_stack: bool) -> void:
 	var from := sim.inventory if side == POCKETS else crate()
-	var to := crate() if side == POCKETS else sim.inventory
-	if from == null or to == null:
-		message.emit("No crate within reach")
+	if from == null or crate() == null:
+		message.emit("No container within reach")
 		return
-	from.move_to(to, item, from.count(item) if whole_stack else 1)
+	var result := sim.move_container_item(_container_id, item, from.count(item) if whole_stack else 1, side != POCKETS)
+	if result["why"] != "":
+		message.emit(result["why"])
 	refresh()
 
 
@@ -142,7 +257,15 @@ func select_bag(item: String) -> void:
 
 
 func selected_gear() -> Dictionary:
-	return sim.gear.find(int(_selected.trim_prefix(GEAR))) if _selected.begins_with(GEAR) else {}
+	if not _selected.begins_with(GEAR):
+		return {}
+	var uid := int(_selected.trim_prefix(GEAR))
+	if _selected_side == CRATE:
+		for piece: Dictionary in sim.container_gear(_container_id):
+			if int(piece["uid"]) == uid:
+				return piece
+		return {}
+	return sim.gear.find(uid)
 
 
 func equip_selected() -> void:
@@ -184,6 +307,51 @@ func drop_selected(whole_stack: bool) -> void:
 	refresh()
 
 
+## E or a double-click: while a container is open, move the selected stack/piece to the other side.
+func take_selected() -> void:
+	if _selected == "":
+		message.emit("Click an item first")
+		return
+	if _selected_side == WORN:
+		message.emit("Drag worn gear back to your pockets")
+		return
+	if _container_id == "":
+		message.emit("No container open")
+		return
+	if _selected.begins_with(GEAR):
+		var result := sim.move_container_gear(_container_id, int(_selected.trim_prefix(GEAR)), _selected_side == CRATE)
+		if result["why"] != "":
+			message.emit(result["why"])
+	else:
+		var held := sim.inventory if _selected_side == POCKETS else crate()
+		if held == null:
+			message.emit("Container closed")
+			return
+		var result := sim.move_container_item(_container_id, _selected, held.count(_selected), _selected_side == CRATE)
+		if result["why"] != "":
+			message.emit(result["why"])
+	refresh()
+
+
+## R while looting: take every stack and piece that fits, and name what stayed behind.
+func take_everything() -> void:
+	if _container_id == "":
+		return
+	var result := sim.take_all(_container_id)
+	var missed := PackedStringArray()
+	for item: String in result["not_fit"]:
+		missed.append("%d %s" % [result["not_fit"][item], _name(item)])
+	for piece: String in result["gear_not_fit"]:
+		missed.append(piece)
+	if not missed.is_empty():
+		message.emit("Too heavy: couldn't fit " + ", ".join(missed))
+	elif result["items"].is_empty() and result["gear"].is_empty():
+		message.emit("Nothing to take")
+	else:
+		message.emit("Took everything")
+	refresh()
+
+
 func _on_slot(item: String, side: String) -> void:
 	if Input.is_key_pressed(KEY_SHIFT):
 		move(item, side, true)
@@ -200,16 +368,22 @@ func _handled() -> void:
 
 
 func _on_item_input(event: InputEvent, item: String, side: String) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click \
-			and side == POCKETS and sim.data.item_value(item, "bag") > 0.0:
-		message.emit(sim.equip_bag(item))
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+		select(item, side)
+		if _container_id != "":
+			take_selected()
+		elif side == POCKETS and sim.data.item_value(item, "bag") > 0.0:
+			message.emit(sim.equip_bag(item))
 		refresh()
 		_handled()
 
 
 func _on_gear_input(event: InputEvent, uid: int, side: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
-		if side == WORN:
+		select_gear(uid, side)
+		if _container_id != "" and side != WORN:
+			take_selected()
+		elif side == WORN:
 			var piece := sim.gear.find(uid)
 			if not piece.is_empty():
 				message.emit(sim.unequip_gear(sim.gear.slot_of(piece)))
@@ -226,6 +400,164 @@ func _on_equipment_input(event: InputEvent, slot: String) -> void:
 		_handled()
 
 
+# --- Drag and drop --------------------------------------------------------------
+
+func begin_drag(data: Dictionary = {}) -> void:
+	_invalid_drop_shown = false
+	_drag_data = data
+
+
+## Public for tests: the data Godot carries between _get_drag_data and a drop target.
+func drag_data(value: String, side: String, ctrl: bool = false) -> Dictionary:
+	if value.begins_with(GEAR):
+		var piece := {}
+		var uid := int(value.trim_prefix(GEAR))
+		if side == CRATE:
+			for held: Dictionary in sim.container_gear(_container_id):
+				if int(held["uid"]) == uid:
+					piece = held
+		else:
+			piece = sim.gear.find(uid)
+		return {} if piece.is_empty() else {"kind": "gear", "uid": uid, "side": side, "amount": 1,
+				"name": piece["name"]}
+	if value.begins_with(BAG):
+		var bag := value.trim_prefix(BAG)
+		return {"kind": "bag", "item": bag, "side": WORN, "amount": 1, "name": _name(bag)}
+	var held := sim.inventory if side == POCKETS else crate()
+	if held == null or held.count(value) <= 0:
+		return {}
+	return {"kind": "item", "item": value, "side": side,
+			"amount": 1 if ctrl else held.count(value), "name": _name(value)}
+
+
+func drag_preview(data: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(64, 64)
+	var value := str(data.get("item", ""))
+	if data.get("kind", "") == "gear":
+		var piece := sim.gear.find(int(data["uid"]))
+		if piece.is_empty():
+			for held: Dictionary in sim.container_gear(_container_id):
+				if int(held["uid"]) == int(data["uid"]):
+					piece = held
+		if not piece.is_empty():
+			panel.add_child(gear_icon(sim.gear.color(piece), sim.gear.base_of(piece)["name"], Vector2(64, 64), piece["base"]))
+	else:
+		var texture := icon_for(value)
+		if texture != null:
+			var picture := TextureRect.new()
+			picture.texture = texture
+			picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			picture.custom_minimum_size = Vector2(64, 64)
+			panel.add_child(picture)
+		else:
+			var fallback := Label.new()
+			fallback.text = _name(value)
+			fallback.custom_minimum_size = Vector2(64, 64)
+			fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			panel.add_child(fallback)
+	var count := Label.new()
+	count.text = str(data.get("amount", 1))
+	count.position = Vector2(34, 38)
+	count.add_theme_font_size_override("font_size", 18)
+	count.add_theme_constant_override("outline_size", 5)
+	panel.add_child(count)
+	return panel
+
+
+## Why this payload cannot land on pockets, the open container, slot:<name> or hotbar:<0-9>.
+func drop_reason(data: Dictionary, target: String) -> String:
+	if data.is_empty() or not data.has("kind") or not data.has("side"):
+		return "Can't move that"
+	var kind := str(data["kind"])
+	var side := str(data["side"])
+	if target == POCKETS:
+		if side == POCKETS:
+			return "Already in your pockets"
+		if side == WORN:
+			if kind == "bag":
+				return sim.can_unequip_gear("back")
+			var worn := sim.gear.find(int(data.get("uid", -1)))
+			return "Nothing there" if worn.is_empty() else sim.can_unequip_gear(sim.gear.slot_of(worn))
+		if side != CRATE:
+			return "Can't move that"
+		return sim.can_take_container_gear(_container_id, int(data["uid"])) if kind == "gear" \
+				else sim.can_take_container_item(_container_id, str(data["item"]), int(data["amount"]))
+	if target == CRATE:
+		if _container_id == "" or not sim.container_exists(_container_id) or not sim.container_in_reach(_container_id):
+			return "No container within reach"
+		return "" if side == POCKETS and kind in ["item", "gear"] else "Move it to your pockets first"
+	if target.begins_with("slot:"):
+		if side != POCKETS:
+			return "Move it to your pockets first"
+		var slot := target.trim_prefix("slot:")
+		if kind == "gear":
+			return sim.can_equip_gear(int(data["uid"]), slot)
+		if kind == "item":
+			return sim.can_equip_item(str(data["item"]), slot)
+		return "Doesn't fit that slot"
+	if target.begins_with("hotbar:"):
+		if side != POCKETS or kind != "item":
+			return "Only pocket items go on the hotbar"
+		return sim.hotbar.validate(Hotbar.item_entry(str(data["item"])))
+	return "Can't move that"
+
+
+func can_drop(data: Dictionary, target: String) -> bool:
+	return drop_reason(data, target) == ""
+
+
+## Public for tests: reports one short reason for a refused payload/target pair.
+func check_drop(data: Variant, target: String) -> bool:
+	if not data is Dictionary:
+		return false
+	var why := drop_reason(data, target)
+	if why != "" and not _invalid_drop_shown:
+		_invalid_drop_shown = true
+		message.emit(why)
+	return why == ""
+
+
+func drop_data(data: Variant, target: String) -> String:
+	if not data is Dictionary:
+		return "Can't move that"
+	var why := drop_reason(data, target)
+	if why != "":
+		message.emit(why)
+		return why
+	var result := ""
+	var kind := str(data["kind"])
+	var side := str(data["side"])
+	if target == POCKETS and side == WORN:
+		var slot := "back" if kind == "bag" else sim.gear.slot_of(sim.gear.find(int(data["uid"])))
+		result = sim.unequip_gear(slot)
+	elif target == POCKETS:
+		if kind == "gear":
+			result = sim.move_container_gear(_container_id, int(data["uid"]), true)["why"]
+		else:
+			result = sim.move_container_item(_container_id, str(data["item"]), int(data["amount"]), true)["why"]
+	elif target == CRATE:
+		if kind == "gear":
+			result = sim.move_container_gear(_container_id, int(data["uid"]), false)["why"]
+		else:
+			result = sim.move_container_item(_container_id, str(data["item"]), int(data["amount"]), false)["why"]
+	elif target.begins_with("slot:"):
+		var slot := target.trim_prefix("slot:")
+		result = sim.equip_gear_to_slot(int(data["uid"]), slot) if kind == "gear" \
+				else sim.equip_item_to_slot(str(data["item"]), slot)
+	elif target.begins_with("hotbar:"):
+		var hotbar_slot := int(target.trim_prefix("hotbar:"))
+		result = sim.assign_hotbar_item(hotbar_slot, str(data["item"]))
+		if result == "":
+			result = "%s is on key %s" % [_name(str(data["item"])), Hotbar.key_name(hotbar_slot)]
+	if result != "":
+		message.emit(result)
+	refresh()
+	return result
+
+
 # --- Drawing -------------------------------------------------------------------
 
 func refresh() -> void:
@@ -235,13 +567,15 @@ func refresh() -> void:
 	_fill(_pockets_grid, sim.inventory, POCKETS)
 	_fill(_crate_grid, box, CRATE)
 	if box == null:
-		_crate_title.text = "No crate within reach"
+		_crate_title.text = "No container within reach"
 	elif _crates.size() > 1:
 		_crate_title.text = "Crate %d of %d" % [_crate_index + 1, _crates.size()]
 	else:
-		_crate_title.text = "Crate"
+		_crate_title.text = sim.container_name(_container_id)
 	_crate_prev.visible = _crates.size() > 1
 	_crate_next.visible = _crates.size() > 1
+	for i in _hotbar_targets.size():
+		_hotbar_targets[i].text = "%s\n%s" % [Hotbar.key_name(i), sim.hotbar.label(i)]
 
 	var carried := sim.carried_kg()
 	var limit := sim.carry_limit()
@@ -256,8 +590,7 @@ func refresh() -> void:
 	if over:
 		_weight_label.text += "   Overloaded: slower and louder"
 	var mech := sim.skills.progress("mechanics")
-	_weight_label.text += "
-Mechanics %d%s" % [sim.skills.level("mechanics"),
+	_weight_label.text += "\nMechanics %d%s" % [sim.skills.level("mechanics"),
 			("  (%d / %d xp to the next level)" % [mech[0], mech[1]]) if mech[1] > 0 else ""]
 
 	_fill_wearing()
@@ -269,7 +602,8 @@ Mechanics %d%s" % [sim.skills.level("mechanics"),
 		return
 	if _selected.begins_with(GEAR):
 		var piece := selected_gear()
-		if piece.is_empty() or sim.gear.is_equipped(piece["uid"]) != (_selected_side == WORN):
+		if piece.is_empty() or (_selected_side in [POCKETS, WORN] \
+				and sim.gear.is_equipped(piece["uid"]) != (_selected_side == WORN)):
 			_selected = ""  # dropped, or moved between pockets and slots
 		_show_gear(piece)
 		return
@@ -288,16 +622,23 @@ func _fill(grid: GridContainer, inv: Inventory, side: String) -> void:
 		grid.add_child(_slot(item, inv.count(item), side))
 	if side == POCKETS:
 		for piece: Dictionary in sim.gear.pieces:
-			grid.add_child(_gear_slot(piece))
+			grid.add_child(_gear_slot(piece, POCKETS))
+	elif side == CRATE:
+		for piece: Dictionary in sim.container_gear(_container_id):
+			grid.add_child(_gear_slot(piece, CRATE))
 
 
 ## A carried gear tile: base icon when available, rarity border, and condition in the corner.
-func _gear_slot(piece: Dictionary) -> Button:
-	var b := Button.new()
+func _gear_slot(piece: Dictionary, side: String) -> Button:
+	var b := DragButton.new()
+	b.screen = self
+	b.drag_value = GEAR + str(piece["uid"])
+	b.drag_side = side
+	b.drop_target = side
 	b.custom_minimum_size = SLOT
 	b.focus_mode = Control.FOCUS_NONE
 	b.toggle_mode = true
-	b.button_pressed = _selected == GEAR + str(piece["uid"]) and _selected_side == POCKETS
+	b.button_pressed = _selected == GEAR + str(piece["uid"]) and _selected_side == side
 	b.tooltip_text = piece["name"]
 	b.name = "Gear%d" % piece["uid"]
 	var icon := gear_icon(sim.gear.color(piece), sim.gear.base_of(piece)["name"], SLOT - Vector2(16, 16), piece["base"])
@@ -314,8 +655,8 @@ func _gear_slot(piece: Dictionary) -> Button:
 	n.add_theme_color_override("font_color", Color(1, 0.5, 0.4) if not sim.gear.working(piece) else Color.WHITE)
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(n)
-	b.pressed.connect(select_gear.bind(int(piece["uid"]), POCKETS))
-	b.gui_input.connect(_on_gear_input.bind(int(piece["uid"]), POCKETS))
+	b.pressed.connect(select_gear.bind(int(piece["uid"]), side))
+	b.gui_input.connect(_on_gear_input.bind(int(piece["uid"]), side))
 	return b
 
 
@@ -363,7 +704,9 @@ func _fill_wearing() -> void:
 			_wearing.remove_child(child)  # now, so the new row can take its name
 			child.queue_free()
 	for slot: String in sim.gear.slots():
-		var b := Button.new()
+		var b := DragButton.new()
+		b.screen = self
+		b.drop_target = "slot:" + slot
 		b.focus_mode = Control.FOCUS_NONE
 		b.name = "Slot_" + slot
 		var rect: Rect2 = SLOT_RECTS[slot]
@@ -374,11 +717,12 @@ func _fill_wearing() -> void:
 		var value: Variant = sim.gear.equipped.get(slot)
 		if value == null:
 			b.text = SLOT_NAMES[slot]
-			b.disabled = true
-			b.add_theme_stylebox_override("disabled", _empty_slot_style())
-			b.add_theme_color_override("font_disabled_color", Color(0.6, 0.6, 0.62, 0.55))
+			b.add_theme_stylebox_override("normal", _empty_slot_style())
+			b.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62, 0.55))
 		elif slot == "back":
 			var item := str(value)
+			b.drag_value = BAG + item
+			b.drag_side = WORN
 			b.tooltip_text = sim.data.item_name(item)
 			var icon := gear_icon(sim.data.item_color(item), SLOT_NAMES[slot], rect.size - Vector2(10, 10), item)
 			icon.position = Vector2(5, 5)
@@ -389,6 +733,8 @@ func _fill_wearing() -> void:
 			b.gui_input.connect(_on_equipment_input.bind(slot))
 		else:
 			var piece: Dictionary = value
+			b.drag_value = GEAR + str(piece["uid"])
+			b.drag_side = WORN
 			b.add_theme_color_override("font_color", sim.gear.color(piece))
 			b.add_theme_color_override("font_hover_color", sim.gear.color(piece).lightened(0.3))
 			b.tooltip_text = "%s · %s" % [piece["name"], sim.gear.condition_text(piece)]
@@ -458,17 +804,23 @@ func _show_gear(piece: Dictionary) -> void:
 	_details.add_theme_color_override("font_color", g.color(piece))
 	if _selected_side == WORN:
 		_action("Unequip", unequip_selected)
+	elif _selected_side == CRATE:
+		_action("Take", take_selected)
 	elif g.slot_of(piece) == "part":
 		_action("Drop", drop_gear_selected)  # M14: parts go on a gun at a workbench, not on you
 	else:
 		_action("Equip", equip_selected)
 		_action("Drop", drop_gear_selected)
-	if sim.inventory.count("repair_kit") > 0 and float(piece["condition"]) < 1.0:
+	if _selected_side != CRATE and sim.inventory.count("repair_kit") > 0 and float(piece["condition"]) < 1.0:
 		_action("Repair (1 kit)", repair_selected)
 
 
 func _slot(item: String, count: int, side: String) -> Button:
-	var b := Button.new()
+	var b := DragButton.new()
+	b.screen = self
+	b.drag_value = item
+	b.drag_side = side
+	b.drop_target = side
 	b.custom_minimum_size = SLOT
 	b.focus_mode = Control.FOCUS_NONE  # keep Tab for closing
 	b.toggle_mode = true
@@ -608,7 +960,7 @@ func _build() -> void:
 	_weight_bar.show_percentage = false
 	_weight_bar.custom_minimum_size = Vector2(0, 10)
 	left.add_child(_weight_bar)
-	_pockets_grid = _grid(left)
+	_pockets_grid = _grid(left, POCKETS)
 
 	var character := VBoxContainer.new()
 	character.custom_minimum_size = Vector2(DOLL_SIZE.x, 0)
@@ -632,7 +984,7 @@ func _build() -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 41)  # line up with the pockets' weight label and bar
 	right.add_child(spacer)
-	_crate_grid = _grid(right)
+	_crate_grid = _grid(right, CRATE)
 
 	_details = Label.new()
 	_details.add_theme_font_size_override("font_size", 20)
@@ -642,8 +994,24 @@ func _build() -> void:
 	_actions.add_theme_constant_override("separation", 10)
 	_actions.custom_minimum_size = Vector2(0, 44)
 	column.add_child(_actions)
+	var hotbar_row := HBoxContainer.new()
+	hotbar_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	hotbar_row.add_theme_constant_override("separation", 4)
+	column.add_child(hotbar_row)
+	for i in Hotbar.SLOTS:
+		var target := DragButton.new()
+		target.name = "HotbarDrop%d" % i
+		target.screen = self
+		target.drop_target = "hotbar:" + str(i)
+		target.focus_mode = Control.FOCUS_NONE
+		target.custom_minimum_size = Vector2(58, 44)
+		target.text = "%s\n%s" % [Hotbar.key_name(i), sim.hotbar.label(i)]
+		target.add_theme_font_size_override("font_size", 12)
+		target.tooltip_text = "Drop a pocket item here to assign key %s" % Hotbar.key_name(i)
+		hotbar_row.add_child(target)
+		_hotbar_targets.append(target)
 	var hint := Label.new()
-	hint.text = "Tab or Esc: close    1-9, 0: put the picked item on that hotbar key    The game keeps running while this is open"
+	hint.text = "E/double-click: stack  ·  R: all  ·  Ctrl-click/drag: one  ·  Shift-click/plain drag: stack  ·  1-9/0: hotbar  ·  Tab/Esc: close  ·  Live game"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.modulate = Color(1, 1, 1, 0.6)
 	column.add_child(hint)
@@ -652,6 +1020,7 @@ func _build() -> void:
 func _cycle(step: int) -> void:
 	if _crates.size() > 1:
 		_crate_index = (_crate_index + step + _crates.size()) % _crates.size()
+		_container_id = _crates[_crate_index]
 		if _selected_side == CRATE:
 			_selected = ""
 		refresh()
@@ -665,12 +1034,15 @@ func _title(text: String) -> Label:
 	return l
 
 
-func _grid(parent: Control) -> GridContainer:
+func _grid(parent: Control, target: String) -> GridContainer:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(COLS * (SLOT.x + 6), 3 * (SLOT.y + 6))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	parent.add_child(scroll)
-	var grid := GridContainer.new()
+	var grid := DropGrid.new()
+	grid.screen = self
+	grid.drop_target = target
+	grid.custom_minimum_size = Vector2(COLS * (SLOT.x + 6), 3 * (SLOT.y + 6))
 	grid.columns = COLS
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)

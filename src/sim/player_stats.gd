@@ -97,6 +97,15 @@ func try_swing(cooldown: float) -> bool:
 	return true
 
 
+## V17: pays the up-front effort for a window vault. SimWorld checks all contextual restrictions first.
+func try_vault(cost: float) -> bool:
+	if dead or asleep or stamina < cost:
+		return false
+	stamina -= cost
+	_rested = 0.0
+	return true
+
+
 ## V15: the world reports the held guard. Only a new rising edge restarts the parry window.
 func set_blocking(value: bool) -> void:
 	if value and not blocking:

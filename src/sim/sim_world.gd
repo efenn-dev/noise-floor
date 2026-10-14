@@ -14,6 +14,8 @@ const PARRY_KNOCKBACK := 4.0
 ## What the HUD says the first time you sit in a car you have no key for.
 const NO_KEY_MESSAGE := "No key. The glovebox is searched from the trunk, or try the nearest house"
 
+signal container_searched(id: String)  # V18: the world opens this container's loot screen
+
 var clock: GameClock
 var data: GameData
 var inventory := Inventory.new()
@@ -57,12 +59,20 @@ var _cold_hour := -1  # M16: the game-hour "You're cold" / "You're freezing" was
 var loot: Loot
 ## Storage crates: piece key -> Inventory.
 var storages: Dictionary = {}
+## Storage crates can hold rolled gear as well as stackable items.
+var storage_gear: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var player := PlayerStats.new()
 ## What happened this session (deaths, builds, loudest sounds...), for the playtest session log.
 var stats := RunStats.new()
 ## Written by the world each frame: where the player stands and whether the flashlight is on.
 var player_pos := Vector3.ZERO
+## V17: an active scripted window crossing. Rules and timing live here; Player only draws the curve.
+## {key, from, to, elapsed, duration}. `vault_landing` hands the exact endpoint to the world for one frame.
+var player_vault: Dictionary = {}
+var vault_landing := Vector3.INF
+## V17: timed E interaction on sharp remnants: {key, elapsed, duration}.
+var clearing_glass: Dictionary = {}
 ## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
 var house_cells: Dictionary = {}
 var player_lit := false
@@ -179,6 +189,7 @@ func step() -> void:
 	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
 	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
 			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
+	_tick_window_actions()
 	var was_bleeding := player.bleeding
 	player.tick(TICK)
 	if was_bleeding and not player.bleeding and not player.dead:
@@ -191,30 +202,7 @@ func step() -> void:
 		_practice("sneaking", "sneak_second", TICK)
 	var found := loot.tick(TICK, player_pos)
 	if not found.is_empty():
-		_practice("scavenging", "search")
-		found["items"] = _rot_old_food(found["items"])
-		inventory.give_all(found["items"])
-		var names := PackedStringArray()
-		if not found["items"].is_empty():
-			names.append(_list(found["items"]))
-		for piece: Dictionary in found.get("gear", []) + _search_gear(found):  # S4: a corpse's pieces first
-			gear.pieces.append(piece)
-			stats.note_gear(piece.get("rarity", "white"))
-			names.append(piece["name"])
-			_announce(piece, "You find")
-		if found["id"].begins_with(CORPSE):
-			var zid := int(found["id"].trim_prefix(CORPSE))
-			if horde.zombies.has(zid):
-				horde.zombies[zid].searched = true  # S4: a looted corpse is cleared sooner
-		var armoury := _search_guns(found)  # M14: guns, parts and ammo, on their own seeded stream
-		if not armoury["items"].is_empty():
-			inventory.give_all(armoury["items"])
-			names.append(_list(armoury["items"]))
-		for piece: Dictionary in armoury["pieces"]:
-			gear.pieces.append(piece)
-			stats.note_gear(piece.get("rarity", "white"))
-			names.append(piece["name"])
-		add_message(("Found " + ", ".join(names)) if not names.is_empty() else "Nothing useful", 4.0)
+		_finish_search(found)
 	var night := clock.is_night()
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
 			"player_lit": player_lit or automation.in_light(player_pos), "pieces": build.pieces, "noise": noise}
@@ -391,7 +379,7 @@ func _watch_pete() -> void:
 	for id: int in horde.zombies:
 		var z: ZombieBrain = horde.zombies[id]
 		if z.type == "old_pete" and not z.is_dead() and z.state in [ZombieBrain.State.CHASE, ZombieBrain.State.INVESTIGATE,
-				ZombieBrain.State.BREAK, ZombieBrain.State.ATTACK]:
+				ZombieBrain.State.BREAK, ZombieBrain.State.CLIMB, ZombieBrain.State.ATTACK]:
 			busy = true
 			at = z.pos
 	if busy and not _pete_busy:
@@ -506,6 +494,137 @@ func _unnoticed_zombie_near() -> bool:
 	return false
 
 
+# --- Window vaulting and glass -------------------------------------------------
+
+## Fitness is the existing agility-like skill: 3% off per level, capped so the motion stays readable.
+func vault_duration() -> float:
+	return float(data.survival["vault_seconds"]) * maxf(0.65, 1.0 - skills.bonus("vault_speed"))
+
+
+func vault_fraction() -> float:
+	if player_vault.is_empty():
+		return 0.0
+	return clampf(float(player_vault["elapsed"]) / maxf(0.001, float(player_vault["duration"])), 0.0, 1.0)
+
+
+## A prompt/action only counts when the player is beside the opening, not merely inside the 4 m look ray.
+func window_in_reach(key: String) -> bool:
+	return build.is_broken(key) and _flat_dist(player_pos, build.piece_center(key)) <= float(data.survival["vault_reach"])
+
+
+## Why Space cannot begin this vault. Empty means it is legal.
+func vault_reason(key: String) -> String:
+	if not build.is_broken(key):
+		return "Only a broken window can be climbed"
+	if not window_in_reach(key):
+		return "Move closer to the window"
+	if not player_vault.is_empty():
+		return "Already climbing"
+	if player.dead or player.asleep:
+		return "You can't climb now"
+	if player.aiming or guns.aiming:
+		return "Lower your aim before climbing"
+	if guns.reloading > 0.0:
+		return "Finish reloading before climbing"
+	if player.swing_cooldown > 0.0:
+		return "Finish the swing before climbing"
+	if player.blocking:
+		return "Lower your guard before climbing"
+	if carry_ratio() > 1.0:
+		return "Too over-encumbered to climb"
+	if player.stamina < float(data.survival["vault_stamina"]):
+		return "Too tired to climb"
+	return ""
+
+
+## Starts a deterministic crossing from the player's side of the frame to a safe point on the other side.
+## Returns "" or the reason it did not start.
+func start_vault(key: String) -> String:
+	var why := vault_reason(key)
+	if why != "":
+		return why
+	var piece: Dictionary = build.pieces[key]
+	var center := build.piece_center(key)
+	center.y = player_pos.y
+	var yaw := build.yaw_for(piece["id"], piece["cell"], piece["side"])
+	var normal := Basis(Vector3.UP, deg_to_rad(yaw)).z
+	var side := 1.0 if (player_pos - center).dot(normal) >= 0.0 else -1.0
+	var clearance := float(data.survival["vault_clearance"])
+	var landing := center - normal * side * clearance
+	if not player.try_vault(float(data.survival["vault_stamina"])):
+		return "Too tired to climb"
+	player.sprinting = false
+	player.set_blocking(false)
+	clearing_glass = {}
+	vault_landing = Vector3.INF
+	player_vault = {"key": key, "from": player_pos, "to": landing, "elapsed": 0.0, "duration": vault_duration()}
+	noise.emit_kind(center, "vault")
+	if build.has_shards(key):
+		player.damage(float(data.survival["vault_cut_damage"]), "glass")
+		if not player.dead:
+			player.bleeding = true
+			add_message("The glass cut you — you're bleeding (H to bandage)", 5.0)
+	return ""
+
+
+## Screenshot-only positioning uses the same state and curve without advancing the sim clock.
+func set_vault_fraction(fraction: float) -> void:
+	if not player_vault.is_empty():
+		player_vault["elapsed"] = float(player_vault["duration"]) * clampf(fraction, 0.0, 1.0)
+		player_pos = (player_vault["from"] as Vector3).lerp(player_vault["to"] as Vector3, vault_fraction())
+
+
+## Starts clearing sharp glass. An equipped melee weapon (not bare fists or a gun in hand) is faster.
+func start_clear_glass(key: String) -> String:
+	if not build.is_broken(key):
+		return "The window is not broken"
+	if not window_in_reach(key):
+		return "Move closer to the window"
+	if player.dead or player.asleep:
+		return "You can't clear glass now"
+	if not player_vault.is_empty():
+		return "Finish climbing first"
+	if not build.has_shards(key):
+		return "The glass is already cleared"
+	if not clearing_glass.is_empty():
+		return "Clearing the glass..." if clearing_glass.get("key", "") == key else "Already clearing another window"
+	var duration := float(data.survival["clear_glass_seconds"])
+	if guns.hands == "melee" and gear.equipped.get("weapon") is Dictionary:
+		duration *= float(data.survival["clear_glass_weapon_mult"])
+	clearing_glass = {"key": key, "elapsed": 0.0, "duration": duration}
+	return "Clearing the glass..."
+
+
+func clear_glass_fraction() -> float:
+	if clearing_glass.is_empty():
+		return 0.0
+	return clampf(float(clearing_glass["elapsed"]) / maxf(0.001, float(clearing_glass["duration"])), 0.0, 1.0)
+
+
+func _tick_window_actions() -> void:
+	if not player_vault.is_empty():
+		player_vault["elapsed"] = minf(float(player_vault["duration"]), float(player_vault["elapsed"]) + TICK)
+		var k := smoothstep(0.0, 1.0, vault_fraction())
+		player_pos = (player_vault["from"] as Vector3).lerp(player_vault["to"] as Vector3, k)
+		if float(player_vault["elapsed"]) >= float(player_vault["duration"]):
+			vault_landing = player_vault["to"] as Vector3
+			player_pos = vault_landing
+			player_vault = {}
+	if clearing_glass.is_empty():
+		return
+	var key: String = clearing_glass["key"]
+	if not build.has_shards(key) or not window_in_reach(key):
+		clearing_glass = {}
+		return
+	clearing_glass["elapsed"] = float(clearing_glass["elapsed"]) + TICK
+	if float(clearing_glass["elapsed"]) < float(clearing_glass["duration"]):
+		return
+	clearing_glass = {}
+	if build.clear_shards(key):
+		noise.emit_kind(build.piece_center(key), "glass_clear")
+		add_message("Glass cleared — the frame is safe to climb", 3.0)
+
+
 # --- Carrying ---------------------------------------------------------------
 
 ## Carry limit in kg: carry_base, plus 3 kg per Strength level (skills.json), plus the bag worn on back.
@@ -521,6 +640,135 @@ func carry_ratio() -> float:
 ## What you carry in kg: your pockets' items plus the gear pieces in them (worn gear doesn't count).
 func carried_kg() -> float:
 	return inventory.weight(data) + gear.weight()
+
+
+## V18: the right-hand inventory behind either a searched world container or a built storage crate.
+func container_inventory(id: String) -> Inventory:
+	if storages.has(id):
+		return storages[id]
+	if loot.containers.has(id) and loot.containers[id]["searched"]:
+		return loot.inventory(id)
+	return null
+
+
+func container_gear(id: String) -> Array:
+	if storage_gear.has(id):
+		return storage_gear[id]
+	if loot.containers.has(id) and loot.containers[id]["searched"]:
+		return loot.containers[id]["gear"]
+	return []
+
+
+func container_exists(id: String) -> bool:
+	return storages.has(id) or (loot.containers.has(id) and loot.containers[id]["searched"])
+
+
+func container_in_reach(id: String) -> bool:
+	if storages.has(id):
+		return build.pieces.has(id) and _flat_dist(build.piece_center(id), player_pos) <= float(data.survival["crate_reach"])
+	return loot.in_reach(id, player_pos)
+
+
+func container_name(id: String) -> String:
+	if storages.has(id):
+		return "Crate"
+	if id.begins_with(CORPSE):
+		return "Corpse"
+	if loot.containers.has(id):
+		var table := str(loot.containers[id]["table"])
+		return "Trunk" if table == "car_trunk" else loot.display_name(id)
+	return "Container"
+
+
+## Moves a stack between a searched container and pockets. Taking stops at the carry limit.
+## Returns {moved, left, why}; `left` is the requested amount that could not move.
+func move_container_item(id: String, item: String, amount: int, to_pockets: bool) -> Dictionary:
+	var box := container_inventory(id)
+	if box == null:
+		return {"moved": 0, "left": maxi(0, amount), "why": "Container closed"}
+	if not container_in_reach(id):
+		return {"moved": 0, "left": maxi(0, amount), "why": "Too far away"}
+	var from := box if to_pockets else inventory
+	var to := inventory if to_pockets else box
+	var wanted := mini(maxi(0, amount), from.count(item))
+	var allowed := wanted
+	if to_pockets:
+		var each := data.item_weight(item)
+		if each > 0.0:
+			allowed = mini(allowed, maxi(0, floori((carry_limit() - carried_kg() + 0.001) / each)))
+	var moved := from.move_to(to, item, allowed)
+	var left := wanted - moved
+	return {"moved": moved, "left": left, "why": "Too heavy" if left > 0 and to_pockets else ""}
+
+
+func can_take_container_item(id: String, item: String, amount: int) -> String:
+	var box := container_inventory(id)
+	if box == null:
+		return "Container closed"
+	if not container_in_reach(id):
+		return "Too far away"
+	var wanted := mini(maxi(0, amount), box.count(item))
+	if wanted <= 0:
+		return "Nothing to take"
+	return "Too heavy" if carried_kg() + data.item_weight(item) * wanted > carry_limit() + 0.001 else ""
+
+
+## Moves one rolled gear piece between a searched container and pockets.
+func move_container_gear(id: String, uid: int, to_pockets: bool) -> Dictionary:
+	if not container_exists(id):
+		return {"moved": false, "why": "Container closed"}
+	if not container_in_reach(id):
+		return {"moved": false, "why": "Too far away"}
+	var held := container_gear(id)
+	if to_pockets:
+		for i in held.size():
+			var piece: Dictionary = held[i]
+			if int(piece["uid"]) != uid:
+				continue
+			if carried_kg() + gear.piece_weight(piece) > carry_limit() + 0.001:
+				return {"moved": false, "why": "Too heavy"}
+			held.remove_at(i)
+			gear.pieces.append(piece)
+			return {"moved": true, "why": ""}
+		return {"moved": false, "why": "Nothing to take"}
+	var piece := gear.take(uid)
+	if piece.is_empty():
+		return {"moved": false, "why": "You don't have that"}
+	held.append(piece)
+	return {"moved": true, "why": ""}
+
+
+func can_take_container_gear(id: String, uid: int) -> String:
+	if not container_exists(id):
+		return "Container closed"
+	if not container_in_reach(id):
+		return "Too far away"
+	for piece: Dictionary in container_gear(id):
+		if int(piece["uid"]) == uid:
+			return "Too heavy" if carried_kg() + gear.piece_weight(piece) > carry_limit() + 0.001 else ""
+	return "Nothing to take"
+
+
+## Takes every stack and gear piece that fits. What remains is reported for the HUD.
+func take_all(id: String) -> Dictionary:
+	var box := container_inventory(id)
+	var out := {"items": {}, "gear": [], "not_fit": {}, "gear_not_fit": []}
+	if box == null or not container_in_reach(id):
+		return out
+	for item: String in box.items():
+		var before := box.count(item)
+		var moved: Dictionary = move_container_item(id, item, before, true)
+		if moved["moved"] > 0:
+			out["items"][item] = moved["moved"]
+		if moved["left"] > 0:
+			out["not_fit"][item] = moved["left"]
+	for piece: Dictionary in container_gear(id).duplicate():
+		var moved := move_container_gear(id, int(piece["uid"]), true)
+		if moved["moved"]:
+			out["gear"].append(piece["name"])
+		else:
+			out["gear_not_fit"].append(piece["name"])
+	return out
 
 
 ## Your pockets plus every storage crate within storage_range of `at`: what building and hand-feeding use.
@@ -751,28 +999,116 @@ func _bag_at_feet() -> Dictionary:
 
 func equip_gear(uid: int) -> String:
 	var piece := gear.find(uid)
-	var why := gear.equip(uid)
+	if piece.is_empty():
+		return "You don't have that"
+	if gear.slot_of(piece) == "part":
+		return "Attach it to a firearm at a workbench"
+	var why := can_equip_gear(uid, gear.slot_of(piece))
+	if why != "":
+		return why
+	why = gear.equip(uid)
 	return why if why != "" else "Equipped " + piece["name"]
 
 
-## Wears one stackable bag item on the back. The old bag goes to pockets if it fits, otherwise the ground.
+## Checks a drag from pockets onto a character slot without changing either side.
+func can_equip_gear(uid: int, slot: String) -> String:
+	var piece := gear.find(uid)
+	if piece.is_empty() or gear.is_equipped(uid):
+		return "You don't have that"
+	if gear.slot_of(piece) != slot or slot == "part":
+		return "Doesn't fit that slot"
+	var old: Variant = gear.equipped.get(slot)
+	var final_kg := carried_kg() - gear.piece_weight(piece)
+	if old is Dictionary:
+		final_kg += gear.piece_weight(old)
+	var had := gear.equipped.has(slot)
+	gear.equipped[slot] = piece
+	var limit := carry_limit()
+	if had:
+		gear.equipped[slot] = old
+	else:
+		gear.equipped.erase(slot)
+	# only refuse when the swap makes you heavier: putting on what you carry always lightens your pockets
+	return "Too heavy" if final_kg > limit + 0.001 and final_kg > carried_kg() + 0.001 else ""
+
+
+func equip_gear_to_slot(uid: int, slot: String) -> String:
+	var why := can_equip_gear(uid, slot)
+	return why if why != "" else equip_gear(uid)
+
+
+## Wears one stackable bag item on the back. The old bag goes to pockets.
 func equip_bag(item: String) -> String:
 	if data.item_value(item, "bag") <= 0.0:
 		return "That isn't a bag"
-	if not inventory.remove(item, 1):
+	if inventory.count(item) <= 0:
 		return "You don't have that"
 	var old := str(gear.equipped.get("back", ""))
+	var final_kg := carried_kg() - data.item_weight(item) + data.item_weight(old)
+	var had := gear.equipped.has("back")
+	gear.equipped["back"] = item
+	var limit := carry_limit()
+	if had:
+		gear.equipped["back"] = old
+	else:
+		gear.equipped.erase("back")
+	if final_kg > limit + 0.001:
+		return "Too heavy"
+	inventory.remove(item, 1)
 	gear.equipped["back"] = item
 	var suffix := _stow_bag(old)
 	return "Equipped %s%s" % [data.item_name(item), suffix]
 
 
+func can_equip_item(item: String, slot: String) -> String:
+	if slot != "back" or data.item_value(item, "bag") <= 0.0:
+		return "Doesn't fit that slot"
+	if inventory.count(item) <= 0:
+		return "You don't have that"
+	var old := str(gear.equipped.get("back", ""))
+	var final_kg := carried_kg() - data.item_weight(item) + data.item_weight(old)
+	var had := gear.equipped.has("back")
+	gear.equipped["back"] = item
+	var limit := carry_limit()
+	if had:
+		gear.equipped["back"] = old
+	else:
+		gear.equipped.erase("back")
+	return "Too heavy" if final_kg > limit + 0.001 else ""
+
+
+func equip_item_to_slot(item: String, slot: String) -> String:
+	var why := can_equip_item(item, slot)
+	return why if why != "" else equip_bag(item)
+
+
 func unequip_gear(slot: String) -> String:
+	var why := can_unequip_gear(slot)
+	if why != "":
+		return why
 	if slot == "back":
 		return _unequip_bag()
 	var piece: Dictionary = gear.equipped.get(slot, {})
-	var why := gear.unequip(slot)
+	why = gear.unequip(slot)
 	return why if why != "" else "Took off " + piece["name"]
+
+
+func can_unequip_gear(slot: String) -> String:
+	if not gear.equipped.has(slot):
+		return "Nothing there"
+	var value: Variant = gear.equipped[slot]
+	if slot == "back":
+		var bag := str(value)
+		gear.equipped.erase(slot)
+		var fits := carried_kg() + data.item_weight(bag) <= carry_limit() + 0.001
+		gear.equipped[slot] = value
+		return "" if fits else "Too heavy"
+	if not value is Dictionary:
+		return "Nothing there"
+	gear.equipped.erase(slot)
+	var fits := carried_kg() + gear.piece_weight(value) <= carry_limit() + 0.001
+	gear.equipped[slot] = value
+	return "" if fits else "Too heavy"
 
 
 func _unequip_bag() -> String:
@@ -788,12 +1124,15 @@ func _unequip_bag() -> String:
 func _stow_bag(item: String) -> String:
 	if item == "":
 		return ""
-	if carried_kg() + data.item_weight(item) <= carry_limit() + 0.001:
-		inventory.add(item, 1)
-		return ""
-	var bag := _bag_at_feet()
-	bag["items"][item] = int(bag["items"].get(item, 0)) + 1
-	return " (pockets full: dropped at your feet)"
+	inventory.add(item, 1)
+	return ""
+
+
+## Screen-local number-key and hotbar-drop rule.
+func assign_hotbar_item(i: int, item: String) -> String:
+	if inventory.count(item) <= 0:
+		return "Click an item in your pockets first"
+	return hotbar.assign(i, Hotbar.item_entry(item))
 
 
 ## Repairs a piece (carried or worn) to mint with one repair kit from your pockets. Trains Mechanics
@@ -1157,6 +1496,46 @@ func search(id: String) -> String:
 	return reason
 
 
+## Screenshot/test path: reveal the same seeded contents without spending search time or making noise.
+func reveal_container(id: String) -> String:
+	if not loot.containers.has(id):
+		return "Nothing to search"
+	if loot.containers[id]["searched"]:
+		return ""
+	var found := loot.reveal(id)
+	if found.is_empty():
+		return "Nothing to search"
+	_finish_search(found)
+	return ""
+
+
+## A completed search leaves everything in the container; the screen decides what to take.
+func _finish_search(found: Dictionary) -> void:
+	_practice("scavenging", "search")
+	var id := str(found["id"])
+	var items: Dictionary = _rot_old_food(found["items"])
+	var armoury := _search_guns(found)
+	for item: String in armoury["items"]:
+		items[item] = int(items.get(item, 0)) + int(armoury["items"][item])
+	loot.inventory(id).give_all(items)
+	var rolled: Array = _search_gear(found) + armoury["pieces"]
+	loot.add_gear(id, rolled)
+	for piece: Dictionary in rolled:
+		stats.note_gear(piece.get("rarity", "white"))
+		_announce(piece, "You find")
+	if id.begins_with(CORPSE):
+		var zid := int(id.trim_prefix(CORPSE))
+		if horde.zombies.has(zid):
+			horde.zombies[zid].searched = true
+	var names := PackedStringArray()
+	if not items.is_empty():
+		names.append(_list(items))
+	for piece: Dictionary in loot.containers[id]["gear"]:
+		names.append(piece["name"])
+	add_message(("Found " + ", ".join(names) + " — choose what to take") if not names.is_empty() else "Nothing useful", 4.0)
+	container_searched.emit(id)
+
+
 ## Fits a muffler to the machine at `cell`: -15 loudness, 10% slower. Returns "" or why not.
 func fit_muffler(cell: Vector2i) -> String:
 	var gen_key := "o:%d:%d" % [cell.x, cell.y]
@@ -1187,7 +1566,7 @@ func fit_muffler(cell: Vector2i) -> String:
 ## Starts a melee swing if the weapon is ready and there's stamina (PlayerStats.try_swing). Swinging
 ## trains Strength. Returns true if it swung.
 func swing() -> bool:
-	if not player.try_swing(swing_cooldown()):
+	if not player_vault.is_empty() or not player.try_swing(swing_cooldown()):
 		return false
 	_practice("strength", "swing")
 	return true
@@ -1292,7 +1671,16 @@ func hit_zombie(id: int, head: bool) -> bool:
 
 ## Q: cycles melee, primary and sidearm, skipping empty firearm slots. Returns a message.
 func swap_hands() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	return guns.swap()
+
+
+## V19: a hands-bar key puts that weapon slot in your hands. Returns a message.
+func draw_weapon(slot: String) -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
+	return guns.draw(slot)
 
 
 ## Fires the gun in your hands: uses a round, kicks up the spread, wears the gun and its suppressor, and
@@ -1300,6 +1688,8 @@ func swap_hands() -> String:
 ## Trains Firearms. Returns "" if it fired, otherwise why not. The world then raycasts and calls
 ## shoot_zombie() if the ray met a zombie.
 func fire() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	var why := guns.can_fire()
 	if why != "":
 		return why
@@ -1335,6 +1725,8 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 
 ## R with a gun in hand: starts a reload (or switches ammo type). A reload click carries a few metres.
 func reload() -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
 	var msg := guns.start_reload(inventory)
 	if guns.reloading > 0.0:
 		noise.emit(player_pos, noise_loudness("reload"), "reload")
@@ -1457,12 +1849,19 @@ func take_bag(id: int) -> Dictionary:
 
 
 func _on_player_respawned() -> void:
+	player_vault = {}
+	clearing_glass = {}
+	vault_landing = Vector3.INF
 	player_pos = spawn_point
 
 
 ## Dying drops everything you carry in a bag where you fell, gear in your pockets too.
 ## What you're wearing stays on you (M13).
 func _on_player_died() -> void:
+	if not player_vault.is_empty():
+		vault_landing = player_pos
+	player_vault = {}
+	clearing_glass = {}
 	stats.note_death(player.last_cause, when_text())
 	tally["deaths"] += 1
 	var items := _counts_of(inventory)
@@ -1490,6 +1889,7 @@ func _on_piece_added(key: String) -> void:
 	match build.kind_of(piece["id"]):
 		"storage":
 			storages[key] = Inventory.new()
+			storage_gear[key] = []
 		"turret":
 			factory.add_turret(piece["id"], piece["cell"])
 		"machine":
@@ -1508,9 +1908,11 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 		inventory.add(data.buildables[piece["id"]]["fuel"], cans)  # unburnt fuel comes back
 	if storages.has(key):
 		var held := _counts_of(storages[key])
+		var held_gear: Array = storage_gear.get(key, []).duplicate()
 		storages.erase(key)
-		if not held.is_empty():
-			drop_bag(build.center_for(piece["id"], piece["cell"], piece["side"]) * Vector3(1, 0, 1), held)
+		storage_gear.erase(key)
+		if not held.is_empty() or not held_gear.is_empty():
+			drop_bag(build.center_for(piece["id"], piece["cell"], piece["side"]) * Vector3(1, 0, 1), held, held_gear)
 	if piece.get("destroyed", false) and build.player_placeable(piece["id"]) and build.kind_of(piece["id"]) != "foundation":
 		var at := build.center_for(piece["id"], piece["cell"], piece["side"])
 		var dir := base_log.direction(at)
@@ -1586,6 +1988,9 @@ func _new_day() -> void:
 	var rotted := _spoil(inventory)
 	for key: String in storages:
 		_spoil(storages[key])
+	for id: String in loot.containers:
+		if loot.containers[id]["searched"]:
+			_spoil(loot.inventory(id))
 	if rotted > 0:
 		add_message("%d of your vegetables rotted" % rotted, 5.0)
 	if clock.day >= int(data.survival["gas_stale_day"]) and vehicles.go_stale() > 0:
