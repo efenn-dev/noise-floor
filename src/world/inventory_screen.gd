@@ -90,6 +90,7 @@ var _crate_grid: GridContainer
 var _crate_title: Label
 var _crate_prev: Button
 var _crate_next: Button
+var _take_all_button: Button  # V27
 var _weight_label: Label
 var _weight_bar: ProgressBar
 var _details: Label
@@ -333,6 +334,15 @@ func take_selected() -> void:
 	refresh()
 
 
+## V27: the Equip action on a gear piece in the open container: wear it straight away.
+func equip_from_container_selected() -> void:
+	if _container_id == "" or not _selected.begins_with(GEAR):
+		return
+	message.emit(sim.equip_from_container(_container_id, int(_selected.trim_prefix(GEAR))))
+	_selected = ""
+	refresh()
+
+
 ## R while looting: take every stack and piece that fits, and name what stayed behind.
 func take_everything() -> void:
 	if _container_id == "":
@@ -490,9 +500,11 @@ func drop_reason(data: Dictionary, target: String) -> String:
 			return "No container within reach"
 		return "" if side == POCKETS and kind in ["item", "gear"] else "Move it to your pockets first"
 	if target.begins_with("slot:"):
+		var slot := target.trim_prefix("slot:")
+		if side == CRATE and kind == "gear":
+			return sim.can_equip_from_container(_container_id, int(data["uid"]), slot)  # V27: straight from the container
 		if side != POCKETS:
 			return "Move it to your pockets first"
-		var slot := target.trim_prefix("slot:")
 		if kind == "gear":
 			return sim.can_equip_gear(int(data["uid"]), slot)
 		if kind == "item":
@@ -545,8 +557,11 @@ func drop_data(data: Variant, target: String) -> String:
 			result = sim.move_container_item(_container_id, str(data["item"]), int(data["amount"]), false)["why"]
 	elif target.begins_with("slot:"):
 		var slot := target.trim_prefix("slot:")
-		result = sim.equip_gear_to_slot(int(data["uid"]), slot) if kind == "gear" \
-				else sim.equip_item_to_slot(str(data["item"]), slot)
+		if side == CRATE and kind == "gear":
+			result = sim.equip_from_container(_container_id, int(data["uid"]), slot)
+		else:
+			result = sim.equip_gear_to_slot(int(data["uid"]), slot) if kind == "gear" \
+					else sim.equip_item_to_slot(str(data["item"]), slot)
 	elif target.begins_with("hotbar:"):
 		var hotbar_slot := int(target.trim_prefix("hotbar:"))
 		result = sim.assign_hotbar_item(hotbar_slot, str(data["item"]))
@@ -574,6 +589,7 @@ func refresh() -> void:
 		_crate_title.text = sim.container_name(_container_id)
 	_crate_prev.visible = _crates.size() > 1
 	_crate_next.visible = _crates.size() > 1
+	_take_all_button.visible = _container_id != "" and box != null
 	for i in _hotbar_targets.size():
 		_hotbar_targets[i].text = "%s\n%s" % [Hotbar.key_name(i), sim.hotbar.label(i)]
 
@@ -805,6 +821,8 @@ func _show_gear(piece: Dictionary) -> void:
 	if _selected_side == WORN:
 		_action("Unequip", unequip_selected)
 	elif _selected_side == CRATE:
+		if g.slot_of(piece) != "part":
+			_action("Equip", equip_from_container_selected)  # V27: wear it without taking it first
 		_action("Take", take_selected)
 	elif g.slot_of(piece) == "part":
 		_action("Drop", drop_gear_selected)  # M14: parts go on a gun at a workbench, not on you
@@ -981,6 +999,9 @@ func _build() -> void:
 	_crate_next = _small_button(">", func() -> void: _cycle(1))
 	head.add_child(_crate_prev)
 	head.add_child(_crate_next)
+	_take_all_button = _small_button("Take all (R)", take_everything)  # V27: the R key, as a button too
+	_take_all_button.name = "TakeAll"
+	head.add_child(_take_all_button)
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 41)  # line up with the pockets' weight label and bar
 	right.add_child(spacer)

@@ -2,6 +2,16 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V27 Take all button, wear gear straight from a container (Sprint 4)
+
+Emmitt: "a loot all button might help, I also noticed that we can't immediately equip items, it has to go to inventory before being equipped". By Claude Opus 5.5.
+
+**Built:**
+- **Take all (R)** is now a button beside the container's name, not only the R key.
+- **Wear it from the container:** a gear piece in an open container has an Equip action, and you can drag it straight onto a character slot. What you wore there goes into your pockets, or stays in the container if you can't carry it (the message says so). Gun parts and wrong slots are refused with a reason. Rules in the sim (`SimWorld.can_equip_from_container` / `equip_from_container`).
+
+**Tests:** 11,876 green (new `test_loot_polish.gd`).
+
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
 Emmitt: "fix the hands in the engine". Every Blender pass bent some finger the wrong way once it reached Godot, so the poses are now built in Godot, where they can be measured. By Claude Opus 5.5.
