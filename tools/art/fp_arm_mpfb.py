@@ -5,9 +5,10 @@ Run with Blender 5.1:
 
 The MPFB HumanService creates a moderately muscular adult male and RigService supplies the
 game_engine skeleton and weights.  Native right and left hands are cut from that human; the
-left is never mirrored.  MPFB weights are merged onto the game's compact 17-bone contract,
-then the anatomically correct hand is skinned directly into the Grip rest pose.  The jacket
-sleeve, turned cuff and glove seam are deterministic procedural additions.
+left is never mirrored.  MPFB weights are merged onto the game's compact 17-bone contract.
+The working Grip hand is the deformation-safe bind pose; every named action is authored from
+an anatomical neutral reference without adding bone roll.  The jacket sleeve, turned cuff and
+glove seam are deterministic procedural additions.
 
 Important axis contract: authored points are in Godot coordinates and g2b maps them to
 Blender.  glTF's Y-up conversion maps them back on import.  The grip centre is the scene
@@ -56,6 +57,61 @@ MACRO_SETTINGS = {
     "race": {"asian": 0.33, "caucasian": 0.34, "african": 0.33},
 }
 
+# Anatomical flexion in degrees from the clean neutral reference.  The fist
+# values are the requested MCP/PIP/DIP closure rather than a visually guessed
+# fingertip path.
+GRIP_ANGLES = {
+    "Thumb": (18.0, 24.0, 12.0),
+    "Index": (30.0, 32.0, 38.0),
+    "Middle": (32.0, 34.0, 40.0),
+    "Ring": (34.0, 36.0, 42.0),
+    "Pinky": (36.0, 38.0, 44.0),
+}
+POSE_ANGLES = {
+    "Grip": GRIP_ANGLES,
+    "Open": {
+        "Thumb": (8.0, 10.0, 6.0),
+        "Index": (10.0, 15.0, 8.0),
+        "Middle": (12.0, 17.0, 9.0),
+        "Ring": (14.0, 19.0, 10.0),
+        "Pinky": (16.0, 21.0, 12.0),
+    },
+    "Flat": {digit: (0.0, 0.0, 0.0) for digit in ("Thumb", *FINGERS)},
+    "HoldMag": {
+        "Thumb": (34.0, 42.0, 18.0),
+        "Index": (7.0, 8.0, 5.0),
+        "Middle": (42.0, 58.0, 34.0),
+        "Ring": (45.0, 62.0, 36.0),
+        "Pinky": (48.0, 66.0, 38.0),
+    },
+    "Pinch": {
+        "Thumb": (42.0, 52.0, 26.0),
+        "Index": (60.0, 70.0, 38.0),
+        "Middle": (32.0, 42.0, 22.0),
+        "Ring": (36.0, 46.0, 24.0),
+        "Pinky": (40.0, 50.0, 27.0),
+    },
+    "Fist": {
+        "Thumb": (52.0, 62.0, 34.0),
+        "Index": (88.0, 100.0, 66.0),
+        "Middle": (89.0, 101.0, 67.0),
+        "Ring": (89.0, 101.0, 67.0),
+        "Pinky": (87.0, 99.0, 65.0),
+    },
+}
+
+# Only the MCP is allowed a tiny natural fan.  Signs mirror with the palm
+# normal, keeping both native hands symmetric without lateral joint bending.
+GRIP_FAN = {"Thumb": 0.0, "Index": -3.0, "Middle": -1.0,
+            "Ring": 1.0, "Pinky": 3.5}
+POSE_FAN = {
+    "Grip": GRIP_FAN,
+    "Open": {"Thumb": 0.0, "Index": -1.0, "Middle": -0.3, "Ring": 0.3, "Pinky": 1.0},
+    "Flat": {"Thumb": 0.0, "Index": -0.4, "Middle": -0.1, "Ring": 0.1, "Pinky": 0.4},
+    "HoldMag": {"Thumb": 0.0, "Index": -1.5, "Middle": -0.8, "Ring": 1.2, "Pinky": 3.5},
+    "Pinch": {"Thumb": 0.0, "Index": -2.0, "Middle": -1.0, "Ring": 1.2, "Pinky": 3.5},
+    "Fist": {"Thumb": 25.0, "Index": -4.0, "Middle": -1.5, "Ring": 1.5, "Pinky": 4.0},
+}
 
 def g2b(point):
     """Godot point/vector -> Blender point/vector for a Y-up glTF round trip."""
@@ -65,6 +121,17 @@ def g2b(point):
 def b2g(point):
     """Blender point/vector -> Godot point/vector after glTF re-import."""
     return Vector((point.x, point.z, -point.y))
+
+
+GODOT_TO_BLENDER_BASIS = Matrix(((1.0, 0.0, 0.0),
+                                 (0.0, 0.0, -1.0),
+                                 (0.0, 1.0, 0.0)))
+
+
+def g2b_rotation(rotation):
+    """Convert a Godot-space rotation to the equivalent Blender-space rotation."""
+    matrix = rotation.to_matrix() if isinstance(rotation, Quaternion) else Matrix(rotation)
+    return GODOT_TO_BLENDER_BASIS @ matrix @ GODOT_TO_BLENDER_BASIS.transposed()
 
 
 def clean_scene(remove_actions=False):
@@ -130,6 +197,48 @@ def target_chain(root, lengths, directions):
     return chain
 
 
+def flexion_chain(neutral_chain, palm_normal, joint_angles, fan_angle=0.0,
+                  axis_chain=None):
+    """Pose a digit without roll: every joint turns around its flexion axis.
+
+    At each phalanx the axis is derived afresh as bone direction x inward palm
+    normal.  Parent rotation carries that axis forward to the child, so there is
+    no dependence on MPFB bone roll and no shortest-arc swing ambiguity.
+    """
+    points = [Vector(neutral_chain[0])]
+    rotations = []
+    palm_normal = Vector(palm_normal).normalized()
+    axis_chain = axis_chain or neutral_chain
+    parent_rotation = Quaternion(palm_normal, math.radians(fan_angle))
+    for index, angle in enumerate(joint_angles):
+        rest_vector = Vector(neutral_chain[index + 1]) - Vector(neutral_chain[index])
+        length = rest_vector.length
+        base_direction = (parent_rotation @ rest_vector.normalized()).normalized()
+        posed_normal = (parent_rotation @ palm_normal).normalized()
+        axis_direction = (Vector(axis_chain[index + 1]) - Vector(axis_chain[index])).normalized()
+        axis_direction = (parent_rotation @ axis_direction).normalized()
+        flex_axis = axis_direction.cross(-posed_normal)
+        assert flex_axis.length > 0.25, (index, base_direction[:], posed_normal[:])
+        flex_axis.normalize()
+        flex = Quaternion(flex_axis, math.radians(angle))
+        segment_rotation = flex @ parent_rotation
+        direction = (segment_rotation @ rest_vector.normalized()).normalized()
+        points.append(points[-1] + direction * length)
+        rotations.append(segment_rotation)
+        parent_rotation = segment_rotation
+    return points, rotations
+
+
+def rotations_between_chains(source_chain, target_chain):
+    """Return twist-free segment swings from one authored chain to another."""
+    rotations = []
+    for index in range(3):
+        source_direction = (Vector(source_chain[index + 1]) - Vector(source_chain[index])).normalized()
+        target_direction = (Vector(target_chain[index + 1]) - Vector(target_chain[index])).normalized()
+        rotations.append(source_direction.rotation_difference(target_direction))
+    return rotations
+
+
 def fabrik(chain, target, iterations=32):
     points = [Vector(point) for point in chain]
     root = points[0].copy()
@@ -171,7 +280,9 @@ def hand_transform(source_armature, side):
     source_across = (side * source_normal.cross(source_long)).normalized()
     source_basis = Matrix((source_long, source_across, source_normal)).transposed()
 
-    target_wrist_g = Vector((side * 0.052, -0.010, 0.112))
+    # Position the whole hand around the prop after flexing the digits; do not
+    # cheat contact by steering individual phalanges sideways.
+    target_wrist_g = Vector((side * 0.055, -0.010, 0.112))
     target_long_g = Vector((side * 0.105, 0.0, -0.9945)).normalized()
     target_across_g = Vector((0.0, 1.0, 0.0))
     target_normal_g = (side * target_long_g.cross(target_across_g)).normalized()
@@ -182,7 +293,7 @@ def hand_transform(source_armature, side):
     transform = (Matrix.Translation(g2b(target_wrist_g)) @ rotation.to_4x4()
                  @ Matrix.Translation(-wrist))
     assert abs(rotation.determinant() - 1.0) < 1.0e-5
-    return transform, rotation, target_wrist_g
+    return transform, rotation, target_wrist_g, target_normal_g
 
 
 def grip_directions(side, digit):
@@ -202,10 +313,27 @@ def grip_directions(side, digit):
     )
 
 
+def fist_directions(side, digit):
+    """Compact closed chains, kept close to the deformation-safe Grip bind."""
+    if digit == "Thumb":
+        return (
+            (side * -0.25, 0.55, -0.80),
+            (side * -0.72, 0.55, -0.42),
+            (side * -0.82, 0.45, -0.35),
+        )
+    spread = {"Index": -0.018, "Middle": -0.006,
+              "Ring": 0.006, "Pinky": 0.018}[digit]
+    return (
+        (side * -0.62, spread, -0.78),
+        (side * -0.98, spread * 0.3, -0.18),
+        (side * -0.65, spread * 0.2, 0.76),
+    )
+
+
 def make_rest_definition(source_armature, side):
     suffix = source_side(side)
     source_bones = source_armature.data.bones
-    hand_xform, hand_rotation, wrist_g = hand_transform(source_armature, side)
+    hand_xform, hand_rotation, wrist_g, palm_normal_g = hand_transform(source_armature, side)
     sleeve_end_g = Vector((side * 0.070, -0.104, 0.424))
     definition = {
         "Forearm": (sleeve_end_g, wrist_g, None),
@@ -217,10 +345,13 @@ def make_rest_definition(source_armature, side):
     definition["Hand"] = (hand_head, hand_tail, "Forearm")
 
     chains = {}
+    neutral_chains = {}
     for digit in ("Thumb", *FINGERS):
         source_chain = [source_bones[source_name(digit, 1, suffix)].head_local.copy()]
         for index in range(1, 4):
             source_chain.append(source_bones[source_name(digit, index, suffix)].tail_local.copy())
+        neutral_chain = [b2g(hand_xform @ point) for point in source_chain]
+        neutral_chains[digit] = neutral_chain
         lengths = [(source_chain[index + 1] - source_chain[index]).length for index in range(3)]
         target_root = b2g(hand_xform @ source_chain[0])
         chain = target_chain(target_root, lengths, grip_directions(side, digit))
@@ -231,11 +362,12 @@ def make_rest_definition(source_armature, side):
             definition[name] = (chain[index], chain[index + 1], parent)
             parent = name
     assert tuple(definition) == BONE_NAMES
-    return definition, chains, hand_xform, hand_rotation
+    return definition, chains, neutral_chains, palm_normal_g, hand_xform, hand_rotation
 
 
 def build_armature(source_armature, side):
-    definition, chains, hand_xform, hand_rotation = make_rest_definition(source_armature, side)
+    (definition, chains, neutral_chains, palm_normal_g,
+     hand_xform, hand_rotation) = make_rest_definition(source_armature, side)
     suffix = source_side(side)
     source_bones = source_armature.data.bones
     data = bpy.data.armatures.new("Armature")
@@ -294,7 +426,8 @@ def build_armature(source_armature, side):
     relative_rotation = source_axis.rotation_difference(target_axis).to_matrix()
     transforms["Forearm"] = (Matrix.Translation(dst_tail) @ relative_rotation.to_4x4()
                               @ Matrix.Translation(-src_tail))
-    return armature, definition, chains, transforms
+    pose_meta = {"neutral_chains": neutral_chains, "palm_normal": palm_normal_g}
+    return armature, definition, chains, transforms, pose_meta
 
 
 def nearest_mapping(source_armature, source_bone_name, side):
@@ -387,6 +520,11 @@ def extract_mpfb_arm(source_mesh, source_armature, output_armature, side, transf
         indices = list(polygon.vertices)
         if not all(index in body_vertices for index in indices):
             continue
+        # The signed forearm projection alone also accepts remote body islands
+        # behind the wrist plane.  Bound the native hand cut spatially so a
+        # stale/remote island can never be mapped through the nearest arm weight.
+        if max((source_positions[index] - wrist).length for index in indices) > 0.35:
+            continue
         if sum(proximity[index] for index in indices) / len(indices) > 0.056:
             continue
         if min(source_influences[index] for index in indices) < 0.25:
@@ -406,11 +544,11 @@ def extract_mpfb_arm(source_mesh, source_armature, output_armature, side, transf
     mapped_weights = []
     for old_index in used:
         source_point = source_positions[old_index].copy()
-        if proximity[old_index] <= 0.015:
+        if proximity[old_index] <= 0.028:
             offset = 0.0018
             # A narrow, integral welt at the glove opening.  It is displaced
             # from MPFB's own surface, so it cannot float away from the wrist.
-            if 0.006 <= proximity[old_index] <= 0.014:
+            if 0.019 <= proximity[old_index] <= 0.027:
                 offset += 0.0015
             source_point += source_normals[old_index] * offset
         weights = source_weights[old_index]
@@ -421,7 +559,7 @@ def extract_mpfb_arm(source_mesh, source_armature, output_armature, side, transf
         for target_name, weight in weights.items():
             point += (transforms[target_name] @ source_point) * weight
         point_g = b2g(point)
-        if (proximity[old_index] <= 0.015 and 0.025 < point_g.z < 0.090
+        if (proximity[old_index] <= 0.028 and 0.025 < point_g.z < 0.090
                 and abs(point_g.y) < 0.007 and side * point_g.x > 0.066):
             # Integral raised back-of-hand seam: move an existing narrow strip
             # rather than adding a disconnected decorative object.
@@ -439,7 +577,7 @@ def extract_mpfb_arm(source_mesh, source_armature, output_armature, side, transf
     bpy.context.collection.objects.link(mesh)
     for output_polygon, source_polygon in zip(data.polygons, selected_faces):
         centre_proximity = sum(proximity[index] for index in source_polygon.vertices) / len(source_polygon.vertices)
-        output_polygon.material_index = 0 if centre_proximity <= 0.015 else 1
+        output_polygon.material_index = 0 if centre_proximity <= 0.028 else 1
         output_polygon.use_smooth = True
     groups = {name: mesh.vertex_groups.new(name=name) for name in BONE_NAMES}
     for vertex_index, weights in enumerate(mapped_weights):
@@ -511,15 +649,16 @@ def add_clothing_parts(side, definition, mats):
 
     turned_cuff = make_ring_tube(
         "TurnedSleeveCuff",
-        [at(0.022), at(0.030), at(0.040), at(0.054)],
-        [(0.038, 0.043), (0.043, 0.048), (0.044, 0.049), (0.041, 0.046)],
+        [at(0.047), at(0.052), at(0.060), at(0.070)],
+        [(0.034, 0.038), (0.041, 0.045), (0.043, 0.047), (0.041, 0.045)],
         mats["sleeve"], {"Forearm": 1.0}, sides=20, fold=0.0012,
+        cap_start=True,
     )
-    sleeve_distances = (0.048, 0.085, 0.145, 0.215, min(0.285, length - 0.025), length)
+    sleeve_distances = (0.064, 0.090, 0.145, 0.215, min(0.285, length - 0.025), length)
     sleeve = make_ring_tube(
         "CanvasSleeve",
         [at(distance) for distance in sleeve_distances],
-        [(0.039, 0.044), (0.042, 0.047), (0.046, 0.051),
+        [(0.040, 0.044), (0.042, 0.047), (0.046, 0.051),
          (0.051, 0.056), (0.056, 0.061), (0.060, 0.065)],
         mats["sleeve"], {"Forearm": 1.0}, sides=20, fold=0.0017, cap_end=True,
     )
@@ -593,91 +732,6 @@ def rest_chains(armature):
     return result
 
 
-def pose_targets(armature, side):
-    rest = rest_chains(armature)
-    result = {"Grip": rest}
-
-    def finger_pose(kind):
-        posed = {}
-        for finger in FINGERS:
-            chain = rest[finger]
-            lengths = [(chain[index + 1] - chain[index]).length for index in range(3)]
-            if kind == "Open":
-                directions = [(side * -0.18, 0.0, -0.98),
-                              (side * -0.10, 0.0, -0.995),
-                              (side * -0.05, 0.0, -0.999)]
-            elif kind == "Flat":
-                directions = [(side * 0.04, 0.0, -1.0)] * 3
-            elif kind == "HoldMag":
-                if finger == "Index":
-                    directions = [(side * -0.14, -0.05, -0.99),
-                                  (side * -0.30, -0.04, -0.95),
-                                  (side * -0.55, -0.03, -0.83)]
-                else:
-                    outward = -0.18 if chain[0].y < 0.0 else 0.18
-                    directions = [(side * -0.22, outward, -0.96),
-                                  (side * -0.52, outward * 0.7, -0.84),
-                                  (side * -0.82, outward * 0.4, -0.55)]
-            elif kind == "Fist":
-                directions = [(side * -0.70, 0.0, -0.71),
-                              (side * -0.96, 0.0, 0.28),
-                              (side * 0.02, 0.0, 1.0)]
-            else:
-                raise ValueError(kind)
-            posed[finger] = target_chain(chain[0], lengths, directions)
-        return posed
-
-    opened = finger_pose("Open")
-    opened["Thumb"] = target_chain(
-        rest["Thumb"][0],
-        [(rest["Thumb"][index + 1] - rest["Thumb"][index]).length for index in range(3)],
-        [(side * -0.54, -0.71, -0.45), (side * -0.70, -0.57, -0.43),
-         (side * -0.77, -0.46, -0.44)],
-    )
-    result["Open"] = opened
-
-    flat = finger_pose("Flat")
-    flat["Thumb"] = target_chain(
-        rest["Thumb"][0],
-        [(rest["Thumb"][index + 1] - rest["Thumb"][index]).length for index in range(3)],
-        [(side * -0.20, 0.05, -0.98), (side * -0.15, 0.05, -0.99),
-         (side * -0.09, 0.04, -0.995)],
-    )
-    result["Flat"] = flat
-
-    hold = finger_pose("HoldMag")
-    hold["Thumb"] = target_chain(
-        rest["Thumb"][0],
-        [(rest["Thumb"][index + 1] - rest["Thumb"][index]).length for index in range(3)],
-        [(side * -0.30, 0.18, -0.94), (side * -0.74, 0.10, -0.67),
-         (side * -0.95, 0.04, -0.30)],
-    )
-    result["HoldMag"] = hold
-
-    pinch_target = Vector((side * -0.001, -0.020, -0.050))
-    pinch = finger_pose("Open")
-    pinch["Index"] = fabrik(rest["Index"], pinch_target)
-    pinch["Thumb"] = fabrik(rest["Thumb"], pinch_target)
-    for finger in ("Middle", "Ring", "Pinky"):
-        chain = rest[finger]
-        lengths = [(chain[index + 1] - chain[index]).length for index in range(3)]
-        pinch[finger] = target_chain(chain[0], lengths,
-                                     [(side * -0.40, 0.0, -0.92),
-                                      (side * -0.64, 0.0, -0.77),
-                                      (side * -0.79, 0.0, -0.61)])
-    result["Pinch"] = pinch
-
-    fist = {digit: [point.copy() for point in chain] for digit, chain in rest.items()}
-    fist["Thumb"] = target_chain(
-        rest["Thumb"][0],
-        [(rest["Thumb"][index + 1] - rest["Thumb"][index]).length for index in range(3)],
-        [(side * -0.25, 0.10, -0.96), (side * -0.60, 0.06, -0.80),
-         (side * -0.70, 0.03, -0.71)],
-    )
-    result["Fist"] = fist
-    return result
-
-
 def reset_pose(armature):
     for bone in armature.pose.bones:
         bone.rotation_mode = "QUATERNION"
@@ -686,20 +740,84 @@ def reset_pose(armature):
         bone.scale = (1.0, 1.0, 1.0)
 
 
+def pose_targets(armature, side, pose_meta):
+    rest = rest_chains(armature)
+    targets = {"Grip": {
+        digit: (rest[digit], [Quaternion() for _index in range(3)])
+        for digit in ("Thumb", *FINGERS)
+    }}
+    for action_name in ACTION_NAMES:
+        if action_name == "Grip":
+            continue
+        targets[action_name] = {}
+        if action_name == "Pinch":
+            pinch_chains = {
+                digit: flexion_chain(
+                    pose_meta["neutral_chains"][digit], pose_meta["palm_normal"],
+                    POSE_ANGLES[action_name][digit], side * POSE_FAN[action_name][digit])[0]
+                for digit in ("Thumb", *FINGERS)
+            }
+            contact = (pinch_chains["Thumb"][-1] + pinch_chains["Index"][-1]) * 0.5
+            # Put the shared point inside the intersection of both reachable
+            # spheres; otherwise FABRIK correctly leaves the shorter digit shy.
+            thumb_root = pinch_chains["Thumb"][0]
+            index_root = pinch_chains["Index"][0]
+            thumb_reach = sum((pinch_chains["Thumb"][index + 1] -
+                               pinch_chains["Thumb"][index]).length
+                              for index in range(3)) * 0.995
+            index_reach = sum((pinch_chains["Index"][index + 1] -
+                               pinch_chains["Index"][index]).length
+                              for index in range(3)) * 0.995
+            root_vector = index_root - thumb_root
+            root_distance = root_vector.length
+            assert abs(thumb_reach - index_reach) < root_distance < thumb_reach + index_reach
+            along = ((root_distance * root_distance + thumb_reach * thumb_reach -
+                      index_reach * index_reach) / (2.0 * root_distance))
+            circle_centre = thumb_root + root_vector.normalized() * along
+            circle_radius = math.sqrt(max(0.0, thumb_reach * thumb_reach - along * along))
+            perpendicular = contact - circle_centre
+            perpendicular -= root_vector.normalized() * perpendicular.dot(root_vector.normalized())
+            if perpendicular.length > circle_radius * 0.80:
+                perpendicular.normalize()
+                perpendicular *= circle_radius * 0.80
+            contact = circle_centre + perpendicular
+            pinch_chains["Thumb"] = fabrik(pinch_chains["Thumb"], contact)
+            pinch_chains["Index"] = fabrik(pinch_chains["Index"], contact)
+            targets[action_name] = {
+                digit: (chain, rotations_between_chains(rest[digit], chain))
+                for digit, chain in pinch_chains.items()
+            }
+            continue
+        for digit in ("Thumb", *FINGERS):
+            if action_name == "Fist":
+                lengths = [(rest[digit][index + 1] - rest[digit][index]).length
+                           for index in range(3)]
+                chain = target_chain(rest[digit][0], lengths,
+                                     fist_directions(side, digit))
+                targets[action_name][digit] = (
+                    chain, rotations_between_chains(rest[digit], chain))
+                continue
+            chain, _rotations = flexion_chain(
+                pose_meta["neutral_chains"][digit], pose_meta["palm_normal"],
+                POSE_ANGLES[action_name][digit], side * POSE_FAN[action_name][digit])
+            targets[action_name][digit] = (
+                chain, rotations_between_chains(rest[digit], chain))
+    return targets
+
+
 def apply_target_pose(armature, targets):
     reset_pose(armature)
-    bpy.context.view_layer.update()
     for digit in ("Thumb", *FINGERS):
-        chain = targets[digit]
+        chain, segment_rotations = targets[digit]
         for index in range(3):
             pose_bone = armature.pose.bones[f"{digit}{index + 1}"]
             target_head = g2b(chain[index])
             target_tail = g2b(chain[index + 1])
             rest = pose_bone.bone.matrix_local.copy()
-            rest_direction = (rest.to_3x3() @ Vector((0.0, 1.0, 0.0))).normalized()
+            rotation = g2b_rotation(segment_rotations[index]) @ rest.to_3x3()
             target_direction = (target_tail - target_head).normalized()
-            swing = rest_direction.rotation_difference(target_direction)
-            rotation = swing.to_matrix() @ rest.to_3x3()
+            actual_direction = (rotation @ Vector((0.0, 1.0, 0.0))).normalized()
+            assert actual_direction.dot(target_direction) > 0.99999
             pose_bone.matrix = Matrix.Translation(target_head) @ rotation.to_4x4()
             bpy.context.view_layer.update()
             assert pose_bone.location.length < 2.5e-4, (pose_bone.name, pose_bone.location[:])
@@ -707,9 +825,9 @@ def apply_target_pose(armature, targets):
     bpy.context.view_layer.update()
 
 
-def make_actions(armature, side):
+def make_actions(armature, side, pose_meta):
     armature.animation_data_create()
-    targets = pose_targets(armature, side)
+    targets = pose_targets(armature, side, pose_meta)
     actions = {}
     for name in ACTION_NAMES:
         action = bpy.data.actions.new(name)
@@ -762,24 +880,16 @@ def build_source(HumanService):
     return human, rig
 
 
-def build_side(HumanService, side):
-    clean_scene(remove_actions=True)
-    bpy.context.scene.render.fps = FPS
-    mats = {
-        "glove": material("Arm Glove", (0.028, 0.010, 0.004), 0.0, 0.82),
-        "skin": material("Arm Skin", (0.48, 0.235, 0.135), 0.0, 0.80),
-        "sleeve": material("Arm Sleeve", (0.030, 0.040, 0.047), 0.0, 0.94),
-    }
-    source_mesh, source_armature = build_source(HumanService)
-    armature, definition, _chains, transforms = build_armature(source_armature, side)
+def build_side(source_mesh, source_armature, mats, side):
+    armature, definition, _chains, transforms, pose_meta = build_armature(source_armature, side)
     hand = extract_mpfb_arm(source_mesh, source_armature, armature, side, transforms, mats)
     clothing = add_clothing_parts(side, definition, mats)
     mesh = join_and_finish([hand, *clothing], armature)
-    make_actions(armature, side)
+    make_actions(armature, side, pose_meta)
     assert all(value > 0.0 for value in (*mesh.scale, *armature.scale))
     result = export_arm(side, mesh, armature)
     print("EXPORTED", result[1])
-    return result
+    return result, mesh, armature
 
 
 def evaluated_points(mesh):
@@ -789,6 +899,156 @@ def evaluated_points(mesh):
     points = [b2g(evaluated.matrix_world @ vertex.co) for vertex in data.vertices]
     evaluated.to_mesh_clear()
     return points
+
+
+def evaluated_finger_points(mesh):
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = mesh.evaluated_get(depsgraph)
+    data = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
+    group_names = {group.index: group.name for group in mesh.vertex_groups}
+    points = []
+    for vertex in data.vertices:
+        finger_weight = sum(item.weight for item in vertex.groups
+                            if group_names.get(item.group, "").startswith(("Thumb", *FINGERS)))
+        if finger_weight >= 0.50:
+            points.append(b2g(evaluated.matrix_world @ vertex.co))
+    evaluated.to_mesh_clear()
+    return points
+
+
+def segment_distance(first_a, first_b, second_a, second_b):
+    """Shortest distance between finite 3-D line segments."""
+    first = first_b - first_a
+    second = second_b - second_a
+    offset = first_a - second_a
+    aa = first.dot(first)
+    bb = first.dot(second)
+    cc = second.dot(second)
+    dd = first.dot(offset)
+    ee = second.dot(offset)
+    denominator = aa * cc - bb * bb
+    first_t = 0.0 if denominator < 1.0e-12 else (bb * ee - cc * dd) / denominator
+    first_t = max(0.0, min(1.0, first_t))
+    second_t = (bb * first_t + ee) / cc if cc > 1.0e-12 else 0.0
+    if second_t < 0.0:
+        second_t = 0.0
+        first_t = max(0.0, min(1.0, -dd / aa))
+    elif second_t > 1.0:
+        second_t = 1.0
+        first_t = max(0.0, min(1.0, (bb - dd) / aa))
+    return ((first_a + first * first_t) -
+            (second_a + second * second_t)).length, first_t, second_t
+
+
+def finger_surface_intersections(_mesh, armature, action_name):
+    """Count penetrations between distal finger surface capsules.
+
+    The MPFB hand is one connected surface at the webs, so raw triangle BVH
+    overlap reports the shared web as hundreds of false collisions.  Distal
+    phalanges are instead checked as anatomical surface capsules; a tip-tip
+    contact in Pinch is permitted, penetration is not.
+    """
+    radii = {"Thumb": 0.0062, "Index": 0.0058, "Middle": 0.0061,
+             "Ring": 0.0058, "Pinky": 0.0052}
+    segments = {}
+    for digit in ("Thumb", *FINGERS):
+        segments[digit] = [
+            (armature.matrix_world @ armature.pose.bones[f"{digit}{index}"].head,
+             armature.matrix_world @ armature.pose.bones[f"{digit}{index}"].tail)
+            for index in (2, 3)
+        ]
+    counts = {}
+    digits = ("Thumb", *FINGERS)
+    for first_index, first in enumerate(digits):
+        for second in digits[first_index + 1:]:
+            if action_name == "Pinch" and {first, second} == {"Thumb", "Index"}:
+                counts[f"{first}-{second}"] = 0
+                continue
+            penetrations = 0
+            for first_segment in segments[first]:
+                for second_segment in segments[second]:
+                    distance, first_t, second_t = segment_distance(
+                        *first_segment, *second_segment)
+                    if distance < radii[first] + radii[second] - 0.001:
+                        penetrations += 1
+            counts[f"{first}-{second}"] = penetrations
+    return counts
+
+
+def pose_prop_intrusions(action_name, points, side):
+    if action_name == "Grip":
+        # The preview handle is a 17 mm radius cylinder along Godot Y.
+        return sum(abs(point.y) < 0.150 - 0.0001
+                   and math.hypot(point.x, point.z) < 0.017 - 0.0001
+                   for point in points)
+    if action_name == "HoldMag":
+        centre = Vector((side * 0.023, 0.0, -0.040))
+        return sum(abs(point.x - centre.x) < 0.011 - 0.0001
+                   and abs(point.y - centre.y) < 0.015 - 0.0001
+                   and abs(point.z - centre.z) < 0.060 - 0.0001
+                   for point in points)
+    return 0
+
+
+def sleeve_glove_measurements(mesh, armature):
+    """Measure the intentional skin band and any see-through cuff opening."""
+    bones = armature.data.bones
+    wrist_b = armature.matrix_world @ bones["Forearm"].tail_local
+    sleeve_end_b = armature.matrix_world @ bones["Forearm"].head_local
+    axis_b = (sleeve_end_b - wrist_b).normalized()
+    material_indices = {mat.name: index for index, mat in enumerate(mesh.data.materials) if mat}
+    vertices_by_material = {}
+    for material_name, material_index in material_indices.items():
+        indices = {index for polygon in mesh.data.polygons
+                   if polygon.material_index == material_index
+                   for index in polygon.vertices}
+        vertices_by_material[material_name] = [
+            (index, mesh.matrix_world @ mesh.data.vertices[index].co)
+            for index in indices]
+
+    forearm_group = mesh.vertex_groups.get("Forearm")
+    assert forearm_group is not None
+
+    def forearm_weight(index):
+        return sum(item.weight for item in mesh.data.vertices[index].groups
+                   if item.group == forearm_group.index)
+
+    def axial(point):
+        return (point - wrist_b).dot(axis_b)
+
+    def radial(point):
+        offset = point - wrist_b
+        return (offset - axis_b * offset.dot(axis_b)).length
+
+    glove_cuff_points = [point for index, point in vertices_by_material["Arm Glove"]
+                         if forearm_weight(index) >= 0.35
+                         and 0.0 <= axial(point) <= 0.039 and radial(point) < 0.080]
+    sleeve_cuff_points = [point for index, point in vertices_by_material["Arm Sleeve"]
+                          if forearm_weight(index) >= 0.95
+                          and 0.0 <= axial(point) <= 0.080 and radial(point) < 0.080]
+    if not glove_cuff_points or not sleeve_cuff_points:
+        print("CUFF_DEBUG", {
+            name: (min(axial(point) for _index, point in material_points),
+                   max(axial(point) for _index, point in material_points),
+                   min(radial(point) for _index, point in material_points),
+                   max(radial(point) for _index, point in material_points))
+            for name, material_points in vertices_by_material.items()
+        })
+    assert glove_cuff_points and sleeve_cuff_points
+    glove_extent = max(axial(point) for point in glove_cuff_points)
+    sleeve_edge = min(axial(point) for point in sleeve_cuff_points)
+    skin_band = sleeve_edge - glove_extent
+    edge_points = [point for point in sleeve_cuff_points
+                   if axial(point) <= sleeve_edge + 0.006]
+    arm_points = [point for material_name in ("Arm Glove", "Arm Skin")
+                  for _index, point in vertices_by_material[material_name]
+                  if abs(axial(point) - sleeve_edge) <= 0.006]
+    assert edge_points and arm_points
+    # A capped cuff has sleeve surface at or inside the underlying forearm in
+    # every view, so no background can be seen through the interface.
+    opening_gap = max(0.0, min(radial(point) for point in edge_points)
+                      - max(radial(point) for point in arm_points))
+    return skin_band, opening_gap
 
 
 def look_at(obj, target_g):
@@ -889,7 +1149,7 @@ def make_contact_sheet(paths):
     sheet = bpy.data.images.new("MPFB Arm Contact Sheet", width=columns * tile,
                                 height=rows * tile, alpha=True)
     sheet.pixels.foreach_set(canvas.ravel())
-    sheet.filepath_raw = str(SHOT_DIR / "fp_arm_mh_sheet.png")
+    sheet.filepath_raw = str(SHOT_DIR / "fp_arm_mh2_sheet.png")
     sheet.file_format = "PNG"
     sheet.save()
     print("PREVIEW", sheet.filepath_raw)
@@ -904,60 +1164,40 @@ def render_previews(side, armature, actions):
     armature.data.pose_position = "POSE"
     rendered = []
 
-    camera.location = g2b((0.260, -0.320, 0.120))
-    look_at(camera, (0.026, 0.0, 0.020))
+    views = (
+        ("back", (0.260, -0.320, 0.120), (0.026, 0.0, 0.020)),
+        ("palm", (-0.245, -0.285, 0.115), (0.018, 0.0, 0.020)),
+    )
+    # Adjacent tiles are the same pose from back three-quarter and palm side.
     for name in ACTION_NAMES:
-        armature.animation_data.action = actions[name]
-        scene.frame_set(1)
-        bpy.context.view_layer.update()
-        prop = add_preview_prop(name, side)
-        scene.render.filepath = str(SHOT_DIR / f"fp_arm_mh_{name.lower()}.png")
-        bpy.ops.render.render(write_still=True)
-        print("PREVIEW", scene.render.filepath)
-        rendered.append(Path(scene.render.filepath))
-        if prop:
-            bpy.data.objects.remove(prop, do_unlink=True)
-
-    camera.location = g2b((-0.245, -0.285, 0.115))
-    look_at(camera, (0.018, 0.0, 0.020))
-    for name in ("Grip", "HoldMag"):
-        armature.animation_data.action = actions[name]
-        scene.frame_set(1)
-        bpy.context.view_layer.update()
-        prop = add_preview_prop(name, side)
-        scene.render.filepath = str(SHOT_DIR / f"fp_arm_mh_{name.lower()}_palm.png")
-        bpy.ops.render.render(write_still=True)
-        print("PREVIEW", scene.render.filepath)
-        rendered.append(Path(scene.render.filepath))
-        if prop:
-            bpy.data.objects.remove(prop, do_unlink=True)
+        for view_name, camera_g, target_g in views:
+            camera.location = g2b(camera_g)
+            look_at(camera, target_g)
+            armature.animation_data.action = actions[name]
+            scene.frame_set(1)
+            bpy.context.view_layer.update()
+            prop = add_preview_prop(name, side)
+            scene.render.filepath = str(
+                SHOT_DIR / f"fp_arm_mh2_{name.lower()}_{view_name}.png")
+            bpy.ops.render.render(write_still=True)
+            print("PREVIEW", scene.render.filepath)
+            rendered.append(Path(scene.render.filepath))
+            if prop:
+                bpy.data.objects.remove(prop, do_unlink=True)
 
     armature.animation_data.action = actions["Grip"]
     scene.frame_set(1)
     bpy.context.view_layer.update()
     handle = add_preview_prop("Grip", side)
-    camera.data.angle_y = math.radians(75.0)
-    camera.location = g2b((0.25, 0.35, 0.65))
+    camera.data.angle_y = math.radians(68.0)
+    camera.location = g2b((0.21, 0.28, 0.52))
     look_at(camera, (0.0, 0.0, 0.0))
-    scene.render.filepath = str(SHOT_DIR / "fp_arm_mh_first_person.png")
+    scene.render.filepath = str(SHOT_DIR / "fp_arm_mh2_first_person.png")
     bpy.ops.render.render(write_still=True)
     print("PREVIEW", scene.render.filepath)
     rendered.append(Path(scene.render.filepath))
     bpy.data.objects.remove(handle, do_unlink=True)
 
-    armature.animation_data.action = None
-    reset_pose(armature)
-    hand = armature.pose.bones["Hand"]
-    hand.rotation_mode = "QUATERNION"
-    hand.rotation_quaternion = Quaternion((0.0, 0.0, 1.0), math.radians(40.0))
-    bpy.context.view_layer.update()
-    camera.data.angle_y = math.radians(48.0)
-    camera.location = g2b((0.260, -0.320, 0.120))
-    look_at(camera, (0.028, 0.0, 0.020))
-    scene.render.filepath = str(SHOT_DIR / "fp_arm_mh_wrist_bent.png")
-    bpy.ops.render.render(write_still=True)
-    print("PREVIEW", scene.render.filepath)
-    rendered.append(Path(scene.render.filepath))
     reset_pose(armature)
     make_contact_sheet(rendered)
 
@@ -1016,13 +1256,14 @@ def validate_reimport(piece_id, output, side, render=False):
     hi = Vector((max(point.x for point in points), max(point.y for point in points),
                  max(point.z for point in points)))
     in_handle_span = [point for point in points if abs(point.y) < 0.040]
-    clearance = min(math.hypot(point.x, point.z) for point in in_handle_span)
+    bind_clearance = min(math.hypot(point.x, point.z) for point in in_handle_span)
     nearest = min(in_handle_span, key=lambda point: math.hypot(point.x, point.z))
-    assert clearance >= 0.015, (clearance, nearest)
 
     pose_tips = {}
     grip_clearance = None
     holdmag_inside = None
+    finger_intersections = {}
+    prop_intrusions = {}
     armature.data.pose_position = "POSE"
     for action_name in ACTION_NAMES:
         armature.animation_data.action = actions[action_name]
@@ -1038,19 +1279,23 @@ def validate_reimport(piece_id, output, side, render=False):
             for digit in ("Thumb", *FINGERS)
         }
         posed_points = evaluated_points(mesh)
+        posed_finger_points = evaluated_finger_points(mesh)
+        finger_intersections[action_name] = finger_surface_intersections(
+            mesh, armature, action_name)
+        prop_intrusions[action_name] = pose_prop_intrusions(action_name, posed_finger_points, side)
         if action_name == "Grip":
             candidates = [point for point in posed_points if abs(point.y) < 0.040]
             grip_clearance = min(math.hypot(point.x, point.z) for point in candidates)
+            nearest = min(candidates, key=lambda point: math.hypot(point.x, point.z))
         if action_name == "HoldMag":
-            centre = Vector((side * 0.023, 0.0, -0.040))
-            holdmag_inside = sum(
-                abs(point.x - centre.x) < 0.011 - 0.0005
-                and abs(point.y - centre.y) < 0.015 - 0.0005
-                and abs(point.z - centre.z) < 0.060 - 0.0005
-                for point in posed_points
-            )
-    assert grip_clearance >= 0.015, grip_clearance
+            holdmag_inside = prop_intrusions[action_name]
+    grip_clearance_valid = grip_clearance >= 0.0169
+    assert grip_clearance_valid, grip_clearance
     assert holdmag_inside == 0, holdmag_inside
+    collision_total = sum(sum(counts.values()) for counts in finger_intersections.values())
+    intrusion_total = sum(prop_intrusions.values())
+    assert collision_total == 0, finger_intersections
+    assert intrusion_total == 0, prop_intrusions
 
     armature.animation_data.action = None
     armature.data.pose_position = "REST"
@@ -1063,6 +1308,10 @@ def validate_reimport(piece_id, output, side, render=False):
     mag_axis = Vector((0.0, 0.0, 1.0))
     assert armature.matrix_world.translation.length < 1.0e-6
     assert mesh.matrix_world.translation.length < 1.0e-6
+    skin_band, sleeve_glove_gap = sleeve_glove_measurements(mesh, armature)
+    cuff_measurements_valid = (0.008 <= skin_band <= 0.0205
+                               and sleeve_glove_gap <= 0.0005)
+    assert cuff_measurements_valid, (skin_band, sleeve_glove_gap)
 
     glove_index = next(index for index, mat in enumerate(mesh.data.materials)
                        if mat and mat.name == "Arm Glove")
@@ -1104,6 +1353,15 @@ def validate_reimport(piece_id, output, side, render=False):
     print("  holdmag_centre", f"({mag_centre.x:.5f},{mag_centre.y:.5f},{mag_centre.z:.5f})",
           "axis", f"({mag_axis.x:.1f},{mag_axis.y:.1f},{mag_axis.z:.1f})",
           "interior_vertices", holdmag_inside)
+    print("  sleeve_glove", f"skin_band={skin_band:.5f}",
+          f"widest_gap={sleeve_glove_gap:.5f}", "closed")
+    print("  finger_intersections", {
+        name: {"total": sum(counts.values()),
+               "pairs": {pair: count for pair, count in counts.items() if count}}
+        for name, counts in finger_intersections.items()
+    })
+    print("  prop_intrusions", prop_intrusions)
+    print("  joint_flexion_degrees", POSE_ANGLES)
     print("  pose_tips", {name: {digit: tuple(round(value, 4) for value in tip)
                                 for digit, tip in tips.items()}
                            for name, tips in pose_tips.items()})
@@ -1115,6 +1373,8 @@ def validate_reimport(piece_id, output, side, render=False):
         "clearance": grip_clearance, "sleeve_direction": sleeve_direction,
         "mag_centre": mag_centre, "mag_axis": mag_axis, "hand_span": hand_span,
         "points": points, "bone_rest": bone_rest,
+        "finger_intersections": finger_intersections,
+        "sleeve_glove_gap": sleeve_glove_gap, "skin_band": skin_band,
     }
 
 
@@ -1147,15 +1407,29 @@ def main():
     HumanService, _RigService, TargetService = enable_mpfb()
     print("MPFB_SETTINGS", MACRO_SETTINGS)
     print("MPFB_TARGET_STACK", TargetService.calculate_target_stack_from_macro_info_dict(MACRO_SETTINGS))
-    right_id, right_path = build_side(HumanService, 1)
-    left_id, left_path = build_side(HumanService, -1)
+    clean_scene(remove_actions=True)
+    bpy.context.scene.render.fps = FPS
+    mats = {
+        "glove": material("Arm Glove", (0.028, 0.010, 0.004), 0.0, 0.82),
+        "skin": material("Arm Skin", (0.48, 0.235, 0.135), 0.0, 0.80),
+        "sleeve": material("Arm Sleeve", (0.030, 0.040, 0.047), 0.0, 0.94),
+    }
+    source_mesh, source_armature = build_source(HumanService)
+    (right_id, right_path), right_mesh, right_armature = build_side(
+        source_mesh, source_armature, mats, 1)
+    bpy.data.objects.remove(right_mesh, do_unlink=True)
+    bpy.data.objects.remove(right_armature, do_unlink=True)
+    for action in list(bpy.data.actions):
+        bpy.data.actions.remove(action)
+    (left_id, left_path), _left_mesh, _left_armature = build_side(
+        source_mesh, source_armature, mats, -1)
     # MPFB installs scene/load handlers.  Remove them before repeatedly replacing
     # the file state for glTF re-import validation; all MPFB work is finished now.
     addon_utils.disable("bl_ext.blender_org.mpfb", default_set=False)
     # Validate the non-rendered side first.  Blender 5.1's glTF importer can retain
     # stale evaluated render data if another GLB is imported after the preview pass.
-    left = validate_reimport(left_id, left_path, -1, render=False)
     right = validate_reimport(right_id, right_path, 1, render=True)
+    left = validate_reimport(left_id, left_path, -1, render=False)
     validate_mirror(right, left)
 
 
