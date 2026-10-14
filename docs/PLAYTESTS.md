@@ -16,6 +16,10 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-13 (night) — Emmitt, about 1 minute (session log 2026-10-13_1929), build 1c6ffcd (V1 lighting + V3 game feel)
+- Liked: "looks good" (the Sprint 4 lighting and feel).
+- Broken: "when I got into the car the game bugged out". The log shows a NaN car and 28,000 warnings in a minute. Contained in the car NaN fix (see DEVLOG).
+
 ## 2026-10-13 — Emmitt, length not recorded (verbal with a screenshot, relayed by the lead), build 23f1433 (everything through PR #41)
 - First five minutes: not recorded. "The game is pretty cool now."
 - Fun: not recorded.

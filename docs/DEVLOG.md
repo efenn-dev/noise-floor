@@ -2,6 +2,20 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — Fix: the game stalled after getting into a car
+
+Built by Claude Opus 5.5, from Emmitt's report on the V3 build (1c6ffcd): "when I got into the car the game bugged out".
+
+**What happened:** his log shows the car's physics state turned NaN inside the engine's vehicle maths right after he got in (a NaN rotation axis, no script on the stack). Every zombie touching the NaN car then failed its physics move each frame, and about 28,000 warnings with script backtraces in a minute stalled the game. Q1 and Q2 had seen the same kind of car NaN and never pinned it down.
+
+**Couldn't reproduce headless, so it's contained instead:** `test_car_corpse.gd` (dead and live zombies under and around the car, then drive) and `test_car_save_drive.gd` (a copy of Emmitt's own save, every car with gas driven hard with steering) both stay finite. The fix makes a NaN unable to spread or stall the game, wherever it comes from:
+- **The car checks itself every physics tick** (`CarBody.state_ok`). If anything went NaN, `recover_from_nan()` puts it back where it last was, stopped, in the node and the physics server, with one warning per car.
+- **Zombies drop a NaN knock or step** before it reaches the physics engine (`ZombieBody.bad_moves` counts them), and a body lying down zeroes a NaN velocity.
+- **The hidden walker no longer collides while you drive.** It used to stay at the car door, an invisible post the car could hit. `Player.MASK` is restored when you get out.
+- `test_car_nan_guard.gd` checks all three.
+
+**Try it:** `play.bat`, get into a car and drive through zombies and over bodies. If it ever happens again, the log (`%APPDATA%/Godot/app_userdata/Noise Floor/logs/godot.log`) will show one "Car car_N: its physics went NaN" line instead of a flood. Tell me and send that file.
+
 ## 2026-10-13 — V4 Sound (Sprint 4)
 
 Built by Claude Opus 5.5 in a local session, stacked on V3. Nobody could listen to it while it was built (no speakers in the loop), so the numbers are checked by tests and the ear test is Emmitt's (V8).

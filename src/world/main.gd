@@ -1519,6 +1519,9 @@ func _exit_car() -> void:
 func _set_walker(on: bool) -> void:
 	player.visible = on
 	player.collision_layer = Layers.WORLD if on else 0
+	# Fix 2026-10-13: while you drive, the hidden walker stood at the car door still colliding (an invisible
+	# post the car could hit). Nothing collides with it until you get out.
+	player.collision_mask = Player.MASK if on else 0
 	for node: Node in [player, interactor, melee, shooter, builder]:
 		node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 

@@ -26,6 +26,12 @@ var wish_handbrake := false
 var mouse_sensitivity := 0.003
 
 var _model: Node3D
+## Fix 2026-10-13 (Emmitt: "when I got into the car the game bugged out"): the engine's vehicle maths can
+## turn the car's state NaN (seen in his log, never reproduced headless; Q1 and Q2 saw cousins of it). A NaN
+## car poisons every zombie that touches it and floods the log every frame. So every physics tick the car
+## checks itself and, if anything went NaN, goes back to where it last was, stopped. One warning per car.
+var nan_recoveries := 0
+var _last_good := Transform3D()
 var _head: Node3D
 var _lights: Array[SpotLight3D] = []
 const SHOVE_PUSH := 7.0   # m/s handed to a zombie the car is pushing against
@@ -68,6 +74,7 @@ func place_from_sim() -> void:
 	rotation = Vector3(0, float(car["yaw"]) + PI, 0)
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+	_last_good = transform
 
 
 ## The car's facing in the game's convention (front = -Z), as the sim stores it.
@@ -106,7 +113,32 @@ func drive(on: bool) -> void:
 		_set_lights(false)
 
 
+## True when the car's place and motion are all real numbers.
+static func state_ok(xf: Transform3D, lin: Vector3, ang: Vector3) -> bool:
+	return xf.is_finite() and lin.is_finite() and ang.is_finite()
+
+
+## Puts a NaN car back where it last was, stopped, in the node and in the physics server.
+func recover_from_nan() -> void:
+	nan_recoveries += 1
+	if nan_recoveries == 1:
+		push_warning("Car %s: its physics went NaN; put back where it last was (seen %d time)" % [id, nan_recoveries])
+	var rid := get_rid()
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_TRANSFORM, _last_good)
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	global_transform = _last_good
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	engine_force = 0.0
+	steering = 0.0
+
+
 func _physics_process(delta: float) -> void:
+	if state_ok(global_transform, linear_velocity, angular_velocity):
+		_last_good = global_transform
+	else:
+		recover_from_nan()
 	for zid: int in _hit_cooldown.keys():
 		_hit_cooldown[zid] -= delta
 		if _hit_cooldown[zid] <= 0.0:
