@@ -1,5 +1,7 @@
 """Build Noise Floor's mirrored, rigged first-person work-gloved arms.
 
+Superseded by fp_arm_mpfb.py, which uses the anatomically correct CC0 MakeHuman base mesh.
+
 Run with Blender 5.1:
     blender.exe -b --factory-startup --python tools/art/fp_arm_rig.py
 
