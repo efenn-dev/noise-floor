@@ -50,7 +50,7 @@ const MOUSE := {
 	"attack": MOUSE_BUTTON_LEFT,
 	"build_next": MOUSE_BUTTON_WHEEL_DOWN,
 	"build_prev": MOUSE_BUTTON_WHEEL_UP,
-	"aim": MOUSE_BUTTON_RIGHT,  # P2: hold to zoom with a scope (in build mode right click removes instead)
+	"aim": MOUSE_BUTTON_RIGHT,  # V15: hold to aim a gun or block with melee/fists (build mode removes)
 }
 
 

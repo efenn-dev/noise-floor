@@ -2,8 +2,8 @@ class_name Shooter
 extends Node3D
 ## M14: the gun in your hands. Left-click (outside build mode, gun in hand: Q) fires: the sim uses a round
 ## and makes the noise (SimWorld.fire), then this raycasts from the camera inside a cone as wide as the
-## sim's spread (Gunplay.spread_deg: accuracy, scope, recoil, Firearms), and if it meets a zombie that's a hit
-## (SimWorld.shoot_zombie; P2: the ray is the only roll). Right click (hold) with a scope zooms the camera. A hit above the shoulders is a headshot. Shows the gun model
+## sim's spread (Gunplay.spread_deg: accuracy, ADS, scope, recoil, Firearms), and if it meets a zombie that's a hit
+## (SimWorld.shoot_zombie; P2: the ray is the only roll). V15: right click aims every gun. A hit above the shoulders is a headshot. Shows the gun model
 ## held in view, a brief muzzle light and a recoil kick on the camera. Sounds come from SoundView, which plays
 ## the shot's noise event.
 
@@ -23,15 +23,27 @@ const GUN_LOOKS := {
 }
 ## Where each gun sits in view (camera space): resting at the lower right, pointing ahead.
 const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.18, -0.2, -0.5)}
+## V15: sight points measured from tools/art/pistol.py and hunting_rifle.py, converted from Blender
+## (x, y, z) to Godot (x, z, y). ADS_POSES puts the rear-to-front line through camera-space x/y zero.
+const SIGHT_POINTS := {
+	"pistol": {"rear": Vector3(0, 0.1335, 0.071), "front": Vector3(0, 0.133, -0.089)},
+	"hunting_rifle": {"rear": Vector3(0, 0.149, -0.096), "front": Vector3(0, 0.143, -0.506)},
+}
+const ADS_POSES := {
+	"pistol": [Vector3(0, -0.133277474, -0.42), Vector3(0.00312499, 0, 0)],
+	"hunting_rifle": [Vector3(0, -0.150388775, -0.5), Vector3(0.014633102, 0, 0)],
+}
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
-const AIM_FOV := 35.0  # P2: right click (hold) with a scope zooms the camera to this field of view
+const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
+const IRON_FOV_MULT := 0.85  # V15: iron sights narrow the normal field of view by 15%
+const ADS_SWAY_MULT := 0.12
 const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
 const INSPECT_TIME := 2.4
 ## V13: this is a measured-looking guess. Tune it to the rig's actual HoldMag palm centre once the arm
 ## asset lands; the prop remains a child of Hand_L so every wrist correction carries it with the hand.
-const MAG_IN_HAND := Transform3D(Basis.IDENTITY, Vector3(0.012, 0.018, -0.012))
+const MAG_IN_HAND := Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(-0.023, 0.0, -0.04))  # the rig's measured HoldMag centre (left arm); the box is long along +Y, the held magazine along +Z
 
 ## [time, gun position offset, gun rotation degrees, left-hand position in gun space,
 ## left-hand rotation degrees, rig pose, magazine state]. State changes at its key; transforms smoothstep.
@@ -42,10 +54,10 @@ const PISTOL_RELOAD_KEYS := [
 	[0.30, Vector3(0.08, 0.08, 0.045), Vector3(-16, 12, 24), Vector3(-0.16, -0.48, 0.12), Vector3(-30, 5, -12), "Open", "none"],
 	[0.42, Vector3(0.08, 0.08, 0.045), Vector3(-16, 12, 24), Vector3(-0.16, -0.42, 0.08), Vector3(-8, -12, 5), "HoldMag", "in_hand"],
 	[0.56, Vector3(0.07, 0.06, 0.03), Vector3(-14, 10, 20), Vector3(-0.045, -0.12, 0.07), Vector3(-12, -22, 2), "HoldMag", "in_hand"],
-	[0.64, Vector3(0.07, 0.09, 0.015), Vector3(-18, 10, 20), Vector3(-0.03, -0.035, 0.065), Vector3(-15, -30, 0), "HoldMag", "in_gun"],
+	[0.62, Vector3(0.07, 0.09, 0.015), Vector3(-18, 10, 20), Vector3(-0.03, -0.035, 0.065), Vector3(-15, -30, 0), "HoldMag", "in_gun"],
 	[0.74, Vector3(0.055, 0.06, 0.02), Vector3(-12, 7, 16), Vector3(-0.035, 0.015, -0.03), Vector3(72, -10, -18), "Flat", "in_gun"],
 	[0.82, Vector3(0.055, 0.06, 0.10), Vector3(-15, 7, 16), Vector3(-0.035, 0.015, -0.03), Vector3(72, -10, -18), "Flat", "in_gun"],
-	[0.90, Vector3(0.03, 0.03, 0.02), Vector3(-6, 3, 8), Vector3(-0.03, -0.04, 0.065), Vector3(-15, -30, 0), "Grip", "in_gun"],
+	[0.93, Vector3(0.03, 0.03, 0.02), Vector3(-6, 3, 8), Vector3(-0.03, -0.04, 0.065), Vector3(-15, -30, 0), "Grip", "in_gun"],
 	[1.0, Vector3.ZERO, Vector3.ZERO, Vector3(-0.03, -0.04, 0.065), Vector3(-15, -30, 0), "Grip", "in_gun"],
 ]
 const RIFLE_RELOAD_KEYS := [
@@ -74,10 +86,12 @@ var last_message := ""
 var no_spread := false
 ## --aim (screenshots) and tests: hold the scope zoom without a right click.
 var hold_aim := false
+var sprinting := false  # V15: the player controller sets this from the sprint request; sprint cancels ADS
 var hold_reload_at := -1.0  # V13: --reload-at freezes the visible choreography without touching the sim
 var hold_inspect_at := -1.0  # V13: --inspect-at does the same for inspection
 var base_fov := 75.0
 var _aim_held := false
+var _aim_weight := 0.0
 
 var _rng := RandomNumberGenerator.new()
 var _models: Dictionary = {}  # base -> Node3D
@@ -268,6 +282,12 @@ static func _rest_pose(gun_id: String) -> Dictionary:
 			"magazine_state": "in_gun"}
 
 
+## V15: the exact camera-space pose used at full ADS, kept pure for sight-alignment tests.
+static func aim_pose(gun_id: String) -> Dictionary:
+	var p: Array = ADS_POSES.get(gun_id, [HOLD.get(gun_id, Vector3.ZERO), Vector3.ZERO])
+	return {"position": p[0] as Vector3, "rotation": p[1] as Vector3}
+
+
 func _apply_left_hand(node: Node3D, pose: Dictionary) -> void:
 	var left := node.get_node_or_null("Hand_L") as Node3D
 	if left == null:
@@ -319,8 +339,9 @@ func is_inspecting() -> bool:
 
 func start_inspect() -> bool:
 	if not sim.guns.in_hand() or builder.active or sim.player.dead or sim.guns.reloading > 0.0 \
-			or sim.guns.raising > 0.0 or aiming():
+			or sim.guns.raising > 0.0:
 		return false
+	sim.guns.aiming = false
 	_inspect_elapsed = 0.0
 	_inspect_uid = int(sim.gear.gun().get("uid", -1))
 	var gun := sim.gear.gun()
@@ -340,7 +361,7 @@ func cancel_inspect() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action("aim") and not event.is_echo():
 		_aim_held = event.is_pressed() and InputSetup.captured()  # a release always lets go
-		if aiming():
+		if _aim_held and sim.guns.in_hand():
 			cancel_inspect()
 	if not InputSetup.captured() or builder.active:
 		return
@@ -359,7 +380,7 @@ func _process(delta: float) -> void:
 		_reload_total = maxf(remaining, sim.guns.reload_time())
 		cancel_inspect()
 	_last_reloading = remaining
-	if _inspect_elapsed >= 0.0 and (not show or aiming() or int(sim.gear.gun().get("uid", -1)) != _inspect_uid):
+	if _inspect_elapsed >= 0.0 and (not show or int(sim.gear.gun().get("uid", -1)) != _inspect_uid):
 		cancel_inspect()
 	var inspect_p := -1.0
 	if _inspect_elapsed >= 0.0:
@@ -372,6 +393,8 @@ func _process(delta: float) -> void:
 	var reload_p := hold_reload_at
 	if remaining > 0.0:
 		reload_p = 1.0 - remaining / maxf(0.001, _reload_total)
+	var handling := maxf(0.01, float(sim.guns.stats()["handling"])) if not sim.gear.gun().is_empty() else 0.35
+	_aim_weight = move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)
 	for b: String in _models:
 		var node: Node3D = _models[b]
 		node.visible = show and b == base
@@ -382,11 +405,17 @@ func _process(delta: float) -> void:
 				pose = reload_pose(b, reload_p)
 			elif inspect_p >= 0.0:
 				pose = inspect_pose(b, inspect_p)
-			node.position = HOLD[b] + pose["position"] + Vector3(0.0, -0.25 * raise, 0.06 * _kick * 10.0)
-			node.rotation = pose["rotation"] + Vector3(_kick * 2.0, 0.0, 0.0)
-			if feel != null and not aiming():  # V3: bob and sway (held steady while scoped)
-				node.position += feel.hold_position_offset()
-				node.rotation += feel.hold_rotation_offset()
+			var hip_position: Vector3 = HOLD[b] + pose["position"] + Vector3(0.0, -0.25 * raise, 0.0)
+			var hip_rotation: Vector3 = pose["rotation"]
+			var ads: Dictionary = aim_pose(b)
+			node.position = hip_position.lerp(ads["position"] as Vector3, _aim_weight) \
+					+ Vector3(0.0, 0.0, 0.06 * _kick * 10.0)
+			node.rotation = hip_rotation.lerp(ads["rotation"] as Vector3, _aim_weight) \
+					+ Vector3(_kick * 2.0, 0.0, 0.0)
+			if feel != null:
+				var move_scale := lerpf(1.0, ADS_SWAY_MULT, _aim_weight)
+				node.position += feel.hold_position_offset() * move_scale
+				node.rotation += feel.hold_rotation_offset() * move_scale
 			_apply_left_hand(node, pose)
 			_update_magazines(node, b, pose, reload_p)
 			Hands.reaim(node, node.basis)  # V12: through the kick and the reload too
@@ -398,22 +427,26 @@ func _process(delta: float) -> void:
 		feel.kick = _kick  # V3: ViewFeel adds shake and bob and applies it to the camera
 	else:
 		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
-	camera.fov = move_toward(camera.fov, AIM_FOV if aiming() else base_fov, ZOOM_SPEED * delta)
+	var aimed_fov := AIM_FOV if sim.guns.scoped() else base_fov * IRON_FOV_MULT
+	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_message_time -= delta
 	if _message_time <= 0.0:
 		last_message = ""
 
 
-## True while the scope zoom is on: right click held (or --aim) with a scoped gun in hand, on foot, alive.
-## Without a scope right click does nothing. The scope's tighter cone is always on (Gunplay.sight_mult).
+## V15: true while any gun is aimed. Reload/inspect/raise/sprint all lower it; a scope only changes the FOV
+## and adds its extra cone tightening once this is true.
 func aiming() -> bool:
-	return (_aim_held or hold_aim) and sim.guns.scoped() and not builder.active and not sim.player.dead
+	return (_aim_held or hold_aim) and sim.guns.in_hand() and not builder.active and not sim.player.dead \
+			and not sim.player.asleep and sim.guns.reloading <= 0.0 and sim.guns.raising <= 0.0 \
+			and not is_inspecting() and not sprinting
 
 
 ## Fires if the sim lets it. Returns the id of the zombie the ray met (hit or not), -1 for none, -2 if no shot.
 func fire() -> int:
 	cancel_inspect()  # V13: pulling the trigger snaps the weapon straight back to its firing hold
+	sim.guns.aiming = aiming()  # input can fire before Main's next presentation-to-sim sync
 	var why := sim.fire()
 	if why != "":
 		_say(why)

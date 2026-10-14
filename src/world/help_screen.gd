@@ -38,7 +38,7 @@ const ROWS := [
 	["Build", ["build_remove"], "", "pull down what you look at (the town's pieces give a little salvage)"],
 	["Build", [], "Esc", "stop building"],
 	["Fight (pipe and guns)", ["attack"], "", "swing the pipe, or fire the gun"],
-	["Fight (pipe and guns)", ["aim"], "", "hold to zoom, with a scope on your gun"],
+	["Fight (pipe and guns)", ["aim"], "", "hold to aim a gun; with melee or fists, hold to block"],
 	["Fight (pipe and guns)", ["swap_hands"], "", "pipe or gun in your hands"],
 	["Fight (pipe and guns)", ["refuel"], "", "reload the gun in your hands (at a car: pour in gas)"],
 	["Fight (pipe and guns)", ["inspect"], "", "inspect the weapon and its condition"],

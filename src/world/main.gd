@@ -13,6 +13,7 @@ extends Node3D
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
+##   --block               V15: hold the melee/fists guard pose, for screenshots
 ##   --break-windows[=R]   W2: break every window within R m (default 12) at the start, for screenshots
 ##   --fists               V12: start bare-handed (your weapon goes to your pockets)
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
@@ -262,6 +263,8 @@ func _ready() -> void:
 		sim.gear.pieces.append(scope)                              # zoom, for screenshots
 		sim.attach_part(scope["uid"])
 		shooter.hold_aim = true
+	if args.has("block"):
+		melee.hold_block = true  # V15: default pipe, or combine with --weapon / --fists
 	if args.has("shoot"):
 		shooter.fire.call_deferred()  # --shoot: fire once (screenshots of the HUD line after a shot)
 	if args.has("reload-at"):
@@ -575,6 +578,14 @@ func _sync_player() -> void:
 	# no walking while sorting your pockets, spending perk points, at the workbench or in the build menu
 	player.frozen = p.dead or p.asleep or inventory_screen.is_open() or skills_screen.is_open() or workbench_screen.is_open() \
 			or _m15_screen_open() or build_menu.is_open()
+	var sprint_requested := player.wish_sprint
+	if player.use_device_input:
+		sprint_requested = Input.is_action_pressed("sprint")
+	shooter.sprinting = sprint_requested or driving != null  # V15: requesting sprint drops ADS immediately
+	var aimed := driving == null and shooter.aiming()
+	sim.guns.aiming = aimed
+	p.aiming = aimed
+	p.set_blocking(driving == null and melee.blocking())
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -829,7 +840,7 @@ func _update_hud(delta: float) -> void:
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
 	var gun_up := driving == null and sim.guns.in_hand() and not builder.active and not sim.player.dead
-	crosshair.visible = gun_up
+	crosshair.visible = gun_up and not shooter.aiming()
 	_dot.visible = not gun_up
 	if gun_up:
 		crosshair.update_from(sim.guns.spread_deg(), player.camera)
@@ -1374,12 +1385,10 @@ func key_hint_text() -> String:
 	else:
 		parts.append_array(interactor.keys())
 		if sim.guns.in_hand():
-			parts.append_array(["LMB fire", "R reload", "V inspect"])
-			if sim.guns.scoped():
-				parts.append("RMB zoom")
+			parts.append_array(["LMB fire", "RMB aim", "R reload", "V inspect"])
 			parts.append("Q pipe")
 		else:
-			parts.append_array(["LMB swing", "V inspect"])
+			parts.append_array(["LMB swing", "RMB block", "V inspect"])
 			if not sim.gear.gun().is_empty():
 				parts.append("Q gun")
 		parts.append_array(["WASD move", "E use", "B build", "1-0 hotbar", "Tab gear", "K skills", "L log", "F light"])

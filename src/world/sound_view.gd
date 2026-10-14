@@ -17,6 +17,7 @@ const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum
 		"tower_hammer": "hum_press", "tower_pump": "engine_generator"}
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
+		"block": ["bash"],  # V15: a guarded hit reuses the existing solid thud
 		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"],
 		# M14: guns (the sim's shot loudness sets the volume) and the reload click
 		"gunshot_pistol": ["shot_pistol"], "gunshot_rifle": ["shot_rifle"],

@@ -16,6 +16,7 @@ var last_message := ""
 var feel: ViewFeel  # V3: bob, sway, hit marker, impact puffs (null in tests that build Melee alone)
 var hold_at := -1.0  # V11: >= 0 freezes the swing at that fraction (--swing-at, for screenshots)
 var hold_inspect_at := -1.0  # V13: >= 0 freezes inspection there (--inspect-at)
+var hold_block := false  # V15: --block holds the guard for screenshots
 
 ## Weapon id (weapons.json) -> model. Fists have none.
 const MODELS := {"pipe": "res://assets/models/pipe.glb", "bat": "res://assets/models/bat.glb",
@@ -25,6 +26,21 @@ const PLACEHOLDER_LENGTH := {"pipe": 0.6, "bat": 0.85, "axe": 0.75, "machete": 0
 const STYLE_BY_WEAPON := {"pipe": "diagonal", "bat": "side", "axe": "overhead", "machete": "slash",
 		"knife": "stab", "fists": "punch"}
 const INSPECT_TIME := 2.4
+const BLOCK_RAISE_TIME := 0.18
+const BLOCK_JOLT_TIME := 0.12
+const BLOCK_SWAY_MULT := 0.25
+## V15: camera-space guards. Long weapons cross the body; blades turn their edge toward the threat;
+## fists bring both hands high. Rotations are degrees here and converted by block_pose().
+const BLOCK_POSES := {
+	"pipe": [Vector3(0.02, -0.06, -0.42), Vector3(0, 8, 88)],
+	"bat": [Vector3(0.02, -0.08, -0.44), Vector3(4, 5, 82)],
+	"axe": [Vector3(0.01, -0.05, -0.43), Vector3(-2, 5, 86)],
+	"machete": [Vector3(0.03, -0.08, -0.39), Vector3(-18, 4, 62)],
+	"knife": [Vector3(0.08, -0.08, -0.35), Vector3(-34, 5, 48)],
+	"fists": [Vector3(0.17, -0.08, -0.34), Vector3(-5, 0, 8)],
+}
+const FIST_LEFT_REST := [Vector3(-0.21, -0.21, -0.5), Vector3(-15, 0, -10)]
+const FIST_LEFT_BLOCK := [Vector3(-0.17, -0.09, -0.35), Vector3(-5, 0, -8)]
 ## Weapon materials by name, drawn with the gun and cloth photos (Shooter._gun_material does the work).
 const WEAPON_LOOKS := {
 	"materials": {
@@ -81,6 +97,10 @@ var _pending: Array = []  # V11: hit feedback waiting for the strike: {at: secon
 var _message_time := 0.0
 var _inspect_elapsed := -1.0
 var _inspect_weapon := ""
+var _block_held := false
+var _block_weight := 0.0
+var _block_jolt := 0.0
+var _seen_blocks: Array = []
 
 
 func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_exclude: Array[RID]) -> void:
@@ -210,6 +230,13 @@ static func inspect_pose(weapon_id: String, p: float) -> Dictionary:
 	return {"position": (rest[0] as Vector3) + offset[0], "rotation": (rest[1] as Vector3) + offset[1]}
 
 
+## V15: pure full guard pose for the held weapon ("" means fists).
+static func block_pose(weapon_id: String) -> Dictionary:
+	var id := weapon_id if weapon_id != "" else "fists"
+	var p: Array = BLOCK_POSES[id]
+	return {"position": p[0] as Vector3, "rotation": Shooter._radians(p[1] as Vector3)}
+
+
 static func _inspect_offset(keys: Array, p: float) -> Array:
 	var tt := clampf(p, 0.0, 1.0)
 	for i in range(1, keys.size()):
@@ -225,6 +252,10 @@ static func _inspect_offset(keys: Array, p: float) -> Array:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action("aim") and not event.is_echo():
+		_block_held = event.is_pressed() and InputSetup.captured()
+		if _block_held and not sim.guns.in_hand():
+			cancel_inspect()
 	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active and not sim.guns.in_hand():
 		swing()
 
@@ -242,6 +273,9 @@ func _process(delta: float) -> void:
 			_inspect_elapsed = -1.0
 	if hold_inspect_at >= 0.0:
 		inspect_p = hold_inspect_at
+	_block_weight = move_toward(_block_weight, 1.0 if blocking() else 0.0, delta / BLOCK_RAISE_TIME)
+	_note_block_feedback()
+	_block_jolt = maxf(0.0, _block_jolt - delta)
 	if _fists != null:  # V12: bare-handed, the fists show
 		_fists.visible = not builder.active and not sim.player.dead and id == "" and not sim.guns.in_hand()
 	for w: String in _models:
@@ -259,6 +293,8 @@ func _process(delta: float) -> void:
 
 ## Swings if ready. Returns the id of the zombie hit, -1 for a miss, -2 if the swing wasn't ready.
 func swing() -> int:
+	if blocking():
+		return -2
 	cancel_inspect()  # V13: an attack returns to the combat pose immediately
 	if not sim.swing():
 		return -2
@@ -311,7 +347,8 @@ func _land(p: Dictionary) -> void:
 func _pose(t: float, inspect_p: float = -1.0) -> void:
 	var id := weapon_id()
 	if id == "" and _fists != null:  # V12: the right fist jabs; both bob and sway
-		var fist: Node3D = _fists.get_node("R")
+		var fist := _fists.get_node("R") as Node3D
+		var left := _fists.get_node("L") as Node3D
 		if inspect_p >= 0.0:
 			var inspect := inspect_pose("fists", inspect_p)
 			fist.position = inspect["position"]
@@ -320,9 +357,20 @@ func _pose(t: float, inspect_p: float = -1.0) -> void:
 			var fp: Array = pose_at("punch", t)
 			fist.position = fp[0]
 			fist.rotation = fp[1]
+		if _block_weight > 0.0:
+			var guard: Dictionary = block_pose("")
+			fist.position = fist.position.lerp(guard["position"] as Vector3, _block_weight)
+			fist.rotation = fist.rotation.lerp(guard["rotation"] as Vector3, _block_weight)
+		var left_rest_rotation := Shooter._radians(FIST_LEFT_REST[1] as Vector3)
+		var left_block_rotation := Shooter._radians(FIST_LEFT_BLOCK[1] as Vector3)
+		left.position = (FIST_LEFT_REST[0] as Vector3).lerp(FIST_LEFT_BLOCK[0] as Vector3, _block_weight)
+		left.rotation = left_rest_rotation.lerp(left_block_rotation, _block_weight)
 		Hands.reaim(fist, fist.basis)
-		_fists.position = feel.hold_position_offset() if feel != null else Vector3.ZERO
-		_fists.rotation = feel.hold_rotation_offset() if feel != null else Vector3.ZERO
+		Hands.reaim(left, left.basis)
+		var move_scale := lerpf(1.0, BLOCK_SWAY_MULT, _block_weight)
+		_fists.position = feel.hold_position_offset() * move_scale if feel != null else Vector3.ZERO
+		_fists.rotation = feel.hold_rotation_offset() * move_scale if feel != null else Vector3.ZERO
+		_fists.position.z += 0.045 * _block_jolt / BLOCK_JOLT_TIME
 		return
 	if id == "" or not _models.has(id):
 		return
@@ -335,10 +383,40 @@ func _pose(t: float, inspect_p: float = -1.0) -> void:
 		var pr: Array = pose_at(_style if _swing < 1.0 and hold_at < 0.0 else style(), t)
 		node.position = pr[0]
 		node.rotation = pr[1]
+	if _block_weight > 0.0:
+		var guard: Dictionary = block_pose(id)
+		node.position = node.position.lerp(guard["position"] as Vector3, _block_weight)
+		node.rotation = node.rotation.lerp(guard["rotation"] as Vector3, _block_weight)
 	if feel != null:  # V3: the weapon bobs with your steps and lags the mouse
-		node.position += feel.hold_position_offset()
-		node.rotation += feel.hold_rotation_offset()
+		var move_scale := lerpf(1.0, BLOCK_SWAY_MULT, _block_weight)
+		node.position += feel.hold_position_offset() * move_scale
+		node.rotation += feel.hold_rotation_offset() * move_scale
+	node.position.z += 0.045 * _block_jolt / BLOCK_JOLT_TIME
 	Hands.reaim(node, node.basis)  # V12: forearms keep running off the bottom of the screen through the swing
+
+
+## V15: right click guards with melee or fists. A running swing finishes before a guard can come up.
+func blocking() -> bool:
+	return (_block_held or hold_block) and not sim.guns.in_hand() and not builder.active and not sim.player.dead \
+			and not sim.player.asleep and _swing >= 1.0 and not is_inspecting()
+
+
+## A successful sim block emits one "block" noise. That same event drives the thud, camera bump and hands.
+func _note_block_feedback() -> void:
+	for event: Dictionary in sim.noise.recent:
+		if event.get("kind", "") != "block" or _seen_event(_seen_blocks, event):
+			continue
+		_block_jolt = BLOCK_JOLT_TIME
+		if feel != null:
+			feel.add_trauma(ViewFeel.TRAUMA_BLOCK)
+	_seen_blocks = sim.noise.recent.duplicate()
+
+
+static func _seen_event(events: Array, event: Dictionary) -> bool:
+	for other: Dictionary in events:
+		if is_same(other, event):
+			return true
+	return false
 
 
 func is_inspecting() -> bool:

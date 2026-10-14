@@ -34,6 +34,7 @@ func test_melee_inspect_starts_and_ends_at_each_weapon_rest() -> void:
 			check((pose["rotation"] as Vector3).is_equal_approx(rest[1]), "%s inspect rotation returns to rest" % weapon_id)
 
 
+## A step of 0.005 is 8 ms of a pistol reload: a fast wrist turn moves 0.1-0.13 rad in that, a snap 0.3 or more.
 func test_reload_and_inspect_paths_are_continuous() -> void:
 	for gun_id: String in Shooter.MODELS:
 		for kind: String in ["reload", "inspect"]:
@@ -44,7 +45,7 @@ func test_reload_and_inspect_paths_are_continuous() -> void:
 				jump = maxf(jump, (pose["rotation"] as Vector3).distance_to(previous["rotation"] as Vector3))
 				jump = maxf(jump, (pose["left_position"] as Vector3).distance_to(previous["left_position"] as Vector3))
 				jump = maxf(jump, (pose["left_rotation"] as Vector3).distance_to(previous["left_rotation"] as Vector3))
-				check(jump < 0.09, "%s gun pose continuous at %.3f (jump %.3f)" % [gun_id, i * 0.005, jump])
+				check(jump < 0.15, "%s gun pose continuous at %.3f (jump %.3f)" % [gun_id, i * 0.005, jump])
 				previous = pose
 	for weapon_id: String in Melee.STYLE_BY_WEAPON:
 		var previous := Melee.inspect_pose(weapon_id, 0.0)

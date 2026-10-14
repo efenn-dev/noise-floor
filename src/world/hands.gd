@@ -10,7 +10,7 @@ const ARM_MODELS := {"right": "res://assets/models/fp_arm_right.glb", "left": "r
 const MODELS := {"right": "res://assets/models/fp_hand_right.glb", "left": "res://assets/models/fp_hand_left.glb"}
 const LOOKS := {
 	"materials": {
-		"Arm Glove": {"texture": "leather_boot", "tile_m": 0.08, "tint": Color(0.5, 0.36, 0.24), "metallic": 0.0, "roughness": 0.8},
+		"Arm Glove": {"texture": "leather_boot", "tile_m": 0.08, "tint": Color(0.78, 0.58, 0.4), "metallic": 0.0, "roughness": 0.8},
 		"Arm Sleeve": {"texture": "cloth_cotton", "tile_m": 0.1, "tint": Color(0.3, 0.27, 0.22), "metallic": 0.0, "roughness": 0.95},
 	},
 	"untextured": ["Arm Skin"],

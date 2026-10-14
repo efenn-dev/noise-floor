@@ -17,6 +17,7 @@ var bloom := 0.0       # extra spread in degrees from recent shots; settles back
 var cooldown := 0.0    # seconds until the next shot
 var raising := 0.0     # seconds until the gun is up after Q
 var reloading := 0.0   # seconds left of a reload (0 = not reloading)
+var aiming := false    # V15: written by the world; spread remains a deterministic sim rule
 
 
 func _init(p_data: GameData, p_gear: Gear, p_skills: Skills) -> void:
@@ -43,10 +44,12 @@ func swap() -> String:
 		if gun().is_empty():
 			return "No gun (equip one from Tab)"
 		hands = "gun"
+		aiming = false
 		raising = float(stats()["handling"])
 		reloading = 0.0
 		return "%s in hand" % gear.gun_name()
 	hands = "melee"
+	aiming = false
 	reloading = 0.0
 	return "%s in hand" % gear.weapon_name()
 
@@ -56,6 +59,7 @@ func swap() -> String:
 func tick(dt: float, inv: Inventory) -> int:
 	if hands == "gun" and gun().is_empty():
 		hands = "melee"  # the gun was taken off
+		aiming = false
 	cooldown = maxf(0.0, cooldown - dt)
 	raising = maxf(0.0, raising - dt)
 	var settle := float(stats()["settle"]) if not gun().is_empty() else 8.0
@@ -73,8 +77,8 @@ func spread_mult() -> float:
 	return maxf(float(data.guns["min_spread_mult"]), 1.0 - skills.bonus("spread_cut"))
 
 
-## How much a gun's range (the scope, "+% accuracy at range" rolls) tightens its cone: the base gun's range
-## over this one's, so a scope's +60% range is a cone 1/1.6 as wide. 1.0 without range bonuses.
+## How much a gun's range (the scope, "+% accuracy at range" rolls) tightens its cone while aimed: the base
+## gun's range over this one's, so a scope's +60% range is a cone 1/1.6 as wide. 1.0 without range bonuses.
 func sight_mult() -> float:
 	if gun().is_empty():
 		return 1.0
@@ -85,12 +89,15 @@ func sight_mult() -> float:
 	return clampf(float(base["range"]) / reach, 0.1, 1.0)
 
 
-## The cone the world shoots into, in degrees (half-angle): the gun's spread plus the recoil bloom, times
-## spread_mult (Firearms) and sight_mult (scope and range). The ray is the only roll: what it meets is hit.
+## V15: the cone the world shoots into, in degrees (half-angle). ADS applies the gun's data multiplier;
+## a scope's range multiplier only helps while the player is actually looking through it.
 func spread_deg() -> float:
 	if gun().is_empty():
 		return 0.0
-	return (float(stats()["spread"]) + bloom) * spread_mult() * sight_mult()
+	var st := stats()
+	var ads := float(st["ads_spread"]) if aiming else 1.0
+	var sight := sight_mult() if aiming and scoped() else 1.0
+	return (float(st["spread"]) + bloom) * spread_mult() * ads * sight
 
 
 ## The radius in metres of the cone `distance` m out: why the same cone lands less often further away.
@@ -169,6 +176,7 @@ func start_reload(inv: Inventory) -> String:
 	var full := int(piece["loaded"]) >= int(stats()["magazine"])
 	var other := _other_ammo(inv, piece["ammo"])
 	if inv.count(piece["ammo"]) > 0 and not full:
+		aiming = false
 		reloading = reload_time()
 		return "Reloading %s..." % data.item_name(piece["ammo"]).to_lower()
 	if other == "":
@@ -176,6 +184,7 @@ func start_reload(inv: Inventory) -> String:
 	inv.add(piece["ammo"], int(piece["loaded"]))
 	piece["loaded"] = 0
 	piece["ammo"] = other
+	aiming = false
 	reloading = reload_time()
 	return "Switching to %s..." % data.item_name(other).to_lower()
 
