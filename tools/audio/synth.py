@@ -436,6 +436,107 @@ def reload_click() -> np.ndarray:
     return fade_edges(normalize(out, -8))
 
 
+def mag_out() -> np.ndarray:
+    """V16: a magazine-release click followed by the polymer magazine sliding out of the well."""
+    n = seconds(0.30)
+    t = t_axis(n)
+    out = np.zeros(n)
+    release = clank(0.08, [(2300, 1.0, 0.009), (4100, 0.45, 0.006)])
+    place(out, release, 0.012, wrap=False)
+    slide_env = np.sin(np.pi * np.clip((t - 0.055) / 0.20, 0.0, 1.0)) ** 2
+    slide = oneshot_noise(n, lambda f: bp(1300, 1.2)(f) * hp(260, 2)(f)) * slide_env
+    out += 0.34 * normalize(slide, 0)
+    return fade_edges(normalize(out, -8))
+
+
+def mag_in() -> np.ndarray:
+    """V16: a firm polymer body-clack and metal catch as a magazine seats."""
+    n = seconds(0.20)
+    out = 0.42 * thump(0.20, 260, 105, 0.025)
+    body = oneshot_noise(n, bp(720, 1.0)) * decay(n, 0.018, attack=0.002)
+    out += 0.50 * normalize(body, 0)
+    catch = clank(0.12, [(1450, 1.0, 0.018), (2950, 0.65, 0.010), (4800, 0.22, 0.006)])
+    place(out, catch, 0.045, wrap=False)
+    out -= np.mean(out)
+    return fade_edges(normalize(out, -5))
+
+
+def slide_rack() -> np.ndarray:
+    """V16: a pistol slide drawn back and slammed forward, two tight metallic shlicks."""
+    n = seconds(0.36)
+    out = np.zeros(n)
+    for at, direction in ((0.015, 1.0), (0.175, -1.0)):
+        m = seconds(0.15)
+        tt = np.linspace(0.0, 1.0, m)
+        rasp = oneshot_noise(m, bp(2100 if direction > 0 else 2500, 1.0))
+        rasp *= np.sin(np.pi * tt) ** 1.5 * (0.78 + 0.22 * np.sin(2 * np.pi * (18 * tt + direction * tt * tt)))
+        place(out, 0.46 * normalize(rasp, 0), at, wrap=False)
+        stop = clank(0.09, [(1750, 1.0, 0.012), (3600, 0.55, 0.007)])
+        place(out, stop, at + 0.09, wrap=False)
+    return fade_edges(normalize(out, -5))
+
+
+def bolt_open() -> np.ndarray:
+    """V16: a bolt handle lifted with a click, then the steel bolt scraped back."""
+    n = seconds(0.36)
+    t = t_axis(n)
+    out = np.zeros(n)
+    place(out, clank(0.09, [(1250, 1.0, 0.014), (2750, 0.55, 0.009)]), 0.012, wrap=False)
+    scrape_env = np.sin(np.pi * np.clip((t - 0.075) / 0.25, 0.0, 1.0)) ** 1.4
+    scrape = oneshot_noise(n, bp(1050, 1.1)) * scrape_env
+    scrape *= 0.78 + 0.22 * np.sin(2 * np.pi * 31 * t)
+    out += 0.42 * normalize(scrape, 0)
+    return fade_edges(normalize(out, -7))
+
+
+def bolt_close() -> np.ndarray:
+    """V16: the bolt scraped forward, then locked down with a solid steel click."""
+    n = seconds(0.34)
+    t = t_axis(n)
+    scrape_env = np.sin(np.pi * np.clip((t - 0.012) / 0.23, 0.0, 1.0)) ** 1.5
+    scrape = oneshot_noise(n, bp(950, 1.1)) * scrape_env
+    scrape *= 0.8 + 0.2 * np.sin(2 * np.pi * 27 * t)
+    out = 0.40 * normalize(scrape, 0)
+    lock = clank(0.11, [(1050, 1.0, 0.022), (2350, 0.65, 0.012), (3900, 0.25, 0.007)])
+    lock += 0.35 * thump(0.11, 240, 105, 0.025)
+    place(out, lock, 0.225, wrap=False)
+    return fade_edges(normalize(out, -5))
+
+
+def round_in() -> np.ndarray:
+    """V16: one brass cartridge pressed past a rifle magazine's feed lips."""
+    n = seconds(0.13)
+    scrape = oneshot_noise(n, bp(2400, 0.8)) * decay(n, 0.018, attack=0.006)
+    click_ = clank(0.10, [(2850, 1.0, 0.016), (5100, 0.42, 0.009), (6900, 0.18, 0.005)])
+    out = 0.28 * normalize(scrape, 0)
+    place(out, click_, 0.025, wrap=False)
+    return fade_edges(normalize(out, -9), ms=2)
+
+
+def gun_handle() -> np.ndarray:
+    """V16: subdued cloth movement and small metal contact while turning a gun over."""
+    n = seconds(0.48)
+    t = t_axis(n)
+    cloth_env = np.sin(np.pi * np.clip(t / 0.22, 0.0, 1.0)) ** 2
+    cloth_env += 0.7 * np.sin(np.pi * np.clip((t - 0.22) / 0.22, 0.0, 1.0)) ** 2
+    cloth = oneshot_noise(n, lambda f: bp(750, 1.3)(f) * lp(2600, 2)(f)) * cloth_env
+    out = 0.42 * normalize(cloth, 0)
+    place(out, 0.18 * clank(0.11, [(1350, 1.0, 0.018), (2750, 0.35, 0.010)]), 0.16, wrap=False)
+    return fade_edges(normalize(out, -14), ms=7)
+
+
+def blade_handle() -> np.ndarray:
+    """V16: a quiet grip shift, with a soft leather-and-wood creak."""
+    n = seconds(0.40)
+    t = t_axis(n)
+    rate = 38 + 18 * np.sin(2 * np.pi * 1.8 * t)
+    phase = np.cumsum(rate) / SR
+    creak = pad_shape(((phase % 1.0) < 0.12).astype(float) - 0.12, bp(820, 0.8))
+    creak *= np.sin(np.pi * np.clip((t - 0.025) / 0.33, 0.0, 1.0)) ** 2
+    grip = oneshot_noise(n, bp(420, 1.1)) * np.sin(np.pi * np.clip(t / 0.30, 0.0, 1.0)) ** 2
+    return fade_edges(normalize(creak + 0.32 * normalize(grip, 0), -15), ms=7)
+
+
 def pad_shape(x: np.ndarray, gain) -> np.ndarray:
     """shape() for a one-shot: padded so the circular filter can't wrap the tail onto the head."""
     return shape(np.concatenate([x, np.zeros(len(x))]), gain)[: len(x)]
@@ -496,6 +597,10 @@ def main() -> None:
              "shot_pistol": lambda: gunshot(False, False), "shot_rifle": lambda: gunshot(True, False),
              "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
              "reload": reload_click,
+             # V16: reload choreography and weapon inspection handling
+             "mag_out": mag_out, "mag_in": mag_in, "slide_rack": slide_rack,
+             "bolt_open": bolt_open, "bolt_close": bolt_close, "round_in": round_in,
+             "gun_handle": gun_handle, "blade_handle": blade_handle,
              "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
              "creak": creak, "clang_far": clang_far,  # V4: ambience
              "headshot": headshot,  # V7

@@ -5,4 +5,5 @@ The rest of `assets/` was made for this game: Codex-generated textures and the B
 
 | File | What | Author | Source | License |
 |---|---|---|---|---|
+| `models/fp_arm_right.glb`, `models/fp_arm_left.glb` | Human base mesh and skin weights (MPFB 2.0.18 export) | MakeHuman / MPFB | https://extensions.blender.org/add-ons/mpfb/ | CC0 |
 | `sounds/zombie/*.wav` | Zombie moans and groans ("Zombies Sound Pack", 24 sounds) | artisticdude | https://opengameart.org/content/zombies-sound-pack | CC0 |
