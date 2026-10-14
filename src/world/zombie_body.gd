@@ -7,6 +7,10 @@ extends CharacterBody3D
 const HEAD_Y := 1.45   # hits above this height (from the feet) count as head hits
 const HEIGHT := 1.8
 const RADIUS := 0.35
+## V24: the arms' reach in front of the body (it walks toward -Z): a ball this big at this offset makes the
+## furthest point 0.54 m ahead, where the hands are in the walk and the scratch.
+const REACH_RADIUS := 0.22
+const REACH_OFFSET := Vector3(0.0, 1.25, -0.32)
 const LOS_EVERY := 3   # physics frames between line-of-sight checks
 const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
@@ -72,6 +76,7 @@ var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the 
 var _frame := 0
 var _shape: CollisionShape3D
 var _corpse_shape: CollisionShape3D
+var _reach_shape: CollisionShape3D  # V24: keeps the reaching arms out of walls
 var _last_target := Vector3.INF
 var _fall := 0.0
 var _model: Node3D
@@ -218,6 +223,15 @@ func _init() -> void:
 	_shape.shape = capsule
 	_shape.position.y = HEIGHT / 2.0
 	add_child(_shape)
+	# V24 (Emmitt: "you can see zombie arms sticking through walls"): the motion-captured walk and scratch hold
+	# the arms out past the capsule, so a zombie pressed against a wall put its hands through it. A ball at arm
+	# height in front of the chest stops the body that much further from whatever it walks into.
+	_reach_shape = CollisionShape3D.new()
+	var reach := SphereShape3D.new()
+	reach.radius = REACH_RADIUS
+	_reach_shape.shape = reach
+	_reach_shape.position = REACH_OFFSET
+	add_child(_reach_shape)
 	# S4: once it's dead the capsule goes and this low slab takes over, so the look ray finds the body on the
 	# ground (E searches it, like a bag) and nothing trips over a standing ghost.
 	_corpse_shape = CollisionShape3D.new()
@@ -378,6 +392,7 @@ func _lie_down(delta: float) -> void:
 		collision_layer = Layers.BAG  # S4: only the look ray sees a corpse (like a dropped bag)
 		collision_mask = Layers.WORLD
 		_shape.disabled = true
+		_reach_shape.disabled = true
 		_corpse_shape.disabled = false
 		set_meta("container_id", SimWorld.CORPSE + str(brain.id))  # the Interactor offers to search it
 		# S5 (Emmitt: "when you walk over a slain zombie you push the dead bodies"): a body is a kinematic
