@@ -98,6 +98,7 @@ var _title_camera: Camera3D  # set while the title screen shows its dusk view
 var _hud: Label
 var _build_label: Label
 var _materials_hud: Label
+var view_feel: ViewFeel  # V3: bob, sway, shake, hit marker, red edge, impact puffs
 var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
 var _dot: ColorRect      # the centre dot, shown otherwise
 var _keys_label: Label   # P3: the one-line key hint at the bottom, for what you're doing now
@@ -1129,6 +1130,11 @@ func _build_zombies(args: Dictionary) -> void:
 	shooter = Shooter.new()
 	add_child(shooter)
 	shooter.setup(sim, player.camera, builder, [player.get_rid()])
+	view_feel = ViewFeel.new()
+	add_child(view_feel)
+	view_feel.setup(sim, player)
+	melee.feel = view_feel
+	shooter.feel = view_feel
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
@@ -1447,6 +1453,7 @@ func _title_view(on: bool) -> void:
 
 func _exit_tree() -> void:
 	Surfaces.clear_cache()
+	ImpactFx.clear_cache()
 	InventoryScreen.clear_cache()
 	SoundView.clear_cache()
 

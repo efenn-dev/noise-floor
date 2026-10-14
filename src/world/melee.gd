@@ -7,6 +7,7 @@ var camera: Camera3D
 var builder: BuildController
 var exclude: Array[RID] = []
 var last_message := ""
+var feel: ViewFeel  # V3: bob, sway, hit marker, impact puffs (null in tests that build Melee alone)
 
 var _pipe: MeshInstance3D
 var _swing := 1.0  # 0 -> 1 over one swing animation
@@ -61,6 +62,9 @@ func swing() -> int:
 	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT | Layers.ZOMBIE, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
+		if not hit.is_empty() and feel != null:  # V3: a swing into a wall puffs dust and jars the view
+			feel.impact(hit["position"], hit["normal"], "dust")
+			feel.add_trauma(ViewFeel.TRAUMA_MELEE_WALL)
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
@@ -68,6 +72,10 @@ func swing() -> int:
 	var killed := sim.hit_zombie(id, head)
 	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
 	_message_time = 1.0
+	if feel != null:
+		feel.impact(hit["position"], hit["normal"], "blood")
+		feel.hit_zombie(killed, head)
+		feel.add_trauma(ViewFeel.TRAUMA_MELEE_HIT)
 	return id
 
 
@@ -76,3 +84,6 @@ func _pose(t: float) -> void:
 	var arc := sin(t * PI)
 	_pipe.position = Vector3(0.32 - 0.3 * arc, -0.38 + 0.05 * arc, -0.6 - 0.15 * arc)
 	_pipe.rotation = Vector3(deg_to_rad(-55.0 - 45.0 * arc), 0.0, deg_to_rad(35.0 + 30.0 * arc))
+	if feel != null:  # V3: the pipe bobs with your steps and lags the mouse
+		_pipe.position += feel.hold_position_offset()
+		_pipe.rotation += feel.hold_rotation_offset()

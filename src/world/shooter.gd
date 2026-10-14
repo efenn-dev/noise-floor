@@ -30,6 +30,7 @@ var _aim_held := false
 
 var _rng := RandomNumberGenerator.new()
 var _models: Dictionary = {}  # base -> Node3D
+var feel: ViewFeel  # V3: carries the kick to the camera, shake, hit marker, impact puffs (null when built alone)
 var _flash: OmniLight3D
 var _flash_time := 0.0
 var _kick := 0.0  # radians the camera is tipped up right now
@@ -89,9 +90,15 @@ func _process(delta: float) -> void:
 			var reload := 1.0 if sim.guns.reloading > 0.0 else 0.0
 			node.position = HOLD[b] + Vector3(0.0, -0.25 * raise - 0.12 * reload, 0.06 * _kick * 10.0)
 			node.rotation = Vector3(_kick * 2.0 - deg_to_rad(25.0) * reload, 0.0, deg_to_rad(20.0) * reload)
+			if feel != null and not aiming():  # V3: bob and sway (held steady while scoped)
+				node.position += feel.hold_position_offset()
+				node.rotation += feel.hold_rotation_offset()
 	_flash_time -= delta
 	_flash.light_energy = 6.0 if _flash_time > 0.0 else 0.0
-	camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
+	if feel != null:
+		feel.kick = _kick  # V3: ViewFeel adds shake and bob and applies it to the camera
+	else:
+		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
 	camera.fov = move_toward(camera.fov, AIM_FOV if aiming() else base_fov, ZOOM_SPEED * delta)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_message_time -= delta
@@ -114,6 +121,8 @@ func fire() -> int:
 	var base: String = sim.gear.gun()["base"]
 	_flash_time = FLASH_TIME
 	_kick = minf(deg_to_rad(12.0), _kick + deg_to_rad(KICK_DEG.get(base, 2.0)))
+	if feel != null:
+		feel.fired(base)
 	var from := camera.global_position
 	var dir := -camera.global_basis.z
 	if not no_spread:
@@ -123,12 +132,17 @@ func fire() -> int:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
 		_say("Missed")
+		if not hit.is_empty() and feel != null:
+			feel.impact(hit["position"], hit["normal"], "dust")  # V3: the round kicks up dust where it lands
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
 	var head: bool = hit["position"].y > body.global_position.y + ZombieBody.HEAD_Y
 	var r := sim.shoot_zombie(id, head)
 	_say("Killed it" if r["killed"] else (("Headshot!" if head else "Hit") if r["hit"] else "Missed"))
+	if feel != null and r["hit"]:
+		feel.impact(hit["position"], hit["normal"], "blood")
+		feel.hit_zombie(r["killed"], head)
 	return id
 
 
