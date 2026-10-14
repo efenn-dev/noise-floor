@@ -123,15 +123,16 @@ func test_infamy_lets_in_runners_then_screamers() -> void:
 	var sim := _smelter_sim()
 	var none := 0
 	for i in 200:
-		if sim.director.pick_type() != "shambler":
+		if not (sim.director.pick_type() in ["shambler", "crawler"]):
 			none += 1
-	eq(none, 0, "at first, only shamblers")
+	eq(none, 0, "at first, only day-one shamblers and crawlers")
 	sim.director.infamy = 2999.0
 	for i in SimWorld.TICK_RATE * 2:
 		sim.step()
 	check(sim.director.unlocked.has("runner"), "past 3000: runners")
 	check(sim.messages.any(func(m: Dictionary) -> bool: return m["text"].contains("fast")), "with a warning")
 	check(not sim.director.unlocked.has("screamer"), "not screamers yet")
+	check(not sim.director.unlocked.has("brute"), "not brutes yet")
 	var runners := 0
 	for i in 400:
 		if sim.director.pick_type() == "runner":

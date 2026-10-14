@@ -84,14 +84,22 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	var by_road := kind != "wanderers"
 	var e := _rng.randi_range(0, 1) if by_road else _rng.randi_range(0, EDGES.size() - 1)
 	var route := road_route(EDGE_NAMES[e], lure["pos"]) if by_road else []
+	var type_counts := {}
+	var live_counts := {}
+	for living: ZombieBrain in horde.zombies.values():
+		if not living.is_dead():
+			live_counts[living.type] = int(live_counts.get(living.type, 0)) + 1
 	for i in size:
 		var spot: Vector3 = EDGES[e] + Vector3(_rng.randf_range(-4, 4), 0, _rng.randf_range(-4, 4))
-		var z := horde.spawn(pick_type(), spot)
+		var type := pick_type(night, type_counts, kind, live_counts)
+		type_counts[type] = int(type_counts.get(type, 0)) + 1
+		live_counts[type] = int(live_counts.get(type, 0)) + 1
+		var z := horde.spawn(type, spot)
 		var first: Vector3 = route[0] if not route.is_empty() else lure["pos"]
 		z.facing = (first - spot).normalized()
 		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
-	return {"size": size, "edge": EDGE_NAMES[e], "kind": kind, "route": route}
+	return {"size": size, "edge": EDGE_NAMES[e], "kind": kind, "route": route, "types": type_counts}
 
 
 ## The waypoints a wave from the `edge` road end ("north" or "south") walks before turning toward
@@ -196,9 +204,24 @@ func _add_infamy(dt: float, noise: NoiseField) -> void:
 			newly_unlocked = u
 
 
-## Which kind of zombie the next one in a wave is: mostly shamblers, plus whatever infamy has unlocked.
-func pick_type() -> String:
+## Which kind of zombie the next one in a wave is: mostly shamblers, the day-one starting mix, and whatever
+## infamy has unlocked. V28 night_only and per-wave caps keep early brute groups from becoming brute walls.
+func pick_type(night: bool = false, wave_counts: Dictionary = {}, wave_kind_name: String = "",
+		live_counts: Dictionary = {}) -> String:
 	for u: Dictionary in data.noise["infamy"]["unlocks"]:
-		if unlocked.has(u["type"]) and _rng.randf() < float(u["chance"]):
+		if not unlocked.has(u["type"]) or (bool(u.get("night_only", false)) and not night):
+			continue
+		var limit := int(u.get("max_per_wave", 0))
+		if wave_kind_name == "horde":
+			limit = int(u.get("max_per_horde", limit))
+		if limit > 0 and int(wave_counts.get(u["type"], 0)) >= limit:
+			continue
+		var live_limit := int(u.get("max_alive", 0))
+		if live_limit > 0 and int(live_counts.get(u["type"], 0)) >= live_limit:
+			continue
+		if _rng.randf() < float(u["chance"]):
 			return u["type"]
+	for entry: Dictionary in data.noise["infamy"].get("starting", []):
+		if _rng.randf() < float(entry["chance"]):
+			return entry["type"]
 	return "shambler"
