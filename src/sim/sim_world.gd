@@ -775,6 +775,8 @@ func sleep_in(key: String) -> String:
 	spawn_point = build.piece_center(key) + Vector3(1.2, -build.piece_center(key).y, 0)
 	if player.energy >= float(data.survival["sleep_below_energy"]):
 		return "Not tired. You'll wake up here if you die"
+	if player.bleeding:
+		return "You're bleeding. Bandage first (H)"  # Q5: bleeding would wake you the same tick
 	player.sleep()
 	return ""
 

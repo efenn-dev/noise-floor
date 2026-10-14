@@ -98,6 +98,10 @@ func test_bed_sleep_and_respawn() -> void:
 	eq(sim.sleep_in(bed), "Not tired. You'll wake up here if you die", "full energy: no sleep, but sets respawn")
 	check(Vector2(sim.spawn_point.x, sim.spawn_point.z).distance_to(Vector2(11 + 1.2, 11)) < 0.01, "respawn point is by the bed")
 	sim.player.energy = 40.0
+	sim.player.bleeding = true
+	eq(sim.sleep_in(bed), "You're bleeding. Bandage first (H)", "Q5: bleeding: no sleep (it would wake you at once)")
+	check(not sim.player.asleep, "still awake while bleeding")
+	sim.player.bleeding = false
 	eq(sim.sleep_in(bed), "", "tired: sleep")
 	check(sim.player.asleep, "asleep")
 	_run(sim, 100.0)

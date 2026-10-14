@@ -24,6 +24,8 @@ func test_heat_warning_materials_and_messages_do_not_overlap() -> void:
 			sim.inventory.add(item, 5)
 	sim.add_message("The smelter needs fuel", 30.0)
 	sim.add_message("Found Scrap Metal x3, Nails x10", 30.0)
+	# Q5: the longest real message (tour tile 06 ran it under the clock and the pockets)
+	sim.add_message("Smelter placed. It needs power: a generator (E loads gas cans) or a solar panel, and a power pole within 12 m", 30.0)
 	for level in ["wanderers_at", "group_at", "horde_at"]:
 		sim.director.heat = float(sim.director.cfg[level]) + 5.0
 		for size: Vector2i in [Vector2i(1600, 900), Vector2i(1280, 720)]:  # the default window, and a small one
@@ -42,6 +44,9 @@ func test_heat_warning_materials_and_messages_do_not_overlap() -> void:
 			check(not h.intersects(n), "heat warning clear of the messages (%s)" % where)
 			check(not m.intersects(n), "materials block clear of the messages (%s)" % where)
 			check(h.position.y >= m.end.y, "heat warning on its own line under the materials (%s)" % where)
+			for corner: Label in [main._hud, main._build_label]:
+				check(not _rect(corner).intersects(n), "Q5: messages clear of the top-left text %s (%s)" % [_rect(corner), where])
+			check(n.position.x >= 0.0 and n.end.x <= main.get_viewport().get_visible_rect().size.x, "Q5: messages on screen (%s)" % where)
 			# S3: the hotbar along the bottom keeps clear of the health line, the key hints and the look-at text.
 			var bar: Rect2 = main.hotbar_view.get_global_rect()
 			var health := _rect(main._health_label)

@@ -2,6 +2,27 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — Q5 Pre-playtest check (Sprint 4)
+
+The check DIRECTION.md asks for before every playtest, on `main` at #55, by Claude Opus 5.5 in a cloud session.
+
+**Found and fixed:**
+- **Sleeping while bleeding woke you at once, with no reason given** (the bleed damage each tick wakes you). The bed now says "You're bleeding. Bandage first (H)". Test in `test_needs.gd`.
+- **Long messages ran under the clock and the pockets** (tour tile 06: "Smelter placed. It needs power: ..."). Messages are now a centred column between the top-left and top-right blocks that wraps. `test_hud_layout.gd` checks the longest real message at 1600x900 and 1280x720.
+- **Soak bot:** it now bandages when it bleeds (H, as the HUD says), and counts the bleeds it had no bandage for; on day 2 it rebuilds a machine a zombie wrecked before the dusk wave check (that made the soak fail: a chasing zombie broke the smelter on day 1, so no machine was running for the wave to home in on).
+
+**Found, not changed (for Playtest #2 to judge):**
+- **Bleeding kills fast.** 30% of zombie hits make you bleed, bleeding takes you from full health to dead in about 3.5 real minutes, you start with one bandage, and bandages can't be made (bathroom cabinets are the best place to find them). The bot dies of bleeding on day 1 even when it bandages. A new player probably will too.
+- **A soak game-day now takes about 177 s instead of 87 s**, and memory starts at about 260 MB instead of 115 MB (S5's Jolt Physics and W2's breakable glass and doors are the likely causes). One 94 ms physics spike on day 1. Fine in play so far; worth a look before the world grows.
+- **Respawning into the zombies that killed you.** On day 3 the bot died at house 1 three times in about 30 game-minutes: it wakes at its bed with the zombies that killed it still in the room. Worth a short grace period or a safer respawn if Playtest #2 hits it.
+- **The hands sit low on the melee weapons:** with the axe or pipe the gripping hand is mostly below the screen and the left hand doesn't show. Judge on the PC (Forward+), not from cloud shots.
+
+**Result:** `tools/soak.sh --days=3` reports SOAK OK (182 s per game-day; 6 deaths: 1 bleeding, 4 shambler, 1 dehydration on day 4; bandaged twice, bled once with none left). `tools/test.sh`: 9205 passed. Tour checked.
+
+**Try it on the PC:** `play.bat`, get hit until "BLEEDING (H)" shows, then press E on a bed. `play.bat --demo-factory` for the message column.
+
+**Next:** Playtest #2 (V8).
+
 ## 2026-10-13 — V12 First-person hands (Sprint 4)
 
 Emmitt: "work on the animations". Hand models by Codex (one job on his ChatGPT plan); attachment and fists by Claude Opus 5.5.
