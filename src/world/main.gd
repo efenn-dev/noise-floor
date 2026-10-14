@@ -34,6 +34,7 @@ extends Node3D
 ##   --skills                        open the skills and perks screen (K in game)
 ##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
 ##                                   shown in the inventory screen (M13)
+##   --mod-screen[=pistol|rifle]     that gun plus every part in pockets, with its modding panel open (V23)
 ##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
@@ -259,7 +260,9 @@ func _ready() -> void:
 		sim.gear.unequip("weapon")  # V12: --fists starts bare-handed (the weapon goes to your pockets)
 	if args.has("swing-at"):
 		melee.hold_at = clampf(float(args["swing-at"]), 0.0, 1.0)  # V11: freeze the swing there, for screenshots
-	if args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
+	if args.has("mod-screen"):
+		_give_mod_screen(str(args["mod-screen"]))
+	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
 	if args.has("window"):
 		var wh: PackedStringArray = str(args["window"]).split("x")  # P2: --window=1280x720, a smaller window
@@ -347,6 +350,20 @@ func _give_gun(which: String, bench: bool) -> void:
 		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 6, "nails": 12, "plank": 4})
 		sim.player_pos = player.global_position
 		_open_workbench("")
+
+
+## --mod-screen[=pistol|rifle]: a bare gun and all five parts in pockets, selected in Tab so the
+## data-driven slot panel and stat deltas are ready for screenshots.
+func _give_mod_screen(which: String) -> void:
+	var gun_base := "hunting_rifle" if which == "rifle" else "pistol"
+	var gun := sim.gear.make(gun_base, "civilian", "white")
+	sim.gear.pieces.append(gun)
+	for part_base: String in sim.data.guns["parts"]:
+		sim.gear.pieces.append(sim.gear.make(part_base, "civilian", "white"))
+	sim.player_pos = player.global_position
+	if not inventory_screen.is_open():
+		inventory_screen.open()
+	inventory_screen.select_gear(int(gun["uid"]), InventoryScreen.POCKETS)
 
 
 func _open_workbench(key: String) -> void:

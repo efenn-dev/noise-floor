@@ -1002,7 +1002,7 @@ func equip_gear(uid: int) -> String:
 	if piece.is_empty():
 		return "You don't have that"
 	if gear.slot_of(piece) == "part":
-		return "Attach it to a firearm at a workbench"
+		return "Select a firearm, then fit this part in its modding panel"
 	var why := can_equip_gear(uid, gear.slot_of(piece))
 	if why != "":
 		return why
@@ -1733,22 +1733,58 @@ func reload() -> String:
 	return msg
 
 
-## At a workbench: attach a part from your pockets to the firearm Q most recently selected. Returns a message.
+## Finds a firearm by uid in your pockets/equipment or in the open container named by `container_id`.
+func gun_piece(uid: int, container_id: String = "") -> Dictionary:
+	var held := gear.find(uid)
+	if gear.is_gun(held):
+		return held
+	if container_id != "":
+		for piece: Dictionary in container_gear(container_id):
+			if int(piece["uid"]) == uid and gear.is_gun(piece):
+				return piece
+	return {}
+
+
+## Read-only drag/drop check for fitting a pocket part to a specific gun and slot anywhere in the field.
+func can_attach_part_to_gun(gun_uid: int, part_uid: int, slot: String = "", container_id: String = "") -> String:
+	return gear.can_attach(gun_piece(gun_uid, container_id), part_uid, slot)
+
+
+## Fits a pocket part to a specific firearm, including one carried in pockets or lying in the open container.
+## Fitting is instant but makes the small handling noise from data/noise.json.
+func attach_part_to_gun(gun_uid: int, part_uid: int, slot: String = "", container_id: String = "") -> String:
+	var gun := gun_piece(gun_uid, container_id)
+	var part := gear.find(part_uid)
+	var why := gear.attach(gun, part_uid, slot)
+	if why != "":
+		return why
+	make_noise(player_pos, "gun_mod")
+	return "%s fitted: %s" % [part["name"], gear.part_fit_text(part)]
+
+
+## Legacy/workbench convenience: fits to the firearm Q most recently selected.
 func attach_part(uid: int) -> String:
-	var part := gear.find(uid)
-	var why := gear.attach(gear.gun(), uid)
-	return why if why != "" else "Attached %s to %s" % [part["name"], gear.gun_name()]
+	var gun := gear.gun()
+	return attach_part_to_gun(int(gun.get("uid", -1)), uid)
 
 
-## At a workbench: take a part off your gun, back into your pockets (with any rounds that no longer fit).
-func detach_part(slot: String) -> String:
-	var part: Dictionary = gear.gun().get("parts", {}).get(slot, {})
-	var out := gear.detach(gear.gun(), slot)
+## Takes a part off a specific firearm into your pockets (with rounds that no longer fit).
+func detach_part_from_gun(gun_uid: int, slot: String, container_id: String = "") -> String:
+	var gun := gun_piece(gun_uid, container_id)
+	var part: Dictionary = gun.get("parts", {}).get(slot, {})
+	var out := gear.detach(gun, slot)
 	if out["why"] != "":
 		return out["why"]
 	if int(out["rounds"]) > 0:
-		inventory.add(gear.gun()["ammo"], int(out["rounds"]))
-	return "Took off " + part["name"]
+		inventory.add(gun["ammo"], int(out["rounds"]))
+	make_noise(player_pos, "gun_mod")
+	return "%s removed%s" % [part["name"], " · %d rounds moved to pockets" % int(out["rounds"]) if int(out["rounds"]) > 0 else ""]
+
+
+## Legacy/workbench convenience: removes from the firearm Q most recently selected.
+func detach_part(slot: String) -> String:
+	var gun := gear.gun()
+	return detach_part_from_gun(int(gun.get("uid", -1)), slot)
 
 
 ## The workbench's recipes (recipes.json "station": "workbench"), in file order.

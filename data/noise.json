@@ -22,7 +22,8 @@
 		"wreck": 65,
 		"door": 25,
 		"horn": 95,
-		"reload": 15
+		"reload": 15,
+		"gun_mod": 18
 	},
 	"director": {
 		"listen_distance": 50,

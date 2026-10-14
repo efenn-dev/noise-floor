@@ -65,25 +65,29 @@ func test_gun_numbers_are_base_plus_parts() -> void:
 	near(st["damage"], float(base["damage"]), "bare pistol: base damage")
 	eq(st["magazine"], 8, "8 rounds")
 	check(not st["suppressed"], "not suppressed")
-	for p: String in ["extended_mag", "scope", "padded_stock", "oil_filter_suppressor"]:
-		eq(sim.attach_part(_part(sim, p)["uid"]).begins_with("Attached"), true, "attach " + p)
+	for p: String in ["extended_mag", "scope", "oil_filter_suppressor"]:
+		eq(sim.attach_part(_part(sim, p)["uid"]).contains("fitted"), true, "attach " + p)
 	st = sim.gear.gun_stats(gun)
 	eq(st["magazine"], 12, "extended magazine: +50% rounds")
 	near(st["range"], float(base["range"]) * 1.6, "scope: +60% accuracy at range")
-	near(st["recoil"], float(base["recoil"]) * 0.65, "padded stock: 35% less recoil")
 	near(st["loudness"], 65.0, "crude suppressor: 20 quieter")
 	check(st["suppressed"], "suppressed")
 	var police := sim.gear.make("pistol", "police", "white")
 	near(sim.gear.gun_stats(police)["damage"], float(base["damage"]) * 1.25, "a Police pistol hits 25% harder")
 	var machined := _part(sim, "machined_suppressor")
-	eq(sim.attach_part(machined["uid"]), "Attached Machined suppressor to Pistol", "swap in the machined suppressor")
+	check(sim.attach_part(machined["uid"]).begins_with("Machined suppressor fitted"), "swap in the machined suppressor")
 	near(sim.gear.gun_stats(gun)["loudness"], 55.0, "machined suppressor: 30 quieter")
 	check(sim.gear.pieces.any(func(p: Dictionary) -> bool: return p["base"] == "oil_filter_suppressor"),
 			"the crude one came back to your pockets")
-	eq(sim.detach_part("sight"), "Took off Scope", "take the scope off")
+	eq(sim.detach_part("sight"), "Scope removed", "take the scope off")
 	near(sim.gear.gun_stats(gun)["range"], float(base["range"]), "range back to base")
 	var crude: Dictionary = sim.gear.pieces.filter(func(p: Dictionary) -> bool: return p["base"] == "oil_filter_suppressor")[0]
-	eq(sim.equip_gear(crude["uid"]), "Attach it to a firearm at a workbench", "a part can't be worn")
+	eq(sim.equip_gear(crude["uid"]), "Select a firearm, then fit this part in its modding panel", "a part can't be worn")
+	var rifle := sim.gear.make("hunting_rifle", "civilian", "white")
+	var stock := _part(sim, "padded_stock")
+	eq(sim.gear.attach(rifle, int(stock["uid"])), "", "a stock fits the rifle")
+	near(sim.gear.gun_stats(rifle)["recoil"], float(sim.data.guns["guns"]["hunting_rifle"]["recoil"]) * 0.65,
+			"padded stock: 35% less recoil")
 	var rolled := sim.gear.make("pistol", "civilian", "blue", {"gun_damage": 0.2, "gun_quiet": 4.0})
 	near(sim.gear.gun_stats(rolled)["damage"], float(base["damage"]) * 1.2, "a rolled +20% gun damage counts")
 	near(sim.gear.gun_stats(rolled)["loudness"], 81.0, "a rolled 4 quieter shots counts")
@@ -159,14 +163,14 @@ func test_firearms_and_a_scope_shrink_the_cone_and_recoil_grows_it() -> void:
 
 
 func test_recoil_spread_grows_and_settles() -> void:
-	var sim := _armed()
+	var sim := _armed("hunting_rifle")
 	_load_full(sim)
 	var rest := sim.guns.spread_deg()
-	near(rest, float(sim.data.guns["guns"]["pistol"]["spread"]), "at rest: the gun's spread")
+	near(rest, float(sim.data.guns["guns"]["hunting_rifle"]["spread"]), "at rest: the gun's spread")
 	eq(sim.fire(), "", "fires")
 	var one := sim.guns.spread_deg()
 	check(one > rest, "a shot kicks the spread up (%.2f)" % one)
-	_run(sim, 0.3)
+	_run(sim, 1.1)
 	eq(sim.fire(), "", "fires again")
 	check(sim.guns.spread_deg() > rest + 1.0, "two quick shots spread more (%.2f)" % sim.guns.spread_deg())
 	_run(sim, 2.0)
@@ -319,6 +323,7 @@ func test_workbench_recipes_and_the_gunsmith_gate() -> void:
 	eq(sim.bench_craft("bench_machined_suppressor", at), "Needs the Gunsmith perk (Fighter tree, K)",
 			"so does the machined suppressor")
 	eq(sim.bench_craft("bench_crude_suppressor", at), "Made Oil-filter suppressor", "the crude one doesn't")
+	eq(sim.bench_craft("bench_padded_stock", at), "Made Padded stock", "the bench still makes the crafted stock")
 	sim.skills.perks["gunsmith"] = 1
 	eq(sim.bench_craft("bench_subsonic", at), "Made 10 Subsonic rounds", "Gunsmith 1: subsonic")
 	eq(sim.bench_craft("bench_machined_suppressor", at), "Made Machined suppressor", "and the machined suppressor")

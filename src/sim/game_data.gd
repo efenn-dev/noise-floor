@@ -358,6 +358,12 @@ static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
 		return
 	for id: String in gn.get("guns", {}):
 		var gun: Dictionary = gn["guns"][id]
+		var gun_slots: Array = gun.get("part_slots", [])
+		if gun_slots.is_empty():
+			errors.append("gun '%s' needs part_slots" % id)
+		for slot: String in gun_slots:
+			if not slot in gn.get("part_slots", []):
+				errors.append("gun '%s' has unknown part slot '%s'" % [id, slot])
 		for key: String in ["damage", "range", "spread", "ads_spread", "recoil", "settle", "handling", "magazine", "loudness",
 				"cooldown", "reload", "wear_per_shot"]:
 			if float(gun.get(key, 0)) <= 0.0:

@@ -8,6 +8,13 @@ extends Node3D
 ## the shot's noise event.
 
 const MODELS := {"pistol": "res://assets/models/pistol.glb", "hunting_rifle": "res://assets/models/hunting_rifle.glb"}
+const PART_MODELS := {
+	"oil_filter_suppressor": "res://assets/models/part_oil_filter_suppressor.glb",
+	"machined_suppressor": "res://assets/models/part_machined_suppressor.glb",
+	"extended_mag": "res://assets/models/part_extended_mag.glb",
+	"scope": "res://assets/models/part_scope.glb",
+	"padded_stock": "res://assets/models/part_padded_stock.glb",
+}
 ## Handheld models are authored with these stable names. Gun Rubber deliberately reuses the fine polymer
 ## grain (there is no separate rubber photo). V2 review: the models' own colours are near black, which hid
 ## the texture, so each material's colour is its photo times `tint` (gun steel reads as dark grey steel).
@@ -18,11 +25,36 @@ const GUN_LOOKS := {
 		"Gun Wood": {"texture": "gun_wood", "tile_m": 0.15, "tint": Color(1.0, 0.95, 0.9)},
 		"Gun Polymer": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.85, 0.85, 0.85)},
 		"Gun Rubber": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.5, 0.5, 0.5)},
+		"Gun Glass": {"texture": "gun_metal", "tile_m": 0.08, "tint": Color(0.18, 0.55, 0.62), "metallic": 0.1, "roughness": 0.15},
 	},
 	"untextured": [],
 }
 ## Where each gun sits in view (camera space): resting at the lower right, pointing ahead.
 const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.18, -0.2, -0.5)}
+## V23: mount points measured on the exported, centred GLBs (metres in gun-local Godot space). The source
+## bounds were pistol x +/-0.0167, y -0.080..0.0795, z -0.1075..0.1075 and rifle x +/-0.0431,
+## y -0.100..0.0663, z -0.5403..0.5403. Mount nodes stay exactly on these points; centred part meshes use
+## PART_OFFSETS to put their attaching face on the mount.
+const ATTACHMENT_ANCHORS := {
+	"pistol": {
+		"muzzle": Vector3(0.0, 0.057, -0.1075),
+		"magazine": Vector3(0.0, -0.080, 0.073),
+		"sight": Vector3(0.0, 0.0795, -0.005),
+	},
+	"hunting_rifle": {
+		"muzzle": Vector3(-0.015, 0.027, -0.5403),
+		"magazine": Vector3(-0.015, -0.034, 0.060),
+		"sight": Vector3(-0.015, 0.0663, -0.010),
+		"stock": Vector3(-0.015, -0.024, 0.5403),
+	},
+}
+const PART_OFFSETS := {
+	"oil_filter_suppressor": Vector3(0.0, 0.0, -0.1125),
+	"machined_suppressor": Vector3(0.0, 0.0, -0.104),
+	"extended_mag": Vector3(0.0, -0.087, 0.0),
+	"scope": Vector3(0.0, 0.045, 0.0),
+	"padded_stock": Vector3(0.0, 0.0, 0.030),
+}
 ## V15: the sight tops measured from the exported .glb vertices (the models are centred on their bounding
 ## box, so the .py coordinates don't apply; the rifle's bore runs 15 mm left of centre). ADS_POSES puts the
 ## rear-to-front line through camera-space x/y zero.
@@ -33,6 +65,14 @@ const SIGHT_POINTS := {
 const ADS_POSES := {
 	"pistol": [Vector3(0, -0.0785, -0.42), Vector3.ZERO],
 	"hunting_rifle": [Vector3(0.015, -0.0635, -0.62), Vector3.ZERO],  # further out, so the stock's comb doesn't fill the view
+}
+const SCOPE_SIGHT_POINTS := {
+	"pistol": {"rear": Vector3(0.0, 0.1245, 0.115), "front": Vector3(0.0, 0.1245, -0.125)},
+	"hunting_rifle": {"rear": Vector3(-0.015, 0.1113, 0.110), "front": Vector3(-0.015, 0.1113, -0.130)},
+}
+const SCOPE_ADS_POSES := {
+	"pistol": [Vector3(0.0, -0.1245, -0.42), Vector3.ZERO],
+	"hunting_rifle": [Vector3(0.015, -0.1113, -0.62), Vector3.ZERO],
 }
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
@@ -100,6 +140,7 @@ var _aim_weight := 0.0
 
 var _rng := RandomNumberGenerator.new()
 var _models: Dictionary = {}  # base -> Node3D
+var _part_nodes: Dictionary = {}  # gun base -> part base -> the visible model below its measured mount
 var feel: ViewFeel  # V3: carries the kick to the camera, shake, hit marker, impact puffs (null when built alone)
 var _flash: OmniLight3D
 var _flash_time := 0.0
@@ -140,6 +181,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 		node.position = HOLD[base]
 		node.visible = false
 		Hands.attach(node, base, Hands.GUNS)  # V12: hands on the grip and under the barrel
+		_attach_part_models(node, base)
 		var left := node.get_node_or_null("Hand_L") as Node3D
 		if base == "pistol" and left != null:
 			var mag := _make_magazine()
@@ -159,6 +201,36 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	_flash.light_energy = 0.0
 	_flash.position = Vector3(0.2, -0.15, -0.9)
 	camera.add_child(_flash)
+
+
+func _attach_part_models(gun_node: Node3D, gun_id: String) -> void:
+	_part_nodes[gun_id] = {}
+	var slots: Array = sim.data.guns["guns"][gun_id]["part_slots"]
+	for part_id: String in PART_MODELS:
+		var slot := str(sim.data.guns["parts"][part_id]["slot"])
+		if not slot in slots or not ResourceLoader.exists(PART_MODELS[part_id]):
+			continue
+		var mount := Node3D.new()
+		mount.name = "AttachmentMount_" + part_id
+		mount.position = ATTACHMENT_ANCHORS[gun_id][slot]
+		gun_node.add_child(mount)
+		var model := (load(PART_MODELS[part_id]) as PackedScene).instantiate() as Node3D
+		model.name = "Attachment_" + part_id
+		model.position = PART_OFFSETS[part_id]
+		model.visible = false
+		mount.add_child(model)
+		apply_textured_materials(model)
+		for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_part_nodes[gun_id][part_id] = model
+
+
+func _sync_part_models(gun_id: String) -> void:
+	var fitted := {}
+	for part: Dictionary in sim.gear.gun().get("parts", {}).values():
+		fitted[part["base"]] = true
+	for part_id: String in _part_nodes.get(gun_id, {}):
+		(_part_nodes[gun_id][part_id] as Node3D).visible = fitted.has(part_id)
 
 
 ## Apply the named gun surfaces to any instance (hands now; reusable if a 3-D workbench preview is added).
@@ -313,8 +385,9 @@ static func _rest_pose(gun_id: String) -> Dictionary:
 
 
 ## V15: the exact camera-space pose used at full ADS, kept pure for sight-alignment tests.
-static func aim_pose(gun_id: String) -> Dictionary:
-	var p: Array = ADS_POSES.get(gun_id, [HOLD.get(gun_id, Vector3.ZERO), Vector3.ZERO])
+static func aim_pose(gun_id: String, scoped: bool = false) -> Dictionary:
+	var poses: Dictionary = SCOPE_ADS_POSES if scoped else ADS_POSES
+	var p: Array = poses.get(gun_id, [HOLD.get(gun_id, Vector3.ZERO), Vector3.ZERO])
 	return {"position": p[0] as Vector3, "rotation": p[1] as Vector3}
 
 
@@ -444,9 +517,8 @@ func _process(delta: float) -> void:
 	_aim_weight = 1.0 if hold_aim and aiming() else move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)  # --aim screenshots start fully aimed
 	for b: String in _models:
 		var node: Node3D = _models[b]
+		_sync_part_models(b)
 		node.visible = show and b == base
-		if node.visible and sim.guns.scoped() and _aim_weight > 0.9:
-			node.visible = false  # V15: looking through the scope: the zoom and the crosshair are the reticle
 		if node.visible:
 			var raise := clampf(sim.guns.raising / maxf(0.01, float(sim.guns.stats()["handling"])), 0.0, 1.0)
 			var pose := _rest_pose(b)
@@ -456,7 +528,7 @@ func _process(delta: float) -> void:
 				pose = inspect_pose(b, inspect_p)
 			var hip_position: Vector3 = HOLD[b] + pose["position"] + Vector3(0.0, -0.25 * raise, 0.0)
 			var hip_rotation: Vector3 = pose["rotation"]
-			var ads: Dictionary = aim_pose(b)
+			var ads: Dictionary = aim_pose(b, sim.guns.scoped())
 			node.position = hip_position.lerp(ads["position"] as Vector3, _aim_weight) \
 					+ Vector3(0.0, 0.0, 0.06 * _kick * 10.0)
 			node.rotation = hip_rotation.lerp(ads["rotation"] as Vector3, _aim_weight) \
