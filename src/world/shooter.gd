@@ -377,8 +377,9 @@ func start_inspect() -> bool:
 	var gun := sim.gear.gun()
 	var gun_id: String = gun.get("base", "")
 	var gun_node: Node3D = _models.get(gun_id) as Node3D
-	var sound_pos := gun_node.global_position if gun_node != null else camera.global_position
-	SoundView.play_at(self, "gun_handle", sound_pos, -3.0, randf_range(0.95, 1.05))
+	if is_inside_tree():  # tests build Shooter/Melee alone, with no camera
+		var sound_pos := gun_node.global_position if gun_node != null else camera.global_position
+		SoundView.play_at(self, "gun_handle", sound_pos, -3.0, randf_range(0.95, 1.05))
 	_say("%s%s · %d/%d rounds" % [gun["name"], sim.guns.weapon_condition_text(true), int(gun["loaded"]),
 			int(sim.guns.stats()["magazine"])], INSPECT_TIME)
 	return true
