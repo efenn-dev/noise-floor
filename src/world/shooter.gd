@@ -32,7 +32,7 @@ const SIGHT_POINTS := {
 }
 const ADS_POSES := {
 	"pistol": [Vector3(0, -0.0785, -0.42), Vector3.ZERO],
-	"hunting_rifle": [Vector3(0.015, -0.0635, -0.5), Vector3.ZERO],
+	"hunting_rifle": [Vector3(0.015, -0.0635, -0.62), Vector3.ZERO],  # further out, so the stock's comb doesn't fill the view
 }
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
