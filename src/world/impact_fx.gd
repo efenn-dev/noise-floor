@@ -12,6 +12,10 @@ const KINDS := {
 			"size": Vector2(0.05, 0.11), "color": Color(0.32, 0.02, 0.02)},
 	"blood_head": {"amount": 40, "lifetime": 0.7, "speed": Vector2(2.2, 5.0), "gravity": -9.8, "spread": 60.0,
 			"size": Vector2(0.06, 0.14), "color": Color(0.36, 0.02, 0.02)},
+	"glass": {"amount": 34, "lifetime": 0.9, "speed": Vector2(1.2, 3.6), "gravity": -9.8, "spread": 75.0,
+			"size": Vector2(0.02, 0.05), "color": Color(0.82, 0.92, 0.97, 0.9)},
+	"wood": {"amount": 18, "lifetime": 0.8, "speed": Vector2(1.0, 3.0), "gravity": -9.8, "spread": 60.0,
+			"size": Vector2(0.03, 0.07), "color": Color(0.46, 0.33, 0.19)},
 	"dust": {"amount": 12, "lifetime": 0.9, "speed": Vector2(0.4, 1.4), "gravity": -0.6, "spread": 55.0,
 			"size": Vector2(0.1, 0.26), "color": Color(0.55, 0.52, 0.47, 0.75)},
 }

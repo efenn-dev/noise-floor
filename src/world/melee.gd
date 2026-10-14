@@ -189,7 +189,13 @@ func swing() -> int:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
 		if not hit.is_empty():  # V3: a swing into a wall puffs dust and jars the view (at the strike)
-			_pending.append({"at": strike_in, "kind": "wall", "pos": hit["position"], "normal": hit["normal"]})
+			var fx := "dust"
+			var col: Object = hit["collider"]
+			if col != null and col.has_meta("piece_key"):  # W2: windows shatter, town doors splinter
+				var mat := sim.piece_material(col.get_meta("piece_key"))
+				if sim.player_hit_piece(col.get_meta("piece_key"), sim.melee_damage(), sim.gear.weapon_class()) != "":
+					fx = "glass" if mat == "glass" else "wood"
+			_pending.append({"at": strike_in, "kind": "wall", "fx": fx, "pos": hit["position"], "normal": hit["normal"]})
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
@@ -206,7 +212,7 @@ func swing() -> int:
 func _land(p: Dictionary) -> void:
 	if p["kind"] == "wall":
 		if feel != null:
-			feel.impact(p["pos"], p["normal"], "dust")
+			feel.impact(p["pos"], p["normal"], p.get("fx", "dust"))
 			feel.add_trauma(ViewFeel.TRAUMA_MELEE_WALL)
 		return
 	if feel != null:

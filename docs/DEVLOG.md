@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — W2 Breakable windows and doors
+
+Built by Claude Opus 5.5 from Emmitt's ask: "lets work on making things destructible like windows". Stacked on V11.
+
+**Built:**
+- **You can break things.** `SimWorld.player_hit_piece(key, damage, by)` with `piece_material`:
+  - **Windows are glass:** one hit from anything (a punch, any weapon, a round) breaks one.
+  - **Town doors and fences are wood:** `BREAK_FACTOR` sets how hard each weapon hits them (axe 2.2x, blunt 1x, blade 0.4x, fists 0.25x, a round 0.3x). Chopping wears your weapon like a hit on a zombie.
+  - **Some things don't break:** brick house walls, floors, and everything you built yourself (no wrecking your own base with a missed swing).
+  - Melee swings and gunshots both use it.
+- **Breaking glass is loud** (`glass_break` 62, louder than a melee hit). The first window you break tells you everything nearby heard it. Zombies breaking a window now make the same glass sound at the window, instead of a generic thud. Wood knocks (`wood_hit` 38) and a door giving way (`wood_break` 50) are noise too.
+- **How it looks and sounds:** a burst of glass shards both ways (`ImpactFx` "glass"), and jagged glass left in the frame (`BuildView.shard_ring`: thin triangles along the pane's edges, laid out from the piece key so a window always breaks the same way; loaded saves get the jagged edge without the burst). Wood splinters (`ImpactFx` "wood") when a door, barricade or fence is wrecked. New synth sounds: `glass_break` (crash and tinkling pieces), `wood_break` (crack, splinters, boards falling).
+- `--break-windows[=R]` breaks every window within R m (default 12) at the start, for screenshots.
+- `test/test_breakable.gd` (25 checks).
+
+**Try it on the PC:** `play.bat --weapon=axe`, walk to a house, break a window, then chop the front door down. Listen for zombies coming.
+
+**Known gaps:** street fences, cars and furniture aren't breakable yet. No sledgehammer for walls. Broken glass on the floor isn't a hazard.
+
 ## 2026-10-13 — V11 Attack animations (Sprint 4)
 
 Emmitt: "Lets also work on the attack animations". Models by Codex (one job on his ChatGPT plan); swings and wiring by Claude Opus 5.5.

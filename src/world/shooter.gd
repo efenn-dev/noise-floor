@@ -191,8 +191,14 @@ func fire() -> int:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
 		_say("Missed")
+		var fx := "dust"
+		if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("piece_key"):  # W2: glass and town doors
+			var key: String = hit["collider"].get_meta("piece_key")
+			var mat := sim.piece_material(key)
+			if sim.player_hit_piece(key, float(sim.guns.stats().get("damage", 30.0)), "bullet") != "":
+				fx = "glass" if mat == "glass" else "wood"
 		if not hit.is_empty() and feel != null:
-			feel.impact(hit["position"], hit["normal"], "dust")  # V3: the round kicks up dust where it lands
+			feel.impact(hit["position"], hit["normal"], fx)  # V3: the round kicks up dust where it lands
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
