@@ -8,6 +8,9 @@ const TICK_RATE := 20
 const TICK := 1.0 / TICK_RATE
 ## Cap per update so a long freeze (debugger, alt-tab) can't snowball into thousands of ticks.
 const MAX_TICKS_PER_UPDATE := 10
+const PARRY_WINDOW := 0.25  # V15: seconds after raising a guard that a frontal hit is fully stopped
+const PARRY_STUN := 0.35
+const PARRY_KNOCKBACK := 4.0
 ## What the HUD says the first time you sit in a car you have no key for.
 const NO_KEY_MESSAGE := "No key. The glovebox is searched from the trunk, or try the nearest house"
 
@@ -38,7 +41,7 @@ var hotbar: Hotbar  # S3: the ten slots under keys 1-9 and 0
 var skills: Skills
 ## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
 var gear: Gear
-## M14: what's in your hands (melee or gun), spread, magazine and reloads.
+## M14/V14 slots: what's in your hands (melee, primary or sidearm), spread, magazine and reloads.
 var guns: Gunplay
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
 var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
@@ -225,11 +228,7 @@ func step() -> void:
 			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
-			player.damage(float(z.stats["damage"]) * maxf(0.0, 1.0 - skills.bonus("damage_cut")), z.type)
-			if not player.dead and _rng.randf() < bleed_chance():
-				if not player.bleeding:
-					add_message("You're bleeding (H to bandage)", 4.0)
-				player.start_bleeding()
+			zombie_hit_player(z)
 		elif build.pieces.has(e["target"]):
 			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
@@ -448,6 +447,55 @@ func bleed_chance() -> float:
 	return maxf(0.0, float(data.survival["bleed_chance"]) - skills.bonus("bleed_cut"))
 
 
+## V15: resolves one zombie hit against the held guard. Returns the outcome for headless tests and future
+## presentation; the ordinary horde path uses the same method. Armour reduces the hit before the guard.
+func zombie_hit_player(z: ZombieBrain) -> Dictionary:
+	var damage := float(z.stats["damage"]) * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
+	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage}
+	var w: Dictionary = weapon_stats()
+	if player.blocking and not guns.in_hand() and block_faces(player_facing, player_pos, z.pos) \
+			and player.try_block(float(w["block_stamina"])):
+		result["blocked"] = true
+		result["parried"] = player.block_time <= PARRY_WINDOW
+		noise.emit(player_pos, noise_loudness("block"), "block")
+		_wear_block_weapon()
+		if result["parried"]:
+			damage = 0.0
+			z.take_hit(0.0, player_pos, PARRY_KNOCKBACK)
+			z.stunned = maxf(z.stunned, PARRY_STUN)
+			add_message("Parried", 0.8)
+		else:
+			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]))
+	result["damage"] = damage
+	player.damage(damage, z.type)
+	if damage > 0.0 and not player.dead and _rng.randf() < bleed_chance():
+		if not player.bleeding:
+			add_message("You're bleeding (H to bandage)", 4.0)
+		player.start_bleeding()
+	return result
+
+
+## The attacker must be within 70 degrees of the player's flat look direction.
+static func block_faces(facing: Vector3, player_at: Vector3, attacker_at: Vector3) -> bool:
+	var look := Vector2(facing.x, facing.z)
+	var to_attacker := Vector2(attacker_at.x - player_at.x, attacker_at.z - player_at.z)
+	if look.length_squared() <= 1e-6 or to_attacker.length_squared() <= 1e-6:
+		return false
+	return look.normalized().dot(to_attacker.normalized()) >= cos(deg_to_rad(70.0))
+
+
+## A block uses the same per-weapon wear and break path as a landed swing.
+func _wear_block_weapon() -> void:
+	var name := gear.weapon_name()
+	match gear.wear_weapon(skills.bonus("wear_cut")):
+		"worn":
+			add_message("Your %s is worn out: its bonuses stop, and it'll break soon (repair kit from the Press)" % name, 6.0)
+		"broke":
+			add_message("Your %s broke while blocking! Find another weapon" % name, 7.0)
+			noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
+			stats.note("broke a " + name.to_lower())
+
+
 func _unnoticed_zombie_near() -> bool:
 	var reach := float(data.skills["sneak_range"])
 	var calm := [ZombieBrain.State.IDLE, ZombieBrain.State.WANDER, ZombieBrain.State.INVESTIGATE]
@@ -460,13 +508,10 @@ func _unnoticed_zombie_near() -> bool:
 
 # --- Carrying ---------------------------------------------------------------
 
-## Carry limit in kg: carry_base, plus 3 kg per Strength level (skills.json), plus the best bag you're
-## carrying (only one bag counts).
+## Carry limit in kg: carry_base, plus 3 kg per Strength level (skills.json), plus the bag worn on back.
 func carry_limit() -> float:
-	var best := 0.0
-	for item: String in inventory.items():
-		best = maxf(best, data.item_value(item, "bag"))
-	return float(data.survival["carry_base"]) + skills.bonus("carry_kg") + best
+	var bag := str(gear.equipped.get("back", ""))
+	return float(data.survival["carry_base"]) + skills.bonus("carry_kg") + data.item_value(bag, "bag")
 
 
 func carry_ratio() -> float:
@@ -710,10 +755,45 @@ func equip_gear(uid: int) -> String:
 	return why if why != "" else "Equipped " + piece["name"]
 
 
+## Wears one stackable bag item on the back. The old bag goes to pockets if it fits, otherwise the ground.
+func equip_bag(item: String) -> String:
+	if data.item_value(item, "bag") <= 0.0:
+		return "That isn't a bag"
+	if not inventory.remove(item, 1):
+		return "You don't have that"
+	var old := str(gear.equipped.get("back", ""))
+	gear.equipped["back"] = item
+	var suffix := _stow_bag(old)
+	return "Equipped %s%s" % [data.item_name(item), suffix]
+
+
 func unequip_gear(slot: String) -> String:
+	if slot == "back":
+		return _unequip_bag()
 	var piece: Dictionary = gear.equipped.get(slot, {})
 	var why := gear.unequip(slot)
 	return why if why != "" else "Took off " + piece["name"]
+
+
+func _unequip_bag() -> String:
+	var item := str(gear.equipped.get("back", ""))
+	if item == "":
+		return "Nothing there"
+	gear.equipped.erase("back")
+	var suffix := _stow_bag(item)
+	return "Took off %s%s" % [data.item_name(item), suffix]
+
+
+## Returns a message suffix. The capacity bonus is already whatever the currently worn bag supplies.
+func _stow_bag(item: String) -> String:
+	if item == "":
+		return ""
+	if carried_kg() + data.item_weight(item) <= carry_limit() + 0.001:
+		inventory.add(item, 1)
+		return ""
+	var bag := _bag_at_feet()
+	bag["items"][item] = int(bag["items"].get(item, 0)) + 1
+	return " (pockets full: dropped at your feet)"
 
 
 ## Repairs a piece (carried or worn) to mint with one repair kit from your pockets. Trains Mechanics
@@ -1210,7 +1290,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 
 # --- Guns (M14) --------------------------------------------------------------------
 
-## Q: swaps between your melee weapon and your gun. Returns a message.
+## Q: cycles melee, primary and sidearm, skipping empty firearm slots. Returns a message.
 func swap_hands() -> String:
 	return guns.swap()
 
@@ -1229,8 +1309,8 @@ func fire() -> String:
 		add_message("Your %s is worn out: its bonuses stop until you repair it" % piece["name"], 5.0)
 	noise.emit(player_pos, maxf(0.0, loud - skills.bonus("quiet_all")), kind)
 	_practice("firearms", "shot")
-	stats.note("fired a gun")
-	stats.note_shot(str(guns.gun().get("name", "gun")))
+	stats.note("fired a firearm")
+	stats.note_shot(str(guns.gun().get("name", "firearm")))
 	return ""
 
 
@@ -1244,7 +1324,7 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
 	var killed := z.take_hit(dmg, player_pos, float(guns.stats()["knockback"]))
 	stats.note("shot a zombie")
-	stats.note_gun_hit(str(guns.gun().get("name", "gun")), killed)
+	stats.note_gun_hit(str(guns.gun().get("name", "firearm")), killed)
 	_practice("firearms", "hit")
 	if killed:
 		_practice("firearms", "kill")
@@ -1261,7 +1341,7 @@ func reload() -> String:
 	return msg
 
 
-## At a workbench: attach a part from your pockets to the gun you have equipped. Returns a message.
+## At a workbench: attach a part from your pockets to the firearm Q most recently selected. Returns a message.
 func attach_part(uid: int) -> String:
 	var part := gear.find(uid)
 	var why := gear.attach(gear.gun(), uid)

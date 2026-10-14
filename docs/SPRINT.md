@@ -1,6 +1,6 @@
 # Read me first (Emmitt)
 
-*Updated 2026-10-14 by Claude Opus 5.5 (cloud): everything through #55 is merged; Q5, the pre-playtest check, is the last pull request before Playtest #2.* Sprint 4 has started: make the first 30 minutes look, sound and feel premium, with no new systems and free assets only (see the top of `docs/DIRECTION.md`). Codex is making the art and Claude is wiring it in. Each task lands as its own pull request against `main`. Merge them as they come, and `play.bat` picks them up. When the board says V8, play 30 minutes from a new game and write the Playtest #2 entry.
+*Updated 2026-10-14 by Claude Opus 5.5 (cloud): everything through #58 is merged; Q5, the pre-playtest check, is the last pull request before Playtest #2.* Sprint 4 has started: make the first 30 minutes look, sound and feel premium, with no new systems and free assets only (see the top of `docs/DIRECTION.md`). Codex is making the art and Claude is wiring it in. Each task lands as its own pull request against `main`. Merge them as they come, and `play.bat` picks them up. When the board says V8, play 30 minutes from a new game and write the Playtest #2 entry.
 
 ---
 
@@ -27,6 +27,9 @@ A new game's first 30 minutes (day 1, the first night, the next morning) look, s
 | V10 | Zomboid weapon skills (Emmitt): Blunt, Blades and Axe replace Melee (+6% damage and 4% quicker swings per level with that kind of weapon), Maintenance (7% less wear per level); old Melee xp carries over (save version 14) | Claude, same branch as V9 | Merged (#51) | Skills screen shows them; a trained weapon hits harder and faster |
 | V11 | Attack animations (Emmitt): real models for pipe, bat, axe, machete and knife (Codex), and a swing for each kind (diagonal, side, overhead chop, slash, stab) with wind-up, strike and recovery, the hit landing at the strike | Codex (models), Claude (swings), branch `v11-attacks` | Merged (#52) | Each weapon looks and swings differently |
 | W2 | Breakable windows and doors (Emmitt): glass breaks in one hit and is loud, town doors chop down (axes best), shards and jagged glass, splinters; your own builds and brick don't break | Claude, branch `w2-breakable` (stacked on V11) | Merged (#54) | Break a window and a door in play |
+| V13 | Rigged arms (Emmitt: realistic hands): finger bones and six hand poses; visible pistol and rifle reloads; inspect on V | Codex (rig, code), Claude (tests, fixes), branch `v13-arms` | Merged (#58) | Reload and inspect both guns |
+| V15 | Right click (Emmitt): aim down sights with every gun (scope keeps its zoom); block and parry with melee or fists | Codex (code), Claude (sight measurements, fixes), branch `v13-arms` | Merged (#58) | Aimed shots land tighter; a parry staggers a zombie |
+| V14 | Character slots (Emmitt): legs, feet, back (worn bag), Melee/Primary/Sidearm; a character figure with picture tiles; 29 missing item pictures | Codex (slots, pictures), Claude (fixes, checks), branch `v14-slots` | Merged (#57) | Equip boots and a bag; Q cycles your weapons |
 | Q5 | Pre-playtest check (DIRECTION.md): `tools/soak.sh --days=3` and `tools/tour.sh` on `main`, fix what they find | Claude (cloud), branch `q5-pre-playtest-2` | PR open; SOAK OK; tests green | Soak OK and tour checked |
 | V8 | Playtest #2 on the polished build (30 min from a new game, session log pasted in), then tuning from it (replaces S3-2 and S3-3) | Emmitt (+ Kaleb), then Claude | Ready after Q5 merges (V5 can follow) | Entry in `docs/PLAYTESTS.md`; tuning PR merged |
 

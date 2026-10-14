@@ -96,14 +96,17 @@ func test_key_hints_fit_the_moment() -> void:
 	main._give_gun("pistol", false)
 	var gun: String = main.key_hint_text()
 	check(gun != foot, "the line changes when a gun is drawn")
-	check("LMB fire" in gun and "R reload" in gun and "Q pipe" in gun, "gun keys (%s)" % gun)
-	check(not "RMB zoom" in gun, "no zoom without a scope")
+	check("LMB fire" in gun and "RMB aim" in gun and "R reload" in gun and "Q pipe" in gun, "gun keys (%s)" % gun)
+	main.sim.swap_hands()
+	var melee: String = main.key_hint_text()
+	check("LMB swing" in melee and "RMB block" in melee, "melee keys (%s)" % melee)
+	main.sim.swap_hands()
 	main.builder.set_active(true)
 	var build: String = main.key_hint_text()
 	check("R rotate" in build and "LMB place" in build and "RMB remove" in build and "B menu" in build and "Esc stop" in build, "build keys (%s)" % build)
 	check(not "WASD move" in build and not "LMB fire" in build, "and only those")
 	main.builder.set_active(false)
-	for line: String in [foot, gun, build]:
+	for line: String in [foot, gun, melee, build]:
 		check(line.length() <= max_len, "under %d characters (%d)" % [max_len, line.length()])
 		check(not "\n" in line, "one line")
 	# However much is offered, it stays one short line with F1 help on the end.

@@ -10,7 +10,9 @@ func test_weight_and_limit() -> void:
 	near(sim.inventory.weight(sim.data), 11.0, "10 planks (1 kg) + 100 nails (0.01 kg) = 11 kg")
 	near(sim.carry_limit(), 20.0, "20 kg limit with no bag")
 	sim.inventory.give_all({"school_bag": 1, "hiking_pack": 1})
-	near(sim.carry_limit(), 38.0, "only the best bag counts: 20 + 18")
+	near(sim.carry_limit(), 20.0, "bags in pockets add no capacity")
+	eq(sim.equip_bag("hiking_pack"), "Equipped Hiking pack", "wear the hiking pack")
+	near(sim.carry_limit(), 38.0, "only the worn bag counts: 20 + 18")
 
 
 func test_overloaded_is_slow_loud_and_cant_sprint() -> void:

@@ -6,11 +6,11 @@
 		"range": 2.2,
 		"cooldown": 0.7,
 		"knockback": 3.0,
-		"class": "blunt", "wear": 0.008, "style": "diagonal"
+		"class": "blunt", "wear": 0.008, "style": "diagonal", "block_reduction": 0.7, "block_stamina": 12
 	},
-	"bat": { "name": "Baseball bat", "damage": 30, "head_multiplier": 2.0, "range": 2.3, "cooldown": 0.6, "knockback": 4.0, "class": "blunt", "wear": 0.012, "style": "side" },
-	"axe": { "name": "Axe", "damage": 48, "head_multiplier": 2.0, "range": 2.1, "cooldown": 0.95, "knockback": 2.5, "class": "axe", "wear": 0.010, "style": "overhead" },
-	"machete": { "name": "Machete", "damage": 38, "head_multiplier": 2.2, "range": 2.0, "cooldown": 0.55, "knockback": 1.5, "class": "blade", "wear": 0.014, "style": "slash" },
-	"knife": { "name": "Knife", "damage": 22, "head_multiplier": 2.5, "range": 1.6, "cooldown": 0.4, "knockback": 0.8, "class": "blade", "wear": 0.02, "style": "stab" },
-	"fists": { "name": "Fists", "damage": 10, "head_multiplier": 1.5, "range": 1.6, "cooldown": 0.5, "knockback": 1.0, "class": "fists", "wear": 0.0, "style": "punch" }
+	"bat": { "name": "Baseball bat", "damage": 30, "head_multiplier": 2.0, "range": 2.3, "cooldown": 0.6, "knockback": 4.0, "class": "blunt", "wear": 0.012, "style": "side", "block_reduction": 0.7, "block_stamina": 12 },
+	"axe": { "name": "Axe", "damage": 48, "head_multiplier": 2.0, "range": 2.1, "cooldown": 0.95, "knockback": 2.5, "class": "axe", "wear": 0.010, "style": "overhead", "block_reduction": 0.7, "block_stamina": 14 },
+	"machete": { "name": "Machete", "damage": 38, "head_multiplier": 2.2, "range": 2.0, "cooldown": 0.55, "knockback": 1.5, "class": "blade", "wear": 0.014, "style": "slash", "block_reduction": 0.5, "block_stamina": 10 },
+	"knife": { "name": "Knife", "damage": 22, "head_multiplier": 2.5, "range": 1.6, "cooldown": 0.4, "knockback": 0.8, "class": "blade", "wear": 0.02, "style": "stab", "block_reduction": 0.5, "block_stamina": 10 },
+	"fists": { "name": "Fists", "damage": 10, "head_multiplier": 1.5, "range": 1.6, "cooldown": 0.5, "knockback": 1.0, "class": "fists", "wear": 0.0, "style": "punch", "block_reduction": 0.3, "block_stamina": 8 }
 }

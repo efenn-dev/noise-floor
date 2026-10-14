@@ -41,6 +41,7 @@ const KEYS := {
 	"skills": [KEY_K],  # the skills and perks screen (M12)
 	"base_log": [KEY_L],  # M15: the base log screen
 	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
+	"inspect": [KEY_V],  # V13: turn the held gun or melee weapon over in your hands
 	"help": [KEY_F1],  # P3: the controls screen (HelpScreen describes every action here)
 }
 const MOUSE := {
@@ -49,7 +50,7 @@ const MOUSE := {
 	"attack": MOUSE_BUTTON_LEFT,
 	"build_next": MOUSE_BUTTON_WHEEL_DOWN,
 	"build_prev": MOUSE_BUTTON_WHEEL_UP,
-	"aim": MOUSE_BUTTON_RIGHT,  # P2: hold to zoom with a scope (in build mode right click removes instead)
+	"aim": MOUSE_BUTTON_RIGHT,  # V15: hold to aim a gun or block with melee/fists (build mode removes)
 }
 
 

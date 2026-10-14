@@ -42,8 +42,8 @@ func test_a_death_writes_the_log() -> void:
 	check("  1. at 1:05 real (day 1 10:0" in text and "): killed by a shambler" in text, "what killed you, in plain words")
 	check("Built 1 piece: 1 foundation." in lines, "what you built")
 	check("  0:00 built a foundation" in lines, "the timeline")
-	check("Wearing at the end: Pipe (white)." in lines, "what you wore at the end (P3)")
-	check("Guns: never fired." in lines and "Houses entered: 0." in lines, "the P3 lines")
+	check("Wearing at the end: Melee: Pipe (white)." in lines, "what you wore at the end (P3)")
+	check("Firearms: never fired." in lines and "Houses entered: 0." in lines, "the P3 lines")
 	DirAccess.remove_absolute(PATH)
 	slog.queue_free()
 	await tree.process_frame

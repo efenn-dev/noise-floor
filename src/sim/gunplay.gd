@@ -1,6 +1,6 @@
 class_name Gunplay
 extends RefCounted
-## Guns in your hands (M14): what you're holding (Q swaps melee and gun), raising the gun, the spread
+## Guns in your hands (M14): what you're holding (Q cycles melee, primary and sidearm), raising the gun, the spread
 ## that grows with each shot's recoil and settles back, the magazine and reloading, and how loud each shot is.
 ## Since P2 the spread cone is the only thing that decides a hit: the world's ray lands or it doesn't, and
 ## Firearms, the scope (range), recoil and distance (a fixed angle covers more ground further out) all act
@@ -12,11 +12,12 @@ extends RefCounted
 var data: GameData
 var gear: Gear
 var skills: Skills
-var hands := "melee"   # "melee" or "gun"; saved
+var hands := "melee"   # "melee", "primary" or "sidearm"; saved
 var bloom := 0.0       # extra spread in degrees from recent shots; settles back over time
 var cooldown := 0.0    # seconds until the next shot
 var raising := 0.0     # seconds until the gun is up after Q
 var reloading := 0.0   # seconds left of a reload (0 = not reloading)
+var aiming := false    # V15: written by the world; spread remains a deterministic sim rule
 
 
 func _init(p_data: GameData, p_gear: Gear, p_skills: Skills) -> void:
@@ -26,36 +27,49 @@ func _init(p_data: GameData, p_gear: Gear, p_skills: Skills) -> void:
 
 
 func gun() -> Dictionary:
+	if hands in Gear.FIREARM_SLOTS:
+		gear.set_active_gun(hands)
 	return gear.gun()
 
 
 func in_hand() -> bool:
-	return hands == "gun" and not gun().is_empty()
+	return hands in Gear.FIREARM_SLOTS and not gun().is_empty()
 
 
 func stats() -> Dictionary:
 	return gear.gun_stats(gun())
 
 
-## Q: swaps between your melee weapon and your gun. Returns a message.
+## Q: cycles melee -> primary -> sidearm -> melee, skipping empty firearm slots.
 func swap() -> String:
-	if hands == "melee":
-		if gun().is_empty():
-			return "No gun (equip one from Tab)"
-		hands = "gun"
-		raising = float(stats()["handling"])
+	gear.migrate_legacy_gun()
+	var order := ["melee", "primary", "sidearm"]
+	var at := order.find(hands)
+	for step in range(1, order.size() + 1):
+		var slot: String = order[(at + step) % order.size()]
+		if slot != "melee" and not gear.equipped.get(slot) is Dictionary:
+			continue
+		if slot == hands:
+			return "No firearm equipped (Tab)"
+		hands = slot
+		aiming = false  # V15: a swap always drops the aim
 		reloading = 0.0
+		if slot == "melee":
+			return "%s in hand" % gear.weapon_name()
+		gear.set_active_gun(slot)
+		raising = float(stats()["handling"])
 		return "%s in hand" % gear.gun_name()
-	hands = "melee"
+	aiming = false
 	reloading = 0.0
-	return "%s in hand" % gear.weapon_name()
+	return ""
 
 
 ## One tick: timers run down, the spread settles, a finished reload loads the rounds from `inv`.
 ## Returns the rounds loaded this tick (0 if no reload finished).
 func tick(dt: float, inv: Inventory) -> int:
-	if hands == "gun" and gun().is_empty():
+	if hands in Gear.FIREARM_SLOTS and gun().is_empty():
 		hands = "melee"  # the gun was taken off
+		aiming = false
 	cooldown = maxf(0.0, cooldown - dt)
 	raising = maxf(0.0, raising - dt)
 	var settle := float(stats()["settle"]) if not gun().is_empty() else 8.0
@@ -73,8 +87,8 @@ func spread_mult() -> float:
 	return maxf(float(data.guns["min_spread_mult"]), 1.0 - skills.bonus("spread_cut"))
 
 
-## How much a gun's range (the scope, "+% accuracy at range" rolls) tightens its cone: the base gun's range
-## over this one's, so a scope's +60% range is a cone 1/1.6 as wide. 1.0 without range bonuses.
+## How much a gun's range (the scope, "+% accuracy at range" rolls) tightens its cone while aimed: the base
+## gun's range over this one's, so a scope's +60% range is a cone 1/1.6 as wide. 1.0 without range bonuses.
 func sight_mult() -> float:
 	if gun().is_empty():
 		return 1.0
@@ -85,12 +99,15 @@ func sight_mult() -> float:
 	return clampf(float(base["range"]) / reach, 0.1, 1.0)
 
 
-## The cone the world shoots into, in degrees (half-angle): the gun's spread plus the recoil bloom, times
-## spread_mult (Firearms) and sight_mult (scope and range). The ray is the only roll: what it meets is hit.
+## V15: the cone the world shoots into, in degrees (half-angle). ADS applies the gun's data multiplier;
+## a scope's range multiplier only helps while the player is actually looking through it.
 func spread_deg() -> float:
 	if gun().is_empty():
 		return 0.0
-	return (float(stats()["spread"]) + bloom) * spread_mult() * sight_mult()
+	var st := stats()
+	var ads := float(st["ads_spread"]) if aiming else 1.0
+	var sight := sight_mult() if aiming and scoped() else 1.0
+	return (float(st["spread"]) + bloom) * spread_mult() * ads * sight
 
 
 ## The radius in metres of the cone `distance` m out: why the same cone lands less often further away.
@@ -131,7 +148,7 @@ func damage() -> float:
 ## "" if a shot can be fired now, otherwise why not.
 func can_fire() -> String:
 	if not in_hand():
-		return "No gun in hand (Q)"
+		return "No firearm in hand (Q)"
 	if reloading > 0.0:
 		return "Reloading..."
 	if raising > 0.0 or cooldown > 0.0:
@@ -169,6 +186,7 @@ func start_reload(inv: Inventory) -> String:
 	var full := int(piece["loaded"]) >= int(stats()["magazine"])
 	var other := _other_ammo(inv, piece["ammo"])
 	if inv.count(piece["ammo"]) > 0 and not full:
+		aiming = false
 		reloading = reload_time()
 		return "Reloading %s..." % data.item_name(piece["ammo"]).to_lower()
 	if other == "":
@@ -176,6 +194,7 @@ func start_reload(inv: Inventory) -> String:
 	inv.add(piece["ammo"], int(piece["loaded"]))
 	piece["loaded"] = 0
 	piece["ammo"] = other
+	aiming = false
 	reloading = reload_time()
 	return "Switching to %s..." % data.item_name(other).to_lower()
 
@@ -202,27 +221,43 @@ func _load(inv: Inventory) -> int:
 	return n
 
 
-## V9: " 60%" once the melee weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
-func weapon_condition_text() -> String:
-	if not gear.equipped.has("weapon"):
+## V9: " 60%" once the held weapon has some wear, " 20% worn out" when it's about to break; "" when mint.
+## V13: inspection asks for `always`, and while a gun is in hand this describes the gun instead of the
+## stowed melee weapon. This is display text only; wear and reload rules are unchanged.
+func weapon_condition_text(always: bool = false) -> String:
+	var piece: Dictionary = gun() if in_hand() else gear.equipped.get("weapon", {})
+	if piece.is_empty():
 		return ""
-	var piece: Dictionary = gear.equipped["weapon"]
 	var c := float(piece["condition"])
-	if c >= 0.995:
+	if c >= 0.995 and not always:
 		return ""
 	return " %d%%%s" % [roundi(c * 100.0), "" if gear.working(piece) else " worn out"]
 
 
-## The HUD line: "Pistol 6/8 standard (R reload, Q pipe)" or "Pipe (Q: Pistol)".
+func _next_label() -> String:
+	var order := ["melee", "primary", "sidearm"]
+	var at := order.find(hands)
+	for step in range(1, order.size() + 1):
+		var slot: String = order[(at + step) % order.size()]
+		if slot == "melee":
+			return gear.weapon_name()
+		var piece: Variant = gear.equipped.get(slot)
+		if piece is Dictionary:
+			return "%s %s" % [slot.capitalize(), piece["name"]]
+	return ""
+
+
+## The HUD line names the held slot and the next non-empty slot Q will select.
 func hands_text() -> String:
 	if not in_hand():
-		return "Weapon: %s%s%s" % [gear.weapon_name(), weapon_condition_text(),
-				("   (Q: %s)" % gear.gun_name()) if not gun().is_empty() else ""]
+		var next := _next_label()
+		return "Melee: %s%s%s" % [gear.weapon_name(), weapon_condition_text(),
+				("   (Q: %s)" % next) if next != gear.weapon_name() else ""]
 	var piece := gun()
 	var state := ""
 	if reloading > 0.0:
 		state = "  reloading"
 	elif raising > 0.0:
 		state = "  raising"
-	return "Gun: %s  %d/%d %s%s   (Q: %s)" % [piece["name"], int(piece["loaded"]), int(stats()["magazine"]),
-			data.item_name(piece["ammo"]).to_lower(), state, gear.weapon_name()]
+	return "%s: %s  %d/%d %s%s   (Q: %s)" % [hands.capitalize(), piece["name"], int(piece["loaded"]),
+			int(stats()["magazine"]), data.item_name(piece["ammo"]).to_lower(), state, _next_label()]

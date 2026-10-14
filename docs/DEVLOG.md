@@ -23,6 +23,44 @@ The check DIRECTION.md asks for before every playtest, on `main` at #55, by Clau
 
 **Next:** Playtest #2 (V8).
 
+## 2026-10-13 — V13 Rigged arms, reload and inspect + V15 Right click to aim or block (Sprint 4)
+
+Emmitt: "more realistic hands, reload/inspect mechanics" and "use right click to defend or ADS/scope in". Arm rig and code by Codex (four jobs on his ChatGPT plan); testing, sight measurements and fixes by Claude Opus 5.5.
+
+**Built:**
+- **Rigged arms** (`tools/art/fp_arm_rig.py` -> `fp_arm_right.glb` / `fp_arm_left.glb`): a skeleton with a forearm, wrist and three joints per finger and thumb, skinned, with six hand poses (Grip, Open, Flat, HoldMag, Pinch, Fist). Same grip frame as V12's hands, so `Hands.make` prefers them and falls back to the V12 models. A second pass made the fingers continuous tubes instead of stacked capsules.
+- **Reload you can see.** Pistol: the gun tilts, the old magazine drops away, the left hand goes to your belt, comes back holding a fresh one, seats it and racks the slide. Rifle: the left hand presses three cartridges into the action, then the bolt is worked. Keyed to the sim's reload time (`Shooter.reload_pose`), so Quick Hands speeds it up too. The left hand can leave its grip (`Hands.set_target`) and always returns exactly.
+- **Inspect (V).** The gun or melee weapon comes closer and turns over, with a message: name, condition and rounds ("Pistol 100% · 8/8 rounds"). Attacking, reloading, swapping or aiming cancels it.
+- **Aim down sights (right click, every gun).** The gun comes to the centre with its sights on the crosshair (heights measured from the exported models), the view narrows 15%, sway nearly stops, you walk at 70%, sprinting drops it. Aimed shots have half the spread (sim: `guns.json` `ads_spread`). With a scope: the old zoom, the gun gets out of the way and the crosshair is the reticle.
+- **Block (right click with melee or fists).** A guard pose; a hit from the front (within 70 degrees) loses 70% (blunt, axe), 50% (blades) or 30% (fists), costs stamina and wears the weapon. Raise it within 0.25 s of the hit for a **parry**: no damage and the zombie staggers back. No stamina, no block. You can't attack while blocking and move at 60%.
+
+**Try it on the PC:** `play.bat --gun` then R (reload), V (inspect), hold right click (aim); `play.bat --gun=rifle`; `play.bat --weapon=axe` and hold right click to block; `play.bat --fists`. Screenshot flags: `--reload-at=T`, `--inspect-at=T`, `--aim=irons`, `--block`.
+
+**Tests:** 11,353 green (new: `test_reload_inspect.gd`, `test_aim_block.gd`).
+
+**Known gaps:** the hands still don't look truly realistic (thin fingers, a puffy back of the glove); a procedural Blender script has hit its limit here, and the next step is a CC0 sculpted base (MakeHuman/MPFB, whose output is CC0) if Emmitt agrees. With the rifle's iron sights the stock fills the bottom of the view. The fingers don't animate within a reload beyond the pose changes. No new sounds for magazine and bolt (the existing reload sound plays).
+
+**Next:** Playtest #2 (V8).
+## 2026-10-13 — V14 Character slots and item pictures (Sprint 4)
+
+Emmitt: "character slots available in our game for equipment and weapons. a lot of the items still need thumbnail images." Slots, character screen and pictures by Codex (two jobs on his ChatGPT plan); fixes, layout and checks by Claude Opus 5.5.
+
+**Built:**
+- **Ten slots instead of six.** Head, body, hands, **legs**, **feet**, **back**, light, plus **Melee**, **Primary** (rifles) and **Sidearm** (pistols); the single gun slot is split. Q cycles melee -> primary -> sidearm and skips empty slots (fists when there's no melee weapon). `Gear.gun()` is still "the gun in your hands", so the gun code didn't change.
+- **New clothing:** work pants, cargo pants (a little extra carry), work boots, sneakers (quieter footsteps), with rarities, rolls and loot drops like the other clothing.
+- **Bags go on your back.** Only the worn bag adds carrying capacity now (before, the best bag in your pockets counted). Double-click a bag to wear it.
+- **Character screen.** The text list of worn gear is now a figure with a tile per slot: the item's picture, its rarity colour as the border and a condition bar; empty slots are dark tiles with their name. Double-click equips from your pockets and unequips from the figure. The backdrop is darker, so the world doesn't show through.
+- **29 new item pictures** (Codex image generation, cut out by `tools/art/make_icon.py`): ammo, bolts, the repair kit, radio, wall panel, every melee weapon, all clothing, the pistol, the rifle and every gun part. Gear tiles in your pockets and crates now show the picture too (they were coloured letters).
+- **Saves:** VERSION 15. A version-14 save moves its gun to Primary or Sidearm and wears your best bag; nothing is lost (`test/fixtures/save_v14.json`).
+
+**Try it on the PC:** `play.bat --gear=yellow` (a rare piece in your pockets and the character screen open), or Tab in any game. `play.bat --gun` now puts the pistol in the Sidearm slot.
+
+**Tests:** 9,288 green (`test_equipment_slots.gd` is new: slots, Q cycling, worn-bag capacity, new clothing, the v14 migration, every tile on the figure).
+
+**Known gaps:** no drag and drop yet (double-click instead). The figure is drawn shapes, not a picture of your character. A second gun of the same kind can't be carried as a backup in the other gun slot (a pistol only fits Sidearm).
+
+**Next:** V13 (rigged arms with reload and inspect) and V15 (right click to aim or block) are on the `v13-arms` branch.
+
 ## 2026-10-13 — V12 First-person hands (Sprint 4)
 
 Emmitt: "work on the animations". Hand models by Codex (one job on his ChatGPT plan); attachment and fists by Claude Opus 5.5.

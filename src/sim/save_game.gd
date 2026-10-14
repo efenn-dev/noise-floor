@@ -20,7 +20,7 @@ extends RefCounted
 ## 7 = W1c: furniture (counters, tables, couches, shelves, bathtubs, toilets) is pieces, saved with the rest.
 ## A save from before 7 gets the furniture laid by the town plan after it's applied (see holds_props).
 ## 8 = M14: guns. A gun piece also holds its parts, rounds loaded and ammo type (all inside "gear"), and
-## "hands" says whether the gun or the melee weapon was in your hands. A save from before 8 has an empty gun slot.
+## "hands" says whether the firearm or melee weapon was in your hands. A save from before 8 has no firearm.
 ## 9 = M15: turret parts (suppressor, scope) ride in "turrets"; hoppers and repair stations ("bins": what they
 ## hold); sensors with their actions, floodlights' night setting, noisemakers' blare and recharge, doors a
 ## sensor holds shut ("automation"); sprung bear traps; and the base log. A save from before 9 loads with
@@ -37,17 +37,17 @@ extends RefCounted
 ## project at phase 0.
 ## 13 = S3: the hotbar (ten slots, "build:<piece>" / "item:<item>" / ""), and a door's "swing" (which way it
 ## opened). A save from before 13 gets the default hotbar and its open doors swing the default way.
-const VERSION := 14
+## 14 = V10: Melee split into Blunt, Blades and Axe (a save from before 14 gives its Melee xp to all three),
+## plus Maintenance. Weapons wear at their own rate and break at 0 (no new saved fields).
+## 15 = V14 slots: the old gun moves to primary or sidearm by its base, and the best carried bag moves to
+## the back slot. The other bags stay in the inventory and no item is discarded.
+const VERSION := 15
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
 const FIRST_WITH_TOWN := 3
 const FIRST_WITH_FACTORY := 4
-## 14 = V10: Melee split into Blunt, Blades and Axe (a save from before 14 gives its Melee xp to all three),
-## plus Maintenance. Weapons wear at their own rate and break at 0 (no new saved fields).
-
-
 ## True if the save already holds the town's houses as pieces, so the world must not lay them again.
 static func holds_town(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_TOWN
@@ -285,7 +285,16 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		sim.gear.give_start()
 	if version < FIRST_WITH_GEAR:
 		sim.spawn_old_pete()  # he wasn't in the hall before M13
-	sim.guns.hands = "gun" if str(d.get("hands", "melee")) == "gun" and not sim.gear.gun().is_empty() else "melee"
+	if version < 15:
+		_wear_best_legacy_bag(sim)
+	var saved_hands := str(d.get("hands", "melee"))
+	if version < 15 and saved_hands == "gun":
+		saved_hands = sim.gear.gun_slot()
+	if saved_hands in Gear.FIREARM_SLOTS and sim.gear.equipped.get(saved_hands) is Dictionary:
+		sim.guns.hands = saved_hands
+		sim.gear.set_active_gun(saved_hands)
+	else:
+		sim.guns.hands = "melee"
 	var st: Dictionary = d.get("stats", {})
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))
@@ -303,6 +312,18 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim._next_bag = int(d["next_bag"])
 	sim._rng.state = int(d["rng_state"])
 	return ""
+
+
+## V15 migration: old saves counted the best bag in pockets. Wear exactly one of that stack now.
+static func _wear_best_legacy_bag(sim: SimWorld) -> void:
+	if str(sim.gear.equipped.get("back", "")) != "":
+		return
+	var best := ""
+	for item: String in sim.inventory.items():
+		if sim.data.item_value(item, "bag") > sim.data.item_value(best, "bag"):
+			best = item
+	if best != "" and sim.inventory.remove(best, 1):
+		sim.gear.equipped["back"] = best
 
 
 ## P3 upgrade for a version 3-9 save: flags as the town's every piece standing where the seed's town plan

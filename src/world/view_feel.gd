@@ -23,6 +23,7 @@ const SHAKE_SPEED := 26.0
 const TRAUMA_FIRE := {"pistol": 0.14, "hunting_rifle": 0.3}
 const TRAUMA_MELEE_HIT := 0.12
 const TRAUMA_MELEE_WALL := 0.06
+const TRAUMA_BLOCK := 0.1  # V15: small guard impact; damage shake still reflects any hit that got through
 const MARKER_TIME := 0.35
 const HURT_DECAY := 1.4
 const LOW_HEALTH := 35.0        # below this the red edge pulses

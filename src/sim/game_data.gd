@@ -25,7 +25,7 @@ var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, un
 var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
 var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
 var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
-var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], empty (optional weight of nothing), items: [{item, weight, min, max}]}
+var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var load_errors: PackedStringArray = []
 
 
@@ -195,6 +195,9 @@ func validate() -> PackedStringArray:
 				errors.append("loot '%s' entry '%s' needs weight > 0 and 1 <= min <= max" % [table, e.get("item", "")])
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
 	_check_stats(errors, "weapon", weapons, WEAPON_STATS)
+	for id: String in weapons:  # V15: every guard needs a sane fractional damage cut
+		if float(weapons[id].get("block_reduction", 0.0)) > 1.0:
+			errors.append("weapon '%s' block_reduction can't exceed 1" % id)
 	if noise.is_empty():
 		errors.append("no noise data")
 	else:
@@ -240,14 +243,14 @@ func validate() -> PackedStringArray:
 const ZOMBIE_STATS := ["hp", "wander_speed", "chase_speed", "attack_range", "attack_interval", "damage",
 		"structure_damage", "sight_day", "sight_night", "sight_fov", "sense_radius", "hearing_day",
 		"hearing_night", "investigate_speed"]
-const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback"]
+const WEAPON_STATS := ["damage", "head_multiplier", "range", "cooldown", "knockback", "block_reduction", "block_stamina"]
 const SURVIVAL_STATS := ["food_drain", "water_drain", "energy_drain", "energy_sleep_gain", "starve_damage",
 		"respawn_minimum", "heal_rate", "heal_sleep_rate", "heal_min", "stamina_regen", "stamina_regen_delay", "sprint_cost", "swing_cost", "bleed_chance",
 		"bleed_damage", "bleed_time", "sleep_time_scale", "sleep_below_energy", "search_time", "search_range", "search_noise",
 		"storage_range", "carry_base", "carry_slow_per_overload", "carry_min_speed", "carry_no_sprint",
 		"carry_footstep_bonus", "siphon_noise", "car_fuel_min", "car_fuel_max", "car_wreck_chance",
 		"gas_stale_day", "found_food_rots_day"]
-const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "zombie_bash", "wreck", "door", "horn"]
+const SOUNDS := ["footstep_walk", "footstep_sprint", "melee_hit", "block", "zombie_bash", "wreck", "door", "horn"]
 ## Each car has its own key: item id "car_key:<car id>" (not in items.json).
 const CAR_KEY := "car_key:"
 const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudness", "hp", "ram_damage", "mass",
@@ -352,7 +355,7 @@ static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
 		return
 	for id: String in gn.get("guns", {}):
 		var gun: Dictionary = gn["guns"][id]
-		for key: String in ["damage", "range", "spread", "recoil", "settle", "handling", "magazine", "loudness",
+		for key: String in ["damage", "range", "spread", "ads_spread", "recoil", "settle", "handling", "magazine", "loudness",
 				"cooldown", "reload", "wear_per_shot"]:
 			if float(gun.get(key, 0)) <= 0.0:
 				errors.append("gun '%s' needs a positive '%s'" % [id, key])
@@ -366,7 +369,7 @@ static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("ammo '%s' needs an item" % a)
 	for b: String in d.gear.get("bases", {}):
 		var base: Dictionary = d.gear["bases"][b]
-		if base.get("slot", "") == "gun" and not gn.get("guns", {}).has(base.get("gun", "")):
+		if base.get("slot", "") in ["primary", "sidearm"] and not gn.get("guns", {}).has(base.get("gun", "")):
 			errors.append("gear base '%s' needs a gun in guns.json" % b)
 		if base.get("slot", "") == "part" and not gn.get("parts", {}).has(base.get("part", "")):
 			errors.append("gear base '%s' needs a part in guns.json" % b)
@@ -406,6 +409,13 @@ static func _check_gear(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("gear base '%s' needs a slot and a weight" % b)
 		if base.get("slot", "") == "weapon" and not d.weapons.has(base.get("weapon", "")):
 			errors.append("gear base '%s' needs a weapon in weapons.json" % b)
+		for table: String in base.get("sources", []):
+			if not d.loot.has(table) or not b in d.loot.get(table, {}).get("gear", []):
+				errors.append("gear base '%s' needs loot table '%s' to list it" % [b, table])
+	for table: String in d.loot:
+		for b: String in d.loot[table].get("gear", []):
+			if not g.get("bases", {}).has(b):
+				errors.append("loot '%s' lists unknown gear '%s'" % [table, b])
 	for s: String in g.get("stats", {}):
 		var st: Dictionary = g["stats"][s]
 		if float(st.get("min", 0)) <= 0.0 or float(st.get("max", 0)) < float(st.get("min", 0)) or not "%d" in str(st.get("text", "")):

@@ -140,7 +140,7 @@ func test_workbench_screen_attaches_a_part() -> void:
 	tree.root.add_child(screen)
 	screen.setup(s)
 	screen.open("")
-	check(screen.gun_text().begins_with("No gun equipped"), "no gun: it says so")
+	check(screen.gun_text().begins_with("No firearm equipped"), "no firearm: it says so")
 	var gun := s.gear.make("pistol", "civilian", "white")
 	s.gear.pieces.append(gun)
 	s.equip_gear(gun["uid"])
@@ -180,8 +180,8 @@ func _frames(n: int) -> void:
 		await tree.process_frame
 
 
-func test_scope_zoom_on_right_click() -> void:
-	# P2: holding right click with a scoped gun narrows the view; letting go puts it back. No scope, no zoom.
+func test_ads_and_scope_zoom_on_right_click() -> void:
+	# V15: every gun aims; iron sights narrow 15%, and the existing scope still reaches 35 degrees.
 	_setup()
 	InputSetup.register()
 	InputSetup.assume_captured = true
@@ -191,8 +191,8 @@ func test_scope_zoom_on_right_click() -> void:
 	near(base, 75.0, "the normal view: 75 degrees")
 	_right_click(true)
 	await _frames(20)
-	near(player.camera.fov, base, "right click without a scope does nothing")
-	check(not shooter.aiming(), "not aiming")
+	near(player.camera.fov, base * Shooter.IRON_FOV_MULT, "iron sights narrow the view by 15 percent")
+	check(shooter.aiming(), "aiming down the iron sights")
 	_right_click(false)
 	var scope := sim.gear.make("scope", "civilian", "white")
 	sim.gear.pieces.append(scope)
@@ -239,6 +239,12 @@ func test_crosshair_shows_the_spread() -> void:
 	var settled := cross.gap
 	var expect := Crosshair.gap_for(main.sim.guns.spread_deg(), main.player.camera.fov, main.get_viewport().get_visible_rect().size.y)
 	near(settled, expect, "its gap is the cone's size on screen", 0.5)
+	main.shooter.hold_aim = true
+	await _frames(2)
+	check(not cross.visible and not main._dot.visible, "ADS hides both crosshair and centre dot")
+	main.shooter.hold_aim = false
+	await _frames(2)
+	check(cross.visible, "letting go shows the gun crosshair again")
 	main.sim.guns.raising = 0.0
 	check(main.shooter.fire() != -2, "a shot")
 	await _frames(2)

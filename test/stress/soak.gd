@@ -272,14 +272,14 @@ func _eat_drink() -> String:
 
 
 func _shoot() -> String:
-	var had := sim.gear.equipped.has("gun") or _gun_in_pockets()
-	if not sim.gear.equipped.has("gun"):
+	var had := sim.gear.gun_slot() != "" or _gun_in_pockets()
+	if sim.gear.gun_slot() == "":
 		var uid := _gun_in_pockets()
 		if uid > 0:
 			sim.equip_gear(uid)
-	if not sim.gear.equipped.has("gun"):
+	if sim.gear.gun_slot() == "":
 		main._give_gun("pistol", false)  # the path --gun uses
-	elif sim.guns.hands != "gun":
+	while not sim.guns.in_hand():
 		sim.swap_hands()
 	if sim.inventory.count("ammo_standard") < 10:
 		sim.inventory.add("ammo_standard", 30)
@@ -780,7 +780,7 @@ func _nearest_zombie(at: Vector3) -> ZombieBrain:
 
 func _gun_in_pockets() -> int:
 	for piece: Dictionary in sim.gear.pieces:
-		if sim.gear.slot_of(piece) == "gun":
+		if sim.gear.slot_of(piece) in Gear.FIREARM_SLOTS:
 			return int(piece["uid"])
 	return 0
 

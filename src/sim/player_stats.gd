@@ -19,6 +19,8 @@ signal respawned
 signal woke
 
 const RESPAWN_TIME := 3.0
+const AIM_SPEED_MULT := 0.7  # V15: careful sight footwork, independent of carry and exhaustion
+const BLOCK_SPEED_MULT := 0.6
 
 var cfg: Dictionary = {}
 
@@ -38,6 +40,9 @@ var bleeding := false
 var bleed_left := 0.0
 var asleep := false
 var sprinting := false   # written by the world each frame
+var aiming := false      # V15: transient combat stance, written by the world
+var blocking := false
+var block_time := 0.0    # seconds since this guard came up; the first 0.25 s can parry
 var carry_ratio := 0.0   # written by SimWorld each tick
 ## Stamina regen multiplier from Fitness and Second Wind (written by SimWorld each tick).
 var stamina_regen_mult := 1.0
@@ -73,6 +78,8 @@ func damage(amount: float, cause: String = "unknown") -> void:
 	health = maxf(0.0, health - amount)
 	if health == 0.0:
 		dead = true
+		aiming = false
+		set_blocking(false)
 		bleeding = false
 		respawn_timer = RESPAWN_TIME
 		deaths += 1
@@ -82,9 +89,27 @@ func damage(amount: float, cause: String = "unknown") -> void:
 ## Starts a swing if the weapon is ready and there's stamina for it.
 func try_swing(cooldown: float) -> bool:
 	var cost := _c("swing_cost")
-	if dead or asleep or swing_cooldown > 0.0 or stamina < cost:
+	if dead or asleep or blocking or swing_cooldown > 0.0 or stamina < cost:
 		return false
 	swing_cooldown = cooldown
+	stamina -= cost
+	_rested = 0.0
+	return true
+
+
+## V15: the world reports the held guard. Only a new rising edge restarts the parry window.
+func set_blocking(value: bool) -> void:
+	if value and not blocking:
+		block_time = 0.0
+	blocking = value and not dead and not asleep
+	if not blocking:
+		block_time = 0.0
+
+
+## One successful block or parry. A tired player cannot catch the hit at all.
+func try_block(cost: float) -> bool:
+	if dead or asleep or not blocking or cost <= 0.0 or stamina < cost:
+		return false
 	stamina -= cost
 	_rested = 0.0
 	return true
@@ -101,6 +126,10 @@ func speed_multiplier() -> float:
 		m = maxf(_c("carry_min_speed", 0.5), 1.0 - (carry_ratio - 1.0) * _c("carry_slow_per_overload"))
 	if energy <= 0.0:
 		m *= 0.8
+	if aiming:
+		m *= AIM_SPEED_MULT
+	elif blocking:
+		m *= BLOCK_SPEED_MULT
 	return m
 
 
@@ -140,6 +169,8 @@ func wake() -> void:
 
 func tick(dt: float) -> void:
 	swing_cooldown = maxf(0.0, swing_cooldown - dt)
+	if blocking:
+		block_time += dt
 	if dead:
 		respawn_timer -= dt
 		if respawn_timer <= 0.0:
