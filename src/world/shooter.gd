@@ -73,6 +73,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 		node.name = "Gun_" + base
 		node.position = HOLD[base]
 		node.visible = false
+		Hands.attach(node, base, Hands.GUNS)  # V12: hands on the grip and under the barrel
 		apply_textured_materials(node)
 		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false) + ([node] if node is MeshInstance3D else []):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -152,6 +153,7 @@ func _process(delta: float) -> void:
 			if feel != null and not aiming():  # V3: bob and sway (held steady while scoped)
 				node.position += feel.hold_position_offset()
 				node.rotation += feel.hold_rotation_offset()
+			Hands.reaim(node, node.basis)  # V12: through the kick and the reload too
 	_flash_time -= delta
 	_flash.light_energy = 6.0 if _flash_time > 0.0 else 0.0
 	if feel != null:

@@ -12,6 +12,7 @@ extends Node3D
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --break-windows[=R]   W2: break every window within R m (default 12) at the start, for screenshots
+##   --fists               V12: start bare-handed (your weapon goes to your pockets)
 ##   --build=PIECE         start in build mode holding PIECE (foundation or wall)
 ##   --demo-base           pre-build a small base in front of the spawn point
 ##   --demo-factory        pre-build a smelter -> belts -> press line in front of spawn, loaded with scrap
@@ -244,6 +245,8 @@ func _ready() -> void:
 		for key: String in sim.build.pieces.keys():
 			if sim.piece_material(key) == "glass" and sim.build.piece_center(key).distance_to(player.global_position) <= r:
 				sim.player_hit_piece(key, 50.0, "bullet")  # as a shot would: no weapon wear
+	if args.has("fists"):
+		sim.gear.unequip("weapon")  # V12: --fists starts bare-handed (the weapon goes to your pockets)
 	if args.has("swing-at"):
 		melee.hold_at = clampf(float(args["swing-at"]), 0.0, 1.0)  # V11: freeze the swing there, for screenshots
 	if args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):

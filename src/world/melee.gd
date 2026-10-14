@@ -60,11 +60,16 @@ const STYLES := {
 		[0.3, Vector3(0.26, -0.28, -0.34), Vector3(-85, 0, -5)],
 		[0.48, Vector3(0.14, -0.24, -0.68), Vector3(-90, 0, 0)],
 		[1.0, Vector3(0.24, -0.3, -0.45), Vector3(-80, 0, -10)]]},
-	"punch": {"time": 0.22, "strike": 0.45, "keys": [
-		[0.0, Vector3(0.25, -0.35, -0.45), Vector3.ZERO], [1.0, Vector3(0.25, -0.35, -0.45), Vector3.ZERO]]},
+	# V12: bare fists: the right fist's pivot jabs forward from a raised guard (the left fist holds the guard).
+	"punch": {"time": 0.24, "strike": 0.42, "keys": [
+		[0.0, Vector3(0.2, -0.19, -0.45), Vector3(-15, 0, 10)],
+		[0.18, Vector3(0.22, -0.18, -0.39), Vector3(-10, 0, 12)],
+		[0.42, Vector3(0.07, -0.12, -0.76), Vector3(-25, 0, 0)],
+		[1.0, Vector3(0.2, -0.19, -0.45), Vector3(-15, 0, 10)]]},
 }
 
 var _models: Dictionary = {}  # weapon id -> Node3D under the camera
+var _fists: Node3D  # V12: bare hands in a guard; "R" (the jabbing fist's pivot) and "L"
 var _swing := 1.0  # 0 -> 1 over one swing animation
 var _swing_time := 0.32
 var _style := "diagonal"
@@ -94,11 +99,40 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 			node.add_child(m)
 		node.name = "Weapon_" + id
 		node.visible = false
+		var rest: Array = pose_at(String(sim.data.weapons.get(id, {}).get("style", "diagonal")), 0.0)
+		Hands.attach(node, id, Hands.MELEE, Basis.from_euler(rest[1]))  # V12: gloved hands on the grip, so they swing with it
 		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # no flashlight shadow across the view
 		camera.add_child(node)
 		_models[id] = node
+	_fists = make_fists()
+	camera.add_child(_fists)
 	_pose(1.0)
+
+
+## V12: two gloved fists in a raised guard. The right fist sits in a pivot ("R") that the punch style moves;
+## the left ("L") holds still. Each fist is rolled so its forearm runs off the bottom of the screen.
+static func make_fists() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Fists"
+	root.visible = false
+	var guard := {"R": [Vector3(0.2, -0.19, -0.45), Vector3(-15, 0, 10), "right"],
+			"L": [Vector3(-0.21, -0.21, -0.5), Vector3(-15, 0, -10), "left"]}
+	for pivot_name: String in guard:
+		var g: Array = guard[pivot_name]
+		var pivot := Node3D.new()
+		pivot.name = pivot_name
+		pivot.position = g[0]
+		pivot.rotation = Vector3(deg_to_rad(g[1].x), deg_to_rad(g[1].y), deg_to_rad(g[1].z))
+		var hand := Hands.make(g[2])
+		hand.name = "Hand_R" if g[2] == "right" else "Hand_L"
+		var base := Basis(Vector3.RIGHT, deg_to_rad(8.0))  # upright, like a boxing guard: the back of the fist toward you
+		hand.set_meta("base", base)
+		hand.set_meta("side", g[2])
+		hand.basis = Hands.hand_basis(base, Hands.best_roll(base, pivot.basis, Hands.ARM_DIR[g[2]].normalized()))
+		pivot.add_child(hand)
+		root.add_child(pivot)
+	return root
 
 
 ## Textures a weapon model's materials by name (WEAPON_LOOKS), like the guns'.
@@ -161,6 +195,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	var id := weapon_id()
 	var show := not builder.active and not sim.player.dead and id != "" and not sim.guns.in_hand()  # M14: not while the gun is out
+	if _fists != null:  # V12: bare-handed, the fists show
+		_fists.visible = not builder.active and not sim.player.dead and id == "" and not sim.guns.in_hand()
 	for w: String in _models:
 		_models[w].visible = show and w == id
 	_swing = hold_at if hold_at >= 0.0 else minf(1.0, _swing + delta / maxf(0.05, _swing_time))
@@ -226,6 +262,15 @@ func _land(p: Dictionary) -> void:
 ## The weapon's place in view: the style's pose at swing fraction t, plus bob and sway.
 func _pose(t: float) -> void:
 	var id := weapon_id()
+	if id == "" and _fists != null:  # V12: the right fist jabs; both bob and sway
+		var fist: Node3D = _fists.get_node("R")
+		var fp: Array = pose_at("punch", t)
+		fist.position = fp[0]
+		fist.rotation = fp[1]
+		Hands.reaim(fist, fist.basis)
+		_fists.position = feel.hold_position_offset() if feel != null else Vector3.ZERO
+		_fists.rotation = feel.hold_rotation_offset() if feel != null else Vector3.ZERO
+		return
 	if id == "" or not _models.has(id):
 		return
 	var node: Node3D = _models[id]
@@ -235,3 +280,4 @@ func _pose(t: float) -> void:
 	if feel != null:  # V3: the weapon bobs with your steps and lags the mouse
 		node.position += feel.hold_position_offset()
 		node.rotation += feel.hold_rotation_offset()
+	Hands.reaim(node, node.basis)  # V12: forearms keep running off the bottom of the screen through the swing
