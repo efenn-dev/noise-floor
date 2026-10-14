@@ -2,6 +2,20 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V25 First-hour guidance (Sprint 4)
+
+The session logs (nine sessions, about 80 minutes, Emmitt and his son) showed nobody dying, almost nobody building, 24 perk points earned and 2 spent, and good gear found but never worn. Built by Codex (one job on his ChatGPT plan); checks by Claude Opus 5.5.
+
+**Built:**
+- **Perk points get noticed:** a toast when you earn one ("Perk point! Press K") and a small badge while any are unspent; the skills screen highlights them.
+- **Better gear gets worn:** picking up or looting a piece better than what's in that slot (rarity, tier, condition and the slot's main stat, compared in the sim) shows an 8-second toast in its rarity colour; **Y** puts it on straight away (checked again before equipping).
+- **A first-night goal list** in a new game, top-left: find food and water, find a bed, before dark (21:00) shelter a bed with walls and a door (it ticks the foundation, the bed inside, walls and door as you build; town houses don't count), survive the night. **O** hides it; "Show objectives" in Settings. Saved with the game (VERSION 19; older saves load with it off).
+- The session log now records gear you equip and perk points spent, so we can see whether this works.
+
+**Try it on the PC:** start a New game; `play.bat --objectives` shows the list half done.
+
+**Tests:** 11,929 green (new `test_guidance.gd`).
+
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
 Emmitt: "fix the hands in the engine". Every Blender pass bent some finger the wrong way once it reached Godot, so the poses are now built in Godot, where they can be measured. By Claude Opus 5.5.
