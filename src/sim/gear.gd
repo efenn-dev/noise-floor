@@ -28,6 +28,13 @@ const SUFFIX := {"melee_damage": "of Hurt", "fighter_perks": "of the Brawler", "
 const RARE_FIRST := ["Rust", "Grim", "Night", "Ash", "Bone", "Storm", "Dead", "Iron", "Hollow", "Static"]
 const FIREARM_SLOTS := ["primary", "sidearm"]
 const GUN_SLOTS := ["primary", "sidearm", "part"]
+const RARITY_RANK := {"white": 0, "blue": 1, "yellow": 2, "set": 3, "gold": 4, "orange": 5}
+const TIER_RANK := {"civilian": 0, "police": 1, "military": 2}
+## The stat that best describes each wearable slot at a glance. Rarity and tier still matter; this keeps a
+## stronger axe or quieter pair of shoes from losing merely because its generated name sorts differently.
+const MAIN_STAT := {"head": "damage_cut", "body": "damage_cut", "hands": "melee_damage",
+		"legs": "carry_kg", "feet": "gear_quiet", "light": "search_speed",
+		"weapon": "damage", "primary": "gun_damage", "sidearm": "gun_damage"}
 const RARE_SECOND := {"primary": ["Thunder", "Barker", "Rattler"], "sidearm": ["Thunder", "Barker", "Rattler"],
 		"part": ["Hush", "Edge", "Eye"],
 		"weapon": ["Bite", "Mangler", "Knock", "Cleaver"], "head": ["Crown", "Lid", "Visor"],
@@ -309,6 +316,50 @@ func bonus(effect: String) -> float:
 
 func tier_mult(piece: Dictionary) -> float:
 	return float(g()["tiers"][piece["tier"]]["base_mult"])
+
+
+## True when `candidate` is a sensible upgrade for the same equipment slot. An empty slot always wins.
+## The score deliberately has visible, stable parts: rarity, base tier, condition, and the slot's main stat.
+func is_better(candidate: Dictionary, current: Dictionary = {}) -> bool:
+	if candidate.is_empty() or slot_of(candidate) == "part":
+		return false
+	if current.is_empty():
+		return true
+	if slot_of(candidate) != slot_of(current):
+		return false
+	return quality_score(candidate) > quality_score(current) + 0.001
+
+
+func quality_score(piece: Dictionary) -> float:
+	if piece.is_empty():
+		return -INF
+	return float(RARITY_RANK.get(piece["rarity"], 0)) * 20.0 \
+			+ float(TIER_RANK.get(piece["tier"], 0)) * 12.0 \
+			+ clampf(float(piece["condition"]), 0.0, 1.0) * 10.0 \
+			+ _main_stat_score(piece)
+
+
+func _main_stat_score(piece: Dictionary) -> float:
+	var slot := slot_of(piece)
+	if slot == "weapon":
+		var w: Dictionary = data.weapons[base_of(piece)["weapon"]]
+		return float(w["damage"]) * tier_mult(piece) * (1.0 + float(piece["stats"].get("melee_damage", 0.0))) * 0.2
+	if slot in FIREARM_SLOTS:
+		var gun: Dictionary = data.guns["guns"][base_of(piece)["gun"]]
+		return float(gun["damage"]) * tier_mult(piece) * (1.0 + float(piece["stats"].get("gun_damage", 0.0))) * 0.1
+	var effect: String = MAIN_STAT.get(slot, "")
+	var value := float(base_of(piece).get("base", {}).get(effect, 0.0)) * tier_mult(piece)
+	if working(piece):
+		value += float(piece["stats"].get(effect, 0.0))
+	match effect:
+		"damage_cut", "melee_damage", "search_speed":
+			return value * 100.0
+		"carry_kg":
+			return value * 2.0
+		"gear_quiet":
+			return value * 3.0
+		_:
+			return value
 
 
 ## How many working pieces of a set you're wearing.

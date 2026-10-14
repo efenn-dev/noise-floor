@@ -38,6 +38,7 @@ extends Node3D
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
+##   --objectives                    show the first-night objectives midway through (for screenshots)
 ##   --inside[=N]                    start inside house N (0-11, default 0), looking at its fridge
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
@@ -79,6 +80,7 @@ var bag_view: BagView
 var noise_overlay: NoiseOverlay
 var session_log: SessionLog
 var hints: Hints  # first-game hints; null after a load, with --demo-*/--cam/--no-hints, or in screenshots
+var objectives_panel: ObjectivesPanel  # V25: saved first-night loop, under the clock
 var cars: Dictionary = {}  # car id -> CarBody
 var town: Dictionary = {}  # TownPlan.generate(seed): the houses, their pieces, containers and beds (W1a)
 var town_view: TownView
@@ -122,6 +124,9 @@ var _hurt_flash: ColorRect
 var _death_label: Label
 var _last_health := 100.0
 var _message_label: Label
+var _perk_badge: PanelContainer
+var _perk_badge_label: Label
+var _gear_toast_label: Label
 var _heat_label: Label
 var _step_timer := 0.0
 var menus: Menus
@@ -153,6 +158,8 @@ func _ready() -> void:
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
+	if not _loaded and not args.has("no-hints") and (_wants_hints(args) or args.has("objectives")):
+		sim.guidance.start(sim.clock.day, int(sim.tally["deaths"]))
 	session_log = SessionLog.new()
 	session_log.enabled = _shot_path == "" and DisplayServer.get_name() != "headless"
 	if session_log.enabled and SessionLog.carried != null:
@@ -213,6 +220,11 @@ func _ready() -> void:
 		_hud.get_parent().add_child(hints)  # the HUD layer, so the title screen hides it too
 	if _loaded:
 		_apply_save(save)
+	if args.has("objectives") and not args.has("no-hints"):
+		sim.guidance.debug_midway()
+		objectives_panel.force_visible = true
+	objectives_panel.suppressed = args.has("no-hints") or GameSession.skip_hints
+	objectives_panel.refresh()
 	_build_menus(args)
 	_apply_settings()
 	if args.has("heat"):
@@ -704,6 +716,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if menus.is_open():
 		return
+	if event.is_action_pressed("objectives"):
+		Settings.show_objectives = not Settings.show_objectives
+		Settings.save_settings()
+		objectives_panel.refresh()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("help") and not help_screen.is_open() and not inventory_screen.is_open() 			and not skills_screen.is_open() and not workbench_screen.is_open() and not _m15_screen_open():
 		help_screen.open()  # P3: F1; it closes itself on F1 or Esc
 		get_viewport().set_input_as_handled()
@@ -746,6 +764,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		shooter.cancel_inspect()
 		melee.cancel_inspect()
 		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("quick_equip") and not sim.player.dead and driving == null:
+		sim.add_message(sim.quick_equip_better(), 3.0)
+		if inventory_screen.is_open():
+			inventory_screen.refresh()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("inventory") and not sim.player.dead:
@@ -940,6 +964,13 @@ func _update_hud(delta: float) -> void:
 	for m: Dictionary in sim.messages:
 		notes.append(m["text"])
 	_message_label.text = "\n".join(notes)
+	_perk_badge.visible = sim.skills.perk_points > 0
+	_perk_badge_label.text = "K: %d perk point%s" % [sim.skills.perk_points, "" if sim.skills.perk_points == 1 else "s"]
+	_update_gear_toast()
+	objectives_panel.refresh()
+	_build_label.position.y = 52.0
+	if objectives_panel.visible:
+		_build_label.position.y = objectives_panel.position.y + objectives_panel.size.y + 8.0
 	var overlay := noise_overlay.status_text()
 	var level := sim.director.level_name()
 	_heat_label.text = overlay if overlay != "" else ({"calm": "", "noticed": "The noise is being noticed",
@@ -969,6 +1000,20 @@ func warmth_text() -> String:
 	if p.warmth >= 99.5:
 		return ""
 	return "   Warmth %d%s" % [ceili(p.warmth), " FREEZING" if p.is_freezing() else (" COLD" if p.is_cold() else "")]
+
+
+func _update_gear_toast() -> void:
+	var uid := sim.guidance.better_gear_uid
+	var piece := sim.gear.find(uid)
+	_gear_toast_label.visible = uid >= 0 and sim.guidance.better_gear_seconds > 0.0 and not piece.is_empty()
+	if not _gear_toast_label.visible:
+		return
+	var slot := sim.gear.slot_of(piece)
+	var rarity: Dictionary = sim.data.gear["rarities"][piece["rarity"]]
+	var item_name := str(piece["name"] if piece["rarity"] in ["gold", "set"] else sim.gear.base_of(piece)["name"])
+	_gear_toast_label.text = "%s %s: better than your %s slot. Press Y to wear" % [rarity["name"],
+			item_name.to_lower(), slot]
+	_gear_toast_label.add_theme_color_override("font_color", sim.gear.color(piece))
 
 
 func _build_ground() -> void:
@@ -1402,12 +1447,35 @@ func _place_demo_defense() -> void:
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
+	var toast_layer := CanvasLayer.new()
+	toast_layer.layer = 6  # above the live loot/inventory screen, where the upgrade is usually taken
 	_hud = Label.new()
 	_hud.position = Vector2(16, 12)
 	_hud.add_theme_font_size_override("font_size", 26)
 	_hud.add_theme_color_override("font_outline_color", Color.BLACK)
 	_hud.add_theme_constant_override("outline_size", 6)
 	layer.add_child(_hud)
+	_perk_badge = PanelContainer.new()
+	_perk_badge.position = Vector2(300, 12)
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = Color(0.16, 0.12, 0.035, 0.9)
+	badge_style.border_color = Color(0.95, 0.8, 0.55)
+	badge_style.set_border_width_all(1)
+	badge_style.set_corner_radius_all(5)
+	badge_style.content_margin_left = 9
+	badge_style.content_margin_right = 9
+	badge_style.content_margin_top = 4
+	badge_style.content_margin_bottom = 4
+	_perk_badge.add_theme_stylebox_override("panel", badge_style)
+	_perk_badge_label = _outlined_label(16)
+	_perk_badge_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
+	_perk_badge.add_child(_perk_badge_label)
+	layer.add_child(_perk_badge)
+
+	objectives_panel = ObjectivesPanel.new()
+	objectives_panel.position = Vector2(16, 54)
+	objectives_panel.setup(sim)
+	layer.add_child(objectives_panel)
 
 	_build_label = _outlined_label(20)
 	_build_label.position = Vector2(16, 52)
@@ -1452,6 +1520,16 @@ func _build_hud() -> void:
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	layer.add_child(_message_label)
+
+	_gear_toast_label = _outlined_label(23)
+	_gear_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gear_toast_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_gear_toast_label.offset_left = MATERIALS_WIDTH + 32.0
+	_gear_toast_label.offset_right = -(MATERIALS_WIDTH + 32.0)
+	_gear_toast_label.offset_top = 128.0
+	_gear_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gear_toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast_layer.add_child(_gear_toast_label)
 
 	_heat_label = _outlined_label(18)
 	_heat_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
@@ -1498,6 +1576,7 @@ func _build_hud() -> void:
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
+	add_child(toast_layer)
 
 
 ## P3: the one-line key hint at the bottom: only the keys that fit what you're doing. In a car its keys; in
@@ -1513,6 +1592,8 @@ func key_hint_text() -> String:
 		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
 	else:
 		parts.append_array(interactor.keys())
+		if sim.guidance.better_gear_uid >= 0 and sim.guidance.better_gear_seconds > 0.0:
+			parts.append("Y wear better gear")
 		if sim.guns.in_hand():
 			parts.append_array(["LMB fire", "RMB aim", "R reload", "V inspect"])
 			parts.append("Q pipe")

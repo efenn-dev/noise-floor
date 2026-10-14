@@ -41,6 +41,8 @@ var vehicles: Vehicles
 var hotbar: Hotbar  # S3: the ten slots under keys 1-9 and 0
 ## Skills that level by doing and the perks they earn (M12). Kept when you die.
 var skills: Skills
+## V25: saved first-hour objectives and the most recent quick-equip suggestion.
+var guidance := Guidance.new()
 ## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
 var gear: Gear
 ## M14/V14 slots: what's in your hands (melee, primary or sidearm), spread, magazine and reloads.
@@ -250,6 +252,7 @@ func step() -> void:
 		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
 				Director.EDGES[Director.EDGE_NAMES.find(wave["edge"])])
 	_radio()
+	guidance.tick(TICK, clock, build, int(tally["deaths"]))
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
@@ -729,6 +732,7 @@ func move_container_gear(id: String, uid: int, to_pockets: bool) -> Dictionary:
 				return {"moved": false, "why": "Too heavy"}
 			held.remove_at(i)
 			gear.pieces.append(piece)
+			_consider_better_gear(piece)
 			return {"moved": true, "why": ""}
 		return {"moved": false, "why": "Nothing to take"}
 	var piece := gear.take(uid)
@@ -1007,7 +1011,37 @@ func equip_gear(uid: int) -> String:
 	if why != "":
 		return why
 	why = gear.equip(uid)
-	return why if why != "" else "Equipped " + piece["name"]
+	if why != "":
+		return why
+	stats.note_gear_equipped("%s (%s)" % [piece["name"], piece["rarity"]])
+	if guidance.better_gear_uid == uid:
+		guidance.clear_better_gear()
+	return "Equipped " + piece["name"]
+
+
+## Y: wear the last acquired piece that was an upgrade. It is compared again, so changing gear cannot
+## accidentally replace a newer, better piece with an old suggestion.
+func quick_equip_better() -> String:
+	var uid := guidance.better_gear_uid
+	var piece := gear.find(uid)
+	if uid < 0 or piece.is_empty() or gear.is_equipped(uid):
+		guidance.clear_better_gear()
+		return "No better gear ready"
+	var slot := gear.slot_of(piece)
+	var value: Variant = gear.equipped.get(slot)
+	var current: Dictionary = value if value is Dictionary else {}
+	if not gear.is_better(piece, current):
+		guidance.clear_better_gear()
+		return "That piece is no longer better"
+	return equip_gear(uid)
+
+
+func _consider_better_gear(piece: Dictionary) -> void:
+	var slot := gear.slot_of(piece)
+	var value: Variant = gear.equipped.get(slot)
+	var current: Dictionary = value if value is Dictionary else {}
+	if gear.is_better(piece, current):
+		guidance.note_better_gear(int(piece["uid"]))
 
 
 ## Checks a drag from pockets onto a character slot without changing either side.
@@ -1056,6 +1090,7 @@ func equip_bag(item: String) -> String:
 		return "Too heavy"
 	inventory.remove(item, 1)
 	gear.equipped["back"] = item
+	stats.note_gear_equipped(data.item_name(item))
 	var suffix := _stow_bag(old)
 	return "Equipped %s%s" % [data.item_name(item), suffix]
 
@@ -1165,6 +1200,7 @@ func use_item(item: String) -> String:
 		return "Can't use %s" % data.item_name(item)
 	inventory.remove(item, 1)
 	player.consume(food, water)
+	guidance.note_consumed(food, water)
 	return "%s %s" % ["Ate" if food >= water else "Drank", data.item_name(item)]
 
 
@@ -1194,6 +1230,7 @@ func use_bandage() -> String:
 func sleep_in(key: String) -> String:
 	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "bed":
 		return "No bed"
+	guidance.note_bed()
 	spawn_point = build.piece_center(key) + Vector3(1.2, -build.piece_center(key).y, 0)
 	if player.energy >= float(data.survival["sleep_below_energy"]):
 		return "Not tired. You'll wake up here if you die"
@@ -1211,7 +1248,10 @@ func _consume_best(key: String, none: String) -> String:
 	if best == "":
 		return none
 	inventory.remove(best, 1)
-	player.consume(data.item_value(best, "food"), data.item_value(best, "water"))
+	var food := data.item_value(best, "food")
+	var water := data.item_value(best, "water")
+	player.consume(food, water)
+	guidance.note_consumed(food, water)
 	return "%s %s" % ["Ate" if key == "food" else "Drank", data.item_name(best)]
 
 
@@ -1842,6 +1882,7 @@ func take_bag(id: int) -> Dictionary:
 			inventory.give_all(items)
 			for piece: Dictionary in bags[i].get("gear", []):
 				gear.pieces.append(piece)
+				_consider_better_gear(piece)
 				items[piece["name"]] = 1  # so the "Took ..." message names it
 			bags.remove_at(i)
 			return items
@@ -1944,7 +1985,7 @@ func _practice(skill: String, action: String, times: float = 1.0) -> void:
 		add_message("%s %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
 		stats.note_level(skill, skills.level(skill))
 	if skills.perk_points > points:
-		add_message("Perk point earned: K to spend", 6.0)
+		add_message("Perk point! Press K to spend it", 6.0)
 		stats.note_perk_points(skills.perk_points - points)
 
 
