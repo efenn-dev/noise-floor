@@ -259,9 +259,11 @@ func _ready() -> void:
 		if wh.size() == 2:
 			get_window().size = Vector2i(int(wh[0]), int(wh[1]))
 	if args.has("aim"):
-		var scope := sim.gear.make("scope", "civilian", "white")  # P2: --aim fits a scope and holds the
-		sim.gear.pieces.append(scope)                              # zoom, for screenshots
-		sim.attach_part(scope["uid"])
+		if str(args["aim"]) != "irons":  # V15: --aim=irons holds iron-sight ADS without fitting the scope
+			var scope := sim.gear.make("scope", "civilian", "white")  # P2: --aim fits a scope and holds the
+			sim.gear.pieces.append(scope)                              # zoom, for screenshots
+			sim.attach_part(scope["uid"])
+		sim.guns.raising = 0.0  # already up, so the screenshot is aimed
 		shooter.hold_aim = true
 	if args.has("block"):
 		melee.hold_block = true  # V15: default pipe, or combine with --weapon / --fists
@@ -840,7 +842,7 @@ func _update_hud(delta: float) -> void:
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
 	var gun_up := driving == null and sim.guns.in_hand() and not builder.active and not sim.player.dead
-	crosshair.visible = gun_up and not shooter.aiming()
+	crosshair.visible = gun_up and (not shooter.aiming() or sim.guns.scoped())  # V15: irons hide it, a scope keeps it as the reticle
 	_dot.visible = not gun_up
 	if gun_up:
 		crosshair.update_from(sim.guns.spread_deg(), player.camera)

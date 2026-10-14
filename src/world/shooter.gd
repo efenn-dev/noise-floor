@@ -23,15 +23,16 @@ const GUN_LOOKS := {
 }
 ## Where each gun sits in view (camera space): resting at the lower right, pointing ahead.
 const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.18, -0.2, -0.5)}
-## V15: sight points measured from tools/art/pistol.py and hunting_rifle.py, converted from Blender
-## (x, y, z) to Godot (x, z, y). ADS_POSES puts the rear-to-front line through camera-space x/y zero.
+## V15: the sight tops measured from the exported .glb vertices (the models are centred on their bounding
+## box, so the .py coordinates don't apply; the rifle's bore runs 15 mm left of centre). ADS_POSES puts the
+## rear-to-front line through camera-space x/y zero.
 const SIGHT_POINTS := {
-	"pistol": {"rear": Vector3(0, 0.1335, 0.071), "front": Vector3(0, 0.133, -0.089)},
-	"hunting_rifle": {"rear": Vector3(0, 0.149, -0.096), "front": Vector3(0, 0.143, -0.506)},
+	"pistol": {"rear": Vector3(0, 0.0785, 0.084), "front": Vector3(0, 0.0785, -0.076)},
+	"hunting_rifle": {"rear": Vector3(-0.015, 0.0635, -0.07), "front": Vector3(-0.015, 0.0635, -0.5)},
 }
 const ADS_POSES := {
-	"pistol": [Vector3(0, -0.133277474, -0.42), Vector3(0.00312499, 0, 0)],
-	"hunting_rifle": [Vector3(0, -0.150388775, -0.5), Vector3(0.014633102, 0, 0)],
+	"pistol": [Vector3(0, -0.0785, -0.42), Vector3.ZERO],
+	"hunting_rifle": [Vector3(0.015, -0.0635, -0.5), Vector3.ZERO],
 }
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
@@ -394,10 +395,12 @@ func _process(delta: float) -> void:
 	if remaining > 0.0:
 		reload_p = 1.0 - remaining / maxf(0.001, _reload_total)
 	var handling := maxf(0.01, float(sim.guns.stats()["handling"])) if not sim.gear.gun().is_empty() else 0.35
-	_aim_weight = move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)
+	_aim_weight = 1.0 if hold_aim and aiming() else move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)  # --aim screenshots start fully aimed
 	for b: String in _models:
 		var node: Node3D = _models[b]
 		node.visible = show and b == base
+		if node.visible and sim.guns.scoped() and _aim_weight > 0.9:
+			node.visible = false  # V15: looking through the scope: the zoom and the crosshair are the reticle
 		if node.visible:
 			var raise := clampf(sim.guns.raising / maxf(0.01, float(sim.guns.stats()["handling"])), 0.0, 1.0)
 			var pose := _rest_pose(b)
