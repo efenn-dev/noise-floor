@@ -141,8 +141,10 @@ func fire() -> int:
 	var r := sim.shoot_zombie(id, head)
 	_say("Killed it" if r["killed"] else (("Headshot!" if head else "Hit") if r["hit"] else "Missed"))
 	if feel != null and r["hit"]:
-		feel.impact(hit["position"], hit["normal"], "blood")
+		feel.impact(hit["position"], hit["normal"], "blood_head" if head else "blood")
 		feel.hit_zombie(r["killed"], head)
+	if r["hit"] and head:
+		SoundView.play_at(self, "headshot", hit["position"], -2.0, randf_range(0.9, 1.1))  # V7: a headshot reads
 	return id
 
 

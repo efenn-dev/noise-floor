@@ -73,9 +73,11 @@ func swing() -> int:
 	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
 	_message_time = 1.0
 	if feel != null:
-		feel.impact(hit["position"], hit["normal"], "blood")
+		feel.impact(hit["position"], hit["normal"], "blood_head" if head else "blood")
 		feel.hit_zombie(killed, head)
 		feel.add_trauma(ViewFeel.TRAUMA_MELEE_HIT)
+	if head:
+		SoundView.play_at(self, "headshot", hit["position"], -4.0, randf_range(0.9, 1.1))  # V7: a head hit reads
 	return id
 
 

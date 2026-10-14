@@ -3,15 +3,70 @@ extends RefCounted
 ## V3 (Sprint 4): a one-shot puff where something was struck. "blood" (dark red droplets that fall) on a
 ## zombie, "dust" (a slow grey cloud) on walls, ground and anything else. CPU particles, so they also run
 ## in the Compatibility renderer and headless; each frees itself when done.
+## V7: blood stains (Decal nodes with tools/art/make_blood_splat.py's splat) on the ground under a hit and
+## spreading under a body; they fade after a while and only MAX_STAINS exist at once (oldest go first).
+## Decals need Forward+ or Mobile; the Compatibility renderer (cloud screenshots) doesn't draw them.
 
 const KINDS := {
 	"blood": {"amount": 24, "lifetime": 0.55, "speed": Vector2(1.6, 3.6), "gravity": -9.8, "spread": 38.0,
 			"size": Vector2(0.05, 0.11), "color": Color(0.32, 0.02, 0.02)},
+	"blood_head": {"amount": 40, "lifetime": 0.7, "speed": Vector2(2.2, 5.0), "gravity": -9.8, "spread": 60.0,
+			"size": Vector2(0.06, 0.14), "color": Color(0.36, 0.02, 0.02)},
 	"dust": {"amount": 12, "lifetime": 0.9, "speed": Vector2(0.4, 1.4), "gravity": -0.6, "spread": 55.0,
 			"size": Vector2(0.1, 0.26), "color": Color(0.55, 0.52, 0.47, 0.75)},
 }
 
 static var _meshes: Dictionary = {}  # kind -> QuadMesh with its billboard material
+
+const SPLAT := preload("res://assets/textures/blood_splat.png")
+const MAX_STAINS := 48
+const STAIN_LIFE := 180.0  # seconds before a stain starts to fade
+const STAIN_FADE := 12.0
+static var _stains: Array = []  # oldest first
+
+
+## A basis whose +Y is `up` (a Decal projects along its local -Y, so +Y points out of the surface).
+static func basis_facing(up: Vector3) -> Basis:
+	var n := up.normalized() if up.length() > 0.1 else Vector3.UP
+	var ref := Vector3.FORWARD if absf(n.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT
+	var x := ref.cross(n).normalized()
+	return Basis(x, n, x.cross(n))
+
+
+## A blood stain on the surface at `pos` (`normal` points out of it), size_m across. With grow_s > 0 it
+## spreads from a quarter of that size over grow_s seconds (a pool under a body). Fades after `life` s.
+static func stain(parent: Node, pos: Vector3, normal: Vector3, size_m: float, life: float = STAIN_LIFE, grow_s: float = 0.0) -> Decal:
+	_stains = _stains.filter(func(d: Variant) -> bool: return is_instance_valid(d))
+	var d := Decal.new()
+	d.name = "BloodStain"
+	d.top_level = true
+	d.texture_albedo = SPLAT
+	d.upper_fade = 0.25
+	d.lower_fade = 0.25
+	d.cull_mask = 1  # the world, not the first-person weapons
+	var b := basis_facing(normal)
+	d.transform = Transform3D(b.rotated(b.y, randf() * TAU), pos)
+	d.size = Vector3(size_m, 0.5, size_m) * (0.25 if grow_s > 0.0 else 1.0)
+	d.size.y = 0.5
+	parent.add_child(d)
+	if d.is_inside_tree():
+		var tw := d.create_tween()
+		if grow_s > 0.0:
+			tw.tween_property(d, "size", Vector3(size_m, 0.5, size_m), grow_s).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tw.tween_interval(maxf(0.0, life - STAIN_FADE - grow_s))
+		tw.tween_property(d, "modulate:a", 0.0, STAIN_FADE)
+		tw.tween_callback(d.queue_free)
+	_stains.append(d)
+	while _stains.size() > MAX_STAINS:
+		var old: Variant = _stains.pop_front()
+		if is_instance_valid(old):
+			(old as Node).queue_free()
+	return d
+
+
+static func stain_count() -> int:
+	_stains = _stains.filter(func(d: Variant) -> bool: return is_instance_valid(d) and not (d as Node).is_queued_for_deletion())
+	return _stains.size()
 
 
 static func spawn(parent: Node, pos: Vector3, normal: Vector3, kind: String) -> CPUParticles3D:
@@ -76,3 +131,4 @@ static func _soft_dot() -> GradientTexture2D:
 
 static func clear_cache() -> void:
 	_meshes.clear()
+	_stains.clear()

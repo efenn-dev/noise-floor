@@ -44,6 +44,8 @@ var _push := Vector3.ZERO
 var _last_good := Vector3.ZERO  # Q1: the last finite position after a move (see the NaN guard)
 ## Q1: how many times a move came back NaN and was undone (for tests and the soak).
 var nan_recoveries := 0
+var death_dir := Vector3.ZERO  # V7: which way it was knocked as it died (it falls and slides that way)
+var _death_slide := 0.0
 var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
 var _frame := 0
 var _shape: CollisionShape3D
@@ -260,8 +262,23 @@ func _lie_down(delta: float) -> void:
 		_shape.disabled = true
 		_corpse_shape.disabled = false
 		set_meta("container_id", SimWorld.CORPSE + str(brain.id))  # the Interactor offers to search it
+		# V7: fall away from the blow. The Death animation tips the body forward, so it turns to face the way
+		# it was knocked (away from you when nothing knocked it) and slides back a little as it drops.
+		var away := brain.knockback
+		if away.length_squared() < 0.01 and player != null:
+			away = global_position - player.global_position
+		away.y = 0.0
+		if away.is_finite() and away.length_squared() > 1e-4:
+			death_dir = away.normalized()
+			_death_slide = clampf(brain.knockback.length() * 0.3, 0.6, 2.2) if brain.knockback.is_finite() else 0.6
+		brain.knockback = Vector3.ZERO
+		if get_parent() != null:  # a pool spreading under the body for as long as it lies there
+			ImpactFx.stain(get_parent(), global_position + Vector3.UP * 0.05, Vector3.UP, 1.5, ZombieBrain.CORPSE_TIME, 4.0)
 	_fall = minf(1.0, _fall + delta * 2.5)  # the Death animation does the falling
-	velocity = Vector3(0, velocity.y - _gravity * delta, 0) if not is_on_floor() else Vector3.ZERO
+	var slide := death_dir * _death_slide * maxf(0.0, 1.0 - _fall * 1.4)
+	velocity = Vector3(slide.x, 0.0 if is_on_floor() else velocity.y - _gravity * delta, slide.z)
+	if death_dir != Vector3.ZERO and _fall < 0.6:
+		rotation.y = lerp_angle(rotation.y, atan2(-death_dir.x, -death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
 	move_and_slide()
 
 
