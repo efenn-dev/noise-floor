@@ -49,6 +49,7 @@ var director: Director
 var messages: Array = []
 ## Cars you've already been told have no key (see enter_car).
 var _told_no_key := {}
+var _told_glass := false  # W2: the first window you break tells you it was loud
 var _cold_hour := -1  # M16: the game-hour "You're cold" / "You're freezing" was last said
 var loot: Loot
 ## Storage crates: piece key -> Inventory.
@@ -233,8 +234,9 @@ func step() -> void:
 			if build.player_placeable(build.pieces[target]["id"]):  # M15: your own walls, doors, machines
 				base_log.add_once("hit:" + target, float(data.defense["log"]["attack_every"]), "%s under attack: %s" % [
 						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
+			var was_window := build.kind_of(build.pieces[target]["id"]) == "window"
 			if build.damage(target, int(z.stats["structure_damage"])):
-				noise.emit_kind(at, "wreck")
+				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.tick(TICK, horde, noise)
 	automation.tick(TICK, horde, night, defense.bells)
@@ -1104,6 +1106,52 @@ func swing() -> bool:
 		return false
 	_practice("strength", "swing")
 	return true
+
+
+## W2 (Emmitt: "lets work on making things destructible like windows"): how much of a hit a piece takes, by
+## what it's made of and what hit it. Glass goes in one hit; wood takes axes best and blades worst; stone
+## and brick (town walls, floors) and everything you built yourself shrug it off (no wrecking your own base
+## with a missed swing). `by` is a weapon class ("blunt", "blade", "axe", "fists") or "bullet".
+const BREAK_FACTOR := {
+	"glass": {"blunt": 999.0, "blade": 999.0, "axe": 999.0, "fists": 999.0, "bullet": 999.0},
+	"wood": {"blunt": 1.0, "blade": 0.4, "axe": 2.2, "fists": 0.25, "bullet": 0.3},
+}
+
+
+## W2: what a piece is made of for the player's hits: "glass", "wood", or "" (you can't break it).
+func piece_material(key: String) -> String:
+	if not build.pieces.has(key) or build.is_broken(key):
+		return ""
+	var piece: Dictionary = build.pieces[key]
+	var kind := build.kind_of(piece["id"])
+	if kind == "window":
+		return "glass"
+	if piece.get("town", false) and kind in ["door", "fence"]:
+		return "wood"
+	return ""
+
+
+## W2: the player hits a piece (`by` as in BREAK_FACTOR) for `damage`. Returns "" (no effect: you can't break
+## that), "hit" (it took the hit) or "broke" (glass shattered or the piece gave way). Loud: glass breaking can
+## be heard a long way off.
+func player_hit_piece(key: String, damage: float, by: String) -> String:
+	var mat := piece_material(key)
+	if mat == "":
+		return ""
+	var at := build.piece_center(key)
+	var amount := maxi(1, roundi(damage * float(BREAK_FACTOR[mat].get(by, 1.0))))
+	if by != "bullet" and gear.wear_weapon(skills.bonus("wear_cut")) == "broke":
+		add_message("Your weapon broke! Find another weapon", 7.0)
+		noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
+	if not build.damage(key, amount):
+		noise.emit_kind(at, "wood_hit")
+		return "hit"
+	noise.emit_kind(at, "glass_break" if mat == "glass" else "wood_break")
+	stats.note("broke a window" if mat == "glass" else "broke down a door")
+	if mat == "glass" and not _told_glass:
+		_told_glass = true
+		add_message("Breaking glass is loud: everything nearby heard that", 6.0)
+	return "broke"
 
 
 ## Melee damage of one body hit: the weapon's, plus Strength, Heavy Swing and (V10) the skill for this

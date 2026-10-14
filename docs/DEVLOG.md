@@ -17,6 +17,39 @@ Built by Claude Opus 5.5 from Emmitt's notes on the #51 build: "when you walk ov
 **Try it on the PC:** `play.bat`, kill a zombie and walk over it; get in the pickup and drive. If a car ever goes NaN again, `godot.log` has one line starting "Car car_N: its physics went NaN" with what it was touching.
 
 **Known gaps:** bodies are still a single slab (no ragdoll). Jolt makes ragdolls practical later (PhysicalBoneSimulator3D on the zombie rig).
+## 2026-10-13 — W2 Breakable windows and doors
+
+Built by Claude Opus 5.5 from Emmitt's ask: "lets work on making things destructible like windows". Stacked on V11.
+
+**Built:**
+- **You can break things.** `SimWorld.player_hit_piece(key, damage, by)` with `piece_material`:
+  - **Windows are glass:** one hit from anything (a punch, any weapon, a round) breaks one.
+  - **Town doors and fences are wood:** `BREAK_FACTOR` sets how hard each weapon hits them (axe 2.2x, blunt 1x, blade 0.4x, fists 0.25x, a round 0.3x). Chopping wears your weapon like a hit on a zombie.
+  - **Some things don't break:** brick house walls, floors, and everything you built yourself (no wrecking your own base with a missed swing).
+  - Melee swings and gunshots both use it.
+- **Breaking glass is loud** (`glass_break` 62, louder than a melee hit). The first window you break tells you everything nearby heard it. Zombies breaking a window now make the same glass sound at the window, instead of a generic thud. Wood knocks (`wood_hit` 38) and a door giving way (`wood_break` 50) are noise too.
+- **How it looks and sounds:** a burst of glass shards both ways (`ImpactFx` "glass"), and jagged glass left in the frame (`BuildView.shard_ring`: thin triangles along the pane's edges, laid out from the piece key so a window always breaks the same way; loaded saves get the jagged edge without the burst). Wood splinters (`ImpactFx` "wood") when a door, barricade or fence is wrecked. New synth sounds: `glass_break` (crash and tinkling pieces), `wood_break` (crack, splinters, boards falling).
+- `--break-windows[=R]` breaks every window within R m (default 12) at the start, for screenshots.
+- `test/test_breakable.gd` (25 checks).
+
+**Try it on the PC:** `play.bat --weapon=axe`, walk to a house, break a window, then chop the front door down. Listen for zombies coming.
+
+**Known gaps:** street fences, cars and furniture aren't breakable yet. No sledgehammer for walls. Broken glass on the floor isn't a hazard.
+
+## 2026-10-13 — V11 Attack animations (Sprint 4)
+
+Emmitt: "Lets also work on the attack animations". Models by Codex (one job on his ChatGPT plan); swings and wiring by Claude Opus 5.5.
+
+**Built:**
+- **Real weapon models** for the pipe, bat, axe, machete and knife (`tools/art/<id>.py` on `melee_common.py`; grip at the origin, pointing up +Y, striking side toward -Z; 600 to 2,800 triangles each). Their materials (Weapon Metal, Wood, Grip, Edge) are textured with the gun and cloth photos (`Melee.WEAPON_LOOKS`, through `Shooter._gun_material`).
+- **A swing per kind of weapon** (`weapons.json` "style", `Melee.STYLES`): the pipe's diagonal, the bat's wide side swing, the axe's overhead chop, the machete's quick slash, the knife's stab. Each is keyframes of wind-up, strike and recovery, smoothed between keys, and quicker with the weapon's skill (`swing_seconds()` follows `swing_cooldown()`).
+- **Hits land at the strike.** Whether a swing hits is still decided at the click (rules and tests unchanged). The blood, the hit marker, the shake and the head crunch wait for the strike moment of the animation.
+- `--weapon=pipe|bat|axe|machete|knife` and `--swing-at=T` flags, for screenshots of any weapon at any point in its swing.
+- `test/test_melee_styles.gd`: every weapon has a style and a model, poses are finite and start and end at rest, weapon materials are mapped, Blades 5 makes the animation 20% quicker, the hit marker waits for the strike.
+
+**Try it on the PC:** `play.bat --weapon=axe`, `play.bat --weapon=bat`, `play.bat --weapon=knife` and swing at a zombie.
+
+**Known gaps:** no hands yet (V6 first-person arms is next for Codex). Fists show nothing when you punch.
 
 ## 2026-10-13 — V9 + V10 Weapons wear out, Zomboid weapon skills (Sprint 4)
 

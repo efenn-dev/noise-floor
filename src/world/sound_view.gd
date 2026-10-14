@@ -24,7 +24,8 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		"reload": ["reload"],
 		# M15: a decoy noisemaker is a horn; a tripwire bell borrows the click until it gets its own sound
 		"noisemaker": ["horn"], "bell": ["click"],
-		"weapon_break": ["weapon_break"]}  # V9: a weapon snapping
+		"weapon_break": ["weapon_break"],  # V9: a weapon snapping
+		"glass_break": ["glass_break"], "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0
 ## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones

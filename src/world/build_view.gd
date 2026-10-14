@@ -210,7 +210,7 @@ func _on_added(key: String) -> void:
 	add_child(body)
 	_bodies[key] = body
 	if grid.is_broken(key):
-		_on_changed(key)  # a broken window from a save
+		_on_changed(key, false)  # a broken window from a save: no shatter, just the jagged edge
 
 
 ## The surface a town piece is drawn with (shared materials; world-space, so pieces join up).
@@ -265,15 +265,21 @@ func _add_window(body: StaticBody3D, key: String, size: Vector3) -> void:
 ## body in its swung pose, so the look ray still finds it (to close it) and nobody walks through the panel;
 ## the doorway itself is clear, and the navmesh rebake routes zombies through it round the open panel.
 ## (It used to go on no layer at all when open: you could not close it again, and walked through it.)
-func _on_changed(key: String) -> void:
+func _on_changed(key: String, fx: bool = true) -> void:
 	var body: StaticBody3D = _bodies.get(key)
 	if body == null or not grid.pieces.has(key):
 		return
 	if grid.pieces[key]["id"] == "window":  # broken: the glass is gone and it's an opening
 		var broken := grid.is_broken(key)
 		body.collision_layer = 0 if broken else Layers.BUILT
-		var glass := body.get_node_or_null("Glass") as Node3D
+		var glass := body.get_node_or_null("Glass") as MeshInstance3D
 		if glass != null:
+			if broken and glass.visible and body.get_node_or_null("GlassShards") == null:
+				body.add_child(shard_ring(glass, key))  # W2: jagged glass left in the frame
+				if fx:  # W2: and a burst of glass, both ways (zombie or you, inside or out)
+					var n := body.global_basis.z
+					ImpactFx.spawn(get_parent() if get_parent() != null else self, glass.global_position, n, "glass")
+					ImpactFx.spawn(get_parent() if get_parent() != null else self, glass.global_position, -n, "glass")
 			glass.visible = not broken
 		return
 	body.collision_layer = Layers.BUILT
@@ -365,7 +371,52 @@ func _surface(id: String) -> StandardMaterial3D:
 	return Surfaces.material(SURFACES[id])  # shared, so world-space tiling lines up across pieces
 
 
-func _on_removed(key: String, _piece: Dictionary) -> void:
+func _on_removed(key: String, piece: Dictionary) -> void:
+	if piece.get("destroyed", false) and _bodies.has(key) and kind_has_wood(String(piece.get("id", ""))):
+		ImpactFx.spawn(get_parent() if get_parent() != null else self, _bodies[key].global_position, Vector3.UP, "wood")  # W2
 	if _bodies.has(key):
 		_bodies[key].queue_free()
 		_bodies.erase(key)
+
+
+## W2: doors, barricades, fences and furniture splinter when they're wrecked.
+static func kind_has_wood(id: String) -> bool:
+	return id in ["door", "town_door", "barricade", "fence"] or id.begins_with("town_door")
+
+
+## W2: the jagged glass a broken window leaves in its frame: thin triangles along each edge of the pane,
+## pointing in, laid out from the piece key so the same window always breaks the same way.
+static func shard_ring(glass: MeshInstance3D, key: String) -> MeshInstance3D:
+	var size := (glass.mesh as BoxMesh).size if glass.mesh is BoxMesh else Vector3(1.4, 1.3, 0.03)
+	var hx := size.x / 2.0
+	var hy := size.y / 2.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(key)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Each edge: a start and end corner and the inward direction.
+	for edge: Array in [[Vector2(-hx, -hy), Vector2(hx, -hy), Vector2(0, 1)], [Vector2(hx, hy), Vector2(-hx, hy), Vector2(0, -1)],
+			[Vector2(-hx, hy), Vector2(-hx, -hy), Vector2(1, 0)], [Vector2(hx, -hy), Vector2(hx, hy), Vector2(-1, 0)]]:
+		var a: Vector2 = edge[0]
+		var b: Vector2 = edge[1]
+		var inward: Vector2 = edge[2]
+		var count := rng.randi_range(2, 4)
+		for i in count:
+			var t0 := float(i) / count + rng.randf_range(0.0, 0.05)
+			var t1 := float(i + 1) / count - rng.randf_range(0.0, 0.05)
+			var p0 := a.lerp(b, t0)
+			var p1 := a.lerp(b, t1)
+			var depth := rng.randf_range(0.06, 0.32) * minf(size.x, size.y)
+			var tip := a.lerp(b, rng.randf_range(t0, t1)) + inward * depth
+			for p: Vector2 in [p0, p1, tip]:  # both faces, so it shows from inside and out
+				st.add_vertex(Vector3(p.x, p.y, 0.0))
+			for p: Vector2 in [p1, p0, tip]:
+				st.add_vertex(Vector3(p.x, p.y, 0.0))
+	st.generate_normals()
+	var shards := MeshInstance3D.new()
+	shards.name = "GlassShards"
+	shards.mesh = st.commit()
+	shards.material_override = glass.material_override
+	shards.transform = glass.transform
+	shards.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return shards
