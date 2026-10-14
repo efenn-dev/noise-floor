@@ -8,6 +8,19 @@ extends Node3D
 ## the shot's noise event.
 
 const MODELS := {"pistol": "res://assets/models/pistol.glb", "hunting_rifle": "res://assets/models/hunting_rifle.glb"}
+## Handheld models are authored with these stable names. Gun Rubber deliberately reuses the fine polymer
+## grain (there is no separate rubber photo). V2 review: the models' own colours are near black, which hid
+## the texture, so each material's colour is its photo times `tint` (gun steel reads as dark grey steel).
+## Any new material name must be mapped or explicitly listed here so test_textured_looks.gd catches it.
+const GUN_LOOKS := {
+	"materials": {
+		"Gun Metal": {"texture": "gun_metal", "tile_m": 0.15, "tint": Color(0.8, 0.8, 0.84), "metallic": 0.5, "roughness": 0.5},
+		"Gun Wood": {"texture": "gun_wood", "tile_m": 0.15, "tint": Color(1.0, 0.95, 0.9)},
+		"Gun Polymer": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.85, 0.85, 0.85)},
+		"Gun Rubber": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.5, 0.5, 0.5)},
+	},
+	"untextured": [],
+}
 ## Where each gun sits in view (camera space): resting at the lower right, pointing ahead.
 const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.18, -0.2, -0.5)}
 const FLASH_TIME := 0.06
@@ -36,6 +49,9 @@ var _flash_time := 0.0
 var _kick := 0.0  # radians the camera is tipped up right now
 var _message_time := 0.0
 
+## Guns with the same authored material share one object-space material across every place they are shown.
+static var _material_cache: Dictionary = {}
+
 
 func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_exclude: Array[RID]) -> void:
 	sim = p_sim
@@ -57,6 +73,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 		node.name = "Gun_" + base
 		node.position = HOLD[base]
 		node.visible = false
+		apply_textured_materials(node)
 		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false) + ([node] if node is MeshInstance3D else []):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		camera.add_child(node)
@@ -67,6 +84,48 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	_flash.light_energy = 0.0
 	_flash.position = Vector3(0.2, -0.15, -0.9)
 	camera.add_child(_flash)
+
+
+## Apply the named gun surfaces to any instance (hands now; reusable if a 3-D workbench preview is added).
+## Object-space triplanar keeps the grain attached to the moving weapon.
+static func apply_textured_materials(node: Node3D) -> void:
+	var meshes := node.find_children("*", "MeshInstance3D", true, false)
+	if node is MeshInstance3D:
+		meshes.append(node)
+	for child: Node in meshes:
+		var mesh := child as MeshInstance3D
+		if mesh == null or mesh.mesh == null:
+			continue
+		for surface in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(surface) as StandardMaterial3D
+			if source == null or not GUN_LOOKS["materials"].has(source.resource_name):
+				continue
+			var mapping: Dictionary = GUN_LOOKS["materials"][source.resource_name]
+			mesh.set_surface_override_material(surface, _gun_material(source, String(mapping["texture"]),
+					float(mapping["tile_m"]), mapping.get("tint", Color.WHITE), mapping))
+
+
+## V2 review: a fully metallic surface takes its colour from reflections, and a dim sky left the pistol black,
+## so a mapping may set its own "metallic" and "roughness" (gun steel is satin, not mirror).
+static func _gun_material(source: StandardMaterial3D, texture: String, tile_m: float, tint: Color = Color.WHITE,
+		mapping: Dictionary = {}) -> StandardMaterial3D:
+	var key := "%s|%s|%.3f|%s|%.3f|%.3f" % [source.resource_name, texture, tile_m,
+			tint.to_html(), source.metallic, source.roughness]
+	if not _material_cache.has(key):
+		var mat := source.duplicate() as StandardMaterial3D
+		mat.resource_name = source.resource_name
+		mat.albedo_color = tint
+		mat.metallic = float(mapping.get("metallic", source.metallic))
+		mat.roughness = float(mapping.get("roughness", source.roughness))
+		mat.albedo_texture = load("res://assets/textures/%s_albedo.jpg" % texture)
+		mat.normal_enabled = true
+		mat.normal_texture = load("res://assets/textures/%s_normal.jpg" % texture)
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = false
+		mat.uv1_scale = Vector3.ONE / tile_m
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_material_cache[key] = mat
+	return _material_cache[key]
 
 
 func _unhandled_input(event: InputEvent) -> void:

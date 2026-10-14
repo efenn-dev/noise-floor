@@ -10,6 +10,20 @@ static var _cache: Dictionary = {}
 
 
 ## `tile_m` is how many metres one copy of the texture covers.
+## V2 review: average brightness (0-1) of each character and gun photo, measured from the _albedo.jpg.
+## A model colour multiplied by a dark photo came out nearly black (zombie faces, the pistol), so
+## tint_for_texture divides it back out: the textured surface averages the model's own colour.
+const TEXTURE_MEAN := {"zombie_skin": 0.461, "cloth_cotton": 0.636, "cloth_flannel": 0.196,
+		"cloth_workshirt": 0.543, "denim": 0.354, "leather_boot": 0.227, "gun_metal": 0.256,
+		"gun_wood": 0.248, "gun_polymer": 0.188}
+
+
+## The albedo tint that makes `texture` average out to `tint` (each channel capped at 1).
+static func tint_for_texture(tint: Color, texture: String) -> Color:
+	var m: float = TEXTURE_MEAN.get(texture, 1.0)
+	return Color(minf(tint.r / m, 1.0), minf(tint.g / m, 1.0), minf(tint.b / m, 1.0), tint.a)
+
+
 static func material(texture: String, tile_m: float = 2.0, tint: Color = DEFAULT_TINT) -> StandardMaterial3D:
 	var key := "%s|%s|%s" % [texture, tile_m, tint.to_html()]
 	if not _cache.has(key):

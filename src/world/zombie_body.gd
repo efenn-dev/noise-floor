@@ -21,6 +21,29 @@ const MODEL_SCALE := 1.0  # built at real size (about HEIGHT tall)
 const WALK_ANIM_SPEED := 1.0  # m/s the Walk animation's feet move at speed_scale 1
 const RUN_ANIM_SPEED := 3.45  # m/s the Run animation's feet move at speed_scale 1
 const RUN_ABOVE := 2.0  # m/s: faster than this, a runner runs instead of walking
+## Textures and per-zombie palettes live together so an art pass can tune the whole look in one place.
+## `tile_m` is the real-world width of one texture repeat. Materials not in `materials` are deliberately
+## left as the model made them; test_textured_looks.gd makes a new model material fail until it is listed.
+const LOOK_DATA := {
+	"materials": {
+		"Zombie Skin": {"texture": "zombie_skin", "tile_m": 0.32},
+		"Shirt": {"texture": "cloth_cotton", "tile_m": 0.28},  # texture is replaced by shirt_textures
+		"Jeans": {"texture": "denim", "tile_m": 0.30},
+		"Boots": {"texture": "leather_boot", "tile_m": 0.22},
+	},
+	"untextured": ["Eyes", "Hair", "Stain", "Shadow", "Vest", "Hard Hat", "Cap"],
+	"shirt_textures": ["cloth_cotton", "cloth_flannel", "cloth_workshirt"],
+	"shirt_tints": [
+		Color(0.62, 0.60, 0.55), Color(0.45, 0.50, 0.60), Color(0.60, 0.42, 0.38),
+		Color(0.50, 0.55, 0.42), Color(0.70, 0.66, 0.50), Color(0.38, 0.40, 0.44),
+	],
+	# Small multipliers preserve zombie.py's skin colour while making a crowd less uniform.
+	"skin_tints": [
+		Color(0.94, 0.98, 0.91), Color(1.02, 0.94, 0.90), Color(0.90, 1.00, 0.96),
+		Color(1.05, 1.01, 0.93),
+	],
+}
+
 ## How each kind of zombie looks, so you can tell them apart: skin and shirt tints, size.
 const LOOKS := {
 	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92,
@@ -31,9 +54,6 @@ const LOOKS := {
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
 const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)
 const GRUNTS := 11  # assets/sounds/zombie/grunt_NN.wav
-## Faded shirt colours, one per zombie, so a crowd isn't identical.
-const SHIRTS := [Color(0.62, 0.6, 0.55), Color(0.45, 0.5, 0.6), Color(0.6, 0.42, 0.38), Color(0.5, 0.55, 0.42),
-		Color(0.7, 0.66, 0.5), Color(0.38, 0.4, 0.44)]
 
 var brain: ZombieBrain
 var player: Node3D
@@ -63,6 +83,10 @@ var _next_moan := 3.0
 var _was_attacking := false
 var _said_death := false
 
+## Shared by every body with the same material name, source colour and deterministic look. Set only in
+## setup(), never per frame. This keeps a street full of matching outfits to one material apiece.
+static var _look_material_cache: Dictionary = {}
+
 
 func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 	brain = p_brain
@@ -82,24 +106,80 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 		_set_body(variant)
 	var look: Dictionary = LOOKS.get(brain.type, {})
 	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4)) * float(look.get("scale", 1.0))
-	var shirts: Array = look.get("shirts", SHIRTS)
+	var shirt_look := shirt_look_for(brain.id)
+	var shirts: Array = look.get("shirts", LOOK_DATA["shirt_tints"])
 	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
 		for i in mesh.mesh.get_surface_count():
-			var mat := mesh.mesh.surface_get_material(i) as StandardMaterial3D
-			if mat == null:
+			var source := mesh.mesh.surface_get_material(i) as StandardMaterial3D
+			if source == null:
 				continue
-			if mat.resource_name == "Shirt":
-				mat = mat.duplicate()
-				mat.albedo_color = shirts[brain.id % shirts.size()]
-				mesh.set_surface_override_material(i, mat)
-			elif mat.resource_name == "Zombie Skin" and look.has("skin"):
-				mat = mat.duplicate()
-				mat.albedo_color = look["skin"]
-				mesh.set_surface_override_material(i, mat)
-			elif mat.resource_name in BODY_CLOTHES and look.has("dim"):
-				mat = mat.duplicate()
-				mat.albedo_color = mat.albedo_color.darkened(look["dim"])
-				mesh.set_surface_override_material(i, mat)
+			var tint := source.albedo_color
+			var texture := ""
+			if source.resource_name == "Shirt":
+				tint = shirts[brain.id % shirts.size()] if look.has("shirts") else shirt_look["tint"]
+				texture = String(shirt_look["texture"])
+			elif source.resource_name == "Zombie Skin":
+				# The named kind colour remains exact (runner green, screamer pale, Old Pete olive). Ordinary
+				# zombies get the subtle id-based multiplier requested for crowd variety.
+				tint = look["skin"] if look.has("skin") else skin_tint_for(brain.id, source.albedo_color)
+			elif source.resource_name in BODY_CLOTHES and look.has("dim"):
+				tint = tint.darkened(look["dim"])
+			if LOOK_DATA["materials"].has(source.resource_name):
+				var mapping: Dictionary = LOOK_DATA["materials"][source.resource_name]
+				if texture == "":
+					texture = String(mapping["texture"])
+				mesh.set_surface_override_material(i, _material_for_look(source, texture, float(mapping["tile_m"]), tint))
+			elif tint != source.albedo_color:
+				mesh.set_surface_override_material(i, _plain_material_for_look(source, tint))
+
+
+## The same id always receives the same cloth and faded colour, before and after saving. The two picks use
+## different mixed parts of the id so a short run of ids does not just cycle through three fixed pairs.
+static func shirt_look_for(id: int) -> Dictionary:
+	var h := id * 0x45D9F3B + 0x27100001
+	h = h ^ (h >> 16)
+	var textures: Array = LOOK_DATA["shirt_textures"]
+	var tints: Array = LOOK_DATA["shirt_tints"]
+	return {"texture": textures[posmod(h, textures.size())], "tint": tints[posmod(h >> 8, tints.size())]}
+
+
+## A slight warm/cool shift around the skin colour authored in zombie.py.
+static func skin_tint_for(id: int, base: Color) -> Color:
+	var shifts: Array = LOOK_DATA["skin_tints"]
+	var shift: Color = shifts[posmod(id * 5 + 1, shifts.size())]
+	return Color(clampf(base.r * shift.r, 0.0, 1.0), clampf(base.g * shift.g, 0.0, 1.0),
+			clampf(base.b * shift.b, 0.0, 1.0), base.a)
+
+
+## Object-space triplanar: the texture follows the animated body rather than being projected from the world.
+static func _material_for_look(source: StandardMaterial3D, texture: String, tile_m: float,
+		tint: Color) -> StandardMaterial3D:
+	var key := "textured|%s|%s|%.3f|%s|%.3f|%.3f" % [source.resource_name, texture, tile_m,
+			tint.to_html(), source.metallic, source.roughness]
+	if not _look_material_cache.has(key):
+		var mat := source.duplicate() as StandardMaterial3D
+		mat.resource_name = source.resource_name
+		mat.albedo_color = Surfaces.tint_for_texture(tint, texture)  # V2 review: no longer near-black
+		mat.set_meta("look_tint", tint)  # the look's own colour, before the texture brightness is divided out
+		mat.albedo_texture = load("res://assets/textures/%s_albedo.jpg" % texture)
+		mat.normal_enabled = true
+		mat.normal_texture = load("res://assets/textures/%s_normal.jpg" % texture)
+		mat.uv1_triplanar = true
+		mat.uv1_world_triplanar = false
+		mat.uv1_scale = Vector3.ONE / tile_m
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_look_material_cache[key] = mat
+	return _look_material_cache[key]
+
+
+static func _plain_material_for_look(source: StandardMaterial3D, tint: Color) -> StandardMaterial3D:
+	var key := "plain|%s|%s|%.3f|%.3f" % [source.resource_name, tint.to_html(), source.metallic, source.roughness]
+	if not _look_material_cache.has(key):
+		var mat := source.duplicate() as StandardMaterial3D
+		mat.resource_name = source.resource_name
+		mat.albedo_color = tint
+		_look_material_cache[key] = mat
+	return _look_material_cache[key]
 
 
 ## A2: the body a zombie gets, from its id and kind: the same zombie always gets the same one (saves,
