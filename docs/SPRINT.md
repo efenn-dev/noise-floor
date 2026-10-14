@@ -1,5 +1,38 @@
 # Read me first (Emmitt)
 
+*Updated 2026-10-13 night by Claude Opus 5.5.* Sprint 4 has started: make the first 30 minutes look, sound and feel premium, with no new systems and free assets only (see the top of `docs/DIRECTION.md`). Codex is making the art and Claude is wiring it in. Each task lands as its own pull request against `main`. Merge them as they come, and `play.bat` picks them up. When the board says V8, play 30 minutes from a new game and write the Playtest #2 entry.
+
+---
+
+# Sprint 4 — "The first 30 minutes"
+
+*Started 2026-10-13 night at Emmitt's request. Lead: Claude Opus 5.5 in a local session. Art: Codex on Emmitt's ChatGPT plan, one job at a time, in its own worktree. Feature freeze: polish, tuning and bug fixes only.*
+
+## Sprint goal
+
+A new game's first 30 minutes (day 1, the first night, the next morning) look, sound and feel good enough that Emmitt would post a 60-second clip of them.
+
+## Board
+
+| # | Task | Owner | Status | Done when |
+|---|---|---|---|---|
+| V1 | Lighting and atmosphere: volumetric fog the flashlight shows up in, ambient occlusion, bounce light, a colour grade for a dead town, a real flashlight beam (Codex light texture), pools of light from street lamps, glow on lamps and machine lights; a graphics quality setting so weaker PCs still run | Claude, branch `v1-lighting` | In progress | Day and night screenshots beat the old ones; settings has low/medium/high; tests green |
+| V2 | Textured zombies and guns, a different shirt and colours per zombie, detailed pistol and rifle models (this is S3-1c) | Codex (textures, gun models, wiring), Claude reviews, branch `s3-1c-codex-art` | Codex running | Zombies and guns read as textured close up; tests green |
+| V3 | Game feel: weapon sway and bob, recoil kick, camera shake on hits, impact puffs (dust, sparks, blood), a hit marker, a red edge when hurt, a step bob | Claude | Not started | It feels good in Emmitt's hands (V8) |
+| V4 | Sound: walls muffle what the player hears (same wall count the zombies use), echo indoors, layered wind and distant moans, heavier guns and hits | Claude | Not started | Indoors sounds different from outdoors; a machine behind a wall is quieter |
+| V5 | Art direction: `docs/ART_DIRECTION.md`, one page with palette, mood and reference pictures from Codex; every later asset is checked against it | Codex (pictures), Claude (page) | Queued after V2 | Page merged |
+| V6 | First-person arms: rigged arms in a Blender script (idle, walk, swing, shoot, reload), shown with the pipe and both guns | Codex (model and animations), Claude (wiring) | Queued after V5 | Hands visible holding every weapon |
+| V7 | Zombie hits and deaths: stagger when hit, a ragdoll fall on death, blood decals, a headshot that reads | Codex (stagger animations), Claude (code) | Queued after V2 merges | A fight looks right in a screenshot sequence |
+| V8 | Playtest #2 on the polished build (30 min from a new game, session log pasted in), then tuning from it (replaces S3-2 and S3-3) | Emmitt (+ Kaleb), then Claude | Waiting on V1–V7 | Entry in `docs/PLAYTESTS.md`; tuning PR merged |
+
+Order: V2 runs in Codex while Claude builds V1; then V3 and V4 (code) while Codex does V5 and V6 (art); V7 after V2 merges because both touch the zombie; V8 last. Before V8, run `tools/soak.sh --days=3` and `tools/tour.sh` on `main`, as DIRECTION.md asks.
+
+---
+
+*Below: Sprint 3 and the earlier sprints, kept for the record.*
+
+# Read me first (Emmitt), Sprint 3
+
 *Updated 2026-10-13 evening by Claude Fable 5.1 after your Playtest #1 notes. Everything from the day run is merged; `main` is #41.*
 
 **Two pull requests to merge, in order: S3 (branch `s3-playtest-fixes`), then S4 (branch `s4-playtest-1b`, stacked on it; it shows both until S3 merges).** S4 adds pictures on the hotbar and in the build menu, green tips that walk you through your first factory with power and loading, bodies you can search (E on a dead zombie), and jumpscare stings. The first-factory steps are also under F1. It fixes the two things you hit (driving, doors) and adds what you asked for (a hotbar and a build menu). After the merge, `play.bat` picks it up. Try, in order: walk to the red sedan, E at its back to search the trunk for the key, E at its side to get in, W to drive, E to get out. Open a house door with E, walk in, turn round and press E on the open door to close it. Press 1 and click to lay a foundation; B for the build menu; point at a piece in it and press a number to put it on that key; Tab, click a bandage, press 0. Then tell the lead what felt wrong and the next sprint-3 pass is tuning from that.

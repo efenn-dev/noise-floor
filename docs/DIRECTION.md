@@ -2,6 +2,26 @@
 
 *Written 2026-10-12 by Claude Fable 5.1 at Emmitt's request, after reading the design doc, the devlog, the sim code and the first fifteen pull requests. This file outranks the milestone list in `GAME_DESIGN.md`: when they disagree, follow this one. Update it when a decision below changes.*
 
+## Update, night of 2026-10-13: Sprint 4, "The first 30 minutes" (Emmitt's call)
+
+*Written by Claude Opus 5.5 at Emmitt's request. He asked how to make Noise Floor feel like a AAA game, then said: stay free for now, write the sprint into direction, and start it.*
+
+Real AAA is a hundred-million-dollar budget and hundreds of people. The target is a game that feels premium in a narrow slice, the way Road to Vostok (one developer, Godot) does. Noise Floor doesn't lack systems; it lacks finish. So:
+
+- **Feature freeze for Sprint 4.** No new systems, nothing from M17b. Bug fixes, tuning and polish only. Playtest notes still come first, as the rest of this file says.
+- **The goal is the first 30 minutes at trailer quality.** A new game starts at 08:00 on day 1 of summer, and sunset is 21:00, so in real time the slice is day 1 (minutes 0 to 13), the first night (13 to 21) and the next morning (21 to 30):
+  - **0–5:** wake up, read the first tip, open the crate, search a house, hear the town.
+  - **5–13:** first smelter and generator. It's loud, and the first zombies come up the street.
+  - **13–21:** dusk, then the first night: fog, the flashlight, a fight at the walls, the stings.
+  - **21–30:** dawn, the base log of what happened, the next goal clear.
+
+  Every pass in this sprint is judged by how those 30 minutes look, sound and feel.
+- **Free assets only (Emmitt, 2026-10-13).** No paid packs, no freelancers for now. Art comes from Codex (image generation, plus Blender scripts Codex writes and runs) and the Blender kit. Third-party files stay CC0 with Emmitt asked first.
+- **Who does what.** Codex makes art on Emmitt's ChatGPT plan, one job at a time (parallel `codex exec` runs deadlock on this PC). Claude writes the code, wires the art in, runs tests and screenshots, and reviews each PR. One heavy job (Godot, Blender) at a time.
+- **Exit test.** A 60-second capture of those 30 minutes that Emmitt would post, plus Playtest #2 on the polished build (it replaces Sprint 3's S3-2 and S3-3).
+
+The board is in `docs/SPRINT.md`. In order of impact: lighting and atmosphere, textured zombies and guns, game feel, sound, a written art direction, first-person arms, zombie hit reactions and deaths, then the playtest.
+
 ## Update, evening of 2026-10-13: where things stand
 
 In the thirty hours after this file was written, builders (Claude Opus 5.5, one at a time, each from a plan by the lead) delivered the whole long-game list except outposts: W1a–W1c (houses with rooms, loot, furniture, a zombie in some, the factory hall, hordes down the road), M12–M16 (skills and perks, loot with rarity and gear, guns and the workbench, automated defense with sensors and the base log, seasons with cold and the stove), M17a (the industrial park and the water tower project), two art passes (street dressing, five zombie bodies), three polish passes (gun feel, playtest readiness with a help screen, soak fixes) and three QA passes (a stress test, a bot that plays game-days headless, a twelve-shot tour). Every one is a pull request against `main` with tests; the suite is past seven thousand checks.
@@ -53,6 +73,8 @@ M11 (the world gets worse) was already started by another session when this was 
 - **Token discipline.** Prefer a compact report file (the session log, a test summary) over reading transcripts or frames. Don't launch multi-agent workflows on this project without asking Emmitt and quoting a cost.
 
 ## Decisions Emmitt still owns
+
+- **Decided 2026-10-13: free assets only for now.** No paid asset packs or freelance artists. Revisit if Codex and Blender can't make convincing zombies and first-person arms.
 
 - **Who is the player?** The recommendation: Emmitt and Kaleb on a forgiving "normal"; hardcore later as an option. Tuning follows from this.
 - **Map style for W1.** Recommendation: a kit of rooms assembled by seeded code. The alternative is hand-built scenes in the Godot editor, which look better per hour of human work but can't be built in cloud sessions or tested headlessly.
