@@ -519,6 +519,8 @@ func _process(delta: float) -> void:
 		var node: Node3D = _models[b]
 		_sync_part_models(b)
 		node.visible = show and b == base
+		if node.visible and sim.guns.scoped() and _aim_weight > 0.9:
+			node.visible = false  # V15/V23: looking through the scope the eyepiece would fill the view; the zoom and reticle take over
 		if node.visible:
 			var raise := clampf(sim.guns.raising / maxf(0.01, float(sim.guns.stats()["handling"])), 0.0, 1.0)
 			var pose := _rest_pose(b)

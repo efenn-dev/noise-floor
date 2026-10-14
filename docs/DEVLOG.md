@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V23 Tarkov-style gun attachments (Sprint 4)
+
+Emmitt: "the attachments for guns, none of them work, make it so the guns have attachment slots like in tarkov." Built by Codex (one job on his ChatGPT plan); review, one fix and the checks by Claude Opus 5.5.
+
+**Why they didn't work:** fitting was only possible at the workbench screen (hard to find), the inventory told you to go to a workbench, the parts were invisible on the gun, every gun shared one slot list (a pistol could take a stock), and parts almost never dropped.
+
+**Built:**
+- **A modding panel in the inventory:** select a gun (pockets, a container, Primary or Sidearm) and its attachment slots appear: pistol = muzzle, magazine, sight; hunting rifle = muzzle, magazine, sight, stock (per gun in `guns.json`). Drag a part on (or double-click it), drag it off (or double-click the slot). Works anywhere, instantly; crafting parts still needs the bench. Fitting makes a small noise.
+- **Stats you can see:** damage, recoil, accuracy cone, raise time, magazine and loudness, with each part's change in green or red, all from the sim.
+- **Parts on the gun:** five new models (`tools/art/part_*.py`): oil-filter and machined suppressors, a longer magazine, a scope with rings and turrets, a rubber recoil pad, fixed at anchors measured on each gun.
+- **Effects that matter:** suppressors 20 / 30 quieter, the extended magazine +50% rounds (reloads fill it), the scope's zoom and tighter cone, the padded stock 35% less recoil.
+- **Parts drop:** car trunks 12%, factory crates 35%, industrial loot 45%, zombie corpses 8%.
+- Fix by Claude: looking through the scope showed the back of the scope tube over the target; the gun hides again at full scope aim (the zoom and reticle take over), as before.
+
+**Try it on the PC:** find a gun and a part, press Tab, click the gun; `play.bat --mod-screen=rifle` gives you a rifle and every part.
+
+**Tests:** 12,014 green (new `test_gun_mods.gd`).
+
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
 Emmitt: "fix the hands in the engine". Every Blender pass bent some finger the wrong way once it reached Godot, so the poses are now built in Godot, where they can be measured. By Claude Opus 5.5.
