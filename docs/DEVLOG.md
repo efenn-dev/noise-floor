@@ -11,6 +11,18 @@ Emmitt: "a loot all button might help, I also noticed that we can't immediately 
 - **Wear it from the container:** a gear piece in an open container has an Equip action, and you can drag it straight onto a character slot. What you wore there goes into your pockets, or stays in the container if you can't carry it (the message says so). Gun parts and wrong slots are refused with a reason. Rules in the sim (`SimWorld.can_equip_from_container` / `equip_from_container`).
 
 **Tests:** 11,876 green (new `test_loot_polish.gd`).
+## 2026-10-14 — V24 Fixes from play: sleeping, the roof, zombie arms (Sprint 4)
+
+Emmitt, after playing: "I was not able to sleep or regain energy", "if you jump in a house you can see through the roof and you can see zombie arms sticking through walls". By Claude Opus 5.5.
+
+**Fixed:**
+- **You can sleep again.** E on a bed put you to sleep, but the same key press then reached main.gd, where "any key wakes you" woke you in the same instant, so energy never came back. The interactor now marks that E press as used once it puts you to sleep, the way it already did for getting into a car. `test_sleep_key.gd` presses E through the real input path (it fails without the fix).
+- **No more seeing through the roof.** House and factory roofs had no colliders on purpose (sound is 2-D), so a jump, or a jump off the furniture, put your head and the camera up through the ceiling. Each roof now has a ceiling slab on its own physics layer (`Layers.CEILING`) that only the walker bumps into; the navmesh, rays and sound still ignore roofs.
+- **Zombie arms stay out of walls.** The motion-captured walk and scratch hold the arms past the body's 35 cm capsule, so a zombie pressed against a wall put its hands through. A ball at arm height in front of the chest (reaching 0.54 m ahead) keeps the body back; it goes with the capsule when the zombie dies. Attack range (1.5 m) is unchanged.
+
+**Try it on the PC:** sleep in any bed in a house when you're tired (energy under 90); jump inside a house; let a zombie chase you to a wall.
+
+**Tests:** 11,870 green (new `test_sleep_key.gd`, `test_clipping.gd`).
 
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
