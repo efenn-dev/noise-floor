@@ -64,6 +64,8 @@ var _push := Vector3.ZERO
 var _last_good := Vector3.ZERO  # Q1: the last finite position after a move (see the NaN guard)
 ## Q1: how many times a move came back NaN and was undone (for tests and the soak).
 var nan_recoveries := 0
+const NUDGE_RADIUS := 0.75  # S5: your feet are on the body inside this distance
+const NUDGE_SHARE := 0.1  # S5: share of your walking speed a body shuffles at while you're on it
 var death_dir := Vector3.ZERO  # V7: which way it was knocked as it died (it falls and slides that way)
 var _death_slide := 0.0
 var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
@@ -342,6 +344,16 @@ func _lie_down(delta: float) -> void:
 		_shape.disabled = true
 		_corpse_shape.disabled = false
 		set_meta("container_id", SimWorld.CORPSE + str(brain.id))  # the Interactor offers to search it
+		# S5 (Emmitt: "when you walk over a slain zombie you push the dead bodies"): a body is a kinematic
+		# body, which the engine treats as unpushable and infinitely heavy, so it shoved you, and it shoved
+		# any car it touched (a likely source of the car's NaN). It now ignores you and the cars entirely;
+		# walking over it nudges it a little instead (_nudge).
+		if player is PhysicsBody3D:
+			add_collision_exception_with(player)
+		if is_inside_tree():
+			for car: Node in get_tree().get_nodes_in_group("cars"):
+				if car is PhysicsBody3D:
+					add_collision_exception_with(car)
 		# V7: fall away from the blow. The Death animation tips the body forward, so it turns to face the way
 		# it was knocked (away from you when nothing knocked it) and slides back a little as it drops.
 		var away := brain.knockback
@@ -359,7 +371,26 @@ func _lie_down(delta: float) -> void:
 	velocity = Vector3(slide.x, 0.0 if is_on_floor() else velocity.y - _gravity * delta, slide.z)
 	if death_dir != Vector3.ZERO and _fall < 0.6:
 		rotation.y = lerp_angle(rotation.y, atan2(-death_dir.x, -death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
+	var nudge := nudge_for(player, global_position) if _fall >= 1.0 else Vector3.ZERO
+	velocity.x += nudge.x
+	velocity.z += nudge.z
 	move_and_slide()
+
+
+## S5: how hard walking over a body shuffles it: a small share of your speed while your feet are on it,
+## nothing when you stand still. Bodies are heavy: they shift a little, they don't skate away.
+static func nudge_for(walker: Node3D, body_pos: Vector3) -> Vector3:
+	var w := walker as CharacterBody3D
+	if w == null:
+		return Vector3.ZERO
+	var d := body_pos - w.global_position
+	d.y = 0.0
+	if d.length() > NUDGE_RADIUS:
+		return Vector3.ZERO
+	var v := Vector3(w.velocity.x, 0.0, w.velocity.z)
+	if v.length() < 0.5:
+		return Vector3.ZERO
+	return v * NUDGE_SHARE
 
 
 static func _flat(v: Vector3) -> Vector3:

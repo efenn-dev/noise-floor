@@ -2,6 +2,22 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — S5 Physics: grounded bodies, the stuck car, Jolt Physics
+
+Built by Claude Opus 5.5 from Emmitt's notes on the #51 build: "when you walk over a slain zombie you push the dead bodies. Can you make them much more grounded... Is there any physics engine we could use? also I got in the car but was not able to drive."
+
+**Found:** his log showed the pickup (car_1) going NaN right after he got in, and the guard from the earlier fix putting it back every tick, so it never moved. Dead bodies are kinematic bodies, which the engine treats as unpushable and infinitely heavy. They collided with you (so walking over one shoved it around) and with cars. A body pressed against a car is a likely source of the NaN: both of his NaN sessions came right after kills.
+
+**Built:**
+- **Bodies are grounded.** A body adds collision exceptions with you and with every car (cars are in the "cars" group), so neither pushes the other. Walking over one nudges it at a tenth of your speed while your feet are on it (`ZombieBody.nudge_for`, `NUDGE_RADIUS` 0.75 m, `NUDGE_SHARE` 0.1).
+- **A NaN car gets fresh wheels.** `CarBody.recover_from_nan` also rebuilds every VehicleWheel3D with the same settings and tyre model (the old wheels kept the engine's NaN in their own state). If it goes NaN three times within a second, the car freezes for half a second to settle. The first time, the log gets a report of the tick before: position, speed, spin, engine, steering and what each wheel and the body were touching.
+- **Jolt Physics.** `project.godot` now uses Godot 4.7's built-in Jolt engine (free; the engine behind Horizon Forbidden West) instead of Godot Physics. The full suite passes on both engines, and the one-day soak passed on Jolt (car driven 24.5 m, 10 kills, 0 NaN recoveries).
+- `test/test_corpse_ground.gd` (nudge maths, exceptions with the player and car_0, walking over a body moves it under half a metre, fresh wheels after a NaN).
+
+**Try it on the PC:** `play.bat`, kill a zombie and walk over it; get in the pickup and drive. If a car ever goes NaN again, `godot.log` has one line starting "Car car_N: its physics went NaN" with what it was touching.
+
+**Known gaps:** bodies are still a single slab (no ragdoll). Jolt makes ragdolls practical later (PhysicalBoneSimulator3D on the zombie rig).
+
 ## 2026-10-13 — V9 + V10 Weapons wear out, Zomboid weapon skills (Sprint 4)
 
 Built by Claude Opus 5.5 from Emmitt's ask: "adding durability to items so we need to get a new weapon every so often. I want zomboid like skills where you level up your blunt, blades, axe, etc skills and do more damage/faster attacks."
