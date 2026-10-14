@@ -2,6 +2,19 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V26 Save slots: one per player (Sprint 4)
+
+Emmitt and his son share the PC and there was one save file, so they overwrote each other. Built by Codex (one job on his ChatGPT plan); a safer migration, two fixes and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Three save slots**, each its own file (`user://saves/slot_N.json`) with a name you type ("Dad", "Kaleb"), the day and time in game, time played, zombies killed and when it was last played. The title screen's Continue opens a slot picker; New game asks which slot (warning before replacing one) and for a name; each slot has Delete with a confirm. The pause menu, F5 and F9 use the slot you're playing; session logs name it. Settings stay shared.
+- **Your old save becomes slot 1 automatically** the first time, named "Slot 1". It is COPIED: the old `save.json` is never deleted (Codex's version moved it, which would have made a screenshot or test run of this branch take the save away from the current build on main).
+- Fixes: the slot picker's test helper looked one level too shallow; the migrated save's "Last played" showed UTC instead of local time.
+
+**Try it on the PC:** `play.bat`, Continue: your current game is Slot 1; New game into Slot 2 with your son's name. `play.bat --slots` opens the picker.
+
+**Tests:** 11,909 green (new `test_save_slots.gd`, all on test-only paths; no real save is touched).
+
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
 Emmitt: "fix the hands in the engine". Every Blender pass bent some finger the wrong way once it reached Godot, so the poses are now built in Godot, where they can be measured. By Claude Opus 5.5.

@@ -215,7 +215,7 @@ func start_new_profile(_submitted: String = "") -> void:
 
 
 func slot_text(slot: int) -> String:
-	var button := _slot_rows.get_node_or_null("Slot%d" % slot) as Button
+	var button := _slot_rows.find_child("Slot%d" % slot, true, false) as Button  # each sits in its row with Delete
 	return button.text if button != null else ""
 
 

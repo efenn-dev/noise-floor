@@ -175,7 +175,8 @@ static func migrate_legacy_save() -> String:
 		return "" if copy_error == OK else "Couldn't copy the old save into slot 1 (%s)" % error_string(copy_error)
 	data["meta"] = _meta_from_data(data, 1)
 	data["meta"]["name"] = "Slot 1"
-	data["meta"]["last_played"] = Time.get_datetime_string_from_unix_time(modified, true)
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60  # the file time is UTC; show it in local time
+	data["meta"]["last_played"] = Time.get_datetime_string_from_unix_time(modified + bias, true)
 	return SaveGame.write_dict(data, target)  # the old file stays where it was either way
 
 
