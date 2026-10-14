@@ -9,3 +9,4 @@ const BUILT := 2
 const ZOMBIE := 4
 const BAG := 8
 const TRAP := 16  # spike strips: walk-over, only rays (aiming, building) see them
+const CEILING := 32  # V24: house and factory ceilings: only the walker bumps its head on them (navmesh and rays ignore them)
