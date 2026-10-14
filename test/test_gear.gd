@@ -28,7 +28,8 @@ func test_gear_data_is_valid() -> void:
 	var data := GameData.load_default()
 	var gear_errors := Array(data.validate()).filter(func(e: String) -> bool: return "gear" in e or "unique" in e or "set " in e)
 	eq(gear_errors, [], "gear.json validates")
-	eq(data.gear["slots"], ["weapon", "head", "body", "hands", "light", "gun"], "five slots, and the gun (M14)")
+	eq(data.gear["slots"], ["head", "body", "hands", "legs", "feet", "back", "light", "weapon", "primary", "sidearm"],
+			"all clothing, bag and weapon slots")
 	for r: String in ["white", "blue", "yellow", "gold", "set", "orange"]:
 		check(data.gear["rarities"].has(r), "rarity " + r)
 	var bad := GameData.load_default()

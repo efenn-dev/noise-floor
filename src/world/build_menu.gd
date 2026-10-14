@@ -31,7 +31,7 @@ const BLURBS := {
 	"barricade": "Low boards: blocks sound and zombies, turrets shoot over it. Boards up a broken window.",
 	"bed": "Sleep here (E). Heals you fast and becomes where you respawn.",
 	"storage": "A crate. E puts building materials away; building draws from crates nearby.",
-	"workbench": "Make gun parts and ammo by hand (E).",
+	"workbench": "Make firearm parts and ammo by hand (E).",
 	"stove": "Burns planks (E to load). Warms the room in winter; crackles a little.",
 	"electric_heater": "Warms the room on power. Silent.",
 	"belt": "Carries items forward at 2 m a second. R turns it.",

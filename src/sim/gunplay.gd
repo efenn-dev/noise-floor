@@ -1,6 +1,6 @@
 class_name Gunplay
 extends RefCounted
-## Guns in your hands (M14): what you're holding (Q swaps melee and gun), raising the gun, the spread
+## Guns in your hands (M14): what you're holding (Q cycles melee, primary and sidearm), raising the gun, the spread
 ## that grows with each shot's recoil and settles back, the magazine and reloading, and how loud each shot is.
 ## Since P2 the spread cone is the only thing that decides a hit: the world's ray lands or it doesn't, and
 ## Firearms, the scope (range), recoil and distance (a fixed angle covers more ground further out) all act
@@ -12,7 +12,7 @@ extends RefCounted
 var data: GameData
 var gear: Gear
 var skills: Skills
-var hands := "melee"   # "melee" or "gun"; saved
+var hands := "melee"   # "melee", "primary" or "sidearm"; saved
 var bloom := 0.0       # extra spread in degrees from recent shots; settles back over time
 var cooldown := 0.0    # seconds until the next shot
 var raising := 0.0     # seconds until the gun is up after Q
@@ -26,35 +26,45 @@ func _init(p_data: GameData, p_gear: Gear, p_skills: Skills) -> void:
 
 
 func gun() -> Dictionary:
+	if hands in Gear.FIREARM_SLOTS:
+		gear.set_active_gun(hands)
 	return gear.gun()
 
 
 func in_hand() -> bool:
-	return hands == "gun" and not gun().is_empty()
+	return hands in Gear.FIREARM_SLOTS and not gun().is_empty()
 
 
 func stats() -> Dictionary:
 	return gear.gun_stats(gun())
 
 
-## Q: swaps between your melee weapon and your gun. Returns a message.
+## Q: cycles melee -> primary -> sidearm -> melee, skipping empty firearm slots.
 func swap() -> String:
-	if hands == "melee":
-		if gun().is_empty():
-			return "No gun (equip one from Tab)"
-		hands = "gun"
-		raising = float(stats()["handling"])
+	gear.migrate_legacy_gun()
+	var order := ["melee", "primary", "sidearm"]
+	var at := order.find(hands)
+	for step in range(1, order.size() + 1):
+		var slot: String = order[(at + step) % order.size()]
+		if slot != "melee" and not gear.equipped.get(slot) is Dictionary:
+			continue
+		if slot == hands:
+			return "No firearm equipped (Tab)"
+		hands = slot
 		reloading = 0.0
+		if slot == "melee":
+			return "%s in hand" % gear.weapon_name()
+		gear.set_active_gun(slot)
+		raising = float(stats()["handling"])
 		return "%s in hand" % gear.gun_name()
-	hands = "melee"
 	reloading = 0.0
-	return "%s in hand" % gear.weapon_name()
+	return ""
 
 
 ## One tick: timers run down, the spread settles, a finished reload loads the rounds from `inv`.
 ## Returns the rounds loaded this tick (0 if no reload finished).
 func tick(dt: float, inv: Inventory) -> int:
-	if hands == "gun" and gun().is_empty():
+	if hands in Gear.FIREARM_SLOTS and gun().is_empty():
 		hands = "melee"  # the gun was taken off
 	cooldown = maxf(0.0, cooldown - dt)
 	raising = maxf(0.0, raising - dt)
@@ -131,7 +141,7 @@ func damage() -> float:
 ## "" if a shot can be fired now, otherwise why not.
 func can_fire() -> String:
 	if not in_hand():
-		return "No gun in hand (Q)"
+		return "No firearm in hand (Q)"
 	if reloading > 0.0:
 		return "Reloading..."
 	if raising > 0.0 or cooldown > 0.0:
@@ -213,16 +223,30 @@ func weapon_condition_text() -> String:
 	return " %d%%%s" % [roundi(c * 100.0), "" if gear.working(piece) else " worn out"]
 
 
-## The HUD line: "Pistol 6/8 standard (R reload, Q pipe)" or "Pipe (Q: Pistol)".
+func _next_label() -> String:
+	var order := ["melee", "primary", "sidearm"]
+	var at := order.find(hands)
+	for step in range(1, order.size() + 1):
+		var slot: String = order[(at + step) % order.size()]
+		if slot == "melee":
+			return gear.weapon_name()
+		var piece: Variant = gear.equipped.get(slot)
+		if piece is Dictionary:
+			return "%s %s" % [slot.capitalize(), piece["name"]]
+	return ""
+
+
+## The HUD line names the held slot and the next non-empty slot Q will select.
 func hands_text() -> String:
 	if not in_hand():
-		return "Weapon: %s%s%s" % [gear.weapon_name(), weapon_condition_text(),
-				("   (Q: %s)" % gear.gun_name()) if not gun().is_empty() else ""]
+		var next := _next_label()
+		return "Melee: %s%s%s" % [gear.weapon_name(), weapon_condition_text(),
+				("   (Q: %s)" % next) if next != gear.weapon_name() else ""]
 	var piece := gun()
 	var state := ""
 	if reloading > 0.0:
 		state = "  reloading"
 	elif raising > 0.0:
 		state = "  raising"
-	return "Gun: %s  %d/%d %s%s   (Q: %s)" % [piece["name"], int(piece["loaded"]), int(stats()["magazine"]),
-			data.item_name(piece["ammo"]).to_lower(), state, gear.weapon_name()]
+	return "%s: %s  %d/%d %s%s   (Q: %s)" % [hands.capitalize(), piece["name"], int(piece["loaded"]),
+			int(stats()["magazine"]), data.item_name(piece["ammo"]).to_lower(), state, _next_label()]

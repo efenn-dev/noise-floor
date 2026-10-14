@@ -9,9 +9,9 @@ extends CanvasLayer
 signal closed(from: String)
 
 const GOLD := Color(0.95, 0.8, 0.55)
-const GROUPS := ["Move and look", "Use and search", "Build", "Fight (pipe and guns)", "Cars", "Screens", "Game"]
+const GROUPS := ["Move and look", "Use and search", "Build", "Fight (melee and firearms)", "Cars", "Screens", "Game"]
 ## Which groups go in which column, left to right.
-const COLUMNS := [["Move and look", "Use and search"], ["Build", "Fight (pipe and guns)"], ["Cars", "Screens", "Game"]]
+const COLUMNS := [["Move and look", "Use and search"], ["Build", "Fight (melee and firearms)"], ["Cars", "Screens", "Game"]]
 ## [group, actions it describes (InputSetup names), keys to show ("" = the actions' own keys), what it does].
 ## A row with no actions describes the mouse, or a key that does something else in a car.
 const ROWS := [
@@ -37,10 +37,10 @@ const ROWS := [
 	["Build", ["build_place"], "", "build it (from your pockets and crates nearby)"],
 	["Build", ["build_remove"], "", "pull down what you look at (the town's pieces give a little salvage)"],
 	["Build", [], "Esc", "stop building"],
-	["Fight (pipe and guns)", ["attack"], "", "swing the pipe, or fire the gun"],
-	["Fight (pipe and guns)", ["aim"], "", "hold to zoom, with a scope on your gun"],
-	["Fight (pipe and guns)", ["swap_hands"], "", "pipe or gun in your hands"],
-	["Fight (pipe and guns)", ["refuel"], "", "reload the gun in your hands (at a car: pour in gas)"],
+	["Fight (melee and firearms)", ["attack"], "", "swing your melee weapon, or fire the firearm in hand"],
+	["Fight (melee and firearms)", ["aim"], "", "hold to zoom, with a scope on the firearm in hand"],
+	["Fight (melee and firearms)", ["swap_hands"], "", "cycle Melee, Primary and Sidearm (empty slots are skipped)"],
+	["Fight (melee and firearms)", ["refuel"], "", "reload the firearm in hand (at a car: pour in gas)"],
 	["Cars", [], "E", "get in or out (at the back: search the trunk)"],
 	["Cars", [], "W A S D", "drive and steer"],
 	["Cars", [], "Space", "handbrake"],
