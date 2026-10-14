@@ -46,7 +46,9 @@ extends RefCounted
 ## 17 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
 ## 18 = V19 two hotbars: "hotbar" is {"hands": [...], "build": [...]}; an older single bar is split by kind
 ## (Hotbar.load_saved), so no version check is needed to read it.
-const VERSION := 18
+## 19 = V25 first-hour guidance: objective progress and the current better-gear suggestion. Version-18 and
+## older saves are established games, so their missing guidance loads inactive instead of restarting it.
+const VERSION := 19
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -164,6 +166,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"skills": sim.skills.xp,
 		"perks": sim.skills.perks,
 		"perk_points": sim.skills.perk_points,
+		"guidance": sim.guidance.to_dict(),
 		"gear": sim.gear.to_dict(),
 		"hands": sim.guns.hands,
 		"stats": sim.tally,
@@ -304,6 +307,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for perk: String in d.get("perks", {}):
 		sim.skills.perks[perk] = int(d["perks"][perk])
 	sim.skills.perk_points = int(d.get("perk_points", sim.skills.points_earned()))
+	sim.guidance.load_dict(d.get("guidance", {}))
 	if d.has("gear"):
 		sim.gear.load_dict(d["gear"])
 	else:  # before M13: the pipe you always had becomes a white piece in the weapon slot

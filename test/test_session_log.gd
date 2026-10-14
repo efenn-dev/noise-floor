@@ -88,6 +88,7 @@ func test_a_full_log_stays_under_55_lines() -> void:
 		st.note_level(skill, 2)
 	st.note_perk_points(4)
 	st.note_perk("soft_step")
+	st.note_gear_equipped("Rare work boots")
 	for g: String in ["Pistol", "Rifle", "Shotgun", "Old Pete's Deer Rifle"]:
 		st.note_shot(g)
 	for i in 9:
@@ -96,5 +97,7 @@ func test_a_full_log_stays_under_55_lines() -> void:
 		st.note_house("house %d" % i)
 	var lines := slog.lines()
 	check(lines.size() <= 55, "at most 55 lines (%d)" % lines.size())
+	check("Perk points earned: 4, spent: 1 (soft step)." in lines, "perk points spent are recorded")
+	check("Gear equipped: Rare work boots." in lines, "equipped gear is recorded")
 	check("First five minutes:" in lines, "the first-five-minutes timeline is still there")
 	slog.free()

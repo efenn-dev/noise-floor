@@ -178,7 +178,7 @@ func test_level_up_and_perk_point_messages() -> void:
 	var z := sim.horde.spawn("shambler", Vector3(0, 0, -1.5))
 	sim.hit_zombie(z.id, false)
 	check(_said(sim, "Blunt 1"), "says the new level")
-	check(_said(sim, "Perk point earned: K to spend"), "3 levels in all: says so")
+	check(_said(sim, "Perk point! Press K to spend it"), "3 levels in all: says so")
 	eq(sim.skills.perk_points, 1, "and the point is there")
 
 

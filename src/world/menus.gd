@@ -30,6 +30,7 @@ var _settings: Control
 var _status: Label
 var _continue_button: Button
 var _load_button: Button
+var _objectives_check: CheckBox
 var _settings_back_to := ""  # "title" or "pause"
 var _slot_summaries: Array = []
 var _slot_mode := "continue"
@@ -237,6 +238,7 @@ func show_pause(has_save: bool) -> void:
 func show_settings(back_to: String) -> void:
 	_settings_back_to = back_to
 	hide_all()
+	_objectives_check.set_pressed_no_signal(Settings.show_objectives)
 	_settings.visible = true
 
 
@@ -354,6 +356,12 @@ func _build_settings(box: VBoxContainer) -> void:
 	bob.add_theme_font_size_override("font_size", 22)
 	bob.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(bob)
+	_objectives_check = CheckBox.new()
+	_objectives_check.text = "Show objectives"
+	_objectives_check.button_pressed = Settings.show_objectives
+	_objectives_check.add_theme_font_size_override("font_size", 22)
+	_objectives_check.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(_objectives_check)
 	var refresh := func() -> void:
 		sens_label.text = "Mouse sensitivity: %.1fx" % Settings.mouse_sensitivity
 		vol_label.text = "Volume: %d%%" % roundi(Settings.volume * 100.0)
@@ -374,6 +382,9 @@ func _build_settings(box: VBoxContainer) -> void:
 		settings_changed.emit())
 	bob.toggled.connect(func(on: bool) -> void:
 		Settings.head_bob = on
+		settings_changed.emit())
+	_objectives_check.toggled.connect(func(on: bool) -> void:
+		Settings.show_objectives = on
 		settings_changed.emit())
 	full.toggled.connect(func(on: bool) -> void:
 		Settings.fullscreen = on
