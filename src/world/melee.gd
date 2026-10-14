@@ -431,6 +431,10 @@ func start_inspect() -> bool:
 	if _inspect_weapon == "":
 		last_message = "Fists"
 	else:
+		var weapon_node: Node3D = _models.get(_inspect_weapon) as Node3D
+		if is_inside_tree():  # tests build Shooter/Melee alone, with no camera
+			var sound_pos := weapon_node.global_position if weapon_node != null else camera.global_position
+			SoundView.play_at(self, "blade_handle", sound_pos, -3.0, randf_range(0.95, 1.05))  # V16: handling only, no sim noise
 		var piece: Dictionary = sim.gear.equipped["weapon"]
 		last_message = "%s · %s" % [piece["name"], sim.gear.condition_text(piece)]
 	_message_time = INSPECT_TIME

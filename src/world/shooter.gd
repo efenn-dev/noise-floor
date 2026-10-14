@@ -32,12 +32,15 @@ const SIGHT_POINTS := {
 }
 const ADS_POSES := {
 	"pistol": [Vector3(0, -0.0785, -0.42), Vector3.ZERO],
-	"hunting_rifle": [Vector3(0.015, -0.0635, -0.5), Vector3.ZERO],
+	"hunting_rifle": [Vector3(0.015, -0.0635, -0.62), Vector3.ZERO],  # further out, so the stock's comb doesn't fill the view
 }
 const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
+## V16: on iron sights the camera skips what's closer than this, so the rifle's stock under your cheek doesn't
+## fill the bottom of the view (the receiver, sights and both hands are farther out).
+const ADS_NEAR := {"hunting_rifle": 0.34}
 const IRON_FOV_MULT := 0.85  # V15: iron sights narrow the normal field of view by 15%
 const ADS_SWAY_MULT := 0.12
 const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
@@ -91,6 +94,7 @@ var sprinting := false  # V15: the player controller sets this from the sprint r
 var hold_reload_at := -1.0  # V13: --reload-at freezes the visible choreography without touching the sim
 var hold_inspect_at := -1.0  # V13: --inspect-at does the same for inspection
 var base_fov := 75.0
+var base_near := 0.05
 var _aim_held := false
 var _aim_weight := 0.0
 
@@ -103,6 +107,8 @@ var _kick := 0.0  # radians the camera is tipped up right now
 var _message_time := 0.0
 var _last_reloading := 0.0
 var _reload_total := 0.0
+var _reload_sound_progress := -1.0  # V16: last choreography progress heard; -1 means stopped/cancelled
+var _reload_sound_gun := ""
 var _inspect_elapsed := -1.0
 var _inspect_uid := -1
 var _mag_in_hand: Dictionary = {}  # gun base -> the prop parented to Hand_L
@@ -118,6 +124,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	builder = p_builder
 	exclude = p_exclude
 	base_fov = camera.fov
+	base_near = camera.near
 	_rng.randomize()
 	for base: String in MODELS:
 		var node: Node3D
@@ -210,6 +217,28 @@ static func reload_pose(gun_id: String, p: float) -> Dictionary:
 		[1.0, Vector3.ZERO, Vector3.ZERO, rest[0], rest[1], "Grip", "in_gun"],
 	]
 	return _sample_hand_pose(keys, p)
+
+
+## V16: mechanical sounds land on the V13 choreography keys, independent of the sim's reload noise.
+static func reload_sounds(gun_id: String) -> Array:
+	if gun_id == "pistol":
+		return [[0.18, "mag_out"], [0.62, "mag_in"], [0.74, "slide_rack"]]
+	if gun_id == "hunting_rifle":
+		return [[0.12, "bolt_open"], [0.47, "round_in"], [0.56, "round_in"],
+				[0.65, "round_in"], [0.72, "bolt_close"]]
+	return []
+
+
+## Every cue crossed by a forward progress step, in order. The open lower bound prevents repeats.
+static func passed_reload_sounds(gun_id: String, previous_progress: float, current_progress: float) -> Array:
+	var passed: Array = []
+	if current_progress <= previous_progress:
+		return passed
+	for cue: Array in reload_sounds(gun_id):
+		var at := float(cue[0])
+		if at > previous_progress and at <= current_progress:
+			passed.append(cue)
+	return passed
 
 
 ## V13: pure two-sided inspection. A pistol's left hand lets go; a rifle stays held between both hands.
@@ -346,6 +375,11 @@ func start_inspect() -> bool:
 	_inspect_elapsed = 0.0
 	_inspect_uid = int(sim.gear.gun().get("uid", -1))
 	var gun := sim.gear.gun()
+	var gun_id: String = gun.get("base", "")
+	var gun_node: Node3D = _models.get(gun_id) as Node3D
+	if is_inside_tree():  # tests build Shooter/Melee alone, with no camera
+		var sound_pos := gun_node.global_position if gun_node != null else camera.global_position
+		SoundView.play_at(self, "gun_handle", sound_pos, -3.0, randf_range(0.95, 1.05))
 	_say("%s%s · %d/%d rounds" % [gun["name"], sim.guns.weapon_condition_text(true), int(gun["loaded"]),
 			int(sim.guns.stats()["magazine"])], INSPECT_TIME)
 	return true
@@ -375,10 +409,13 @@ func _process(delta: float) -> void:
 	var base: String = sim.gear.gun().get("base", "")
 	var show := sim.guns.in_hand() and not builder.active and not sim.player.dead
 	var remaining := sim.guns.reloading
-	if remaining > 0.0 and (_last_reloading <= 0.0 or remaining > _last_reloading + 0.001):
+	var reload_started := remaining > 0.0 and (_last_reloading <= 0.0 or remaining > _last_reloading + 0.001)
+	if reload_started:
 		# The parent advances the fixed sim tick before this presentation node. Capture the reload's full
 		# skilled duration, not the already-ticked first visible value, and never recalculate it mid-reload.
 		_reload_total = maxf(remaining, sim.guns.reload_time())
+		_reload_sound_progress = 0.0
+		_reload_sound_gun = base
 		cancel_inspect()
 	_last_reloading = remaining
 	if _inspect_elapsed >= 0.0 and (not show or int(sim.gear.gun().get("uid", -1)) != _inspect_uid):
@@ -394,6 +431,15 @@ func _process(delta: float) -> void:
 	var reload_p := hold_reload_at
 	if remaining > 0.0:
 		reload_p = 1.0 - remaining / maxf(0.001, _reload_total)
+	var reload_cues: Array = []
+	if remaining > 0.0 and _reload_sound_progress >= 0.0 and show and base == _reload_sound_gun:
+		reload_cues = passed_reload_sounds(base, _reload_sound_progress, reload_p)
+		_reload_sound_progress = reload_p
+	elif remaining > 0.0 and _reload_sound_progress >= 0.0:
+		_reload_sound_progress = -1.0  # hidden, swapped or dead: this reload stays silent from here on
+	elif remaining <= 0.0:
+		_reload_sound_progress = -1.0
+		_reload_sound_gun = ""
 	var handling := maxf(0.01, float(sim.guns.stats()["handling"])) if not sim.gear.gun().is_empty() else 0.35
 	_aim_weight = 1.0 if hold_aim and aiming() else move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)  # --aim screenshots start fully aimed
 	for b: String in _models:
@@ -422,6 +468,10 @@ func _process(delta: float) -> void:
 			_apply_left_hand(node, pose)
 			_update_magazines(node, b, pose, reload_p)
 			Hands.reaim(node, node.basis)  # V12: through the kick and the reload too
+	if not reload_cues.is_empty() and _models.has(base):
+		var gun_node: Node3D = _models[base]
+		for cue: Array in reload_cues:
+			SoundView.play_at(self, String(cue[1]), gun_node.global_position, -3.0, randf_range(0.95, 1.05))
 	if reload_p < 0.0:
 		_free_drop_mag()
 	_flash_time -= delta
@@ -432,6 +482,8 @@ func _process(delta: float) -> void:
 		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
 	var aimed_fov := AIM_FOV if sim.guns.scoped() else base_fov * IRON_FOV_MULT
 	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
+	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(sim.gear.gun().get("base", ""), 0.0))
+	camera.near = lerpf(base_near, maxf(base_near, clip), _aim_weight)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_message_time -= delta
 	if _message_time <= 0.0:

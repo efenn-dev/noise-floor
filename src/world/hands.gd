@@ -159,8 +159,11 @@ static func apply_materials(node: Node3D) -> void:
 			if source == null or not LOOKS["materials"].has(source.resource_name):
 				continue
 			var m: Dictionary = LOOKS["materials"][source.resource_name]
-			mesh.set_surface_override_material(i, Shooter._gun_material(source, String(m["texture"]), float(m["tile_m"]),
-					m.get("tint", Color.WHITE), m))
+			var mat := Shooter._gun_material(source, String(m["texture"]), float(m["tile_m"]), m.get("tint", Color.WHITE), m)
+			if source.resource_name == "Arm Sleeve" and mat.cull_mode != BaseMaterial3D.CULL_DISABLED:
+				mat = mat.duplicate() as StandardMaterial3D
+				mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # V16: when a pose turns the open end of the sleeve toward you, you see cloth, not a hole
+			mesh.set_surface_override_material(i, mat)
 
 
 ## A fist and a forearm out of boxes, following the model convention.

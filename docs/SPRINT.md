@@ -1,6 +1,6 @@
 # Read me first (Emmitt)
 
-*Updated 2026-10-14 by Claude Opus 5.5 (cloud): everything through #58 is merged; Q5, the pre-playtest check, is the last pull request before Playtest #2.* Sprint 4 has started: make the first 30 minutes look, sound and feel premium, with no new systems and free assets only (see the top of `docs/DIRECTION.md`). Codex is making the art and Claude is wiring it in. Each task lands as its own pull request against `main`. Merge them as they come, and `play.bat` picks them up. When the board says V8, play 30 minutes from a new game and write the Playtest #2 entry.
+*Updated 2026-10-14 by Claude Opus 5.5 (cloud): everything through #59 is merged; Q5, the pre-playtest check, is the last pull request before Playtest #2.* Sprint 4 has started: make the first 30 minutes look, sound and feel premium, with no new systems and free assets only (see the top of `docs/DIRECTION.md`). Codex is making the art and Claude is wiring it in. Each task lands as its own pull request against `main`. Merge them as they come, and `play.bat` picks them up. When the board says V8, play 30 minutes from a new game and write the Playtest #2 entry.
 
 ---
 
@@ -30,6 +30,7 @@ A new game's first 30 minutes (day 1, the first night, the next morning) look, s
 | V13 | Rigged arms (Emmitt: realistic hands): finger bones and six hand poses; visible pistol and rifle reloads; inspect on V | Codex (rig, code), Claude (tests, fixes), branch `v13-arms` | Merged (#58) | Reload and inspect both guns |
 | V15 | Right click (Emmitt): aim down sights with every gun (scope keeps its zoom); block and parry with melee or fists | Codex (code), Claude (sight measurements, fixes), branch `v13-arms` | Merged (#58) | Aimed shots land tighter; a parry staggers a zombie |
 | V14 | Character slots (Emmitt): legs, feet, back (worn bag), Melee/Primary/Sidearm; a character figure with picture tiles; 29 missing item pictures | Codex (slots, pictures), Claude (fixes, checks), branch `v14-slots` | Merged (#57) | Equip boots and a bag; Q cycles your weapons |
+| V16 | MakeHuman arms (Emmitt approved the add-on), reload/inspect sounds, rifle iron sights without the stock in your face | Codex (arms, sounds), Claude (picks, fixes, checks), branch `v16-arms-polish` | Merged (#59) | Hands read as real hands; each reload step has its sound |
 | Q5 | Pre-playtest check (DIRECTION.md): `tools/soak.sh --days=3` and `tools/tour.sh` on `main`, fix what they find | Claude (cloud), branch `q5-pre-playtest-2` | PR open; SOAK OK; tests green | Soak OK and tour checked |
 | V8 | Playtest #2 on the polished build (30 min from a new game, session log pasted in), then tuning from it (replaces S3-2 and S3-3) | Emmitt (+ Kaleb), then Claude | Ready after Q5 merges (V5 can follow) | Entry in `docs/PLAYTESTS.md`; tuning PR merged |
 

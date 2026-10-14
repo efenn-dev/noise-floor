@@ -23,6 +23,22 @@ The check DIRECTION.md asks for before every playtest, on `main` at #55, by Clau
 
 **Next:** Playtest #2 (V8).
 
+## 2026-10-14 — V16 MakeHuman arms, reload sounds, rifle sights (Sprint 4)
+
+Emmitt: "merge the branches then work on the human model generator and the rest of the things still not right". #57 and #58 merged. MakeHuman installed with his OK; arms and sounds by Codex (four jobs on his ChatGPT plan), testing, picks and fixes by Claude Opus 5.5.
+
+**Built:**
+- **Arms from a real human.** MakeHuman's Blender add-on (MPFB 2.0.18, installed into Blender 5.1 from extensions.blender.org; exported models are CC0, listed in `assets/CREDITS.md`) makes an anatomically correct adult; `tools/art/fp_arm_mpfb.py` cuts out each forearm and hand, keeps MakeHuman's finger weights, adds the leather glove, a skin band and the canvas sleeve, and maps its game-engine skeleton onto our 17 bones and six poses, so no game code changed. Real fingers now wrap the pistol grip and the fist reads as a gloved fist. `fp_arm_rig.py` (the procedural arms) is superseded. A second Codex pass (fist and sleeve fixes) passed its own checks but slid the hands off the grips in the game, so it was reverted (kept in history, commit 5d564d9).
+- **Reload and inspect sounds** (`tools/audio/synth.py`): mag_out, mag_in, slide_rack, bolt_open, round_in (x3), bolt_close, timed to the reload animation (`Shooter.reload_sounds`, each once per reload, none after a cancel); gun_handle / blade_handle when you inspect. The generic reload sound is now only for guns without a choreography. No change to the sim's reload noise.
+- **Rifle iron sights:** the rifle sits further out and the camera skips the first 0.34 m while it's aimed, so the stock under your cheek no longer fills the bottom of the view (`Shooter.ADS_NEAR`).
+- The sleeve is drawn on both sides, so when a pose turns its open end toward you it shows cloth, not a hole.
+
+**Try it on the PC:** `play.bat --gun` then R (listen for the magazine and the slide) and V; `play.bat --gun=rifle` and hold right click; `play.bat --fists`.
+
+**Tests:** 11,532 green (new: `test_reload_sounds.gd`).
+
+**Known gaps:** in the fist the index finger sits a little forward of the others; during the pistol's slide rack the left sleeve's open end shows at the bottom of the view; the rifle's cut-off stock shows its inside if you look for it. Next for realism: zombies from MakeHuman bodies with motion-captured animation (CC0 sources), the bigger "zombies look basic" item.
+
 ## 2026-10-13 — V13 Rigged arms, reload and inspect + V15 Right click to aim or block (Sprint 4)
 
 Emmitt: "more realistic hands, reload/inspect mechanics" and "use right click to defend or ADS/scope in". Arm rig and code by Codex (four jobs on his ChatGPT plan); testing, sight measurements and fixes by Claude Opus 5.5.
