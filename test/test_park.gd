@@ -259,11 +259,10 @@ func test_place_park_registers_crates_wrecks_and_the_tower() -> void:
 	var c: Dictionary = p["crates"][0]
 	w.player_pos = w.loot.containers[c["id"]]["pos"]
 	eq(w.search(c["id"]), "", "searching a warehouse crate starts")
-	var before := w.inventory.items().size()
 	for i in roundi(w.loot.search_time() / SimWorld.TICK) + 2:
 		w.step()
 	check(w.loot.containers[c["id"]]["searched"], "searched")
-	check(w.inventory.items().size() > before, "found something")
+	check(w.loot.inventory(c["id"]).items().size() > 0, "found something in the crate")
 
 
 func test_park_zombies_spawn_and_are_saved() -> void:

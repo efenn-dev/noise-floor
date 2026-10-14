@@ -29,6 +29,7 @@ extends Node3D
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
+##   --loot[=KIND]                   start beside searched loot of KIND (fridge by default), with it open
 ##   --skills                        open the skills and perks screen (K in game)
 ##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
 ##                                   shown in the inventory screen (M13)
@@ -175,6 +176,7 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	sim.container_searched.connect(_open_loot_container)
 	build_menu = BuildMenu.new()
 	add_child(build_menu)
 	build_menu.setup(sim, builder)
@@ -231,6 +233,8 @@ func _ready() -> void:
 		inventory_screen.open()
 		if args["inventory"] != "":
 			inventory_screen.select(args["inventory"], InventoryScreen.POCKETS)  # --inventory=chips, for screenshots
+	if args.has("loot"):
+		_setup_loot_flag(str(args["loot"]))
 	if args.has("build-menu"):
 		_open_build_menu()  # S3: --build-menu, for screenshots (B in game)
 	if args.has("gear"):
@@ -376,6 +380,59 @@ func _open_project(id: String) -> void:
 	project_screen.open(id)
 
 
+func _open_loot_container(id: String) -> void:
+	if not sim.container_exists(id):
+		return
+	if skills_screen.is_open():
+		skills_screen.close()
+	if build_menu.is_open():
+		build_menu.close()
+	if workbench_screen.is_open():
+		workbench_screen.close()
+	if sensor_screen.is_open():
+		sensor_screen.close()
+	if project_screen.is_open():
+		project_screen.close()
+	if base_log_screen.is_open():
+		base_log_screen.close()
+	if help_screen.is_open():
+		help_screen.close()
+	inventory_screen.open_container(id)
+
+
+func _open_storage(key: String) -> void:
+	_open_loot_container(key)
+
+
+## --loot[=KIND]: a deterministic searched container, open and within reach for layout screenshots.
+func _setup_loot_flag(requested: String) -> void:
+	var kind := requested if requested != "" else "fridge"
+	kind = str({"cabinet": "kitchen", "crate": "factory_crate", "trunk": "car_trunk",
+			"corpse": "zombie"}.get(kind, kind))
+	var id := ""
+	for candidate: String in sim.loot.containers:
+		if sim.loot.containers[candidate]["table"] == kind:
+			id = candidate
+			break
+	if id == "" and kind == "zombie":
+		var z := sim.horde.spawn("shambler", player.global_position + Vector3(0, 0, -2.0))
+		z.take_hit(1000.0, Vector3.ZERO, 0.0)
+		sim.step()
+		id = SimWorld.CORPSE + str(z.id)
+	if id == "":
+		sim.add_message("No loot container of kind " + kind, 5.0)
+		return
+	var at: Vector3 = sim.loot.containers[id]["pos"]
+	player.position = Vector3(at.x, 0.0, at.z + 1.5)
+	var look := at - player.position
+	player.set_look(rad_to_deg(atan2(-look.x, -look.z)), -12.0)
+	sim.player_pos = player.position
+	if sim.loot.containers[id]["searched"]:
+		_open_loot_container(id)
+	else:
+		sim.reveal_container(id)
+
+
 ## M17a --tower[=N]: N (0-3) of the water tower's phases already done, and what the next one needs in your
 ## pockets (phase 3's: a generator, a foundation for it, a power pole and gas). Stands you by the tower.
 func _setup_tower(arg: String) -> void:
@@ -418,7 +475,7 @@ func _fill_demo_log() -> void:
 func _wants_hints(args: Dictionary) -> bool:
 	if args.has("hints"):
 		return true
-	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or args.has("park") \
+	if _loaded or _shot_path != "" or args.has("no-hints") or args.has("cam") or args.has("inside") or args.has("park") or args.has("loot") \
 			or args.has("tower") or GameSession.skip_hints:
 		return false
 	for key: String in args:
@@ -1086,6 +1143,8 @@ func _build_building(args: Dictionary) -> void:
 	interactor.opened_workbench.connect(_open_workbench)
 	interactor.opened_sensor.connect(_open_sensor)
 	interactor.opened_project.connect(_open_project)
+	interactor.opened_container.connect(_open_loot_container)
+	interactor.opened_storage.connect(_open_storage)
 	defense_view = DefenseView.new()
 	add_child(defense_view)
 	defense_view.setup(sim, build_view)

@@ -48,6 +48,7 @@ func test_no_key_no_engine_until_you_find_it() -> void:
 	check(not sim.vehicles.is_running("car_0"), "but without the key it won't start")
 	sim.exit_car()
 	_search(sim, "car_0")
+	sim.move_container_item("car_0", Vehicles.key_item("car_0"), 1, true)
 	eq(sim.inventory.count(Vehicles.key_item("car_0")), 1, "searching the car finds its key in the glovebox")
 	eq(sim.data.item_name(Vehicles.key_item("car_0")), "Car key", "it's a car key")
 	eq(sim.enter_car("car_0"), "", "get back in")

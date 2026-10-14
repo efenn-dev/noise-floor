@@ -118,4 +118,4 @@ func test_version_13_melee_xp_carries_over() -> void:
 	check(not sim.skills.xp.has("melee"), "no leftover Melee")
 	var again := SaveGame.to_dict(sim)
 	eq(int(again["version"]), SaveGame.VERSION, "saves as the current version")
-	eq(SaveGame.VERSION, 15, "equipment slots are save version 15")
+	eq(SaveGame.VERSION, 16, "V18 container contents are save version 16")

@@ -73,14 +73,15 @@ func test_only_the_worn_bag_counts_and_unequips() -> void:
 	check(not sim.gear.equipped.has("back"), "the back slot is empty")
 
 
-func test_unequipped_bag_drops_when_pockets_are_too_heavy() -> void:
+func test_unequipped_bag_stays_worn_when_pockets_are_too_heavy() -> void:
 	var sim := SimWorld.new()
 	sim.inventory.add("hiking_pack", 1)
 	sim.equip_bag("hiking_pack")
 	sim.inventory.add("plank", 30)
-	check("dropped at your feet" in sim.unequip_gear("back"), "the message explains the drop")
+	eq(sim.unequip_gear("back"), "Too heavy", "the move is refused")
 	eq(sim.inventory.count("hiking_pack"), 0, "it did not overfill pockets")
-	eq(sim.bags[0]["items"].get("hiking_pack", 0), 1, "the bag is recoverable on the ground")
+	eq(sim.gear.equipped.get("back", ""), "hiking_pack", "the invalid move snaps back to the slot")
+	eq(sim.bags.size(), 0, "dragging does not drop it on the ground")
 
 
 func test_new_clothing_rolls_and_is_listed_in_its_loot_tables() -> void:
@@ -132,9 +133,9 @@ func test_version_14_fixture_moves_gun_and_best_bag_without_loss() -> void:
 	near(sim.carry_limit(), float(sim.data.survival["carry_base"]) + sim.skills.bonus("carry_kg") + 18.0,
 			"the migrated worn bag supplies capacity (the fixture's Strength adds its bonus too)")
 	var current := SaveGame.to_dict(sim)
-	eq(int(current["version"]), 15, "it saves back as version 15")
+	eq(int(current["version"]), SaveGame.VERSION, "it saves back as the current version")
 	var round_trip := SimWorld.new(8.0, null, int(d["seed"]))
-	eq(SaveGame.apply(round_trip, current), "", "the version-15 result loads again")
+	eq(SaveGame.apply(round_trip, current), "", "the current result loads again")
 	eq(round_trip.gear.equipped["back"], "hiking_pack", "the worn bag survives a current round trip")
 	eq(round_trip.gear.equipped["sidearm"]["base"], "pistol", "the sidearm survives too")
 	var rifle_save := d.duplicate(true)

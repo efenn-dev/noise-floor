@@ -9,6 +9,8 @@ signal entered_car(id: String)
 signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
 signal opened_project(id: String)  # M17a: E on the water tower (main opens the project screen)
 signal opened_sensor(key: String)  # M15: E on a motion or noise sensor (main opens the sensor screen)
+signal opened_container(id: String)  # V18: searched world loot opens in the inventory screen
+signal opened_storage(key: String)  # V18: a built crate opens without a search
 
 const REACH := 4.0
 
@@ -183,6 +185,10 @@ func interact() -> String:
 		return ""
 	if target_container != "":
 		var why := sim.search(target_container)
+		if why == "Already searched":
+			opened_container.emit(target_container)
+			last_message = ""
+			return ""
 		last_message = why
 		return why
 	if target_key != "" and sim.build.kind_of(sim.build.pieces[target_key]["id"]) == "door":
@@ -195,9 +201,10 @@ func interact() -> String:
 		return ""
 	match sim.build.kind_of(sim.build.pieces[target_key]["id"]):
 		"storage":
-			var put := sim.deposit(target_key)
-			last_message = ("Stored " + _list(put)) if not put.is_empty() else "Nothing to store (food, drink, bandages and bags stay with you)"
-			return last_message
+			sim.stats.note_crate()
+			opened_storage.emit(target_key)
+			last_message = ""
+			return ""
 		"bed":
 			var why := sim.sleep_in(target_key)
 			last_message = why if why != "" else "Sleeping... (any key wakes you)"
@@ -273,7 +280,7 @@ func status_text() -> String:
 		var c: Dictionary = sim.loot.containers.get(target_container, {})
 		var name := sim.loot.display_name(target_container)
 		if c.get("searched", false):
-			return "%s · searched%s" % [name, ("\n" + last_message) if last_message != "" else ""]
+			return "%s · searched\n[E] open%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 		if sim.loot.active == target_container:
 			return "%s · searching %d%%" % [name, roundi(100.0 * sim.loot.progress / sim.loot.search_time())]
 		return "%s\n[E] search (stay close; it makes a little noise)%s" % [name, ("\n" + last_message) if last_message != "" else ""]
@@ -306,7 +313,7 @@ func status_text() -> String:
 		for item: String in crate.items():
 			held[item] = crate.count(item)
 		lines.append("Storage crate · %s" % _list(held, "empty"))
-		lines.append("[E] put away building materials · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
+		lines.append("[E] open · building and machines use crates within %dm" % int(sim.data.survival["storage_range"]))
 	elif kind == "turret":
 		var t: Factory.Turret = f.turrets[target_cell]
 		var tb: Dictionary = sim.data.buildables[t.id]
@@ -489,7 +496,7 @@ func _car_status() -> String:
 		if sim.loot.active == target_car:
 			keys.append("searching the trunk %d%%" % roundi(100.0 * sim.loot.progress / sim.loot.search_time()))
 		elif trunk.get("searched", false):
-			keys.append("trunk searched")
+			keys.append("[E] open the trunk")
 		else:
 			keys.append("[E] search the trunk")
 	else:

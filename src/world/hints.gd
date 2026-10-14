@@ -9,7 +9,7 @@ const NOISE_SECONDS := 40.0  # the noise and house hints are just information, s
 ## S4 (Playtest #1: "not able to figure out the building and machines"): the steps walk through a whole first
 ## factory, power and loading included; each waits for the sim to show you did it.
 const STEPS := [
-	"Find the crate next to you and press E (Tab looks inside)",
+	"Find the crate next to you and press E to open it",
 	"Houses have food inside. E opens doors; close them behind you",
 	"Press 1 and click the ground to lay a foundation, then B and pick a Smelter to put on it",
 	"A smelter needs power: press B and build a Generator and a Power pole beside it",

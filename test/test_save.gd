@@ -102,11 +102,24 @@ func test_searched_containers_stay_searched() -> void:
 	a.player_pos = Vector3(6, 0, -10)
 	a.search("house_0_e")
 	_run(a, 3.0)
+	var hat := a.gear.make("hard_hat", "civilian", "yellow")
+	a.loot.add_gear("house_0_e", [hat])
+	var stash := a.place_start_stash(Vector2i(0, 0))
+	var boots := a.gear.make("work_boots", "civilian", "blue")
+	a.storage_gear[stash].append(boots)
 	var b := SimWorld.new(10.0)
 	_town(b)
 	SaveGame.apply(b, SaveGame.to_dict(a))
 	b.player_pos = Vector3(6, 0, -10)
 	eq(b.search("house_0_e"), "Already searched", "loot doesn't come back by reloading")
+	eq(b.loot.inventory("house_0_e").items(), a.loot.inventory("house_0_e").items(), "remaining contents are saved")
+	for item: String in a.loot.inventory("house_0_e").items():
+		eq(b.loot.inventory("house_0_e").count(item), a.loot.inventory("house_0_e").count(item),
+				item + " keeps its remaining count")
+	check(b.container_gear("house_0_e").any(func(piece: Dictionary) -> bool: return piece["uid"] == hat["uid"]),
+			"remaining rolled gear is saved in searched loot")
+	check(b.container_gear(stash).any(func(piece: Dictionary) -> bool: return piece["uid"] == boots["uid"]),
+			"rolled gear is saved in built storage")
 
 
 func test_file_write_and_read() -> void:
