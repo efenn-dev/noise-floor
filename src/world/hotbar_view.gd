@@ -16,6 +16,7 @@ var _icons: Array[TextureRect] = []
 var _names: Array[Label] = []
 var _counts: Array[Label] = []
 var _timer := 0.0
+var _mode_label: Label  # V19: "BUILD" in front of the bar while build mode shows the build bar
 
 
 func setup(p_sim: SimWorld, p_builder: BuildController) -> void:
@@ -23,6 +24,11 @@ func setup(p_sim: SimWorld, p_builder: BuildController) -> void:
 	builder = p_builder
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", 6)
+	_mode_label = _label(14, GOLD)
+	_mode_label.text = "BUILD"
+	_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_mode_label.visible = false  # a hidden child takes no room in the bar
+	add_child(_mode_label)
 	for i in Hotbar.SLOTS:
 		var panel := PanelContainer.new()
 		panel.custom_minimum_size = SLOT
@@ -69,6 +75,11 @@ func setup(p_sim: SimWorld, p_builder: BuildController) -> void:
 	refresh()
 
 
+## V19: which bar the keys use right now: the build bar in build mode, the hands bar otherwise.
+func active_bar() -> String:
+	return Hotbar.BUILD_BAR if builder != null and builder.active else Hotbar.HANDS_BAR
+
+
 func _process(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0.0:
@@ -80,9 +91,11 @@ func refresh() -> void:
 	if sim == null:
 		return
 	var stock := sim.stock_at(sim.player_pos)
+	var bar := active_bar()
+	_mode_label.visible = bar == Hotbar.BUILD_BAR
 	for i in Hotbar.SLOTS:
-		var kind := sim.hotbar.kind(i)
-		var id := sim.hotbar.id(i)
+		var kind := sim.hotbar.kind(i, bar)
+		var id := sim.hotbar.id(i, bar)
 		var selected := kind == "build" and builder != null and builder.active and builder.piece() == id
 		var have := true
 		var count := ""
@@ -95,9 +108,15 @@ func refresh() -> void:
 			have = n > 0
 			count = str(n)
 			icon = InventoryScreen.icon_for(id)
+		elif kind == "slot":  # V19: the weapon in that slot; gold while it's the one in your hands
+			var piece: Variant = sim.gear.equipped.get(id)
+			have = piece is Dictionary
+			if have:
+				icon = InventoryScreen.icon_for(String((piece as Dictionary)["base"]))
+			selected = sim.guns.hands == ("melee" if id == "weapon" else id)
 		_icons[i].texture = icon
 		_icons[i].visible = icon != null
-		_names[i].text = sim.hotbar.label(i) if icon == null else ""
+		_names[i].text = sim.hotbar.label(i, bar) if icon == null else ""
 		_names[i].modulate = Color.WHITE if have else Color(1, 1, 1, 0.45)
 		_icons[i].modulate = Color.WHITE if have else Color(1, 1, 1, 0.4)
 		_counts[i].text = count
@@ -110,17 +129,21 @@ func refresh() -> void:
 func describe() -> PackedStringArray:
 	refresh()
 	var out := PackedStringArray()
+	var bar := active_bar()
 	for i in Hotbar.SLOTS:
-		var kind := sim.hotbar.kind(i)
+		var kind := sim.hotbar.kind(i, bar)
 		if kind == "":
 			out.append("%s -" % Hotbar.key_name(i))
 			continue
-		var parts := PackedStringArray([Hotbar.key_name(i), sim.hotbar.label(i), kind])
+		var parts := PackedStringArray([Hotbar.key_name(i), sim.hotbar.label(i, bar), kind])
 		if kind == "build":
 			if _names[i].modulate.a > 0.9:
 				parts.append("afford")
 			if _styles[i].border_color == GOLD:
 				parts.append("selected")
+		elif kind == "slot":
+			if _styles[i].border_color == GOLD:
+				parts.append("in hand")
 		else:
 			parts.append("x" + _counts[i].text)
 		out.append(" ".join(parts))

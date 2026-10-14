@@ -44,7 +44,9 @@ extends RefCounted
 ## 16 = V17 window vaulting: broken windows save whether their sharp glass remnants have been cleared.
 ## A broken window from any older save loads with shards, matching a newly smashed window.
 ## 17 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
-const VERSION := 17
+## 18 = V19 two hotbars: "hotbar" is {"hands": [...], "build": [...]}; an older single bar is split by kind
+## (Hotbar.load_saved), so no version check is needed to read it.
+const VERSION := 18
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -139,7 +141,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
 		"spawn_point": _v3(sim.spawn_point),
 		"pieces": pieces,
-		"hotbar": sim.hotbar.to_array(),  # S3
+		"hotbar": sim.hotbar.to_dict(),  # S3; V19: both bars
 		"machines": machines,
 		"belts": belts,
 		"turrets": turrets,
@@ -243,7 +245,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			bin.put(str(bd["item"]), int(bd["count"]))
 		if bin != null:
 			bin.timer = float(bd.get("timer", 0.0))
-	sim.hotbar.load_array(d.get("hotbar", []))  # S3: defaults before 13
+	sim.hotbar.load_saved(d.get("hotbar", []))  # S3: defaults before 13; V19: an old single bar is split
 	sim.automation.load_dict(d.get("automation", {}))
 	sim.defense.sprung = {}
 	for key: String in d.get("sprung", []):

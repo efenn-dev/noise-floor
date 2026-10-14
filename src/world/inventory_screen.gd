@@ -209,9 +209,18 @@ func _notification(what: int) -> void:
 	_drag_data = {}
 
 
-## S3: puts the selected pocket item on hotbar key `i` (0-9). Returns the message shown.
+## S3: puts the selected pocket item on hotbar key `i` (0-9). V19: a selected weapon (worn or in your pockets)
+## puts its slot on the key instead, so the key draws whatever weapon you have in that slot. Returns the message.
 func assign_hotbar(i: int) -> String:
-	if _selected == "" or _selected_side != POCKETS or _selected.begins_with(GEAR):
+	if _selected.begins_with(GEAR):
+		var piece := selected_gear()
+		var slot := sim.gear.slot_of(piece) if not piece.is_empty() else ""
+		if not Hotbar.WEAPON_SLOTS.has(slot):
+			return "Only weapons, food, drink and bandages go on the hotbar"
+		var why_slot := sim.hotbar.assign(i, Hotbar.slot_entry(slot))
+		refresh()
+		return why_slot if why_slot != "" else "%s (%s) is on key %s" % [Hotbar.WEAPON_SLOTS[slot], piece["name"], Hotbar.key_name(i)]
+	if _selected == "" or _selected_side != POCKETS:
 		return "Click an item in your pockets first"
 	var why := sim.assign_hotbar_item(i, _selected)
 	refresh()

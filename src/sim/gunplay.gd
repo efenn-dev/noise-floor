@@ -64,6 +64,25 @@ func swap() -> String:
 	return ""
 
 
+## V19: a hands-bar key draws one weapon slot ("weapon" = melee, "primary", "sidearm") directly, with the same
+## raise, aim and reload rules as Q. Returns a message.
+func draw(slot: String) -> String:
+	gear.migrate_legacy_gun()
+	var want := "melee" if slot == "weapon" else slot
+	if want != "melee" and not gear.equipped.get(want) is Dictionary:
+		return "No %s equipped (Tab)" % ("rifle" if want == "primary" else "pistol")
+	if want == hands:
+		return "%s in hand" % (gear.weapon_name() if want == "melee" else gear.gun_name())
+	hands = want
+	aiming = false
+	reloading = 0.0
+	if want == "melee":
+		return "%s in hand" % gear.weapon_name()
+	gear.set_active_gun(want)
+	raising = float(stats()["handling"])
+	return "%s in hand" % gear.gun_name()
+
+
 ## One tick: timers run down, the spread settles, a finished reload loads the rounds from `inv`.
 ## Returns the rounds loaded this tick (0 if no reload finished).
 func tick(dt: float, inv: Inventory) -> int:

@@ -1644,22 +1644,28 @@ func _open_build_menu() -> void:
 	build_menu.open()
 
 
-## S3: a hotbar key on foot. A piece: build mode with it (the same key again stops building). An item: use
-## it (eat, drink, bandage). An empty key says how to fill it.
+## S3: a hotbar key on foot. V19: in build mode the keys read the build bar (a piece: build it; the same key
+## again stops building); otherwise the hands bar (a weapon slot: draw that weapon; an item: use it). An empty
+## key says how to fill it.
 func _hotbar_press(i: int) -> void:
-	match sim.hotbar.kind(i):
+	var bar := Hotbar.BUILD_BAR if builder.active else Hotbar.HANDS_BAR
+	match sim.hotbar.kind(i, bar):
 		"build":
-			var id := sim.hotbar.id(i)
+			var id := sim.hotbar.id(i, bar)
 			if builder.active and builder.piece() == id:
 				builder.set_active(false)
 			else:
 				builder.select_id(id)
 				builder.set_active(true)
 		"item":
-			sim.add_message(sim.use_item(sim.hotbar.id(i)), 2.5)
+			sim.add_message(sim.use_item(sim.hotbar.id(i, bar)), 2.5)
+		"slot":
+			sim.add_message(sim.draw_weapon(sim.hotbar.id(i, bar)), 2.0)
 		_:
-			sim.add_message("Key %s is empty: press it on a piece in the build menu (B) or on an item in your pockets (Tab)"
-					% Hotbar.key_name(i), 4.0)
+			if bar == Hotbar.BUILD_BAR:
+				sim.add_message("Key %s is empty on the build bar: press it on a piece in the build menu (B)" % Hotbar.key_name(i), 4.0)
+			else:
+				sim.add_message("Key %s is empty: press it on an item or a weapon in your pockets (Tab)" % Hotbar.key_name(i), 4.0)
 
 
 ## Get into a car: its camera takes over and the walker is switched off until you get out.

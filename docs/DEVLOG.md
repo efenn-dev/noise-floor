@@ -2,6 +2,22 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V19 Two hotbars: your hands and build mode (Sprint 4)
+
+Emmitt: "a build mode where the hotbar items are for building, then regular mode where the user can set items to their hotbar like weapons, meds, grenades... I keep wanting to hit 1 for a weapon but pull out a foundation." Built by Claude Opus 5.5 (Codex hit its weekly limit).
+
+**Built:**
+- **Two bars.** On foot the keys are your **hands bar**: 1 melee, 2 rifle (Primary), 3 pistol (Sidearm), 4 bandage, the rest yours to fill. A weapon key draws that weapon with the same raise and aim rules as Q (an empty slot says so); an item key eats, drinks or bandages. In build mode the keys are the **build bar** (foundation, wall, door, crate, smelter, belt, press, generator, bed); "BUILD" shows in front of it and the bar switches back when you stop building.
+- **Things go to the right bar by themselves.** A building piece can only be on the build bar and everything else only on the hands bar, so assigning never asks which: the build menu's number keys fill the build bar; the inventory's number keys (or dragging onto a key) fill the hands bar. A weapon picked in the inventory puts its slot on the key, so the key draws whatever is in that slot.
+- **The HUD** shows the bar you're using: weapon icons with the one in your hands in gold, item icons with counts.
+- **Saves:** VERSION 18. An old single bar splits itself: pieces keep their keys on the build bar, food and bandages move to the hands bar after the three weapon keys (keeping their key when free). `test/fixtures/save_v17.json` was written by the V18 code.
+
+**Try it on the PC:** press 1, 2, 3 on foot; open the build menu (B) and pick a piece, then 1-9 build.
+
+**Tests:** 11,722 green (test_hotbar and test_build_menu rewritten for two bars; the v17 split).
+
+**Known gaps:** no grenades yet (the bar takes new kinds by prefix when they exist); right-click-to-clear on the HUD isn't there (drag a new thing onto the key, or the inventory).
+
 ## 2026-10-14 — V18 Loot window: hotkeys and drag and drop (Sprint 4)
 
 Emmitt: "make looting open the containers so you can choose what to loot with hotkeys and click and drag function." Built by Codex (one job on his ChatGPT plan); fixes, the merge with V17 and checks by Claude Opus 5.5.

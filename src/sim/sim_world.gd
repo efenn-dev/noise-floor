@@ -1671,6 +1671,13 @@ func swap_hands() -> String:
 	return guns.swap()
 
 
+## V19: a hands-bar key puts that weapon slot in your hands. Returns a message.
+func draw_weapon(slot: String) -> String:
+	if not player_vault.is_empty():
+		return "Finish climbing first"
+	return guns.draw(slot)
+
+
 ## Fires the gun in your hands: uses a round, kicks up the spread, wears the gun and its suppressor, and
 ## makes the shot's noise where you stand (loud: it raises heat and infamy like any one-off sound).
 ## Trains Firearms. Returns "" if it fired, otherwise why not. The world then raycasts and calls
