@@ -16,6 +16,12 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-13 (late) — Emmitt, about 20 minutes, build 2761b62 (everything through #51)
+- Broken: walking over dead bodies pushes them around ("make them much more grounded"). Fixed in S5.
+- Broken: got into the car and couldn't drive. The log showed the pickup going NaN every tick. Fixed in S5 (grounded bodies, fresh wheels, Jolt Physics).
+- Asked: "Is there any physics engine we could use?" Jolt Physics (built into Godot 4.7), adopted in S5.
+- Asked: "lets work on making things destructible like windows". That's W2.
+
 ## 2026-10-13 (night) — Emmitt, about 1 minute (session log 2026-10-13_1929), build 1c6ffcd (V1 lighting + V3 game feel)
 - Liked: "looks good" (the Sprint 4 lighting and feel).
 - Broken: "when I got into the car the game bugged out". The log shows a NaN car and 28,000 warnings in a minute. Contained in the car NaN fix (see DEVLOG).

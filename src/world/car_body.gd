@@ -32,6 +32,11 @@ var _model: Node3D
 ## checks itself and, if anything went NaN, goes back to where it last was, stopped. One warning per car.
 var nan_recoveries := 0
 var _last_good := Transform3D()
+var nan_report := ""  # S5: what the car was doing and touching on the tick before it first went NaN
+var _last_good_info := {}
+var _nan_streak := 0  # S5: NaN again within a second of the last recovery
+var _last_nan_ms := -100000
+var _hold := 0.0  # S5: seconds the car stays frozen after repeated NaN, to let the physics settle
 var _head: Node3D
 var _lights: Array[SpotLight3D] = []
 const SHOVE_PUSH := 7.0   # m/s handed to a zombie the car is pushing against
@@ -57,6 +62,7 @@ func setup(p_sim: SimWorld, p_id: String, tint: Color) -> void:
 	contact_monitor = true
 	max_contacts_reported = 6
 	body_entered.connect(_on_body_entered)
+	add_to_group("cars")  # S5: dead bodies add a collision exception with every car
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	freeze = true
 	_add_shape()
@@ -119,10 +125,19 @@ static func state_ok(xf: Transform3D, lin: Vector3, ang: Vector3) -> bool:
 
 
 ## Puts a NaN car back where it last was, stopped, in the node and in the physics server.
+## S5: Emmitt's pickup went NaN again on the very next tick, every tick, so it couldn't drive: the wheels
+## keep their own internal state, which a reset of the body doesn't touch. They're rebuilt now, and if it
+## keeps happening the car is frozen for half a second to let the physics settle.
 func recover_from_nan() -> void:
 	nan_recoveries += 1
+	var now := Time.get_ticks_msec()
+	_nan_streak = _nan_streak + 1 if now - _last_nan_ms < 1000 else 1
+	_last_nan_ms = now
 	if nan_recoveries == 1:
-		push_warning("Car %s: its physics went NaN; put back where it last was (seen %d time)" % [id, nan_recoveries])
+		nan_report = str(_last_good_info)
+		push_warning("Car %s: its physics went NaN; put back where it last was. Tick before: %s" % [id, nan_report])
+	elif _nan_streak == 3:
+		push_warning("Car %s: NaN %d times in a row; freezing it for half a second" % [id, _nan_streak])
 	var rid := get_rid()
 	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_TRANSFORM, _last_good)
 	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
@@ -132,11 +147,52 @@ func recover_from_nan() -> void:
 	angular_velocity = Vector3.ZERO
 	engine_force = 0.0
 	steering = 0.0
+	rebuild_wheels()
+	if _nan_streak >= 3:
+		_hold = 0.5
+		freeze = true
+
+
+## S5: swaps each wheel for a fresh one with the same settings (and the same tyre model), clearing any
+## NaN the engine left in the old wheel's own state.
+func rebuild_wheels() -> void:
+	for old: VehicleWheel3D in find_children("*", "VehicleWheel3D", false, false):
+		var fresh := VehicleWheel3D.new()
+		for prop: String in ["position", "wheel_radius", "wheel_rest_length", "suspension_travel", "suspension_stiffness",
+				"suspension_max_force", "damping_compression", "damping_relaxation", "wheel_friction_slip",
+				"wheel_roll_influence", "use_as_steering", "use_as_traction"]:
+			fresh.set(prop, old.get(prop))
+		for c: Node in old.get_children():
+			old.remove_child(c)
+			fresh.add_child(c)
+		remove_child(old)
+		old.queue_free()
+		add_child(fresh)
+
+
+## S5: what the car was doing on this (good) tick, kept for the report if the next one goes NaN.
+func _note_good_tick() -> void:
+	var wheels := []
+	for w: VehicleWheel3D in find_children("*", "VehicleWheel3D", false, false):
+		var body := w.get_contact_body()
+		wheels.append([body.name if body != null else "-", w.is_in_contact()])
+	var touching := []
+	for b: Node3D in get_colliding_bodies():
+		touching.append(b.name)
+	_last_good_info = {"pos": global_position.snapped(Vector3.ONE * 0.01), "vel": linear_velocity.snapped(Vector3.ONE * 0.01),
+			"spin": angular_velocity.snapped(Vector3.ONE * 0.01), "engine": engine_force, "steer": snappedf(steering, 0.01),
+			"brake": brake, "wheels": wheels, "touching": touching}
 
 
 func _physics_process(delta: float) -> void:
+	if _hold > 0.0:
+		_hold -= delta
+		if _hold <= 0.0 and driven:
+			freeze = false
 	if state_ok(global_transform, linear_velocity, angular_velocity):
 		_last_good = global_transform
+		if driven:
+			_note_good_tick()
 	else:
 		recover_from_nan()
 	for zid: int in _hit_cooldown.keys():

@@ -45,6 +45,7 @@ Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--t
 - After adding or renaming a `class_name` script, the class cache needs a refresh. `tools/test.sh` does it (`--import`).
 - Test files extend `"res://test/base_test.gd"` **by path** and name methods `test_*`. Use `check`, `eq`, `near`. A test may `await tree.physics_frame` to run real physics (see `test/test_player_walk.gd`); free what it adds to `tree.root`. Don't name non-test files `test_*.gd`.
 - Input actions: register them in code at startup (one place), not by hand-editing `project.godot`.
+- Physics engine: **Jolt Physics** since S5 (`physics/3d/physics_engine` in project.godot). Dead bodies keep collision exceptions with the player and every car (group "cars"); don't make kinematic bodies collide with the car.
 
 ## Visual checks
 After any visible change, take a screenshot, and a night one (`--time=22`). Look at the PNG before claiming it works. Cloud screenshots use the Compatibility renderer on software GL, so lighting looks flatter than Forward+ on Emmitt's GPU. Judge layout and legibility, not final looks.
