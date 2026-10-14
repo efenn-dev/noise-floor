@@ -27,6 +27,7 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		"noisemaker": ["horn"], "bell": ["click"],
 		"weapon_break": ["weapon_break"],  # V9: a weapon snapping
 		"glass_break": ["glass_break"], "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2
+const CHOREOGRAPHED_RELOADS: Array[String] = ["pistol", "hunting_rifle"]  # V16: Shooter supplies timed mechanics
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0
 ## One-offs play this much above their loudness level; footsteps much less (Emmitt: the first ones
@@ -132,6 +133,11 @@ static func ambience_for(indoor_amount: float) -> Vector2:
 static func ambient_delay(night: bool, r: float) -> float:
 	var range_s: Vector2 = AMBIENT_DELAY["night" if night else "day"]
 	return lerpf(range_s.x, range_s.y, clampf(r, 0.0, 1.0))
+
+
+## V16: guns with visible choreography use Shooter's timed mechanical sounds instead of the M14 click.
+static func generic_reload_enabled(gun_id: String) -> bool:
+	return gun_id not in CHOREOGRAPHED_RELOADS
 
 
 ## V4: makes the World (reverb) and Ambience (low-pass) buses once per run; both feed Master.
@@ -277,6 +283,8 @@ func _play_new_events() -> void:
 		if s["kind"] == "scream":  # a screamer's shriek: a moan, much higher and louder
 			play_at(self, "zombie/moan_%02d" % (1 + randi() % 13), s["pos"], volume_for(s["loudness"]), randf_range(1.5, 1.75),
 					walls_to(s["pos"]))
+			continue
+		if s["kind"] == "reload" and not generic_reload_enabled(String(sim.gear.gun().get("base", ""))):
 			continue
 		if not EVENTS.has(s["kind"]):
 			continue

@@ -103,6 +103,8 @@ var _kick := 0.0  # radians the camera is tipped up right now
 var _message_time := 0.0
 var _last_reloading := 0.0
 var _reload_total := 0.0
+var _reload_sound_progress := -1.0  # V16: last choreography progress heard; -1 means stopped/cancelled
+var _reload_sound_gun := ""
 var _inspect_elapsed := -1.0
 var _inspect_uid := -1
 var _mag_in_hand: Dictionary = {}  # gun base -> the prop parented to Hand_L
@@ -210,6 +212,28 @@ static func reload_pose(gun_id: String, p: float) -> Dictionary:
 		[1.0, Vector3.ZERO, Vector3.ZERO, rest[0], rest[1], "Grip", "in_gun"],
 	]
 	return _sample_hand_pose(keys, p)
+
+
+## V16: mechanical sounds land on the V13 choreography keys, independent of the sim's reload noise.
+static func reload_sounds(gun_id: String) -> Array:
+	if gun_id == "pistol":
+		return [[0.18, "mag_out"], [0.62, "mag_in"], [0.74, "slide_rack"]]
+	if gun_id == "hunting_rifle":
+		return [[0.12, "bolt_open"], [0.47, "round_in"], [0.56, "round_in"],
+				[0.65, "round_in"], [0.72, "bolt_close"]]
+	return []
+
+
+## Every cue crossed by a forward progress step, in order. The open lower bound prevents repeats.
+static func passed_reload_sounds(gun_id: String, previous_progress: float, current_progress: float) -> Array:
+	var passed: Array = []
+	if current_progress <= previous_progress:
+		return passed
+	for cue: Array in reload_sounds(gun_id):
+		var at := float(cue[0])
+		if at > previous_progress and at <= current_progress:
+			passed.append(cue)
+	return passed
 
 
 ## V13: pure two-sided inspection. A pistol's left hand lets go; a rifle stays held between both hands.
@@ -346,6 +370,10 @@ func start_inspect() -> bool:
 	_inspect_elapsed = 0.0
 	_inspect_uid = int(sim.gear.gun().get("uid", -1))
 	var gun := sim.gear.gun()
+	var gun_id: String = gun.get("base", "")
+	var gun_node: Node3D = _models.get(gun_id) as Node3D
+	var sound_pos := gun_node.global_position if gun_node != null else camera.global_position
+	SoundView.play_at(self, "gun_handle", sound_pos, -3.0, randf_range(0.95, 1.05))
 	_say("%s%s · %d/%d rounds" % [gun["name"], sim.guns.weapon_condition_text(true), int(gun["loaded"]),
 			int(sim.guns.stats()["magazine"])], INSPECT_TIME)
 	return true
@@ -375,10 +403,13 @@ func _process(delta: float) -> void:
 	var base: String = sim.gear.gun().get("base", "")
 	var show := sim.guns.in_hand() and not builder.active and not sim.player.dead
 	var remaining := sim.guns.reloading
-	if remaining > 0.0 and (_last_reloading <= 0.0 or remaining > _last_reloading + 0.001):
+	var reload_started := remaining > 0.0 and (_last_reloading <= 0.0 or remaining > _last_reloading + 0.001)
+	if reload_started:
 		# The parent advances the fixed sim tick before this presentation node. Capture the reload's full
 		# skilled duration, not the already-ticked first visible value, and never recalculate it mid-reload.
 		_reload_total = maxf(remaining, sim.guns.reload_time())
+		_reload_sound_progress = 0.0
+		_reload_sound_gun = base
 		cancel_inspect()
 	_last_reloading = remaining
 	if _inspect_elapsed >= 0.0 and (not show or int(sim.gear.gun().get("uid", -1)) != _inspect_uid):
@@ -394,6 +425,15 @@ func _process(delta: float) -> void:
 	var reload_p := hold_reload_at
 	if remaining > 0.0:
 		reload_p = 1.0 - remaining / maxf(0.001, _reload_total)
+	var reload_cues: Array = []
+	if remaining > 0.0 and _reload_sound_progress >= 0.0 and show and base == _reload_sound_gun:
+		reload_cues = passed_reload_sounds(base, _reload_sound_progress, reload_p)
+		_reload_sound_progress = reload_p
+	elif remaining > 0.0 and _reload_sound_progress >= 0.0:
+		_reload_sound_progress = -1.0  # hidden, swapped or dead: this reload stays silent from here on
+	elif remaining <= 0.0:
+		_reload_sound_progress = -1.0
+		_reload_sound_gun = ""
 	var handling := maxf(0.01, float(sim.guns.stats()["handling"])) if not sim.gear.gun().is_empty() else 0.35
 	_aim_weight = 1.0 if hold_aim and aiming() else move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)  # --aim screenshots start fully aimed
 	for b: String in _models:
@@ -422,6 +462,10 @@ func _process(delta: float) -> void:
 			_apply_left_hand(node, pose)
 			_update_magazines(node, b, pose, reload_p)
 			Hands.reaim(node, node.basis)  # V12: through the kick and the reload too
+	if not reload_cues.is_empty() and _models.has(base):
+		var gun_node: Node3D = _models[base]
+		for cue: Array in reload_cues:
+			SoundView.play_at(self, String(cue[1]), gun_node.global_position, -3.0, randf_range(0.95, 1.05))
 	if reload_p < 0.0:
 		_free_drop_mag()
 	_flash_time -= delta
