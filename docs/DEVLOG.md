@@ -2,6 +2,21 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V20 Realistic zombies: MakeHuman bodies with motion capture (Sprint 4)
+
+Emmitt: "more realistic ... zombies". Bodies and animation by Codex (three jobs on his ChatGPT plan, one cut off by the weekly limit and resumed); review in the game and the pick by Claude Opus 5.5.
+
+**Built:**
+- **Five new zombie bodies** from the MakeHuman human (MPFB 2.0.18, CC0 output) by `tools/art/zombie_mpfb.py`: an average man, a heavy man (hard hat, vest), a slim man, a short man (cap) and a woman; grey-green mottled skin, sunken eyes, hair, wounds, a torn shirt (the game still tints and textures it per zombie), jeans and work boots. Same 17-bone skeleton, animation names and material names as before, so `zombie_body.gd` didn't change. `zombie.py` (the blocky ones) is superseded.
+- **Motion capture** from Quaternius' Universal Animation Library 1 and 2 (CC0; the originals live outside the repo at C:/projects/assets-src/quaternius-ual, so only the PC can rebuild): Idle = zombie idle (corrected into a standing sway), Walk = zombie walk, Run = sprint with a hunched layer, Punch = zombie scratch, Death = Death01, HitReact = Hit_Chest, Crawl = crouch walk with a crawl layer; the Scream is hand-made. Walk and Run are retimed to the game's 1.0 and 3.45 m/s so feet don't slide.
+- The UAL-pose arms pass from the same branch was rejected in the game (the fingers came out as flat twisted ribbons) and the V16 arms stay; the attempt is in history (534fac9).
+
+**Try it on the PC:** `play.bat` and walk down the street; `play.bat --zombie=0.3,-2.2 --zombies=0` for one close up.
+
+**Tests:** 11,753 green (the art-model, textured-look and zombie tests pass on the new bodies unchanged).
+
+**Known gaps:** faces are simple and the boots a little big; a $100 motion-capture pack (MoCap Online) would add lunges, grabs and directional deaths if Emmitt buys it.
+
 ## 2026-10-14 — V19 Two hotbars: your hands and build mode (Sprint 4)
 
 Emmitt: "a build mode where the hotbar items are for building, then regular mode where the user can set items to their hotbar like weapons, meds, grenades... I keep wanting to hit 1 for a weapon but pull out a foundation." Built by Claude Opus 5.5 (Codex hit its weekly limit).
