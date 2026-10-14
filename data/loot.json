@@ -40,6 +40,7 @@
 	},
 	"bathroom": {
 		"name": "Bathroom cabinet",
+		"gear": ["sneakers"],
 		"rolls": [
 			1,
 			2
@@ -94,6 +95,7 @@
 	},
 	"car_trunk": {
 		"name": "Car trunk",
+		"gear": ["cargo_pants", "sneakers"],
 		"rolls": [
 			1,
 			3
@@ -133,6 +135,7 @@
 	},
 	"factory_crate": {
 		"name": "Supply crate",
+		"gear": ["work_pants", "work_boots"],
 		"rolls": [
 			2,
 			4
@@ -172,6 +175,7 @@
 	},
 	"industrial": {
 		"name": "Warehouse crate",
+		"gear": ["work_pants", "cargo_pants", "work_boots"],
 		"rolls": [
 			2,
 			4
@@ -251,6 +255,7 @@
 	},
 	"zombie": {
 		"name": "Dead zombie",
+		"gear": ["work_pants", "cargo_pants", "work_boots", "sneakers"],
 		"rolls": [
 			1,
 			2

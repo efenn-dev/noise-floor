@@ -25,7 +25,7 @@ var gear: Dictionary = {}        # M13: rarities, tiers, bases, rolled stats, un
 var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actions, traps, repair station, log, radio
 var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
 var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
-var loot: Dictionary = {}        # container type -> {name, rolls: [min, max], empty (optional weight of nothing), items: [{item, weight, min, max}]}
+var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var load_errors: PackedStringArray = []
 
 
@@ -369,7 +369,7 @@ static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("ammo '%s' needs an item" % a)
 	for b: String in d.gear.get("bases", {}):
 		var base: Dictionary = d.gear["bases"][b]
-		if base.get("slot", "") == "gun" and not gn.get("guns", {}).has(base.get("gun", "")):
+		if base.get("slot", "") in ["primary", "sidearm"] and not gn.get("guns", {}).has(base.get("gun", "")):
 			errors.append("gear base '%s' needs a gun in guns.json" % b)
 		if base.get("slot", "") == "part" and not gn.get("parts", {}).has(base.get("part", "")):
 			errors.append("gear base '%s' needs a part in guns.json" % b)
@@ -409,6 +409,13 @@ static func _check_gear(errors: PackedStringArray, d: GameData) -> void:
 			errors.append("gear base '%s' needs a slot and a weight" % b)
 		if base.get("slot", "") == "weapon" and not d.weapons.has(base.get("weapon", "")):
 			errors.append("gear base '%s' needs a weapon in weapons.json" % b)
+		for table: String in base.get("sources", []):
+			if not d.loot.has(table) or not b in d.loot.get(table, {}).get("gear", []):
+				errors.append("gear base '%s' needs loot table '%s' to list it" % [b, table])
+	for table: String in d.loot:
+		for b: String in d.loot[table].get("gear", []):
+			if not g.get("bases", {}).has(b):
+				errors.append("loot '%s' lists unknown gear '%s'" % [table, b])
 	for s: String in g.get("stats", {}):
 		var st: Dictionary = g["stats"][s]
 		if float(st.get("min", 0)) <= 0.0 or float(st.get("max", 0)) < float(st.get("min", 0)) or not "%d" in str(st.get("text", "")):

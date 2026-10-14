@@ -140,7 +140,7 @@ func test_workbench_screen_attaches_a_part() -> void:
 	tree.root.add_child(screen)
 	screen.setup(s)
 	screen.open("")
-	check(screen.gun_text().begins_with("No gun equipped"), "no gun: it says so")
+	check(screen.gun_text().begins_with("No firearm equipped"), "no firearm: it says so")
 	var gun := s.gear.make("pistol", "civilian", "white")
 	s.gear.pieces.append(gun)
 	s.equip_gear(gun["uid"])

@@ -4,11 +4,11 @@ extends RefCounted
 ## Inventory; each piece of gear is an instance with its own rolled stats, rarity and condition:
 ##   {uid, base, tier, rarity, stats: {effect: value}, condition: 0..1, name, set: ""}
 ## You carry pieces in your pockets (`pieces`, they weigh their base's weight) and wear one per slot
-## (`equipped`: weapon, head, body, hands, light). Numbers are in data/gear.json.
+## (`equipped`: clothing, melee, two firearms, and the worn bag's item id). Numbers are in data/gear.json.
 ## bonus(effect) sums what the equipped pieces give: each base's own stats (always), their rolled stats
 ## (only while condition is at least broken_below), and set bonuses. Skills.bonus() adds it in, so the
 ## rules keep asking one question. Rolls take the caller's seeded rng, so the same seed finds the same gear.
-## M14: guns are gear in the "gun" slot, and gun parts are gear (slot "part") carried in your pockets and
+## M14: guns are gear, and gun parts are gear (slot "part") carried in your pockets and
 ## attached to a gun at a workbench: a gun piece also has {parts: {muzzle|magazine|sight|stock: piece},
 ## loaded: rounds in it, ammo: the ammo item it's loaded with}. gun_stats(piece) = its base (guns.json, damage
 ## times its tier) plus its own rolled gun stats plus its working parts. Gun-only stats (those whose
@@ -19,16 +19,21 @@ var data: GameData
 var pieces: Array = []         # carried, not worn
 var equipped: Dictionary = {}  # slot -> piece
 var next_uid := 1
+var active_gun_slot := "primary"  # V14 slots: the firearm Q most recently selected
 
 const SUFFIX := {"melee_damage": "of Hurt", "fighter_perks": "of the Brawler", "ghost_perks": "of Shadows",
 		"engineer_perks": "of the Workshop", "strength": "of the Ox", "gear_quiet": "of Hush",
 		"carry_kg": "of the Mule", "durability": "of Lasting", "search_speed": "of the Magpie",
 		"gun_damage": "of Ruin", "gun_quiet": "of Whispers", "accuracy": "of the Hawk", "recoil_cut": "of Steadiness"}
 const RARE_FIRST := ["Rust", "Grim", "Night", "Ash", "Bone", "Storm", "Dead", "Iron", "Hollow", "Static"]
-const GUN_SLOTS := ["gun", "part"]
-const RARE_SECOND := {"gun": ["Thunder", "Barker", "Rattler"], "part": ["Hush", "Edge", "Eye"],
+const FIREARM_SLOTS := ["primary", "sidearm"]
+const GUN_SLOTS := ["primary", "sidearm", "part"]
+const RARE_SECOND := {"primary": ["Thunder", "Barker", "Rattler"], "sidearm": ["Thunder", "Barker", "Rattler"],
+		"part": ["Hush", "Edge", "Eye"],
 		"weapon": ["Bite", "Mangler", "Knock", "Cleaver"], "head": ["Crown", "Lid", "Visor"],
-		"body": ["Shell", "Coat", "Hide"], "hands": ["Grip", "Knuckle", "Paw"], "light": ["Eye", "Beacon", "Glow"]}
+		"body": ["Shell", "Coat", "Hide"], "hands": ["Grip", "Knuckle", "Paw"],
+		"legs": ["Stride", "Guard", "Tread"], "feet": ["Step", "Tread", "Sole"],
+		"light": ["Eye", "Beacon", "Glow"]}
 
 
 func _init(p_data: GameData) -> void:
@@ -60,7 +65,7 @@ func make(base: String, tier: String, rarity: String, stats: Dictionary = {}, co
 	next_uid += 1
 	if piece_name == "":
 		piece["name"] = _plain_name(piece)
-	if slot_of(piece) == "gun":
+	if slot_of(piece) in FIREARM_SLOTS:
 		piece["parts"] = {}
 		piece["loaded"] = 0
 		piece["ammo"] = data.guns["ammo_order"][0]
@@ -91,8 +96,10 @@ func roll_piece(rng: RandomNumberGenerator, source: String) -> Dictionary:
 		bases.sort()
 		var set_base: String = bases[rng.randi_range(0, bases.size() - 1)]
 		return make(set_base, tier, "set", {}, roll_condition(rng), names[set_base], set_id)
+	var listed: Array = data.loot.get(source, {}).get("gear", [])
 	var all_bases: Array = g()["bases"].keys().filter(func(b: String) -> bool:
-			return not g()["bases"][b]["slot"] in GUN_SLOTS)
+			var base: Dictionary = g()["bases"][b]
+			return not base["slot"] in GUN_SLOTS and (not base.has("sources") or b in listed))
 	all_bases.sort()
 	var base: String = all_bases[rng.randi_range(0, all_bases.size() - 1)]
 	return _roll_as(rng, base, tier, rarity)
@@ -209,14 +216,14 @@ func find(uid: int) -> Dictionary:
 		if int(p["uid"]) == uid:
 			return p
 	for s: String in equipped:
-		if int(equipped[s]["uid"]) == uid:
+		if equipped[s] is Dictionary and int(equipped[s]["uid"]) == uid:
 			return equipped[s]
 	return {}
 
 
 func is_equipped(uid: int) -> bool:
 	for s: String in equipped:
-		if int(equipped[s]["uid"]) == uid:
+		if equipped[s] is Dictionary and int(equipped[s]["uid"]) == uid:
 			return true
 	return false
 
@@ -233,19 +240,22 @@ func take(uid: int) -> Dictionary:
 func equip(uid: int) -> String:
 	var found := find(uid)
 	if not found.is_empty() and slot_of(found) == "part":
-		return "Attach it to a gun at a workbench"
+		return "Attach it to a firearm at a workbench"
 	var piece := take(uid)
 	if piece.is_empty():
 		return "You don't have that"
 	var slot := slot_of(piece)
 	if equipped.has(slot):
-		pieces.append(equipped[slot])
+		if equipped[slot] is Dictionary:
+			pieces.append(equipped[slot])
 	equipped[slot] = piece
+	if slot in FIREARM_SLOTS and not equipped.get(active_gun_slot) is Dictionary:
+		active_gun_slot = slot
 	return ""
 
 
 func unequip(slot: String) -> String:
-	if not equipped.has(slot):
+	if not equipped.has(slot) or not equipped[slot] is Dictionary:
 		return "Nothing there"
 	pieces.append(equipped[slot])
 	equipped.erase(slot)
@@ -276,6 +286,8 @@ func working(piece: Dictionary) -> bool:
 func bonus(effect: String) -> float:
 	var total := 0.0
 	for s: String in equipped:
+		if not equipped[s] is Dictionary:
+			continue
 		var piece: Dictionary = equipped[s]
 		total += float(base_of(piece).get("base", {}).get(effect, 0.0)) * tier_mult(piece)
 		if working(piece) and not g()["stats"].get(effect, {}).has("slots"):  # gun stats: gun_stats() only
@@ -297,7 +309,7 @@ func tier_mult(piece: Dictionary) -> float:
 func set_count(set_id: String) -> int:
 	var n := 0
 	for s: String in equipped:
-		if equipped[s]["set"] == set_id and working(equipped[s]):
+		if equipped[s] is Dictionary and equipped[s]["set"] == set_id and working(equipped[s]):
 			n += 1
 	return n
 
@@ -320,12 +332,43 @@ func weapon_name() -> String:
 
 # --- Guns (M14) --------------------------------------------------------------------
 
+func set_active_gun(slot: String) -> void:
+	if slot in FIREARM_SLOTS:
+		active_gun_slot = slot
+
+
+## V15: the protected world debug path may still put a gun in the old key. Normalize it at the sim edge.
+func migrate_legacy_gun() -> String:
+	var old_value: Variant = equipped.get("gun")
+	if not old_value is Dictionary:
+		return ""
+	var old: Dictionary = old_value
+	var slot := slot_of(old)
+	if not slot in FIREARM_SLOTS:
+		slot = "sidearm"
+	if equipped.has(slot) and equipped[slot] is Dictionary:
+		pieces.append(equipped[slot])
+	equipped[slot] = old
+	equipped.erase("gun")
+	active_gun_slot = slot
+	return slot
+
+
+func gun_slot() -> String:
+	migrate_legacy_gun()
+	if equipped.get(active_gun_slot) is Dictionary:
+		return active_gun_slot
+	return ""
+
+
 func gun() -> Dictionary:
-	return equipped.get("gun", {})
+	var slot := gun_slot()
+	return equipped[slot] if slot != "" else {}
 
 
 func gun_name() -> String:
-	return equipped["gun"]["name"] if equipped.has("gun") else ""
+	var piece := gun()
+	return piece["name"] if not piece.is_empty() else ""
 
 
 ## A part piece's numbers in guns.json ({} if it isn't a part).
@@ -376,8 +419,8 @@ func gun_stats(piece: Dictionary) -> Dictionary:
 ## Attaches a part from your pockets to `gun_piece` (worn or carried). A part already in that slot comes
 ## back to your pockets. "" or why not.
 func attach(gun_piece: Dictionary, part_uid: int) -> String:
-	if gun_piece.is_empty() or slot_of(gun_piece) != "gun":
-		return "Hold a gun first (equip one from Tab)"
+	if gun_piece.is_empty() or not slot_of(gun_piece) in FIREARM_SLOTS:
+		return "Select a primary or sidearm first (equip one from Tab)"
 	var part := {}
 	for p: Dictionary in pieces:
 		if int(p["uid"]) == part_uid and slot_of(p) == "part":
@@ -443,14 +486,18 @@ func weapon_class() -> String:
 func wear_day() -> Array:
 	var out := []
 	for s: String in equipped:
-		if not s in ["weapon", "gun"] and _wear(equipped[s], float(g()["wear_per_day"])):
+		if equipped[s] is Dictionary and not s in ["weapon", "primary", "sidearm"] \
+				and _wear(equipped[s], float(g()["wear_per_day"])):
 			out.append(equipped[s])
 	return out
 
 
 func _wear(piece: Dictionary, amount: float) -> bool:
 	var was := working(piece)
-	var tough := float(piece["stats"].get("durability", 0.0)) if was else 0.0
+	var tough := float(base_of(piece).get("base", {}).get("durability", 0.0)) * tier_mult(piece)
+	if was:
+		tough += float(piece["stats"].get("durability", 0.0))
+	tough = minf(tough, 0.9)
 	piece["condition"] = maxf(0.0, float(piece["condition"]) - amount * (1.0 - tough))
 	return was and not working(piece)
 
@@ -537,7 +584,9 @@ static func _base_text(effect: String, v: float) -> String:
 	match effect:
 		"damage_cut": return "Zombies hurt you %d%% less" % roundi(v * 100.0)
 		"walk_quiet": return "Footsteps %d quieter" % roundi(v)
+		"gear_quiet": return "%d quieter footsteps and swings" % roundi(v)
 		"carry_kg": return "+%d kg carry" % roundi(v)
+		"durability": return "+%d%% durability" % roundi(v * 100.0)
 		"melee_damage": return "+%d%% melee damage" % roundi(v * 100.0)
 		"search_speed": return "+%d%% search speed" % roundi(v * 100.0)
 		"quiet_all": return "your noises %d quieter" % roundi(v)
@@ -557,8 +606,19 @@ func load_dict(d: Dictionary) -> void:
 		pieces.append(clean(p))
 	equipped = {}
 	for s: String in d.get("equipped", {}):
-		equipped[s] = clean(d["equipped"][s])
+		var value: Variant = d["equipped"][s]
+		if value is Dictionary:
+			var saved_piece: Dictionary = value
+			equipped[s] = clean(saved_piece)
+		else:
+			equipped[s] = str(value)
 	next_uid = int(d.get("next_uid", 1))
+	var moved := migrate_legacy_gun()
+	if moved == "":
+		for slot: String in FIREARM_SLOTS:
+			if equipped.get(slot) is Dictionary:
+				active_gun_slot = slot
+				break
 
 
 ## A piece read back from JSON (numbers come back as floats).

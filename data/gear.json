@@ -1,5 +1,5 @@
 {
-	"slots": ["weapon", "head", "body", "hands", "light", "gun"],
+	"slots": ["head", "body", "hands", "legs", "feet", "back", "light", "weapon", "primary", "sidearm"],
 	"rarities": {
 		"white": {"name": "Common", "color": "#e6e6e6", "weight": 70, "stats": [0, 0]},
 		"blue": {"name": "Magic", "color": "#6f86ff", "weight": 20, "stats": [1, 2]},
@@ -24,9 +24,13 @@
 		"hi_vis_vest": {"name": "Hi-vis vest", "slot": "body", "weight": 0.3, "base": {"carry_kg": 3}},
 		"jacket": {"name": "Jacket", "slot": "body", "weight": 1.5, "base": {"damage_cut": 0.08, "warmth": 0.3}},
 		"work_gloves": {"name": "Work gloves", "slot": "hands", "weight": 0.2, "base": {"melee_damage": 0.05}},
+		"work_pants": {"name": "Work pants", "slot": "legs", "weight": 0.8, "base": {"durability": 0.10}, "sources": ["factory_crate", "industrial", "zombie"]},
+		"cargo_pants": {"name": "Cargo pants", "slot": "legs", "weight": 0.9, "base": {"carry_kg": 3}, "sources": ["car_trunk", "industrial", "zombie"]},
+		"work_boots": {"name": "Work boots", "slot": "feet", "weight": 1.4, "base": {"durability": 0.12}, "sources": ["factory_crate", "industrial", "zombie"]},
+		"sneakers": {"name": "Sneakers", "slot": "feet", "weight": 0.6, "base": {"gear_quiet": 2}, "sources": ["bathroom", "car_trunk", "zombie"]},
 		"headlamp": {"name": "Headlamp", "slot": "light", "weight": 0.2, "base": {"search_speed": 0.05}},
-		"pistol": {"name": "Pistol", "slot": "gun", "gun": "pistol", "weight": 1.0},
-		"hunting_rifle": {"name": "Hunting rifle", "slot": "gun", "gun": "hunting_rifle", "weight": 3.5},
+		"pistol": {"name": "Pistol", "slot": "sidearm", "gun": "pistol", "weight": 1.0},
+		"hunting_rifle": {"name": "Hunting rifle", "slot": "primary", "gun": "hunting_rifle", "weight": 3.5},
 		"oil_filter_suppressor": {"name": "Oil-filter suppressor", "slot": "part", "part": "oil_filter_suppressor", "weight": 0.3},
 		"machined_suppressor": {"name": "Machined suppressor", "slot": "part", "part": "machined_suppressor", "weight": 0.4},
 		"extended_mag": {"name": "Extended magazine", "slot": "part", "part": "extended_mag", "weight": 0.2},
@@ -43,10 +47,10 @@
 		"carry_kg": {"text": "+%d kg carry", "min": 5, "max": 15, "int": true},
 		"durability": {"text": "+%d%% durability", "min": 0.10, "max": 0.30},
 		"search_speed": {"text": "+%d%% search speed", "min": 0.10, "max": 0.25},
-		"gun_damage": {"text": "+%d%% gun damage", "min": 0.05, "max": 0.20, "slots": ["gun", "part"]},
-		"gun_quiet": {"text": "%d quieter shots", "min": 2, "max": 6, "int": true, "slots": ["gun", "part"]},
-		"accuracy": {"text": "+%d%% accuracy at range", "min": 0.05, "max": 0.20, "slots": ["gun", "part"]},
-		"recoil_cut": {"text": "%d%% less recoil", "min": 0.05, "max": 0.20, "slots": ["gun", "part"]},
+		"gun_damage": {"text": "+%d%% gun damage", "min": 0.05, "max": 0.20, "slots": ["primary", "sidearm", "part"]},
+		"gun_quiet": {"text": "%d quieter shots", "min": 2, "max": 6, "int": true, "slots": ["primary", "sidearm", "part"]},
+		"accuracy": {"text": "+%d%% accuracy at range", "min": 0.05, "max": 0.20, "slots": ["primary", "sidearm", "part"]},
+		"recoil_cut": {"text": "%d%% less recoil", "min": 0.05, "max": 0.20, "slots": ["primary", "sidearm", "part"]},
 		"threaded": {"text": "Threaded barrel: suppressors wear %d%% slower", "min": 0.5, "max": 0.5, "slots": []}
 	},
 	"uniques": {
