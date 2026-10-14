@@ -5,7 +5,7 @@ extends CharacterBody3D
 
 const FLASHLIGHT_COOKIE := preload("res://assets/textures/flashlight_cookie.png")  # V1, tools/art/make_flashlight_cookie.py
 const WALK_SPEED := 4.0
-const MASK := Layers.WORLD | Layers.BUILT | Layers.ZOMBIE  # what the walker bumps into
+const MASK := Layers.WORLD | Layers.BUILT | Layers.ZOMBIE | Layers.CEILING  # what the walker bumps into (V24: ceilings too)
 const SPRINT_SPEED := 7.0
 const CROUCH_SPEED := 2.0
 const ACCEL := 12.0

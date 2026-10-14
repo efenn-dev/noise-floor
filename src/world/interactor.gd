@@ -46,10 +46,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("interact"):
 		var was_driving := sim.vehicles.driving
+		var was_asleep := sim.player.asleep
 		interact()
-		if was_driving == "" and sim.vehicles.driving != "":
+		if (was_driving == "" and sim.vehicles.driving != "") or (not was_asleep and sim.player.asleep):
 			# S3: this same E press would reach main.gd next (parents get _unhandled_input after their
 			# children), where "E while driving" means get out: you got in and straight back out again.
+			# V24: and "any key while asleep" means wake up: E on a bed slept and woke you in one press.
 			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("upgrade"):
 		upgrade()

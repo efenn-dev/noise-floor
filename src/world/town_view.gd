@@ -2,7 +2,8 @@ class_name TownView
 extends Node3D
 ## What the town plan has that isn't a build piece (W1a): a flat roof over each house with a pale
 ## ceiling under it (so rooms are dark and the flashlight matters), and a strip of wall above each
-## door, up to the roof. No colliders: sound is 2-D in this game, so a roof has no rule, and nothing
+## door, up to the roof. No colliders for sound or rules (sound is 2-D in this game, so a roof has no rule; V24: only a
+## ceiling slab the walker bumps its head on), and nothing
 ## can climb up there. The walls, doors, windows and floors are BuildGrid pieces drawn by BuildView.
 
 const WALL_TOP := 2.8   # foundation top (0.1) + town_wall height (2.7)
@@ -12,6 +13,7 @@ const FACTORY_TOP := 6.0  # W1b: the factory hall's roof; brick runs up from the
 
 var roofs := 0  # roof slabs drawn, for tests
 var factory_cells := 0  # W1b: cells under the factory roof, for tests
+var ceiling_bodies := 0  # V24: ceiling colliders made, for tests
 var roof_meshes: Array = []  # M16: every roof slab, retinted by apply_season
 var _roofed := {}  # Q2: Vector2i cell -> true for every house cell under a roof
 var _has_factory := false
@@ -47,6 +49,7 @@ func setup(plan: Dictionary, grid: BuildGrid) -> void:
 			var x1 := (x + 1) * g + (OVERHANG if x == max_x else 0.0)
 			var mid := Vector3((x0 + x1) / 2.0, 0.0, (z0 + z1) / 2.0)
 			roof_meshes.append(_box(Vector3(x1 - x0, ROOF, z1 - z0), mid + Vector3(0, WALL_TOP + ROOF / 2.0, 0), roof_mat))
+			_ceiling_body(Vector3(x1 - x0, ROOF + 0.04, z1 - z0), mid + Vector3(0, WALL_TOP + ROOF / 2.0 - 0.02, 0))
 			_box(Vector3(g, 0.04, (rows[x][1] - rows[x][0] + 1) * g), Vector3((x + 0.5) * g, WALL_TOP - 0.02, mid.z),
 					ceiling_mat, false)
 			roofs += 1
@@ -81,6 +84,7 @@ func _factory(f: Dictionary, roof_mat: Material, ceiling_mat: Material) -> void:
 	var mid := Vector3(r.get_center().x, 0.0, r.get_center().y)
 	roof_meshes.append(_box(Vector3(r.size.x + 2 * OVERHANG, ROOF, r.size.y + 2 * OVERHANG), mid + Vector3(0, FACTORY_TOP + ROOF / 2.0, 0), roof_mat))
 	_box(Vector3(r.size.x, 0.04, r.size.y), mid + Vector3(0, FACTORY_TOP - 0.02, 0), ceiling_mat, false)
+	_ceiling_body(Vector3(r.size.x, ROOF + 0.04, r.size.y), mid + Vector3(0, FACTORY_TOP + ROOF / 2.0 - 0.02, 0))
 	roofs += 1
 	var brick := BuildView.town_material("factory")
 	var h := FACTORY_TOP - WALL_TOP
@@ -90,6 +94,23 @@ func _factory(f: Dictionary, roof_mat: Material, ceiling_mat: Material) -> void:
 	_box(Vector3(0.2, h, r.size.y), Vector3(r.position.x, y, mid.z), brick)       # west
 	_box(Vector3(0.2, h, r.size.y), Vector3(r.end.x, y, mid.z), brick)            # east
 	factory_cells = f["cells"].size()
+
+
+## V24 (Emmitt: "if you jump in a house you can see through the roof"): the roofs had no colliders, so a jump
+## (or a jump off the furniture) put your head and the camera up through the ceiling. A slab on its own layer
+## that only the walker bumps into: sound, the navmesh and every ray still ignore roofs, as before.
+func _ceiling_body(size: Vector3, pos: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.CEILING
+	body.collision_mask = 0
+	body.position = pos
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
+	add_child(body)
+	ceiling_bodies += 1
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material, shadows := true) -> MeshInstance3D:
