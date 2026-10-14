@@ -1,5 +1,7 @@
 """Build and export Noise Floor's rigid-skinned low-poly zombie.
 
+Superseded by ``tools/art/zombie_mpfb.py``; retained as the lightweight historical fallback.
+
 Run with Blender 5.1:
     blender.exe -b --factory-startup --python tools/art/zombie.py
     blender.exe -b --factory-startup --python tools/art/zombie.py -- --variant=heavy
