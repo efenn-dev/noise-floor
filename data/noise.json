@@ -11,6 +11,7 @@
 		"footstep_walk": 22,
 		"footstep_sprint": 40,
 		"melee_hit": 45,
+		"block": 40,
 		"weapon_break": 55,
 		"glass_break": 62,
 		"wood_hit": 38,

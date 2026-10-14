@@ -142,12 +142,15 @@ func test_firearms_and_a_scope_shrink_the_cone_and_recoil_grows_it() -> void:
 	check(not sim.guns.scoped(), "no scope yet")
 	sim.attach_part(_part(sim, "scope")["uid"])
 	check(sim.guns.scoped(), "scoped")
+	near(sim.guns.spread_deg(), rest, "a scope gives no cone bonus from the hip")
+	sim.guns.aiming = true
 	var scoped := sim.guns.spread_deg()
-	near(scoped, rest / 1.6, "a scope (+60% range) makes the cone 1/1.6 as wide")
+	near(scoped, rest * 0.5 / 1.6, "ADS halves spread and a scope adds its 1/1.6 range bonus")
 	eq(sim.fire(), "", "fires")
-	check(sim.guns.spread_deg() > scoped * 1.5, "a shot's recoil grows the scoped cone (%.3f)" % sim.guns.spread_deg())
+	check(sim.guns.spread_deg() > scoped * 1.5, "a shot's recoil grows the aimed scoped cone (%.3f)" % sim.guns.spread_deg())
 	_run(sim, 2.0)
 	near(sim.guns.spread_deg(), scoped, "and it settles back")
+	sim.guns.aiming = false
 	var rifle := _armed("hunting_rifle")
 	check(rifle.guns.spread_deg() < sim.guns.spread_deg() * 0.6, "a rifle's cone is far tighter than a pistol's")
 	rifle.swap_hands()
