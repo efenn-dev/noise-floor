@@ -48,7 +48,7 @@ func test_kinds_look_different() -> void:
 			for i in mesh.mesh.get_surface_count():
 				var mat := mesh.get_surface_override_material(i) as StandardMaterial3D
 				if mat != null and mat.resource_name == "Shirt":
-					shirts[type] = mat.albedo_color
+					shirts[type] = mat.get_meta("look_tint", mat.albedo_color)  # V2: before texture brightness
 		body.queue_free()
 		await tree.process_frame
 	eq(shirts.size(), 3, "each kind has a tinted shirt")
@@ -116,5 +116,5 @@ func _colours(body: ZombieBody) -> Dictionary:
 		for i in mesh.mesh.get_surface_count():
 			var mat := mesh.get_surface_override_material(i) as StandardMaterial3D
 			if mat != null:
-				out[mat.resource_name] = mat.albedo_color
+				out[mat.resource_name] = mat.get_meta("look_tint", mat.albedo_color)  # V2: before texture brightness
 	return out

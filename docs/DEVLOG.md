@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-13 — S3-1c Textured zombies, varied clothes and textured guns
+
+Built by Codex from Emmitt's Playtest #1 request for better zombie and gun textures. No save change: each look is derived from the zombie id already in the save.
+
+**Built:** `ZombieBody` now maps the authored Zombie Skin, Shirt, Jeans and Boots material names to the new albedo and normal pairs with object-space triplanar projection, so textures follow animated bodies. A deterministic id-based pick gives each zombie one of three shirt fabrics, one of six faded shirt colours and a slight ordinary-skin shift; runner, screamer and Old Pete colours, runner-dimmed clothes, wounds, eyes, hair, stains, hi-vis gear, body variants and animation handling remain. Identical looks share cached materials. `Shooter` maps Gun Metal, Gun Wood, Gun Polymer and Gun Rubber the same way at a 0.15 m repeat while keeping the GLB's metal/roughness/colour settings; rubber reuses the polymer grain because no separate rubber texture was supplied. All new texture imports generate mipmaps. `test_textured_looks.gd` audits all five zombie GLBs and both gun GLBs, the explicit untextured lists, deterministic shirt variety, texture files, normals and object-space settings.
+
+**Try it on the PC:** `play.bat --time=12 --zombie=0,-3,1.2,-4,-1.2,-4.5 --cam=0,0,0,0,-5` for three daytime zombies; change to `--time=22 --flashlight` for night. `play.bat --gun --time=12 --zombie=1,-9` shows the pistol, and `play.bat --gun=rifle --time=12 --zombie=1,-9` the rifle.
+
+**Known gaps:** the workbench screen is text-only, so it has no second 3-D gun preview to texture. Gun Rubber uses the polymer photo under its original near-black, rough tint. This sandbox could not run Godot: opening `user://logs/godot2026-10-13T19.43.58.log` failed and Godot 4.7 then crashed with signal 11. Per the task rule no user-directory workaround was attempted, so the full suite and the five requested Forward+ screenshots remain unverified on the PC.
+
+**Next:** run `tools/test.sh`, take and inspect the five S3-1c shots in the brief one at a time, tune tile sizes/tints if needed, then mark S3-1c fully validated.
+
+**Review by Claude Opus 5.5 (Codex couldn't run Godot from its sandbox, so nothing had been tested or seen):** rebased onto V7, then ran the tests and Forward+ screenshots. Two looks were wrong and are fixed:
+- Zombie faces and shirts were nearly black: the model's colour was multiplied by a photo that is itself dark. `Surfaces.tint_for_texture` divides each photo's measured average brightness (`TEXTURE_MEAN`) back out, so a textured surface averages the look's own colour. The look's colour is kept on the material as `look_tint` meta, which `test_zombie_types_world.gd` now reads.
+- The pistol was solid black: its model colour is near black and its steel fully metallic, which reflected a dim sky. Gun materials now take the photo's colour times a per-material `tint`, and gun steel is satin (metallic 0.5, roughness 0.5).
+
+Full suite 8868 passed. Screenshots checked: three zombies by day (flannel, work shirt, a green shirt, denim, boots) and night, the pistol and the rifle.
 ## 2026-10-13 — V7 Hits and deaths (Sprint 4)
 
 Built by Claude Opus 5.5, stacked on the car fix. The zombie rig already had hit-react and death animations; this pass makes hits and kills read.
