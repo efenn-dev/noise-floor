@@ -1,0 +1,166 @@
+{
+	"automation": {
+		"floodlights": {},
+		"locked": [],
+		"noisemakers": {},
+		"sensors": {}
+	},
+	"bags": [
+		{
+			"gear": [],
+			"id": 1,
+			"items": {
+				"nails": 4
+			},
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"gear": [],
+			"id": 2,
+			"items": {
+				"plank": 3
+			},
+			"pos": [
+				5.0,
+				0.0,
+				-6.0
+			]
+		}
+	],
+	"base_log": [],
+	"belts": [],
+	"bins": [],
+	"clock": {
+		"day": 1,
+		"time": 10.0
+	},
+	"crate_gear": {},
+	"crates": {},
+	"difficulty": "normal",
+	"first_night": {
+		"deaths": 0,
+		"ids": [],
+		"morning": false,
+		"sheltered": false,
+		"warning": false,
+		"wave": false
+	},
+	"gear": {
+		"equipped": {
+			"weapon": {
+				"base": "pipe",
+				"condition": 1.0,
+				"name": "Pipe",
+				"rarity": "white",
+				"set": "",
+				"stats": {},
+				"tier": "civilian",
+				"uid": 1
+			}
+		},
+		"next_uid": 2,
+		"pieces": []
+	},
+	"generators": {},
+	"guidance": {
+		"active": false,
+		"ate": false,
+		"bed_found": false,
+		"better_gear_seconds": 0.0,
+		"better_gear_uid": -1,
+		"completed": false,
+		"drank": false,
+		"night_deaths": 0,
+		"night_failed": false,
+		"saw_night": false,
+		"start_day": 1,
+		"survived_night": false
+	},
+	"hands": "melee",
+	"heat": 0.0,
+	"hotbar": {
+		"build": [
+			"build:foundation",
+			"build:wall",
+			"build:door",
+			"build:storage",
+			"build:smelter",
+			"build:belt",
+			"build:press",
+			"build:generator",
+			"build:bed",
+			""
+		],
+		"hands": [
+			"slot:weapon",
+			"slot:primary",
+			"slot:sidearm",
+			"item:bandage",
+			"",
+			"",
+			"",
+			"",
+			"",
+			""
+		]
+	},
+	"infamy": 0.0,
+	"inventory": {
+		"nails": 5
+	},
+	"look": [
+		0.0,
+		0.0
+	],
+	"loot_contents": {},
+	"machines": [],
+	"next_bag": 3,
+	"next_zombie": 1,
+	"perk_points": 0,
+	"perks": {},
+	"pieces": [],
+	"player": {
+		"bleeding": false,
+		"dead": false,
+		"deaths": 0,
+		"energy": 100.0,
+		"food": 100.0,
+		"health": 100.0,
+		"respawn_timer": 0.0,
+		"stamina": 100.0,
+		"warmth": 100.0,
+		"water": 100.0
+	},
+	"player_pos": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"projects": {},
+	"projects_done": [],
+	"rng_state": "3962313798469030328",
+	"searched": [],
+	"seed": 3,
+	"skills": {},
+	"spawn_point": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"sprung": [],
+	"stats": {
+		"deaths": 0,
+		"kills": 0
+	},
+	"stoves": {},
+	"ticks": 0,
+	"turrets": [],
+	"unlocked": [],
+	"vehicles": {},
+	"version": 20,
+	"zombies": []
+}
