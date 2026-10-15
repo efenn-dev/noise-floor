@@ -17,7 +17,7 @@ const HORDE_WINDOW := 3.0
 const HORDE_COOLDOWN := 45.0
 const KEEP := 8  # how many fired stings are kept for the world to pick up
 
-## Newest last: {"kind": "close" | "horde", "pos": Vector3, "zombie": id (close only), "time": seconds}.
+## Newest last: {"kind": "close" | "horde" | "night", "pos": Vector3, ...}.
 var fired: Array = []
 var _time := 0.0
 var _last_seen: Dictionary = {}  # zombie id -> last time it was in view
@@ -75,3 +75,10 @@ func count(kind: String) -> int:
 		if e["kind"] == kind:
 			n += 1
 	return n
+
+
+## V29: the Director's fixed 21:00 beat uses the same non-positional sting path as jump scares.
+func fire(kind: String, pos: Vector3) -> void:
+	fired.append({"kind": kind, "pos": pos, "time": _time})
+	while fired.size() > KEEP:
+		fired.pop_front()

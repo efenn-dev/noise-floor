@@ -14,18 +14,20 @@ const NEVER_BREAK_IDS := ["water_tap"]
 
 var data: GameData
 var seed_value: int
+var difficulty: Difficulty
 var zombies: Dictionary = {}  # id -> ZombieBrain
 var _next_id := 1
 var _ticks := 0
 
 
-func _init(p_data: GameData, p_seed: int = 1) -> void:
+func _init(p_data: GameData, p_seed: int = 1, p_difficulty: Difficulty = null) -> void:
 	data = p_data
 	seed_value = p_seed
+	difficulty = p_difficulty
 
 
 func spawn(type: String, pos: Vector3) -> ZombieBrain:
-	var z := ZombieBrain.new(_next_id, type, data.zombies[type], pos, hash([seed_value, _next_id]))
+	var z := ZombieBrain.new(_next_id, type, data.zombies[type], pos, hash([seed_value, _next_id]), difficulty)
 	zombies[_next_id] = z
 	_next_id += 1
 	return z
@@ -33,7 +35,7 @@ func spawn(type: String, pos: Vector3) -> ZombieBrain:
 
 ## Brings back a saved zombie with its old id.
 func restore(id: int, type: String, pos: Vector3) -> ZombieBrain:
-	var z := ZombieBrain.new(id, type, data.zombies[type], pos, hash([seed_value, id]))
+	var z := ZombieBrain.new(id, type, data.zombies[type], pos, hash([seed_value, id]), difficulty)
 	zombies[id] = z
 	_next_id = maxi(_next_id, id + 1)
 	return z
@@ -80,6 +82,7 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 	ids.sort()
 	for id: int in ids:
 		var z: ZombieBrain = zombies[id]
+		z.night = bool(ctx["night"])
 		if noise != null and not z.is_dead() and (_ticks + id) % listen_every == 0:
 			var heard := noise.loudest_heard(z.pos, z.hearing(ctx["night"]))
 			if not heard.is_empty():  # Q4: a sound from something it may not break is walked to, not wrecked

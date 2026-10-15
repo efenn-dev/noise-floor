@@ -3,8 +3,8 @@ extends RefCounted
 ## What happened in one play session, for the session log (src/world/session_log.gd) that playtests
 ## leave behind: time played, deaths and what caused them, the Director's peak heat, what got built,
 ## kills, the loudest sounds, and a timeline of the first few real minutes. Since P3 also gear found by
-## rarity and what you wore at the end, skill levels and perk points, shots per gun, the base-log events that
-## mattered most while you were away, and the houses you went into.
+## rarity, what you equipped and wore at the end, skill levels and perk points, shots per gun, the base-log
+## events that mattered most while you were away, and the houses you went into.
 ## SimWorld calls the note_* functions where the events already happen; the world adds real time.
 ## While `muted` (the world building the town, a save or a demo base) nothing is recorded.
 
@@ -49,6 +49,8 @@ var levels_gained: Dictionary = {}
 var perk_points_earned := 0
 ## P3: perk id -> ranks bought this sitting.
 var perks_spent: Dictionary = {}
+## V25: piece name -> times equipped this sitting (quick-equip and the inventory use the same sim path).
+var gear_equipped: Dictionary = {}
 ## P3: gun name -> {"shots", "hits", "kills"}.
 var guns: Dictionary = {}
 ## P3: the most important base-log events that happened more than the radio's range from you:
@@ -149,6 +151,13 @@ func note_perk(perk: String) -> void:
 		return
 	perks_spent[perk] = int(perks_spent.get(perk, 0)) + 1
 	note("took the perk " + _words(perk))
+
+
+func note_gear_equipped(piece_name: String) -> void:
+	if muted:
+		return
+	gear_equipped[piece_name] = int(gear_equipped.get(piece_name, 0)) + 1
+	note("equipped " + piece_name)
 
 
 ## P3: a shot from `gun` (its name); then note_gun_hit if the ray met a zombie.
@@ -288,7 +297,7 @@ func summary_lines() -> PackedStringArray:
 	return out
 
 
-## P3: gear, skills and perks, guns, events at the base while you were away, houses (at most 13 lines).
+## P3/V25: gear, skills and perks, guns, events at the base while you were away, houses (at most 14 lines).
 func _p3_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	var found := PackedStringArray()
@@ -297,6 +306,11 @@ func _p3_lines() -> PackedStringArray:
 			found.append("%d %s" % [gear_found[rarity], rarity])
 	out.append(("Gear found: " + ", ".join(found) + ".") if not found.is_empty() else "Gear found: none.")
 	out.append(("Wearing at the end: " + ", ".join(worn) + ".") if not worn.is_empty() else "Wearing at the end: nothing.")
+	var equipped_parts := PackedStringArray()
+	for piece_name: String in gear_equipped:
+		var n := int(gear_equipped[piece_name])
+		equipped_parts.append(piece_name + ((" x%d" % n) if n > 1 else ""))
+	out.append(("Gear equipped: " + ", ".join(equipped_parts) + ".") if not equipped_parts.is_empty() else "Gear equipped: none.")
 	var lv := PackedStringArray()
 	for skill: String in levels_gained:
 		lv.append("%s +%d" % [_words(skill), levels_gained[skill]])

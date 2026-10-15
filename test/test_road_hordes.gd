@@ -15,6 +15,8 @@ func _run(sim: SimWorld, seconds: float) -> void:
 ## A working smelter east of the road at cell (10, -25): centre (21, -49).
 func _smelter_east(hour: float, seed_value: int) -> SimWorld:
 	var sim := SimWorld.new(hour, null, seed_value)
+	sim.director.first_night_warning_sent = true  # V29: these are about heat-driven road hordes, not the first-night wave
+	sim.director.first_night_wave_sent = true
 	sim.power.free = true
 	sim.give_debug_kit()
 	sim.inventory.add("plank", 50)

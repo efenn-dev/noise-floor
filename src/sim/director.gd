@@ -31,6 +31,7 @@ var heat := 0.0
 ## climbs new kinds of zombie join the waves (data/noise.json "infamy").
 var infamy := 0.0
 var data: GameData
+var difficulty: Difficulty
 var unlocked: Array = []  # zombie types infamy has let in so far
 var newly_unlocked: Dictionary = {}  # the unlock that happened this tick ({} if none), for a message
 var gain := 0.0  # heat per second from noise right now (before cooling)
@@ -43,10 +44,18 @@ var _rng := RandomNumberGenerator.new()
 ## the last pass are dropped. `recounts` counts the 8-direction walks actually done (tests, the stress report).
 var _walls_cache: Dictionary = {}
 var recounts := 0
+## V29: the scripted first-night beats. Saved so loading around dusk cannot repeat them.
+var first_night_warning_sent := false
+var first_night_wave_sent := false
+var first_morning_sent := false
+var first_night_sheltered := false
+var first_night_ids: Array[int] = []
+var first_night_deaths := 0
 
 
-func _init(p_data: GameData, seed_value: int = 1) -> void:
+func _init(p_data: GameData, seed_value: int = 1, p_difficulty: Difficulty = null) -> void:
 	data = p_data
+	difficulty = p_difficulty
 	cfg = p_data.noise["director"]
 	_check = float(cfg["check_every"])
 	_rng.seed = hash([seed_value, "director"])
@@ -77,7 +86,9 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	var kind := wave_kind(night)
 	if kind == "" or noise.continuous.is_empty():
 		return {}
-	var size := mini(int(cfg[kind]), int(cfg["max_alive"]) - horde.alive_count())
+	var count_rule := "night_wave_size" if night and kind != "wanderers" else "zombie_count"
+	var wanted := difficulty.count(count_rule, int(cfg[kind]), 1) if difficulty != null else int(cfg[kind])
+	var size := mini(wanted, int(cfg["max_alive"]) - horde.alive_count())
 	if size <= 0:
 		return {}
 	var lure := _loudest(noise)
@@ -152,7 +163,82 @@ func gain_now(noise: NoiseField, night: bool) -> float:
 		used[at] = walls
 		g += maxf(0.0, noise.level(s["loudness"], dist, walls) - float(cfg["gain_floor"])) * float(cfg["gain_rate"])
 	_walls_cache = used
-	return g * (float(cfg["night_multiplier"]) if night else 1.0)
+	var total := g * (float(cfg["night_multiplier"]) if night else 1.0)
+	return difficulty.scale("director_heat_gain", total) if difficulty != null else total
+
+
+## V29: fixed day-one beats, independent of heat and machine noise. Returns events for the HUD/log.
+## A sheltered wave approaches the outside of the room, investigates briefly, then mills around. A new
+## player-made sound changes those same zombies into hunters.
+func first_night_events(clock: GameClock, player_pos: Vector3, sheltered: bool, player_noisy: bool,
+		deaths: int, horde: Horde) -> Array:
+	var events := []
+	if clock.day == 1 and clock.time_of_day >= 19.0 and not first_night_warning_sent:
+		first_night_warning_sent = true
+		events.append({"kind": "warning"})
+	if clock.day == 1 and clock.time_of_day >= 21.0 and not first_night_wave_sent:
+		first_night_wave_sent = true
+		first_night_deaths = deaths
+		first_night_sheltered = sheltered and not player_noisy
+		var wave := _send_first_night(player_pos, first_night_sheltered, horde)
+		events.append({"kind": "night", "wave": wave})
+	if first_night_wave_sent and first_night_sheltered and player_noisy:
+		first_night_sheltered = false
+		for id: int in first_night_ids:
+			var z: ZombieBrain = horde.zombies.get(id)
+			if z != null and not z.is_dead():
+				z.hunt(player_pos)
+	if first_night_wave_sent and not first_morning_sent and clock.day > 1 and clock.time_of_day >= 6.0:
+		first_morning_sent = true
+		if deaths == first_night_deaths:
+			events.append({"kind": "morning"})
+	return events
+
+
+func _send_first_night(player_pos: Vector3, sheltered: bool, horde: Horde) -> Dictionary:
+	var wanted := difficulty.first_night_size() if difficulty != null else 5
+	# This beat is guaranteed even when the map's starting population has reached the heat-wave cap.
+	var size := wanted
+	var runners := mini(size, difficulty.first_night_runners() if difficulty != null else 0)
+	first_night_ids.clear()
+	for i in size:
+		var angle := TAU * float(i) / maxf(1.0, float(size)) + _rng.randf_range(-0.18, 0.18)
+		var outward := Vector3(cos(angle), 0.0, sin(angle))
+		var spot := player_pos + outward * _rng.randf_range(18.0, 22.0)
+		var type := "runner" if i < runners else "shambler"
+		var z := horde.spawn(type, spot)
+		first_night_ids.append(z.id)
+		z.facing = -outward
+		if sheltered:
+			z.hear(player_pos + outward * _rng.randf_range(7.0, 10.0), "", 14.0)
+		else:
+			z.hunt(player_pos)
+	return {"size": size, "kind": "first_night", "runners": runners, "sheltered": sheltered}
+
+
+func first_night_state() -> Dictionary:
+	return {"warning": first_night_warning_sent, "wave": first_night_wave_sent,
+			"morning": first_morning_sent, "sheltered": first_night_sheltered,
+			"ids": first_night_ids.duplicate(), "deaths": first_night_deaths}
+
+
+func load_first_night_state(saved: Dictionary, clock: GameClock, legacy: bool) -> void:
+	if legacy:
+		first_night_warning_sent = clock.day > 1 or clock.time_of_day >= 19.0
+		first_night_wave_sent = clock.day > 1 or clock.time_of_day >= 21.0
+		first_morning_sent = clock.day > 1 or clock.time_of_day >= 21.0
+		first_night_sheltered = false
+		first_night_ids.clear()
+		first_night_deaths = 0
+		return
+	first_night_warning_sent = bool(saved.get("warning", false))
+	first_night_wave_sent = bool(saved.get("wave", false))
+	first_morning_sent = bool(saved.get("morning", false))
+	first_night_sheltered = bool(saved.get("sheltered", false))
+	first_night_ids.clear()
+	for id: Variant in saved.get("ids", []):
+		first_night_ids.append(int(id))
+	first_night_deaths = int(saved.get("deaths", 0))
 
 
 ## M15: forget the cached wall counts whenever the build grid changes.

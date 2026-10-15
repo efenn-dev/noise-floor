@@ -2,6 +2,19 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V29 Difficulty, and a first night that matters (Sprint 4)
+
+Nobody had died in nine sessions and nobody built a shelter, because nothing forced it; Emmitt wanted the first night to matter and an easier setting for his son. Built by Codex (one job on his ChatGPT plan, on top of V26 save slots and V25 objectives); a test fix, a screenshot flag and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Easy / Normal / Hard**, chosen on the New game screen after the slot name, saved with the game (VERSION 20; older saves load as Normal) and shown in the slot summary and pause menu. One `Difficulty` object (data in `data/difficulty.json`) scales zombie damage (0.5 / 1 / 1.5x), health (0.6 / 1 / 1.4x), counts and night waves (0.6 / 1 / 1.5x), Director heat (0.6 / 1 / 1.5x), hunger/thirst/energy drain (0.6 / 1 / 1.4x), loot (1.5 / 1 / 0.7x) and how much better zombies hear and move at night. Skills are kept on death on every setting.
+- **The first night:** at 19:00 a warning ("It'll be dark at 21:00. Find shelter: a bed inside walls with a door"); at 21:00 "Night falls" and a wave (Easy 3 slow ones, Normal 5, Hard 8 with a runner). Caught outside, they hunt you; in a shelter (a bed in a closed player-built room, or a closed town house with intact windows) they mill around outside unless you make noise. At 06:00 "You made it to morning". Later nights keep the heat-driven waves, more dangerous than days.
+- `--new-game[=SLOT]` opens the New game screen for screenshots.
+- Test fix: the road-horde tests start at 23:00 on day 1, so the first-night wave joined them; they mark the first night as done.
+
+**Try it on the PC:** New game, pick a difficulty, and see if you can get a bed behind walls and a door before 21:00. The 1-day soak bot survives (2 waves, 1 death).
+
+**Tests:** 12,116 green (new `test_difficulty.gd`, fixture `save_v19.json`).
 ## 2026-10-14 — V28 New zombies: the crawler and the brute (Sprint 4)
 
 The session logs say fighting is what keeps players going; more kinds of zombie to fight. Built by Codex (one job on his ChatGPT plan); three test fixes and the checks by Claude Opus 5.5.
@@ -37,6 +50,31 @@ Emmitt, after playing: "I was not able to sleep or regain energy", "if you jump 
 **Try it on the PC:** sleep in any bed in a house when you're tired (energy under 90); jump inside a house; let a zombie chase you to a wall.
 
 **Tests:** 11,870 green (new `test_sleep_key.gd`, `test_clipping.gd`).
+## 2026-10-14 — V26 Save slots: one per player (Sprint 4)
+
+Emmitt and his son share the PC and there was one save file, so they overwrote each other. Built by Codex (one job on his ChatGPT plan); a safer migration, two fixes and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Three save slots**, each its own file (`user://saves/slot_N.json`) with a name you type ("Dad", "Kaleb"), the day and time in game, time played, zombies killed and when it was last played. The title screen's Continue opens a slot picker; New game asks which slot (warning before replacing one) and for a name; each slot has Delete with a confirm. The pause menu, F5 and F9 use the slot you're playing; session logs name it. Settings stay shared.
+- **Your old save becomes slot 1 automatically** the first time, named "Slot 1". It is COPIED: the old `save.json` is never deleted (Codex's version moved it, which would have made a screenshot or test run of this branch take the save away from the current build on main).
+- Fixes: the slot picker's test helper looked one level too shallow; the migrated save's "Last played" showed UTC instead of local time.
+
+**Try it on the PC:** `play.bat`, Continue: your current game is Slot 1; New game into Slot 2 with your son's name. `play.bat --slots` opens the picker.
+
+**Tests:** 11,909 green (new `test_save_slots.gd`, all on test-only paths; no real save is touched).
+## 2026-10-14 — V25 First-hour guidance (Sprint 4)
+
+The session logs (nine sessions, about 80 minutes, Emmitt and his son) showed nobody dying, almost nobody building, 24 perk points earned and 2 spent, and good gear found but never worn. Built by Codex (one job on his ChatGPT plan); checks by Claude Opus 5.5.
+
+**Built:**
+- **Perk points get noticed:** a toast when you earn one ("Perk point! Press K") and a small badge while any are unspent; the skills screen highlights them.
+- **Better gear gets worn:** picking up or looting a piece better than what's in that slot (rarity, tier, condition and the slot's main stat, compared in the sim) shows an 8-second toast in its rarity colour; **Y** puts it on straight away (checked again before equipping).
+- **A first-night goal list** in a new game, top-left: find food and water, find a bed, before dark (21:00) shelter a bed with walls and a door (it ticks the foundation, the bed inside, walls and door as you build; town houses don't count), survive the night. **O** hides it; "Show objectives" in Settings. Saved with the game (VERSION 19; older saves load with it off).
+- The session log now records gear you equip and perk points spent, so we can see whether this works.
+
+**Try it on the PC:** start a New game; `play.bat --objectives` shows the list half done.
+
+**Tests:** 11,929 green (new `test_guidance.gd`).
 
 ## 2026-10-14 — V22 Hands fixed in the engine (Sprint 4)
 
