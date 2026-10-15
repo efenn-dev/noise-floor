@@ -54,8 +54,12 @@ extends RefCounted
 ## dropped or placed as itself) and a "yaw". Older entries load as bags lying flat, so nothing moves or vanishes.
 ## 22 = F2 the Hub: "milestones" (done and handed in) and "rescue" (the broadcast's state and day). A save from
 ## before 22 had every piece unlocked, so it gets every milestone but the final one: nothing it built is locked.
-const VERSION := 22
+## 23 = W3b downtown: the shops' walls, doors, windows and floors are pieces (saved like the houses) and its
+## zombies are ordinary saved zombies. A save from before 23 gets downtown laid fresh (see holds_downtown; main.gd
+## also spawns its zombies after applying it).
+const VERSION := 23
 const FIRST_WITH_PARK := 12
+const FIRST_WITH_DOWNTOWN := 23
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
@@ -69,6 +73,11 @@ static func holds_town(d: Dictionary) -> bool:
 ## M17a: true if the save already holds the industrial park's warehouse pieces (and its zombies).
 static func holds_park(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_PARK
+
+
+## W3b: true if the save already holds downtown's shop pieces (and its zombies).
+static func holds_downtown(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_DOWNTOWN
 
 
 ## True if the save already holds the factory hall's pieces (W1b).

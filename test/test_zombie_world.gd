@@ -69,6 +69,30 @@ func test_zombie_chases_and_bites() -> void:
 	await _teardown()
 
 
+## W3b: an idle zombie far from you rests (its animation and physics stop) and wakes when you come near or
+## something draws it.
+func test_far_idle_zombies_rest_and_wake() -> void:
+	_setup(Vector3.ZERO)
+	_add_box(Vector3(0, -1, -60), Vector3(20, 2, 30))  # ground out there too
+	var z := _zombie(Vector3(0, 0, -62), Vector3.FORWARD)  # 62 m off, facing away
+	z._timer = 999.0  # it stays idle (outdoors it would wander off now and then, which wakes it too)
+	_start_zombies()
+	await _run(1.0)
+	var body: ZombieBody = zview.body_for(z.id)
+	eq(z.state, ZombieBrain.State.IDLE, "it hasn't noticed you")
+	check(body.resting, "so it rests")
+	eq(body._anim.callback_mode_process, AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL, "its animation is stopped")
+	var held := body.global_position
+	await _run(0.5)
+	check(body.global_position.distance_to(held) < 0.001, "and it doesn't move (%s -> %s, resting %s)" % [held, body.global_position, body.resting])
+	sim.noise.emit(z.pos + Vector3(0, 0, 4), 80.0, "test")  # a noise beside it
+	await _run(0.5)
+	check(z.state != ZombieBrain.State.IDLE, "a noise draws it")
+	check(not body.resting, "and it wakes")
+	check(body._anim.callback_mode_process != AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL, "animating again")
+	await _teardown()
+
+
 func test_zombie_breaks_a_wall_between_you() -> void:
 	_setup(Vector3(1, 0, 5))
 	var view := BuildView.new()

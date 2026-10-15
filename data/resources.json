@@ -19,6 +19,7 @@
 		{ "id": "roadside_well", "kind": "well", "purity": "poor", "pos": [17, 183], "prop": [2.5, 0], "yaw": 90 },
 		{ "id": "highway_tanker", "kind": "fuel_tank", "purity": "rich", "pos": [283, -61], "prop": [5.5, 0], "yaw": 90 },
 		{ "id": "junction_tanker", "kind": "fuel_tank", "purity": "normal", "pos": [239, 101], "prop": [-5.5, 0], "yaw": 85 },
+		{ "id": "gas_station_tanker", "kind": "fuel_tank", "purity": "normal", "pos": [79, 77], "prop": [5.5, 0], "yaw": 90 },
 		{ "id": "timber_1", "kind": "timber", "purity": "rich", "pos": [-121, -173], "prop": [-3.5, 0], "yaw": 30 },
 		{ "id": "timber_2", "kind": "timber", "purity": "normal", "pos": [-183, -239], "prop": [-3.5, 0], "yaw": 60 },
 		{ "id": "timber_3", "kind": "timber", "purity": "normal", "pos": [-179, -345], "prop": [-3.5, 0], "yaw": 90 },

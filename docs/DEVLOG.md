@@ -2,6 +2,28 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — W3b Downtown (the bigger world, part 2)
+
+Emmitt: "it needs a much bigger world" (town + countryside). Code and checks by Claude Opus 5.5, using the shop props Codex made for W3a. Stacked on F3 (#82), which is stacked on F2 (#81).
+
+**Built:**
+- **Five shops along Market Street**, east of Main Street (walk south from spawn to the crossroads, then east): a **grocery**, a **pharmacy** and a **hardware store** on the north side; the **police station** and a **gas station** on the south side. Each is made of the same pieces as the houses (floors, walls, shop windows along the front, a front door and a back door), so doors open and close, windows break, zombies inside stay muffled, and it counts as indoors (warmth, fog). A coloured sign over each front, flat roofs, concrete sidewalks.
+- **Things to search** (E): grocery shelves (canned food, chips, soda, water, seeds), pharmacy shelves and counters (bandages, water), hardware shelves (nails, planks, plates, bolts, repair kits, gas cans, work boots and pants, gun parts sometimes), police desks (ammo, radios), and the police station's **armory**: five **gun lockers** behind an inside wall, the best place in the game to find a gun (about a 1 in 3 chance each) and plenty of ammunition. The gas station has snack shelves, two **pumps** (a gas can or two each) under a canopy, and a dumpster beside every shop.
+- **A fuel tanker** parked behind the gas station is an F1 resource node: put a fuel pump on its yellow spot.
+- **Zombies:** two in every shop (a brute in the police station) and seven on the street; two or three burned-out cars on Market Street with trunks to search.
+- **Saves:** version 23. A save from before downtown gets it built fresh, with its zombies, the first time it loads.
+- **Far zombies rest** (W3e pulled forward): a zombie standing idle more than 50 m from you stops animating and skips its physics until a noise draws it or you come close (beyond every zombie's sight, so it notices exactly what it did before). Without this, downtown's 17 zombies made a soak day 60% slower; with it, a soak day costs the same as before downtown (159 s vs 154 s on main).
+- **Fix (F2, also pushed to #81):** the radio mast's warning light looked for the mast by walking every piece in the world each frame (another 60% on a soak day); the Hub and mast are now found from an index.
+- Flags: `--at=downtown`, `--at=police`, `--at=gas`.
+
+**Try it:** `play.bat --at=downtown` (or walk: south down Main Street to Market Street, then east).
+
+**Tests:** 17,696 green (new `test_downtown.gd`: seeded; inside its area and off every road, house, warehouse and resource node for eight seeds; every shop closed with its doors and windows; props inside their shop, never overlapping, and a walkable way to the front of every shelf, counter and locker; containers and wrecks registered; gun lockers find guns and ammo; zombies in their shops (one brute) and saved; a version-22 save gets downtown fresh; walking into the grocery through its door and finding a solid, searchable shelf); `test_zombie_world.gd`: a far idle zombie rests and a noise wakes it. One-day soak OK, 159 s (main 154 s), 488 MB. The park test now lets gun lockers beat warehouse crates for guns; the street test counts downtown's wrecks and dumpsters.
+
+**Known gaps:** shop interiors are lit only by their windows (dim, like the houses); no shop-specific items yet (medicine is still bandages); downtown's east end past the hardware store is open street (room for W3e or more shops); zombies stand still until they hear you, like the park's.
+
+**Next:** W3c more streets of houses (West and East Street), then W3d the countryside.
+
 ## 2026-10-15 — F3 Build feel: drag-placing, field belts, splitters and mergers (building like Satisfactory, part 3)
 
 Emmitt: building should feel like Satisfactory. Code and checks by Claude Opus 5.5. Stacked on F2 (#81).
