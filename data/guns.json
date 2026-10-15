@@ -1,24 +1,37 @@
 {
 	"guns": {
-		"pistol": {"name": "Pistol", "damage": 40, "range": 18, "spread": 1.2, "ads_spread": 0.5, "recoil": 1.6, "settle": 8.0,
+		"pistol": {"name": "Pistol", "part_slots": ["muzzle", "magazine", "sight"], "damage": 40, "range": 18, "spread": 1.2, "ads_spread": 0.5, "recoil": 1.6, "settle": 8.0,
 			"handling": 0.35, "magazine": 8, "loudness": 85, "cooldown": 0.22, "reload": 1.6, "knockback": 1.5,
 			"wear_per_shot": 0.002, "sound": "pistol"},
-		"hunting_rifle": {"name": "Hunting rifle", "damage": 95, "range": 50, "spread": 0.35, "ads_spread": 0.5, "recoil": 4.5, "settle": 6.0,
+		"hunting_rifle": {"name": "Hunting rifle", "part_slots": ["muzzle", "magazine", "sight", "stock"], "damage": 95, "range": 50, "spread": 0.35, "ads_spread": 0.5, "recoil": 4.5, "settle": 6.0,
 			"handling": 0.8, "magazine": 5, "loudness": 95, "cooldown": 1.0, "reload": 2.6, "knockback": 3.0,
-			"wear_per_shot": 0.003, "sound": "rifle"}
+			"wear_per_shot": 0.003, "sound": "rifle"},
+		"shotgun": {"name": "Pump shotgun", "part_slots": ["muzzle", "stock"], "ammo": "shells", "damage": 18, "range": 35,
+			"spread": 4.5, "ads_spread": 0.75, "recoil": 7.0, "settle": 5.0, "handling": 0.9, "magazine": 6,
+			"loudness": 100, "cooldown": 0.85, "reload": 0.58, "reload_mode": "shell", "pellets": 8,
+			"falloff_start": 12.0, "falloff_end": 28.0, "min_damage": 0.30, "knockback": 4.5,
+			"wear_per_shot": 0.0035, "sound": "shotgun"},
+		"crossbow": {"name": "Crossbow", "part_slots": ["sight"], "ammo": "bolt", "damage": 100, "range": 60,
+			"spread": 0.25, "ads_spread": 0.55, "recoil": 0.8, "settle": 8.0, "handling": 0.75, "magazine": 1,
+			"loudness": 25, "cooldown": 0.5, "reload": 2.8, "reload_mode": "single", "knockback": 2.0,
+			"projectile_speed": 55.0, "projectile_gravity": 9.8, "bolt_survival": 0.70,
+			"wear_per_shot": 0.0015, "sound": "crossbow"}
 	},
 	"part_slots": ["muzzle", "magazine", "sight", "stock"],
 	"parts": {
-		"oil_filter_suppressor": {"slot": "muzzle", "loudness": -20, "wear_per_shot": 0.005},
-		"machined_suppressor": {"slot": "muzzle", "loudness": -30, "wear_per_shot": 0.0008},
-		"extended_mag": {"slot": "magazine", "magazine": 0.5},
-		"scope": {"slot": "sight", "range": 0.6},
-		"padded_stock": {"slot": "stock", "recoil": -0.35}
+		"oil_filter_suppressor": {"slot": "muzzle", "guns": ["pistol", "hunting_rifle"], "loudness": -20, "wear_per_shot": 0.005},
+		"machined_suppressor": {"slot": "muzzle", "guns": ["pistol", "hunting_rifle"], "loudness": -30, "wear_per_shot": 0.0008},
+		"extended_mag": {"slot": "magazine", "guns": ["pistol", "hunting_rifle"], "magazine": 0.5},
+		"scope": {"slot": "sight", "guns": ["pistol", "hunting_rifle", "crossbow"], "range": 0.6},
+		"padded_stock": {"slot": "stock", "guns": ["hunting_rifle", "shotgun"], "recoil": -0.35},
+		"choke": {"slot": "muzzle", "guns": ["shotgun"], "spread": -0.40}
 	},
 	"ammo": {
 		"ammo_standard": {"loudness": 0, "damage": 1.0},
 		"ammo_subsonic": {"loudness": -15, "damage": 0.75},
 		"ammo_ap": {"loudness": 0, "damage": 1.0, "reserved": true}
+		,"shells": {"loudness": 0, "damage": 1.0}
+		,"bolt": {"loudness": 0, "damage": 1.0}
 	},
 	"ammo_order": ["ammo_standard", "ammo_subsonic"],
 	"head_multiplier": 2.0,
@@ -27,13 +40,28 @@
 	"min_reload_mult": 0.4,
 	"ray_range": 150,
 	"finds": {
-		"car_trunk": {"gun": 0.05, "part": 0.02, "ammo": 0.25},
-		"factory_crate": {"gun": 0.0, "part": 0.15, "ammo": 0.3},
-		"industrial": {"gun": 0.08, "part": 0.25, "ammo": 0.45}
+		"car_trunk": {"gun": 0.05, "part": 0.12, "ammo": 0.25},
+		"factory_crate": {"gun": 0.0, "part": 0.35, "ammo": 0.3},
+		"industrial": {"gun": 0.08, "part": 0.45, "ammo": 0.45},
+		"zombie": {"gun": 0.0, "part": 0.08, "ammo": 0.0},
+		"kitchen": {"gun": 0.006, "part": 0.005, "ammo": 0.08},
+		"house": {"gun": 0.04, "part": 0.03, "ammo": 0.12},
+		"police": {"gun": 0.075, "part": 0.12, "ammo": 0.40},
+		"hunter": {"gun": 0.07, "part": 0.10, "ammo": 0.35},
+		"hunting_cabin": {"gun": 0.07, "part": 0.10, "ammo": 0.35},
+		"garage": {"gun": 0.04, "part": 0.08, "ammo": 0.18}
 	},
 	"police_find": 0.02,
-	"gun_weights": {"pistol": 3, "hunting_rifle": 1},
-	"part_weights": {"oil_filter_suppressor": 2, "machined_suppressor": 1, "extended_mag": 3, "scope": 2, "padded_stock": 3},
+	"gun_weights": {"pistol": 6, "hunting_rifle": 2, "shotgun": 2, "crossbow": 1},
+	"gun_weights_by_source": {
+		"police": {"pistol": 6, "shotgun": 2, "hunting_rifle": 1},
+		"hunter": {"pistol": 3, "hunting_rifle": 3, "shotgun": 2},
+		"hunting_cabin": {"hunting_rifle": 4, "shotgun": 2, "crossbow": 1},
+		"garage": {"pistol": 5, "shotgun": 2, "crossbow": 1},
+		"house": {"pistol": 7, "shotgun": 1},
+		"kitchen": {"pistol": 8, "shotgun": 1}
+	},
+	"part_weights": {"oil_filter_suppressor": 2, "machined_suppressor": 1, "extended_mag": 3, "scope": 2, "padded_stock": 3, "choke": 2},
 	"ammo_found": [4, 12],
 	"zombie_extra_uniques": {"old_pete": {"unique": "petes_deer_rifle", "ammo": {"ammo_standard": 10}}},
 	"loaded_when_found": [0, 1]

@@ -2,6 +2,41 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V30 Shotgun, crossbow, pipe bomb and bottle (Sprint 4)
+
+The session logs say fighting is the fun; Emmitt asked for grenades earlier. Built by Codex (one job on his ChatGPT plan, on top of V23 attachments); fixes and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Pump shotgun** (Primary): 6 shells, 8 pellets of 18 in a 4.5 degree cone with falloff from 12 to 28 m, loudness 100, a pump between shots (0.85 s), loads one shell at a time (0.58 s each, firing interrupts). Takes a padded stock and a new **choke** (40% tighter spread); no suppressor or scope.
+- **Crossbow** (Primary): 100 damage, loudness 25, one bolt, 2.8 s draw; the bolt is a real projectile in the sim (55 m/s with gravity), drawn in flight; 70% of bolts can be picked back up from bodies or where they land. Takes a scope; bolts are craftable.
+- **Pipe bomb** (throwable): hold to throw with an arc preview, bounces, 3 s fuse, 5 m blast with damage, knockback and stun that fall off, hurts you too, lightly damages pieces, and is loud enough (150) to draw everything around: a lure as much as a weapon. Crafted at the bench (scrap, gunpowder, nails).
+- **Glass bottle** (throwable): shatters where it lands with a noise (65) that zombies go to investigate, for sneaking past.
+- Throwables go on the hands bar; left click holds/releases to throw, right click cancels. Models, icons and sounds for all of them; grips and sights measured from the models; loot and recipes.
+- Fixes by Claude: a Codex edit had pasted the throw key hints into the `--inspect-at` code (main.gd didn't compile); kitchens found guns 3x as often as before and the unplaced police/hunter/cabin sources beat warehouse crates (rebalanced); bottles made trash bins mostly full (rarer now).
+
+**Try it on the PC:** `play.bat --gun=shotgun`, `play.bat --gun=crossbow`, `play.bat --throw=pipe_bomb`, `play.bat --throw=bottle`.
+
+**Tests:** 13,149 green (new `test_new_weapons.gd`).
+
+**Known gap (from V22, now visible on every long gun):** the left arm's sleeve extension shows its open end and looks detached from the forearm on the rifle, shotgun and crossbow fore-end grip; fixing next.
+
+## 2026-10-14 — V23 Tarkov-style gun attachments (Sprint 4)
+
+Emmitt: "the attachments for guns, none of them work, make it so the guns have attachment slots like in tarkov." Built by Codex (one job on his ChatGPT plan); review, one fix and the checks by Claude Opus 5.5.
+
+**Why they didn't work:** fitting was only possible at the workbench screen (hard to find), the inventory told you to go to a workbench, the parts were invisible on the gun, every gun shared one slot list (a pistol could take a stock), and parts almost never dropped.
+
+**Built:**
+- **A modding panel in the inventory:** select a gun (pockets, a container, Primary or Sidearm) and its attachment slots appear: pistol = muzzle, magazine, sight; hunting rifle = muzzle, magazine, sight, stock (per gun in `guns.json`). Drag a part on (or double-click it), drag it off (or double-click the slot). Works anywhere, instantly; crafting parts still needs the bench. Fitting makes a small noise.
+- **Stats you can see:** damage, recoil, accuracy cone, raise time, magazine and loudness, with each part's change in green or red, all from the sim.
+- **Parts on the gun:** five new models (`tools/art/part_*.py`): oil-filter and machined suppressors, a longer magazine, a scope with rings and turrets, a rubber recoil pad, fixed at anchors measured on each gun.
+- **Effects that matter:** suppressors 20 / 30 quieter, the extended magazine +50% rounds (reloads fill it), the scope's zoom and tighter cone, the padded stock 35% less recoil.
+- **Parts drop:** car trunks 12%, factory crates 35%, industrial loot 45%, zombie corpses 8%.
+- Fix by Claude: looking through the scope showed the back of the scope tube over the target; the gun hides again at full scope aim (the zoom and reticle take over), as before.
+
+**Try it on the PC:** find a gun and a part, press Tab, click the gun; `play.bat --mod-screen=rifle` gives you a rifle and every part.
+
+**Tests:** 12,014 green (new `test_gun_mods.gd`).
 ## 2026-10-14 — V29 Difficulty, and a first night that matters (Sprint 4)
 
 Nobody had died in nine sessions and nobody built a shelter, because nothing forced it; Emmitt wanted the first night to matter and an easier setting for his son. Built by Codex (one job on his ChatGPT plan, on top of V26 save slots and V25 objectives); a test fix, a screenshot flag and the checks by Claude Opus 5.5.

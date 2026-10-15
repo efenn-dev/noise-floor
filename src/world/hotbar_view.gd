@@ -108,6 +108,7 @@ func refresh() -> void:
 			have = n > 0
 			count = str(n)
 			icon = InventoryScreen.icon_for(id)
+			selected = sim.ready_throw == id
 		elif kind == "slot":  # V19: the weapon in that slot; gold while it's the one in your hands
 			var piece: Variant = sim.gear.equipped.get(id)
 			have = piece is Dictionary

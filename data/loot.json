@@ -35,6 +35,18 @@
 				"weight": 1,
 				"min": 5,
 				"max": 20
+			},
+			{
+				"item": "bottle",
+				"weight": 4,
+				"min": 1,
+				"max": 3
+			},
+			{
+				"item": "shells",
+				"weight": 1,
+				"min": 2,
+				"max": 4
 			}
 		]
 	},
@@ -130,6 +142,12 @@
 				"weight": 2,
 				"min": 1,
 				"max": 1
+			},
+			{
+				"item": "gunpowder",
+				"weight": 1,
+				"min": 1,
+				"max": 2
 			}
 		]
 	},
@@ -216,6 +234,30 @@
 				"weight": 2,
 				"min": 4,
 				"max": 12
+			},
+			{
+				"item": "shells",
+				"weight": 2,
+				"min": 2,
+				"max": 8
+			},
+			{
+				"item": "bolt",
+				"weight": 1,
+				"min": 2,
+				"max": 6
+			},
+			{
+				"item": "gunpowder",
+				"weight": 2,
+				"min": 1,
+				"max": 3
+			},
+			{
+				"item": "pipe_bomb",
+				"weight": 0.15,
+				"min": 1,
+				"max": 1
 			}
 		]
 	},
@@ -250,7 +292,67 @@
 				"weight": 1,
 				"min": 1,
 				"max": 1
+			},
+			{
+				"item": "bottle",
+				"weight": 2,
+				"min": 1,
+				"max": 2
 			}
+		]
+	},
+	"house": {
+		"name": "House cupboard",
+		"rolls": [1, 3],
+		"items": [
+			{"item": "bottle", "weight": 5, "min": 1, "max": 2},
+			{"item": "shells", "weight": 1, "min": 2, "max": 6},
+			{"item": "nails", "weight": 3, "min": 4, "max": 12}
+		]
+	},
+	"police": {
+		"name": "Police locker",
+		"rolls": [2, 4],
+		"items": [
+			{"item": "shells", "weight": 5, "min": 4, "max": 12},
+			{"item": "ammo_standard", "weight": 5, "min": 6, "max": 16},
+			{"item": "gunpowder", "weight": 1, "min": 1, "max": 2},
+			{"item": "pipe_bomb", "weight": 0.1, "min": 1, "max": 1}
+		]
+	},
+	"hunter": {
+		"name": "Hunter cache",
+		"rolls": [2, 4],
+		"items": [
+			{"item": "shells", "weight": 5, "min": 4, "max": 10},
+			{"item": "bolt", "weight": 3, "min": 3, "max": 8},
+			{"item": "plank", "weight": 2, "min": 1, "max": 3}
+		]
+	},
+	"hunting_cabin": {
+		"name": "Hunting cabin locker",
+		"rolls": [2, 4],
+		"items": [
+			{"item": "bolt", "weight": 5, "min": 4, "max": 10},
+			{"item": "shells", "weight": 4, "min": 3, "max": 8},
+			{"item": "gunpowder", "weight": 1, "min": 1, "max": 2}
+		]
+	},
+	"garage": {
+		"name": "Garage shelf",
+		"rolls": [1, 3],
+		"items": [
+			{"item": "bolt", "weight": 2, "min": 2, "max": 6},
+			{"item": "gunpowder", "weight": 2, "min": 1, "max": 2},
+			{"item": "scrap_metal", "weight": 5, "min": 2, "max": 6},
+			{"item": "nails", "weight": 4, "min": 5, "max": 16}
+		]
+	},
+	"ground_pickup": {
+		"name": "Recovered bolt",
+		"rolls": [1, 1],
+		"items": [
+			{"item": "bolt", "weight": 1, "min": 1, "max": 1}
 		]
 	},
 	"zombie": {

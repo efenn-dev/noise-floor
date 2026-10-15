@@ -25,6 +25,10 @@ Game flags (after `--` when calling Godot directly): `--screenshot[=PATH]`, `--t
 V26 screenshot flag: `--slots` opens the title screen's save-slot picker. V29: `--new-game[=SLOT]` opens the New game screen (name and Easy/Normal/Hard) for that slot, 2 by default.
 V25 screenshot flag: `--objectives` shows the first-night objectives panel midway through (the first two goals complete). `--no-hints` suppresses both the original tips and this panel.
 
+V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
+
+V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
+
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.
 
 ## Architecture rules

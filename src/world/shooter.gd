@@ -7,7 +7,20 @@ extends Node3D
 ## held in view, a brief muzzle light and a recoil kick on the camera. Sounds come from SoundView, which plays
 ## the shot's noise event.
 
-const MODELS := {"pistol": "res://assets/models/pistol.glb", "hunting_rifle": "res://assets/models/hunting_rifle.glb"}
+const MODELS := {
+	"pistol": "res://assets/models/pistol.glb",
+	"hunting_rifle": "res://assets/models/hunting_rifle.glb",
+	"shotgun": "res://assets/models/shotgun.glb",
+	"crossbow": "res://assets/models/crossbow.glb",
+}
+const PART_MODELS := {
+	"oil_filter_suppressor": "res://assets/models/part_oil_filter_suppressor.glb",
+	"machined_suppressor": "res://assets/models/part_machined_suppressor.glb",
+	"extended_mag": "res://assets/models/part_extended_mag.glb",
+	"scope": "res://assets/models/part_scope.glb",
+	"padded_stock": "res://assets/models/part_padded_stock.glb",
+	"choke": "res://assets/models/part_choke.glb",
+}
 ## Handheld models are authored with these stable names. Gun Rubber deliberately reuses the fine polymer
 ## grain (there is no separate rubber photo). V2 review: the models' own colours are near black, which hid
 ## the texture, so each material's colour is its photo times `tint` (gun steel reads as dark grey steel).
@@ -18,29 +31,83 @@ const GUN_LOOKS := {
 		"Gun Wood": {"texture": "gun_wood", "tile_m": 0.15, "tint": Color(1.0, 0.95, 0.9)},
 		"Gun Polymer": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.85, 0.85, 0.85)},
 		"Gun Rubber": {"texture": "gun_polymer", "tile_m": 0.15, "tint": Color(0.5, 0.5, 0.5)},
+		"Gun Glass": {"texture": "gun_metal", "tile_m": 0.08, "tint": Color(0.18, 0.55, 0.62), "metallic": 0.1, "roughness": 0.15},
 	},
 	"untextured": [],
 }
 ## Where each gun sits in view (camera space): resting at the lower right, pointing ahead.
-const HOLD := {"pistol": Vector3(0.2, -0.2, -0.42), "hunting_rifle": Vector3(0.18, -0.2, -0.5)}
+const HOLD := {
+	"pistol": Vector3(0.2, -0.2, -0.42),
+	"hunting_rifle": Vector3(0.18, -0.2, -0.5),
+	"shotgun": Vector3(0.19, -0.21, -0.53),
+	"crossbow": Vector3(0.18, -0.23, -0.56),
+}
+## V23: mount points measured on the exported, centred GLBs (metres in gun-local Godot space). The source
+## bounds were pistol x +/-0.0167, y -0.080..0.0795, z -0.1075..0.1075 and rifle x +/-0.0431,
+## y -0.100..0.0663, z -0.5403..0.5403. Mount nodes stay exactly on these points; centred part meshes use
+## PART_OFFSETS to put their attaching face on the mount.
+const ATTACHMENT_ANCHORS := {
+	"pistol": {
+		"muzzle": Vector3(0.0, 0.057, -0.1075),
+		"magazine": Vector3(0.0, -0.080, 0.073),
+		"sight": Vector3(0.0, 0.0795, -0.005),
+	},
+	"hunting_rifle": {
+		"muzzle": Vector3(-0.015, 0.027, -0.5403),
+		"magazine": Vector3(-0.015, -0.034, 0.060),
+		"sight": Vector3(-0.015, 0.0663, -0.010),
+		"stock": Vector3(-0.015, -0.024, 0.5403),
+	},
+	# Exported bounds: x +/-0.035, y -0.090..0.090, z -0.620..0.620.
+	"shotgun": {
+		"muzzle": Vector3(0.0, 0.072, -0.620),
+		"stock": Vector3(0.0, -0.023, 0.606),
+	},
+	# Exported bounds: x +/-0.370, y -0.095..0.095, z -0.585..0.585.
+	"crossbow": {
+		"sight": Vector3(0.0, 0.085, -0.050),
+	},
+}
+const PART_OFFSETS := {
+	"oil_filter_suppressor": Vector3(0.0, 0.0, -0.1125),
+	"machined_suppressor": Vector3(0.0, 0.0, -0.104),
+	"extended_mag": Vector3(0.0, -0.087, 0.0),
+	"scope": Vector3(0.0, 0.045, 0.0),
+	"padded_stock": Vector3(0.0, 0.0, 0.030),
+	"choke": Vector3(0.0, 0.0, -0.045),
+}
 ## V15: the sight tops measured from the exported .glb vertices (the models are centred on their bounding
 ## box, so the .py coordinates don't apply; the rifle's bore runs 15 mm left of centre). ADS_POSES puts the
 ## rear-to-front line through camera-space x/y zero.
 const SIGHT_POINTS := {
 	"pistol": {"rear": Vector3(0, 0.0785, 0.084), "front": Vector3(0, 0.0785, -0.076)},
 	"hunting_rifle": {"rear": Vector3(-0.015, 0.0635, -0.07), "front": Vector3(-0.015, 0.0635, -0.5)},
+	"shotgun": {"rear": Vector3(0.0, 0.089, 0.181), "front": Vector3(0.0, 0.089, -0.564)},
+	"crossbow": {"rear": Vector3(0.0, 0.085, 0.145), "front": Vector3(0.0, 0.085, -0.420)},
 }
 const ADS_POSES := {
 	"pistol": [Vector3(0, -0.0785, -0.42), Vector3.ZERO],
 	"hunting_rifle": [Vector3(0.015, -0.0635, -0.62), Vector3.ZERO],  # further out, so the stock's comb doesn't fill the view
+	"shotgun": [Vector3(0.0, -0.089, -0.66), Vector3.ZERO],
+	"crossbow": [Vector3(0.0, -0.085, -0.65), Vector3.ZERO],
+}
+const SCOPE_SIGHT_POINTS := {
+	"pistol": {"rear": Vector3(0.0, 0.1245, 0.115), "front": Vector3(0.0, 0.1245, -0.125)},
+	"hunting_rifle": {"rear": Vector3(-0.015, 0.1113, 0.110), "front": Vector3(-0.015, 0.1113, -0.130)},
+	"crossbow": {"rear": Vector3(0.0, 0.130, 0.110), "front": Vector3(0.0, 0.130, -0.130)},
+}
+const SCOPE_ADS_POSES := {
+	"pistol": [Vector3(0.0, -0.1245, -0.42), Vector3.ZERO],
+	"hunting_rifle": [Vector3(0.015, -0.1113, -0.62), Vector3.ZERO],
+	"crossbow": [Vector3(0.0, -0.130, -0.65), Vector3.ZERO],
 }
 const FLASH_TIME := 0.06
-const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0}
+const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0, "shotgun": 9.0, "crossbow": 0.8}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
 ## V16: on iron sights the camera skips what's closer than this, so the rifle's stock under your cheek doesn't
 ## fill the bottom of the view (the receiver, sights and both hands are farther out).
-const ADS_NEAR := {"hunting_rifle": 0.34}
+const ADS_NEAR := {"hunting_rifle": 0.34, "shotgun": 0.35, "crossbow": 0.34}
 const IRON_FOV_MULT := 0.85  # V15: iron sights narrow the normal field of view by 15%
 const ADS_SWAY_MULT := 0.12
 const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
@@ -80,6 +147,21 @@ const RIFLE_RELOAD_KEYS := [
 	[0.90, Vector3(0.02, 0.03, 0.0), Vector3(-2, 2, 5), Vector3(-0.02, -0.035, -0.17), Vector3(90, 0, 0), "Grip", "in_gun"],
 	[1.0, Vector3.ZERO, Vector3.ZERO, Vector3(-0.02, -0.035, -0.17), Vector3(90, 0, 0), "Grip", "in_gun"],
 ]
+## One shell step. Gunplay repeats this short sequence until full and a trigger pull can interrupt between steps.
+const SHOTGUN_RELOAD_KEYS := [
+	[0.0, Vector3.ZERO, Vector3.ZERO, Vector3(0.0, -0.015, -0.23), Vector3(90, 0, 0), "Grip", "in_gun"],
+	[0.25, Vector3(0.03, 0.05, 0.03), Vector3(-5, 5, 10), Vector3(-0.15, -0.30, -0.04), Vector3(15, 0, -20), "Pinch", "in_gun"],
+	[0.62, Vector3(0.03, 0.07, 0.03), Vector3(-7, 5, 11), Vector3(-0.02, -0.055, 0.10), Vector3(25, -15, -20), "Pinch", "in_gun"],
+	[0.82, Vector3(0.02, 0.035, 0.01), Vector3(-3, 2, 5), Vector3(0.0, -0.015, -0.23), Vector3(90, 0, 0), "Grip", "in_gun"],
+	[1.0, Vector3.ZERO, Vector3.ZERO, Vector3(0.0, -0.015, -0.23), Vector3(90, 0, 0), "Grip", "in_gun"],
+]
+const CROSSBOW_RELOAD_KEYS := [
+	[0.0, Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -0.18), Vector3(90, 0, 0), "Grip", "in_gun"],
+	[0.18, Vector3(0.02, -0.09, 0.07), Vector3(-18, 5, 8), Vector3(-0.12, -0.24, 0.15), Vector3(20, 0, -20), "Grip", "in_gun"],
+	[0.62, Vector3(0.02, -0.15, 0.09), Vector3(-25, 4, 8), Vector3(-0.02, -0.02, 0.22), Vector3(80, 0, 0), "Pinch", "in_gun"],
+	[0.84, Vector3(0.02, 0.03, 0.02), Vector3(-5, 2, 4), Vector3(0.0, 0.03, -0.34), Vector3(25, 0, -10), "Pinch", "in_gun"],
+	[1.0, Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -0.18), Vector3(90, 0, 0), "Grip", "in_gun"],
+]
 
 var sim: SimWorld
 var camera: Camera3D
@@ -100,6 +182,7 @@ var _aim_weight := 0.0
 
 var _rng := RandomNumberGenerator.new()
 var _models: Dictionary = {}  # base -> Node3D
+var _part_nodes: Dictionary = {}  # gun base -> part base -> the visible model below its measured mount
 var feel: ViewFeel  # V3: carries the kick to the camera, shake, hit marker, impact puffs (null when built alone)
 var _flash: OmniLight3D
 var _flash_time := 0.0
@@ -113,6 +196,7 @@ var _inspect_elapsed := -1.0
 var _inspect_uid := -1
 var _mag_in_hand: Dictionary = {}  # gun base -> the prop parented to Hand_L
 var _drop_mag: MeshInstance3D
+var _last_cooldown := 0.0
 
 ## Guns with the same authored material share one object-space material across every place they are shown.
 static var _material_cache: Dictionary = {}
@@ -140,6 +224,7 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 		node.position = HOLD[base]
 		node.visible = false
 		Hands.attach(node, base, Hands.GUNS)  # V12: hands on the grip and under the barrel
+		_attach_part_models(node, base)
 		var left := node.get_node_or_null("Hand_L") as Node3D
 		if base == "pistol" and left != null:
 			var mag := _make_magazine()
@@ -159,6 +244,38 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	_flash.light_energy = 0.0
 	_flash.position = Vector3(0.2, -0.15, -0.9)
 	camera.add_child(_flash)
+
+
+func _attach_part_models(gun_node: Node3D, gun_id: String) -> void:
+	_part_nodes[gun_id] = {}
+	var slots: Array = sim.data.guns["guns"][gun_id]["part_slots"]
+	for part_id: String in PART_MODELS:
+		var part_def: Dictionary = sim.data.guns["parts"][part_id]
+		var slot := str(part_def["slot"])
+		if not slot in slots or gun_id not in part_def.get("guns", []) \
+				or not ResourceLoader.exists(PART_MODELS[part_id]):
+			continue
+		var mount := Node3D.new()
+		mount.name = "AttachmentMount_" + part_id
+		mount.position = ATTACHMENT_ANCHORS[gun_id][slot]
+		gun_node.add_child(mount)
+		var model := (load(PART_MODELS[part_id]) as PackedScene).instantiate() as Node3D
+		model.name = "Attachment_" + part_id
+		model.position = PART_OFFSETS[part_id]
+		model.visible = false
+		mount.add_child(model)
+		apply_textured_materials(model)
+		for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_part_nodes[gun_id][part_id] = model
+
+
+func _sync_part_models(gun_id: String) -> void:
+	var fitted := {}
+	for part: Dictionary in sim.gear.gun().get("parts", {}).values():
+		fitted[part["base"]] = true
+	for part_id: String in _part_nodes.get(gun_id, {}):
+		(_part_nodes[gun_id][part_id] as Node3D).visible = fitted.has(part_id)
 
 
 ## Apply the named gun surfaces to any instance (hands now; reusable if a 3-D workbench preview is added).
@@ -210,6 +327,10 @@ static func reload_pose(gun_id: String, p: float) -> Dictionary:
 		return _sample_hand_pose(PISTOL_RELOAD_KEYS, p)
 	if gun_id == "hunting_rifle":
 		return _sample_hand_pose(RIFLE_RELOAD_KEYS, p)
+	if gun_id == "shotgun":
+		return _sample_hand_pose(SHOTGUN_RELOAD_KEYS, p)
+	if gun_id == "crossbow":
+		return _sample_hand_pose(CROSSBOW_RELOAD_KEYS, p)
 	var rest := _left_rest(gun_id)
 	var keys := [
 		[0.0, Vector3.ZERO, Vector3.ZERO, rest[0], rest[1], "Grip", "in_gun"],
@@ -226,7 +347,33 @@ static func reload_sounds(gun_id: String) -> Array:
 	if gun_id == "hunting_rifle":
 		return [[0.12, "bolt_open"], [0.47, "round_in"], [0.56, "round_in"],
 				[0.65, "round_in"], [0.72, "bolt_close"]]
+	if gun_id == "shotgun":
+		return [[0.62, "shell_in"]]
+	if gun_id == "crossbow":
+		return [[0.18, "draw_string"], [0.84, "bolt_in"]]
 	return []
+
+
+## The pump is included in the firing cooldown. The moving fore-hand and the small whole-gun translation
+## make the action readable even though the low-poly export is a single optimized mesh.
+static func pump_pose(progress: float) -> Dictionary:
+	var p := clampf(progress, 0.0, 1.0)
+	var travel := 0.0
+	if p < 0.42:
+		travel = smoothstep(0.0, 1.0, p / 0.42) * 0.105
+	else:
+		travel = (1.0 - smoothstep(0.0, 1.0, (p - 0.42) / 0.48)) * 0.105
+	return {"gun_offset": Vector3(0.0, 0.0, travel * 0.18),
+			"hand_position": Vector3(0.0, -0.015, -0.23 + travel)}
+
+
+static func passed_pump_sounds(previous_progress: float, current_progress: float) -> Array[String]:
+	var sounds: Array[String] = []
+	if previous_progress < 0.28 and current_progress >= 0.28:
+		sounds.append("pump_back")
+	if previous_progress < 0.67 and current_progress >= 0.67:
+		sounds.append("pump_forward")
+	return sounds
 
 
 ## Every cue crossed by a forward progress step, in order. The open lower bound prevents repeats.
@@ -313,8 +460,9 @@ static func _rest_pose(gun_id: String) -> Dictionary:
 
 
 ## V15: the exact camera-space pose used at full ADS, kept pure for sight-alignment tests.
-static func aim_pose(gun_id: String) -> Dictionary:
-	var p: Array = ADS_POSES.get(gun_id, [HOLD.get(gun_id, Vector3.ZERO), Vector3.ZERO])
+static func aim_pose(gun_id: String, scoped: bool = false) -> Dictionary:
+	var poses: Dictionary = SCOPE_ADS_POSES if scoped else ADS_POSES
+	var p: Array = poses.get(gun_id, [HOLD.get(gun_id, Vector3.ZERO), Vector3.ZERO])
 	return {"position": p[0] as Vector3, "rotation": p[1] as Vector3}
 
 
@@ -395,19 +543,19 @@ func cancel_inspect() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action("aim") and not event.is_echo():
-		_aim_held = event.is_pressed() and InputSetup.captured()  # a release always lets go
+		_aim_held = event.is_pressed() and InputSetup.captured() and sim.ready_throw == ""  # RMB cancels a throwable without also aiming
 		if _aim_held and sim.guns.in_hand():
 			cancel_inspect()
 	if not InputSetup.captured() or builder.active:
 		return
-	if event.is_action_pressed("attack") and sim.guns.in_hand():
+	if event.is_action_pressed("attack") and sim.guns.in_hand() and sim.ready_throw == "":
 		fire()
 		get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
 	var base: String = sim.gear.gun().get("base", "")
-	var show := sim.guns.in_hand() and not builder.active and not sim.player.dead
+	var show := sim.guns.in_hand() and sim.ready_throw == "" and not builder.active and not sim.player.dead
 	var remaining := sim.guns.reloading
 	var reload_started := remaining > 0.0 and (_last_reloading <= 0.0 or remaining > _last_reloading + 0.001)
 	if reload_started:
@@ -432,6 +580,7 @@ func _process(delta: float) -> void:
 	if remaining > 0.0:
 		reload_p = 1.0 - remaining / maxf(0.001, _reload_total)
 	var reload_cues: Array = []
+	var pump_cues: Array[String] = []
 	if remaining > 0.0 and _reload_sound_progress >= 0.0 and show and base == _reload_sound_gun:
 		reload_cues = passed_reload_sounds(base, _reload_sound_progress, reload_p)
 		_reload_sound_progress = reload_p
@@ -444,9 +593,10 @@ func _process(delta: float) -> void:
 	_aim_weight = 1.0 if hold_aim and aiming() else move_toward(_aim_weight, 1.0 if aiming() else 0.0, delta / handling)  # --aim screenshots start fully aimed
 	for b: String in _models:
 		var node: Node3D = _models[b]
+		_sync_part_models(b)
 		node.visible = show and b == base
 		if node.visible and sim.guns.scoped() and _aim_weight > 0.9:
-			node.visible = false  # V15: looking through the scope: the zoom and the crosshair are the reticle
+			node.visible = false  # V15/V23: looking through the scope the eyepiece would fill the view; the zoom and reticle take over
 		if node.visible:
 			var raise := clampf(sim.guns.raising / maxf(0.01, float(sim.guns.stats()["handling"])), 0.0, 1.0)
 			var pose := _rest_pose(b)
@@ -455,8 +605,16 @@ func _process(delta: float) -> void:
 			elif inspect_p >= 0.0:
 				pose = inspect_pose(b, inspect_p)
 			var hip_position: Vector3 = HOLD[b] + pose["position"] + Vector3(0.0, -0.25 * raise, 0.0)
+			if b == "shotgun" and sim.guns.cooldown > 0.0:
+				var pump_progress := 1.0 - sim.guns.cooldown / float(sim.guns.stats()["cooldown"])
+				var pump := pump_pose(pump_progress)
+				hip_position += pump["gun_offset"] as Vector3
+				pose["left_position"] = pump["hand_position"]
+				var previous_pump := 1.0 - _last_cooldown / float(sim.guns.stats()["cooldown"]) \
+						if _last_cooldown > 0.0 else 0.0
+				pump_cues = passed_pump_sounds(previous_pump, pump_progress)
 			var hip_rotation: Vector3 = pose["rotation"]
-			var ads: Dictionary = aim_pose(b)
+			var ads: Dictionary = aim_pose(b, sim.guns.scoped())
 			node.position = hip_position.lerp(ads["position"] as Vector3, _aim_weight) \
 					+ Vector3(0.0, 0.0, 0.06 * _kick * 10.0)
 			node.rotation = hip_rotation.lerp(ads["rotation"] as Vector3, _aim_weight) \
@@ -472,6 +630,10 @@ func _process(delta: float) -> void:
 		var gun_node: Node3D = _models[base]
 		for cue: Array in reload_cues:
 			SoundView.play_at(self, String(cue[1]), gun_node.global_position, -3.0, randf_range(0.95, 1.05))
+	if not pump_cues.is_empty() and _models.has(base):
+		var pump_node: Node3D = _models[base]
+		for cue: String in pump_cues:
+			SoundView.play_at(self, cue, pump_node.global_position, -2.0, randf_range(0.96, 1.04))
 	if reload_p < 0.0:
 		_free_drop_mag()
 	_flash_time -= delta
@@ -485,6 +647,7 @@ func _process(delta: float) -> void:
 	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(sim.gear.gun().get("base", ""), 0.0))
 	camera.near = lerpf(base_near, maxf(base_near, clip), _aim_weight)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
+	_last_cooldown = sim.guns.cooldown
 	_message_time -= delta
 	if _message_time <= 0.0:
 		last_message = ""
@@ -507,12 +670,25 @@ func fire() -> int:
 		_say(why)
 		return -2
 	var base: String = sim.gear.gun()["base"]
-	_flash_time = FLASH_TIME
+	_flash_time = 0.0 if base == "crossbow" else FLASH_TIME
 	_kick = minf(deg_to_rad(12.0), _kick + deg_to_rad(KICK_DEG.get(base, 2.0)))
 	if feel != null:
 		feel.fired(base)
 	var from := camera.global_position
 	var dir := -camera.global_basis.z
+	if base == "shotgun":
+		var pellet_hits := sim.fire_shotgun_pellets(from, dir)
+		for pellet: Dictionary in pellet_hits:
+			if feel != null:
+				feel.impact(pellet["position"], -dir, "blood")
+				feel.hit_zombie(bool(pellet["killed"]), false)
+		_say("Missed" if pellet_hits.is_empty() else ("Killed it" if pellet_hits.any(func(h: Dictionary) -> bool: return bool(h["killed"])) else "%d pellet hits" % pellet_hits.size()))
+		return int(pellet_hits[0]["zombie"]) if not pellet_hits.is_empty() else -1
+	if base == "crossbow":
+		# The sim owns the one spread roll as well as travel, gravity and hit checks.
+		sim.launch_bolt(from + dir * 0.35, dir, true)
+		_say("Bolt away")
+		return -1
 	if not no_spread:
 		dir = _in_cone(dir, deg_to_rad(sim.guns.spread_deg()))
 	var to := from + dir * float(sim.data.guns["ray_range"])

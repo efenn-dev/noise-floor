@@ -357,6 +357,89 @@ def gunshot(rifle: bool, suppressed: bool) -> np.ndarray:
     return fade_edges(normalize(out, -1))
 
 
+def shotgun_shot() -> np.ndarray:
+    """V30: a huge close shotgun report: hard muzzle crack, deep pressure wave and outdoor slap."""
+    n = seconds(1.9)
+    crack = oneshot_noise(n, hp(1500)) * decay(n, 0.009, attack=0.0005)
+    boom = thump(1.9, 125, 31, 0.25)
+    body = oneshot_noise(n, lp(520, 2)) * decay(n, 0.55, attack=0.012)
+    out = normalize(crack, 0) + 1.7 * boom + 0.9 * normalize(body, 0)
+    for delay_s, gain in ((0.10, 0.38), (0.24, 0.24), (0.46, 0.12)):
+        echo = shape(np.concatenate([np.zeros(seconds(delay_s)), out])[:n], lp(950, 2))
+        out += gain * echo
+    return fade_edges(normalize(out, -0.5))
+
+
+def crossbow_shot() -> np.ndarray:
+    """V30: taut string snap, flexing limbs and a short wooden mechanism click."""
+    n = seconds(0.55)
+    t = t_axis(n)
+    string = np.sin(2 * np.pi * (235 * t + 75 * t * t)) * decay(n, 0.055, attack=0.001)
+    snap = oneshot_noise(n, bp(2700, 1.0)) * decay(n, 0.008, attack=0.0005)
+    limb = np.sin(2 * np.pi * 92 * t) * decay(n, 0.13, attack=0.002)
+    return fade_edges(normalize(string + 0.65 * normalize(snap, 0) + 0.7 * limb, -6))
+
+
+def shell_in() -> np.ndarray:
+    """V30: brass-and-plastic shell pushed past the loading gate."""
+    n = seconds(0.19)
+    scrape = oneshot_noise(n, bp(1050, 1.0)) * decay(n, 0.045, attack=0.015)
+    gate = clank(0.13, [(1450, 1.0, 0.020), (3300, 0.42, 0.009)])
+    out = 0.34 * normalize(scrape, 0)
+    place(out, gate, 0.052, wrap=False)
+    return fade_edges(normalize(out, -8))
+
+
+def pump(back: bool) -> np.ndarray:
+    """V30: ribbed fore-end scraping on twin action bars and stopping hard."""
+    n = seconds(0.30)
+    t = t_axis(n)
+    rasp = oneshot_noise(n, bp(1350 if back else 1650, 1.1))
+    rasp *= np.sin(np.pi * np.clip(t / 0.23, 0.0, 1.0)) ** 1.4
+    out = 0.5 * normalize(rasp, 0)
+    stop = clank(0.10, [(820 if back else 1080, 1.0, 0.025), (2400, 0.45, 0.010)])
+    place(out, stop, 0.19, wrap=False)
+    return fade_edges(normalize(out, -6))
+
+
+def draw_string() -> np.ndarray:
+    """V30: crossbow cord creaks under rising tension, then catches."""
+    n = seconds(0.62)
+    t = t_axis(n)
+    creak_ = oneshot_noise(n, bp(780, 0.7)) * np.sin(np.pi * np.clip(t / 0.54, 0, 1)) ** 2
+    rising = np.sin(2 * np.pi * (70 * t + 115 * t * t)) * np.clip(t / 0.45, 0, 1) * 0.18
+    out = 0.42 * normalize(creak_, 0) + rising
+    place(out, click(), 0.51, wrap=False)
+    return fade_edges(normalize(out, -10))
+
+
+def bolt_in_sound() -> np.ndarray:
+    """V30: wood shaft slides down the rail and the nock taps the string."""
+    n = seconds(0.28)
+    t = t_axis(n)
+    slide = oneshot_noise(n, bp(1200, 0.9)) * np.sin(np.pi * np.clip(t / 0.23, 0, 1)) ** 2
+    out = 0.35 * normalize(slide, 0)
+    place(out, clank(0.07, [(2500, 1.0, 0.012), (4600, 0.3, 0.006)]), 0.20, wrap=False)
+    return fade_edges(normalize(out, -11))
+
+
+def bottle_break_sound() -> np.ndarray:
+    """V30: a thrown bottle's single sharp smash and a short spray of glass."""
+    return fade_edges(normalize(glass_break()[:seconds(0.92)], -2))
+
+
+def pipe_bomb_sound() -> np.ndarray:
+    """V30: violent improvised explosive boom with debris crack and a long low tail."""
+    n = seconds(2.6)
+    blast = oneshot_noise(n, lambda f: hp(650, 2)(f) * lp(9000, 2)(f)) * decay(n, 0.018, attack=0.0004)
+    pressure = thump(2.6, 105, 24, 0.42)
+    tail = oneshot_noise(n, lp(650, 2)) * decay(n, 0.85, attack=0.018)
+    debris = np.zeros(n)
+    for at in rng.uniform(0.05, 0.55, 18):
+        place(debris, rng.uniform(0.08, 0.25) * clank(0.20, [(rng.uniform(600, 2600), 1.0, 0.035)]), at, wrap=False)
+    return fade_edges(normalize(normalize(blast, 0) + 1.8 * pressure + 0.7 * normalize(tail, 0) + debris, -0.2))
+
+
 def creak() -> np.ndarray:
     """V4 ambience: an old house settling, a slow low wooden creak with a wobble."""
     n = seconds(1.4)
@@ -595,11 +678,15 @@ def main() -> None:
     shots = {"swing": swing, "hit_body": hit_body, "bash": bash, "turret_shot": turret_shot, "door": door,
              "build_place": build_place, "click": click, "horn": horn,
              "shot_pistol": lambda: gunshot(False, False), "shot_rifle": lambda: gunshot(True, False),
+             "shot_shotgun": shotgun_shot, "shot_crossbow": crossbow_shot,
              "shot_pistol_suppressed": lambda: gunshot(False, True), "shot_rifle_suppressed": lambda: gunshot(True, True),
              "reload": reload_click,
              # V16: reload choreography and weapon inspection handling
              "mag_out": mag_out, "mag_in": mag_in, "slide_rack": slide_rack,
              "bolt_open": bolt_open, "bolt_close": bolt_close, "round_in": round_in,
+             "shell_in": shell_in, "pump_back": lambda: pump(True), "pump_forward": lambda: pump(False),
+             "draw_string": draw_string, "bolt_in": bolt_in_sound,
+             "bottle_break": bottle_break_sound, "pipe_bomb": pipe_bomb_sound,
              "gun_handle": gun_handle, "blade_handle": blade_handle,
              "sting_close": sting_close, "sting_horde": sting_horde,  # S4: jumpscares
              "creak": creak, "clang_far": clang_far,  # V4: ambience

@@ -67,8 +67,10 @@ const COLS := 4
 const POCKETS := "pockets"
 const CRATE := "crate"
 const WORN := "worn"
+const MOD := "mod"
 const GEAR := "gear:"  # a selected gear piece is "gear:<uid>"
 const BAG := "bag:"    # the worn stackable bag is "bag:<item>"
+const MOD_PART := "modpart:"  # a fitted slot drag is "modpart:<slot>"
 const SLOT_NAMES := {"weapon": "Melee", "head": "Head", "body": "Body", "hands": "Hands", "legs": "Legs",
 		"feet": "Feet", "back": "Back", "light": "Light", "primary": "Primary", "sidearm": "Sidearm",
 		"part": "Firearm part"}
@@ -96,6 +98,11 @@ var _weight_bar: ProgressBar
 var _details: Label
 var _wearing: Control
 var _actions: HBoxContainer
+var _mod_panel: PanelContainer
+var _mod_gun_name: Label
+var _mod_gun_picture: Control
+var _mod_slots: HBoxContainer
+var _mod_stats: GridContainer
 var _hotbar_targets: Array[Button] = []
 var _crates: Array = []  # crate keys within reach, nearest first
 var _crate_index := 0
@@ -105,6 +112,7 @@ var _invalid_drop_shown := false
 var _drag_data: Dictionary = {}
 var _selected := ""
 var _selected_side := ""
+var _mod_gun_uid := -1
 
 
 func setup(p_sim: SimWorld) -> void:
@@ -124,6 +132,7 @@ func open() -> void:
 	_container_id = _crates[0] if not _crates.is_empty() else ""
 	_selected = ""
 	_selected_side = ""
+	_mod_gun_uid = -1
 	_open_health = sim.player.health
 	_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -137,6 +146,7 @@ func open_container(id: String) -> void:
 	_container_id = id
 	_selected = ""
 	_selected_side = ""
+	_mod_gun_uid = -1
 	_open_health = sim.player.health
 	_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -250,7 +260,12 @@ func move(item: String, side: String, whole_stack: bool) -> void:
 
 ## M13: selects a gear piece (in your pockets, or WORN).
 func select_gear(uid: int, side: String = POCKETS) -> void:
-	select(GEAR + str(uid), side)
+	_selected = GEAR + str(uid)
+	_selected_side = side
+	var piece := _gear_at(uid, side)
+	if sim.gear.is_gun(piece):
+		_mod_gun_uid = uid
+	refresh()
 
 
 func select_bag(item: String) -> void:
@@ -267,6 +282,29 @@ func selected_gear() -> Dictionary:
 				return piece
 		return {}
 	return sim.gear.find(uid)
+
+
+func _gear_at(uid: int, side: String) -> Dictionary:
+	if side == CRATE:
+		for piece: Dictionary in sim.container_gear(_container_id):
+			if int(piece["uid"]) == uid:
+				return piece
+		return {}
+	return sim.gear.find(uid)
+
+
+func selected_mod_gun() -> Dictionary:
+	return sim.gun_piece(_mod_gun_uid, _container_id)
+
+
+func fit_part(uid: int, slot: String = "") -> void:
+	message.emit(sim.attach_part_to_gun(_mod_gun_uid, uid, slot, _container_id))
+	refresh()
+
+
+func remove_part(slot: String) -> void:
+	message.emit(sim.detach_part_from_gun(_mod_gun_uid, slot, _container_id))
+	refresh()
 
 
 func equip_selected() -> void:
@@ -390,16 +428,25 @@ func _on_item_input(event: InputEvent, item: String, side: String) -> void:
 
 func _on_gear_input(event: InputEvent, uid: int, side: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+		var piece := _gear_at(uid, side)
 		select_gear(uid, side)
-		if _container_id != "" and side != WORN:
+		if not piece.is_empty() and sim.gear.slot_of(piece) == "part" and side == POCKETS and not selected_mod_gun().is_empty():
+			fit_part(uid)
+		elif _container_id != "" and side != WORN:
 			take_selected()
 		elif side == WORN:
-			var piece := sim.gear.find(uid)
-			if not piece.is_empty():
-				message.emit(sim.unequip_gear(sim.gear.slot_of(piece)))
+			var worn_piece := sim.gear.find(uid)
+			if not worn_piece.is_empty():
+				message.emit(sim.unequip_gear(sim.gear.slot_of(worn_piece)))
 		else:
 			message.emit(sim.equip_gear(uid))
 		refresh()
+		_handled()
+
+
+func _on_mod_slot_input(event: InputEvent, slot: String) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+		remove_part(slot)
 		_handled()
 
 
@@ -419,6 +466,12 @@ func begin_drag(data: Dictionary = {}) -> void:
 
 ## Public for tests: the data Godot carries between _get_drag_data and a drop target.
 func drag_data(value: String, side: String, ctrl: bool = false) -> Dictionary:
+	if value.begins_with(MOD_PART):
+		var slot := value.trim_prefix(MOD_PART)
+		var gun := selected_mod_gun()
+		var part: Dictionary = gun.get("parts", {}).get(slot, {})
+		return {} if part.is_empty() else {"kind": "gun_part", "uid": int(part["uid"]), "gun_uid": _mod_gun_uid,
+				"slot": slot, "side": MOD, "amount": 1, "name": part["name"]}
 	if value.begins_with(GEAR):
 		var piece := {}
 		var uid := int(value.trim_prefix(GEAR))
@@ -444,8 +497,10 @@ func drag_preview(data: Dictionary) -> Control:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(64, 64)
 	var value := str(data.get("item", ""))
-	if data.get("kind", "") == "gear":
+	if data.get("kind", "") in ["gear", "gun_part"]:
 		var piece := sim.gear.find(int(data["uid"]))
+		if piece.is_empty() and data.get("kind", "") == "gun_part":
+			piece = selected_mod_gun().get("parts", {}).get(str(data.get("slot", "")), {})
 		if piece.is_empty():
 			for held: Dictionary in sim.container_gear(_container_id):
 				if int(held["uid"]) == int(data["uid"]):
@@ -486,6 +541,8 @@ func drop_reason(data: Dictionary, target: String) -> String:
 	if target == POCKETS:
 		if side == POCKETS:
 			return "Already in your pockets"
+		if side == MOD and kind == "gun_part":
+			return ""
 		if side == WORN:
 			if kind == "bag":
 				return sim.can_unequip_gear("back")
@@ -499,6 +556,17 @@ func drop_reason(data: Dictionary, target: String) -> String:
 		if _container_id == "" or not sim.container_exists(_container_id) or not sim.container_in_reach(_container_id):
 			return "No container within reach"
 		return "" if side == POCKETS and kind in ["item", "gear"] else "Move it to your pockets first"
+	if target.begins_with("mod:"):
+		if selected_mod_gun().is_empty():
+			return "Select a firearm first"
+		if side != POCKETS:
+			return "Move the part to your pockets first"
+		if kind != "gear":
+			return "Only firearm parts fit attachment slots"
+		var piece := sim.gear.find(int(data["uid"]))
+		if piece.is_empty() or sim.gear.slot_of(piece) != "part":
+			return "Only firearm parts fit attachment slots"
+		return sim.can_attach_part_to_gun(_mod_gun_uid, int(data["uid"]), target.trim_prefix("mod:"), _container_id)
 	if target.begins_with("slot:"):
 		var slot := target.trim_prefix("slot:")
 		if side == CRATE and kind == "gear":
@@ -542,7 +610,9 @@ func drop_data(data: Variant, target: String) -> String:
 	var result := ""
 	var kind := str(data["kind"])
 	var side := str(data["side"])
-	if target == POCKETS and side == WORN:
+	if target == POCKETS and side == MOD:
+		result = sim.detach_part_from_gun(int(data["gun_uid"]), str(data["slot"]), _container_id)
+	elif target == POCKETS and side == WORN:
 		var slot := "back" if kind == "bag" else sim.gear.slot_of(sim.gear.find(int(data["uid"])))
 		result = sim.unequip_gear(slot)
 	elif target == POCKETS:
@@ -555,6 +625,8 @@ func drop_data(data: Variant, target: String) -> String:
 			result = sim.move_container_gear(_container_id, int(data["uid"]), false)["why"]
 		else:
 			result = sim.move_container_item(_container_id, str(data["item"]), int(data["amount"]), false)["why"]
+	elif target.begins_with("mod:"):
+		result = sim.attach_part_to_gun(_mod_gun_uid, int(data["uid"]), target.trim_prefix("mod:"), _container_id)
 	elif target.begins_with("slot:"):
 		var slot := target.trim_prefix("slot:")
 		if side == CRATE and kind == "gear":
@@ -610,6 +682,7 @@ func refresh() -> void:
 			("  (%d / %d xp to the next level)" % [mech[0], mech[1]]) if mech[1] > 0 else ""]
 
 	_fill_wearing()
+	_fill_modding()
 	if _selected.begins_with(BAG):
 		var worn := _selected.trim_prefix(BAG)
 		if str(sim.gear.equipped.get("back", "")) != worn:
@@ -771,6 +844,86 @@ func _fill_wearing() -> void:
 		_wearing.add_child(b)
 
 
+## The selected firearm's data-driven attachment points and sim-computed stat deltas.
+func _fill_modding() -> void:
+	for child in _mod_gun_picture.get_children():
+		_mod_gun_picture.remove_child(child)
+		child.queue_free()
+	for box: Control in [_mod_slots, _mod_stats]:
+		for child in box.get_children():
+			box.remove_child(child)
+			child.queue_free()
+	var gun := selected_mod_gun()
+	_mod_panel.visible = not gun.is_empty()
+	_details.visible = gun.is_empty()
+	_actions.visible = gun.is_empty()
+	if gun.is_empty():
+		_mod_gun_uid = -1
+		return
+	_mod_gun_name.text = "%s  ·  MODDING" % gun["name"]
+	var gun_icon := gear_icon(sim.gear.color(gun), sim.gear.base_of(gun)["name"], Vector2(104, 104), gun["base"])
+	_mod_gun_picture.add_child(gun_icon)
+	for slot_value: Variant in sim.gear.gun_part_slots(gun):
+		var slot := str(slot_value)
+		var part: Dictionary = gun.get("parts", {}).get(slot, {})
+		var b := DragButton.new()
+		b.screen = self
+		b.name = "ModSlot_" + slot
+		b.drop_target = "mod:" + slot
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(86, 78)
+		b.add_theme_font_size_override("font_size", 13)
+		if part.is_empty():
+			b.text = slot.capitalize()
+			b.tooltip_text = "Empty %s slot · drag a matching pocket part here" % slot
+			b.add_theme_stylebox_override("normal", _empty_slot_style())
+		else:
+			b.drag_value = MOD_PART + slot
+			b.drag_side = MOD
+			b.tooltip_text = "%s · %s · drag to Pockets or double-click to remove" % [part["name"],
+					sim.gear.part_text(part)]
+			var icon := gear_icon(sim.gear.color(part), sim.gear.base_of(part)["name"], Vector2(70, 62), part["base"])
+			icon.position = Vector2(8, 3)
+			b.add_child(icon)
+			var label := Label.new()
+			label.text = slot.capitalize()
+			label.position = Vector2(3, 57)
+			label.size = Vector2(80, 18)
+			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			label.add_theme_font_size_override("font_size", 12)
+			label.add_theme_constant_override("outline_size", 4)
+			label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(label)
+			b.gui_input.connect(_on_mod_slot_input.bind(slot))
+		_mod_slots.add_child(b)
+	for row: Dictionary in sim.gear.gun_stat_rows(gun):
+		var label := Label.new()
+		label.text = str(row["label"])
+		label.add_theme_font_size_override("font_size", 15)
+		_mod_stats.add_child(label)
+		var value := Label.new()
+		value.text = str(row["value"])
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value.add_theme_font_size_override("font_size", 15)
+		_mod_stats.add_child(value)
+		var delta := Label.new()
+		delta.text = str(row["delta_text"])
+		delta.custom_minimum_size = Vector2(58, 0)
+		delta.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		delta.add_theme_font_size_override("font_size", 15)
+		if delta.text != "":
+			delta.add_theme_color_override("font_color", Color(0.35, 0.95, 0.45) if row["better"] else Color(1.0, 0.38, 0.3))
+		_mod_stats.add_child(delta)
+
+
+func mod_slot(slot: String) -> Button:
+	return _mod_slots.find_child("ModSlot_" + slot, true, false) as Button
+
+
+func mod_panel_visible() -> bool:
+	return _mod_panel.visible
+
+
 ## V14: an empty slot is a dark tile with a thin grey edge, so you can see where things go.
 static func _empty_slot_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -825,7 +978,9 @@ func _show_gear(piece: Dictionary) -> void:
 			_action("Equip", equip_from_container_selected)  # V27: wear it without taking it first
 		_action("Take", take_selected)
 	elif g.slot_of(piece) == "part":
-		_action("Drop", drop_gear_selected)  # M14: parts go on a gun at a workbench, not on you
+		if not selected_mod_gun().is_empty():
+			_action("Fit to %s" % selected_mod_gun()["name"], fit_part.bind(int(piece["uid"])))
+		_action("Drop", drop_gear_selected)
 	else:
 		_action("Equip", equip_selected)
 		_action("Drop", drop_gear_selected)
@@ -1006,6 +1161,52 @@ func _build() -> void:
 	spacer.custom_minimum_size = Vector2(0, 41)  # line up with the pockets' weight label and bar
 	right.add_child(spacer)
 	_crate_grid = _grid(right, CRATE)
+
+	_mod_panel = PanelContainer.new()
+	_mod_panel.name = "ModdingPanel"
+	_mod_panel.visible = false
+	column.add_child(_mod_panel)
+	var mod_margin := MarginContainer.new()
+	for side: String in ["left", "right", "top", "bottom"]:
+		mod_margin.add_theme_constant_override("margin_" + side, 8)
+	_mod_panel.add_child(mod_margin)
+	var mod_row := HBoxContainer.new()
+	mod_row.add_theme_constant_override("separation", 14)
+	mod_margin.add_child(mod_row)
+	var gun_box := VBoxContainer.new()
+	gun_box.custom_minimum_size = Vector2(180, 112)
+	_mod_gun_name = Label.new()
+	_mod_gun_name.add_theme_font_size_override("font_size", 17)
+	_mod_gun_name.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
+	gun_box.add_child(_mod_gun_name)
+	_mod_gun_picture = Control.new()
+	_mod_gun_picture.custom_minimum_size = Vector2(104, 104)
+	gun_box.add_child(_mod_gun_picture)
+	mod_row.add_child(gun_box)
+	var slots_box := VBoxContainer.new()
+	slots_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var slots_title := Label.new()
+	slots_title.text = "ATTACHMENT SLOTS  ·  drag from Pockets · double-click/drag off to remove"
+	slots_title.add_theme_font_size_override("font_size", 14)
+	slots_title.modulate = Color(1, 1, 1, 0.65)
+	slots_box.add_child(slots_title)
+	_mod_slots = HBoxContainer.new()
+	_mod_slots.add_theme_constant_override("separation", 6)
+	slots_box.add_child(_mod_slots)
+	mod_row.add_child(slots_box)
+	var stats_box := VBoxContainer.new()
+	stats_box.custom_minimum_size = Vector2(280, 0)
+	var stats_title := Label.new()
+	stats_title.text = "WEAPON STATS  ·  fitted change"
+	stats_title.add_theme_font_size_override("font_size", 14)
+	stats_title.modulate = Color(1, 1, 1, 0.65)
+	stats_box.add_child(stats_title)
+	_mod_stats = GridContainer.new()
+	_mod_stats.columns = 3
+	_mod_stats.add_theme_constant_override("h_separation", 8)
+	_mod_stats.add_theme_constant_override("v_separation", 1)
+	stats_box.add_child(_mod_stats)
+	mod_row.add_child(stats_box)
 
 	_details = Label.new()
 	_details.add_theme_font_size_override("font_size", 20)

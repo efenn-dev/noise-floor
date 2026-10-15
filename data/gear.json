@@ -31,11 +31,14 @@
 		"headlamp": {"name": "Headlamp", "slot": "light", "weight": 0.2, "base": {"search_speed": 0.05}},
 		"pistol": {"name": "Pistol", "slot": "sidearm", "gun": "pistol", "weight": 1.0},
 		"hunting_rifle": {"name": "Hunting rifle", "slot": "primary", "gun": "hunting_rifle", "weight": 3.5},
+		"shotgun": {"name": "Pump shotgun", "slot": "primary", "gun": "shotgun", "weight": 3.7},
+		"crossbow": {"name": "Crossbow", "slot": "primary", "gun": "crossbow", "weight": 3.2},
 		"oil_filter_suppressor": {"name": "Oil-filter suppressor", "slot": "part", "part": "oil_filter_suppressor", "weight": 0.3},
 		"machined_suppressor": {"name": "Machined suppressor", "slot": "part", "part": "machined_suppressor", "weight": 0.4},
 		"extended_mag": {"name": "Extended magazine", "slot": "part", "part": "extended_mag", "weight": 0.2},
 		"scope": {"name": "Scope", "slot": "part", "part": "scope", "weight": 0.4},
-		"padded_stock": {"name": "Padded stock", "slot": "part", "part": "padded_stock", "weight": 0.5}
+		"padded_stock": {"name": "Padded stock", "slot": "part", "part": "padded_stock", "weight": 0.5},
+		"choke": {"name": "Shotgun choke", "slot": "part", "part": "choke", "weight": 0.15}
 	},
 	"stats": {
 		"melee_damage": {"text": "+%d%% melee damage", "min": 0.10, "max": 0.25},

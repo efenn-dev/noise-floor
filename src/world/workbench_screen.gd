@@ -1,9 +1,9 @@
 class_name WorkbenchScreen
 extends CanvasLayer
-## M14/V14 slots: E on a workbench. Left: the selected primary or sidearm, its numbers and its four part
+## M14/V23 slots: E on a workbench. Left: the selected primary or sidearm, its data-driven part
 ## slots (click a slot to take the part off). Middle: the gun parts in your pockets (click one to attach it).
 ## Right: what the bench makes by hand (ammo from casings, suppressors, a stock), greyed out with the reason
-## when you can't. The rules are in the sim (SimWorld.attach_part, detach_part, bench_craft); this only shows them.
+## when you can't. Field fitting also lives in Tab now; the bench remains the place that crafts parts and ammo.
 
 signal message(text: String)
 
@@ -92,7 +92,8 @@ func refresh() -> void:
 		_gun_label.text = "\n".join(PackedStringArray([gun["name"]] + sim.gear.stat_lines(gun).filter(
 				func(l: String) -> bool: return not l.contains(": ") or l.begins_with("Loaded"))))
 		_gun_label.add_theme_color_override("font_color", sim.gear.color(gun))
-		for slot: String in sim.data.guns["part_slots"]:
+		for slot_value: Variant in sim.gear.gun_part_slots(gun):
+			var slot := str(slot_value)
 			var part: Dictionary = gun["parts"].get(slot, {})
 			var b := _button("Slot_" + slot, "%s: %s" % [slot.capitalize(), part.get("name", "-")])
 			b.disabled = part.is_empty()

@@ -46,7 +46,8 @@ func test_a_death_writes_the_log() -> void:
 	check("Built 1 piece: 1 foundation." in lines, "what you built")
 	check("  0:00 built a foundation" in lines, "the timeline")
 	check("Wearing at the end: Melee: Pipe (white)." in lines, "what you wore at the end (P3)")
-	check("Firearms: never fired." in lines and "Houses entered: 0." in lines, "the P3 lines")
+	check("Weapons: never fired or thrown." in lines and "Throws: none." in lines \
+			and "Houses entered: 0." in lines, "the P3/V30 lines")
 	DirAccess.remove_absolute(PATH)
 	slog.queue_free()
 	await tree.process_frame

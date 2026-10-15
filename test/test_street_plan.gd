@@ -166,9 +166,9 @@ func test_trash_is_mostly_nothing() -> void:
 		if got.is_empty():
 			empty += 1
 		for item: String in got:
-			allowed = allowed and item in ["scrap_metal", "nails", "bandage", "canned_food"]
+			allowed = allowed and item in ["scrap_metal", "nails", "bandage", "canned_food", "bottle"]  # V30: empty bottles to throw
 		allowed = allowed and got.size() <= 1
-	check(allowed, "only scrap, nails, a bandage or canned food, one thing at most")
+	check(allowed, "only scrap, nails, a bandage, canned food or a bottle, one thing at most")
 	check(empty > 200 and empty < 340, "mostly nothing (%d of 400 empty)" % empty)
 
 

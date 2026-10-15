@@ -48,7 +48,7 @@ func test_assigning_and_what_is_allowed() -> void:
 	eq(h.assign(6, "slot:primary"), "", "a weapon slot can move")
 	eq(h.entry(6), "slot:primary", "to key 7")
 	eq(h.entry(1), "", "leaving key 2")
-	eq(h.assign(2, "item:plank"), "Only food, drink and bandages go on the hotbar", "planks don't")
+	eq(h.assign(2, "item:plank"), "Only usable items and throwables go on the hotbar", "planks don't")
 	eq(h.assign(2, "build:town_wall"), "Only found in town", "town pieces don't")
 	eq(h.assign(2, "build:no_such_piece"), "Unknown piece", "unknown pieces don't")
 	eq(h.assign(2, "item:no_such_item"), "Unknown item", "unknown items don't")
