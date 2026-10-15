@@ -143,6 +143,7 @@ func _add_wrecks(list: Array) -> void:
 		if ResourceLoader.exists(WRECK_MODELS.get(type, "")):
 			var model := (load(WRECK_MODELS[type]) as PackedScene).instantiate() as Node3D
 			model.rotation.y = PI  # the car models face -Z like everything else; a wreck's way doesn't matter
+			model.position.y = (WRECK_BOXES.get(type, Vector3(2, 1.6, 4.5)) as Vector3).y / 2.0  # kit models are centred on their box
 			_rust(model)
 			body.add_child(model)
 		var box: Vector3 = WRECK_BOXES.get(type, Vector3(2, 1.6, 4.5))
