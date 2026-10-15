@@ -293,9 +293,7 @@ func _ready() -> void:
 		shooter.hold_reload_at = clampf(float(args["reload-at"]), 0.0, 1.0)
 	if args.has("inspect-at"):
 		var at := clampf(float(args["inspect-at"]), 0.0, 1.0)
-		if sim.ready_throw != "":
-			parts.append_array(["LMB hold/release throw", "RMB cancel"])
-		elif sim.guns.in_hand():
+		if sim.guns.in_hand():
 			shooter.hold_inspect_at = at
 			shooter.start_inspect()
 		else:
@@ -346,7 +344,7 @@ func _give_gun(which: String, bench: bool) -> void:
 	if which == "pete":
 		piece = sim.gear.roll_unique(RandomNumberGenerator.new(), "petes_deer_rifle")
 	else:
-		var gun_base := {"rifle": "hunting_rifle", "shotgun": "shotgun", "crossbow": "crossbow"}.get(which, "pistol")
+		var gun_base: String = {"rifle": "hunting_rifle", "shotgun": "shotgun", "crossbow": "crossbow"}.get(which, "pistol")
 		piece = sim.gear.make(gun_base, "civilian", "white")
 	sim.gear.pieces.append(piece)
 	sim.gear.equip(int(piece["uid"]))  # V14: a pistol lands in the sidearm slot, a rifle in primary
@@ -1551,7 +1549,9 @@ func key_hint_text() -> String:
 		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
 	else:
 		parts.append_array(interactor.keys())
-		if sim.guns.in_hand():
+		if sim.ready_throw != "":
+			parts.append_array(["LMB hold/release throw", "RMB cancel"])  # V30: a throwable is readied
+		elif sim.guns.in_hand():
 			parts.append_array(["LMB fire", "RMB aim", "R reload", "V inspect"])
 			parts.append("Q pipe")
 		else:

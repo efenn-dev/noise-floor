@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V30 Shotgun, crossbow, pipe bomb and bottle (Sprint 4)
+
+The session logs say fighting is the fun; Emmitt asked for grenades earlier. Built by Codex (one job on his ChatGPT plan, on top of V23 attachments); fixes and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Pump shotgun** (Primary): 6 shells, 8 pellets of 18 in a 4.5 degree cone with falloff from 12 to 28 m, loudness 100, a pump between shots (0.85 s), loads one shell at a time (0.58 s each, firing interrupts). Takes a padded stock and a new **choke** (40% tighter spread); no suppressor or scope.
+- **Crossbow** (Primary): 100 damage, loudness 25, one bolt, 2.8 s draw; the bolt is a real projectile in the sim (55 m/s with gravity), drawn in flight; 70% of bolts can be picked back up from bodies or where they land. Takes a scope; bolts are craftable.
+- **Pipe bomb** (throwable): hold to throw with an arc preview, bounces, 3 s fuse, 5 m blast with damage, knockback and stun that fall off, hurts you too, lightly damages pieces, and is loud enough (150) to draw everything around: a lure as much as a weapon. Crafted at the bench (scrap, gunpowder, nails).
+- **Glass bottle** (throwable): shatters where it lands with a noise (65) that zombies go to investigate, for sneaking past.
+- Throwables go on the hands bar; left click holds/releases to throw, right click cancels. Models, icons and sounds for all of them; grips and sights measured from the models; loot and recipes.
+- Fixes by Claude: a Codex edit had pasted the throw key hints into the `--inspect-at` code (main.gd didn't compile); kitchens found guns 3x as often as before and the unplaced police/hunter/cabin sources beat warehouse crates (rebalanced); bottles made trash bins mostly full (rarer now).
+
+**Try it on the PC:** `play.bat --gun=shotgun`, `play.bat --gun=crossbow`, `play.bat --throw=pipe_bomb`, `play.bat --throw=bottle`.
+
+**Tests:** 13,149 green (new `test_new_weapons.gd`).
+
+**Known gap (from V22, now visible on every long gun):** the left arm's sleeve extension shows its open end and looks detached from the forearm on the rifle, shotgun and crossbow fore-end grip; fixing next.
+
 ## 2026-10-14 — V23 Tarkov-style gun attachments (Sprint 4)
 
 Emmitt: "the attachments for guns, none of them work, make it so the guns have attachment slots like in tarkov." Built by Codex (one job on his ChatGPT plan); review, one fix and the checks by Claude Opus 5.5.
