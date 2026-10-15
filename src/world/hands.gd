@@ -188,7 +188,7 @@ const SKELETON_PATH := "Armature/Skeleton3D"
 ## V31: the model's own sleeve runs straight down the bone, but its hand and cuff sit about 8 cm to one side of
 ## that line, so on a long gun's fore-end the sleeve showed as a separate pipe beside the wrist. The tube is
 ## centred on the cuff now (measured from the mesh) and the model's own sleeve is hidden.
-const SLEEVE_EXTENSION := {"wrist_gap": 0.05, "past_elbow": 0.45, "wrist_radius": 0.046, "shoulder_radius": 0.066}
+const SLEEVE_EXTENSION := {"wrist_gap": 0.0, "past_elbow": 0.45, "wrist_radius": 0.042, "shoulder_radius": 0.066}
 static var _pose_libraries: Dictionary = {}  # side -> AnimationLibrary, built once
 static var _cuff_centres: Dictionary = {}  # side -> Vector3, measured once
 static var _hidden: StandardMaterial3D
