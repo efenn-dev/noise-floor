@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — V35 Zombies die facing you
+
+Emmitt: "the zombies seem to die facing away from the player each time". By Claude Opus 5.5.
+
+**Found:** the zombies' Death animation (Quaternius UAL "Death01") falls *backwards*, but V7 assumed it fell forwards and turned every dying zombie to face away from the blow first, so each one showed you its back and fell toward you.
+
+**Fixed:** a dying zombie now turns to face whoever hit it (you, when nothing knocked it) and goes down one of two ways:
+- **Backwards** (6 in 10, and always after a hard hit like a shotgun blast or a heavy swing): the Death animation, sliding back a little from the blow, landing on its back with its feet toward you.
+- **Forwards** (the rest): its hit reaction, then it tips over toward you about its feet and lands face down.
+
+`ZombieBody.death_style_for` picks by id, so the same zombie always dies the same way. Screenshot flags: `--dead-zombies` now shows bodies already fallen, and `--death-style=back|forward` forces one.
+
+**Try it:** `play.bat --zombie=-3,-5,0,-5,3,-5,-1.5,-8,1.5,-8 --dead-zombies --advance=1.6 --cam=0,0,0,0,-14`, or just fight.
+
+**Tests:** 13,525 green (`test_hits_deaths.gd`: facing the blow, hard hits go backwards, the 6-in-10 split, the forward tip).
+
+**Known gaps:** a forward fall uses the hit reaction's bent-knee pose, so the feet stay a little raised once it's down; a proper forward-death animation would need a new motion clip (none in the free packs).
 ## 2026-10-15 — W3a The bigger world: roads, countryside and a tiled navmesh
 
 Emmitt: "it needs a much bigger world" (town + countryside). Props by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
