@@ -114,6 +114,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	difficulty = Difficulty.new(data.difficulty)
 	apply_difficulty(p_difficulty)
 	build = BuildGrid.new(data)
+	_setup_resource_nodes()  # F1
 	factory = Factory.new(data)
 	power = PowerGrid.new(data, build, factory)
 	climate = Climate.new(data, build, power)
@@ -2370,6 +2371,36 @@ func alpha() -> float:
 
 
 ## Building a machine or belt adds it to the factory.
+## F1 (Emmitt: building "more like Satisfactory"): the resource nodes on the map (data/resources.json): each
+## {id, kind, name, purity, rate, cell, pos (its spot's centre), prop_pos, yaw, extractor}. Fixed, not saved.
+var resource_nodes: Array = []
+
+
+func _setup_resource_nodes() -> void:
+	resource_nodes.clear()
+	build.nodes.clear()
+	var kinds: Dictionary = data.resources.get("kinds", {})
+	for n: Dictionary in data.resources.get("nodes", []):
+		var raw: Array = n["pos"]
+		var cell := Vector2i(floori(float(raw[0]) / BuildGrid.GRID), floori(float(raw[1]) / BuildGrid.GRID))
+		var centre := Vector3((cell.x + 0.5) * BuildGrid.GRID, 0, (cell.y + 0.5) * BuildGrid.GRID)
+		var off: Array = n.get("prop", [0, 0])
+		var kind: Dictionary = kinds[n["kind"]]
+		resource_nodes.append({"id": n["id"], "kind": n["kind"], "name": kind["name"], "purity": n["purity"],
+				"rate": float(data.resources["purity"][n["purity"]]), "cell": cell, "pos": centre,
+				"prop_pos": centre + Vector3(float(off[0]), 0, float(off[1])), "yaw": deg_to_rad(float(n.get("yaw", 0))),
+				"extractor": kind["extractor"], "model": kind.get("model", n["kind"])})
+		build.nodes[cell] = n["kind"]
+
+
+## F1: the resource node whose spot is `cell` ({} if none).
+func node_at(cell: Vector2i) -> Dictionary:
+	for n: Dictionary in resource_nodes:
+		if n["cell"] == cell:
+			return n
+	return {}
+
+
 func _on_piece_added(key: String) -> void:
 	var piece: Dictionary = build.pieces[key]
 	stats.note_built(piece["id"])
@@ -2380,7 +2411,9 @@ func _on_piece_added(key: String) -> void:
 		"turret":
 			factory.add_turret(piece["id"], piece["cell"])
 		"machine":
-			factory.add_machine(piece["id"], piece["cell"], piece["side"])
+			var m := factory.add_machine(piece["id"], piece["cell"], piece["side"])
+			if str(data.buildables[piece["id"]].get("needs_node", "")) != "":  # F1: an extractor works at its node's purity
+				m.node_rate = float(node_at(piece["cell"]).get("rate", 1.0))
 		"belt":
 			factory.add_belt(piece["cell"], piece["side"])
 		"hopper", "repair_station":

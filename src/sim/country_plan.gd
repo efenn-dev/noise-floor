@@ -18,7 +18,8 @@ const EDGE_SPACING := 6.0
 const ROAD_CLEAR := 3.5        # metres kept free either side of a road
 const SCALES := [0.8, 1.0, 1.2, 1.4]
 const KEEP_CLEAR := ["town", "park", "downtown", "residential_west", "residential_east", "farm_west", "farm_south",
-		"highway", "cabin"]
+		"highway", "cabin", "junkyard"]
+const NODE_CLEAR := 8.0  # F1: metres kept free round each resource node (its spot and its model)
 const JAMS := [-410.0, -170.0, 150.0, 260.0]  # where wrecks pile up along the highway (z)
 const WRECKS_PER_JAM := 3
 const WRECK_TYPES := ["sedan", "pickup"]
@@ -29,7 +30,12 @@ const JUNCTION_GAP := 14.0   # the guardrails stop this far either side of Marke
 const BARRIER_INSET := 8.0   # barriers stand this far inside the map's edge
 
 
-static func generate(seed_value: int) -> Dictionary:
+static var _keep_out: Array = []  # F1: Vector2s with nothing grown within NODE_CLEAR (set by generate)
+
+
+## `keep_out`: points (x, z) to keep clear (the resource nodes).
+static func generate(seed_value: int, keep_out: Array = []) -> Dictionary:
+	_keep_out = keep_out
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, "country"])
 	var trees: Array = []
@@ -53,12 +59,15 @@ static func generate(seed_value: int) -> Dictionary:
 			field += 1
 	for p: Vector2 in _edge_points(rng):
 		_try(trees, p, rng, true)
-	return {"trees": trees, "props": _props(rng, trees), "wrecks": _wrecks(rng)}
+	var props := _props(rng, trees)
+	var wrecks := _wrecks(rng)
+	_junkyard(rng, props, wrecks)
+	return {"trees": trees, "props": props, "wrecks": wrecks}
 
 
 ## Adds a tree at `p` unless something must stay clear there. Returns whether it did.
 static func _try(trees: Array, p: Vector2, rng: RandomNumberGenerator, edge: bool) -> bool:
-	if not WorldMap.EXTENT.has_point(p) or WorldMap.on_road(p, ROAD_CLEAR):
+	if not WorldMap.EXTENT.has_point(p) or WorldMap.on_road(p, ROAD_CLEAR) or _near_node(p):
 		return false
 	for id: String in KEEP_CLEAR:
 		if (WorldMap.AREAS[id] as Rect2).grow(4.0).has_point(p):
@@ -148,13 +157,54 @@ static func _props(rng: RandomNumberGenerator, trees: Array) -> Array:
 	return out
 
 
+static func _near_node(p: Vector2) -> bool:
+	for k: Vector2 in _keep_out:
+		if k.distance_to(p) < NODE_CLEAR:
+			return true
+	return false
+
+
 static func _clear(p: Vector2) -> bool:
-	if not WorldMap.EXTENT.grow(-6.0).has_point(p) or WorldMap.on_road(p, ROAD_CLEAR):
+	if not WorldMap.EXTENT.grow(-6.0).has_point(p) or WorldMap.on_road(p, ROAD_CLEAR) or _near_node(p):
 		return false
 	for id: String in KEEP_CLEAR:
 		if (WorldMap.AREAS[id] as Rect2).grow(4.0).has_point(p):
 			return false
 	return true
+
+
+## F1: the junkyard (WorldMap.AREAS["junkyard"]): a wooden fence round it, open where the lane comes in, and
+## wrecked cars piled inside, clear of the scrap heaps' spots.
+static func _junkyard(rng: RandomNumberGenerator, props: Array, wrecks: Array) -> void:
+	var yard: Rect2 = WorldMap.AREAS["junkyard"]
+	var gate_z := -40.0  # the junkyard lane comes in on the west side here
+	var x := yard.position.x + 1.0
+	while x < yard.end.x:
+		for z: float in [yard.position.y, yard.end.y]:
+			props.append({"kind": "farm_fence", "pos": Vector3(x, 0, z), "yaw": 0.0, "scale": 1.0})
+		x += 2.0
+	var z := yard.position.y + 1.0
+	while z < yard.end.y:
+		if absf(z - gate_z) > 4.0:
+			props.append({"kind": "farm_fence", "pos": Vector3(yard.position.x, 0, z), "yaw": PI / 2.0, "scale": 1.0})
+		props.append({"kind": "farm_fence", "pos": Vector3(yard.end.x, 0, z), "yaw": PI / 2.0, "scale": 1.0})
+		z += 2.0
+	var placed := 0
+	var tries := 0
+	while placed < 7 and tries < 200:
+		tries += 1
+		var p := Vector2(rng.randf_range(yard.position.x + 5, yard.end.x - 5), rng.randf_range(yard.position.y + 5, yard.end.y - 5))
+		if _near_node(p) or WorldMap.on_road(p, 3.0):
+			continue
+		var clash := false
+		for w: Dictionary in wrecks:
+			if Vector2(w["pos"].x, w["pos"].z).distance_to(p) < 6.0:
+				clash = true
+		if clash:
+			continue
+		wrecks.append({"type": WRECK_TYPES[rng.randi_range(0, WRECK_TYPES.size() - 1)], "pos": Vector3(p.x, 0, p.y),
+				"yaw": rng.randf_range(0, TAU)})
+		placed += 1
 
 
 static func _wrecks(rng: RandomNumberGenerator) -> Array:

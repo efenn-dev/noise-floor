@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — F1 Resource nodes and extractors (building like Satisfactory, part 1)
+
+Emmitt: "I'd like the building to be more like Satisfactory but it doesn't feel like it fits into the game right now." Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5. Stacked on W3a (#78).
+
+**Why:** nothing in the survival loop needed a factory: loot gave you everything and machines only made noise. F1 gives the factory things only it can do.
+
+**Built:**
+- **16 resource nodes on the map** (`data/resources.json`): scrap heaps in a new **junkyard** east of town (fenced, wrecked cars, a dirt lane from East Street) and by the highway jams, **farm wells**, two **crashed fuel tankers** by the highway, and **timber stands** in the woods. Each is poor (x0.5), normal or rich (x2). Its own model stands beside a **yellow painted spot**; looking at either says what it is and what to build ("Scrap heap (rich) - Build a Salvager on the yellow spot").
+- **Four extractors** (Build menu, new **Extractors** group): **Salvager** (scrap metal, very loud), **Water pump** (dirty water), **Fuel pump** (gas cans for generators and cars), **Sawmill** (planks; a portable bandsaw mill, for Emmitt's HM122). They go only on their kind's spot, need no foundation, need power, make their resource with nothing put in, at the node's purity, and are as loud as machines should be: an outpost draws zombies.
+- Rules: `BuildGrid.nodes` + `needs_node` in buildables.json; `Factory.Machine.node_rate`; `SimWorld.resource_nodes` / `node_at()`. Nothing new is saved (nodes are fixed; extractors are pieces like any machine).
+- `NodeView` draws the nodes and spots; the countryside keeps clear of them. Flags: `--demo-outpost` (one of each extractor built and running), `--at=junkyard|timber`.
+
+**Try it:** `play.bat --at=junkyard --demo-outpost`, or find the junkyard (east of East Street, down the dirt lane) and build a Salvager on a yellow spot with a generator and a power pole.
+
+**Tests:** 13,883 green (new `test_resource_nodes.gd`: the data, every node on the map and off the roads, spot-only placement with no foundation, each extractor making its resource with no input at its purity, rich = 2x normal, loudness, no trees on nodes).
+
+**Known gaps:** outposts are far from town and belts cost a plate per 2 m, so for now you fetch the output by hand or by car (F3 brings better logistics); nodes never run dry; the salvager's claw doesn't move.
+
+**Next:** F2, the Hub and milestones (deliver parts to unlock machines and tiers, ending in a radio rescue), then F3 build feel.
+
 ## 2026-10-15 — W3a The bigger world: roads, countryside and a tiled navmesh
 
 Emmitt: "it needs a much bigger world" (town + countryside). Props by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.

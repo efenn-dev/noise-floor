@@ -32,13 +32,14 @@ class Machine:
 	var watts := 0.0       # power it draws while working (0 = needs no power)
 	var powered := true    # set by PowerGrid each tick; an unpowered machine does nothing
 	var frozen := false    # M16: a planter in winter: its timer pauses (set by Factory.tick)
+	var node_rate := 1.0   # F1: an extractor works its resource node this many times its recipe's speed (purity)
 
 	## Would draw power this tick: working, or able to start.
 	func wants_power() -> bool:
 		return crafting or _can_start()
 
 	func craft_time() -> float:
-		return recipe["time"] * time_scale
+		return recipe["time"] * time_scale / maxf(node_rate, 0.01)
 
 	func accepts(item: String) -> bool:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP

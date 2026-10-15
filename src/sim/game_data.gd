@@ -27,6 +27,7 @@ var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, c
 var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
+var resources: Dictionary = {}   # F1: resource node kinds, purities and the nodes on the map: data/resources.json
 var load_errors: PackedStringArray = []
 
 
@@ -48,6 +49,8 @@ static func load_default() -> GameData:
 	data.projects = _read_json(DIR + "projects.json", data)
 	data.projects.erase("_about")
 	data.difficulty = _read_json(DIR + "difficulty.json", data)
+	data.resources = _read_json(DIR + "resources.json", data)
+	data.resources.erase("_about")
 	return data
 
 
@@ -70,6 +73,7 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"size": Vector3(size[0], size[1], size[2]) if size.size() == 3 else Vector3.ZERO,
 			"cost": cost,
 			"recipe": b.get("recipe", ""),
+			"needs_node": b.get("needs_node", ""),          # F1: an extractor goes only on this kind of resource node
 			"recipes": Array(b.get("recipes", [])),  # M13: a machine that can switch (the Press)
 			"hp": int(b.get("hp", 0)),
 			"loudness": float(b.get("loudness", 0.0)),
@@ -196,6 +200,13 @@ func validate() -> PackedStringArray:
 			if float(e.get("weight", 0)) <= 0.0 or int(e.get("min", 0)) < 1 or int(e.get("max", 0)) < int(e.get("min", 0)):
 				errors.append("loot '%s' entry '%s' needs weight > 0 and 1 <= min <= max" % [table, e.get("item", "")])
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
+	for kind: String in resources.get("kinds", {}):  # F1
+		var ex := str(resources["kinds"][kind].get("extractor", ""))
+		if not buildables.has(ex) or str(buildables[ex].get("needs_node", "")) != kind:
+			errors.append("resource kind '%s' needs an extractor buildable whose needs_node is '%s'" % [kind, kind])
+	for n: Dictionary in resources.get("nodes", []):
+		if not resources["kinds"].has(n.get("kind", "")) or not resources.get("purity", {}).has(n.get("purity", "")):
+			errors.append("resource node '%s' has an unknown kind or purity" % n.get("id", "?"))
 	for id: String in zombies:
 		var z: Dictionary = zombies[id]
 		if not z.has("name") or str(z["name"]) == "":

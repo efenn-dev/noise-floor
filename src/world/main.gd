@@ -6,7 +6,8 @@ extends Node3D
 ##   --time=HOURS          start at this hour, e.g. --time=22 for night
 ##   --day=N               start on day N (M16: days 1-7 summer, 8-14 autumn, 15-21 winter, 22-28 spring)
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
-##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west)
+##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
+##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
@@ -63,6 +64,8 @@ const AT_PLACES := {
 	"woods": [Vector3(-120, 0, -192), 60.0, 0.0],     # on the woods track, looking north-west into the trees
 	"farms": [Vector3(-170, 0, 100), 0.0, 0.0],       # the farm lane by the county road
 	"west": [Vector3(-60, 0, 0), 0.0, 0.0],           # West Street, looking north
+	"junkyard": [Vector3(150, 0, -46), 15.0, -12.0],  # F1: the junkyard's scrap heaps, from the lane
+	"timber": [Vector3(-114, 0, -170), 75.0, -14.0],  # F1: a timber stand in the woods, from the track
 }
 
 var sim: SimWorld
@@ -87,6 +90,7 @@ var park_view: ParkView
 var road_view: RoadView  # W3a: the bigger map's new roads
 var country_view: CountryView  # W3a: woods, field trees, highway wrecks, the map's edge
 var country: Dictionary = {}
+var node_view: NodeView  # F1: resource nodes (their models and yellow spots)
 var park_pieces := 0  # M17a: warehouse pieces the park plan laid this run (0 when the save holds them)
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
 var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
@@ -299,6 +303,15 @@ func _ready() -> void:
 		_give_mod_screen(str(args["mod-screen"]))
 	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("demo-outpost"):  # F1: one of each extractor on its node, running
+		sim.power.free = true
+		var stock := Inventory.new()
+		stock.give_all({"metal_plate": 200, "nails": 200, "scrap_metal": 200})
+		var done := {}
+		for n: Dictionary in sim.resource_nodes:
+			if not done.has(n["kind"]):
+				done[n["kind"]] = true
+				sim.build.place(n["extractor"], n["cell"], BuildGrid.Side.NORTH, stock)
 	if args.has("throw"):
 		var throwable := str(args["throw"])
 		if throwable not in ["pipe_bomb", "bottle"]:
@@ -1176,11 +1189,19 @@ func _build_country() -> void:
 	road_view = RoadView.new()
 	road_view.name = "RoadView"
 	add_child(road_view)
-	country = CountryPlan.generate(sim.seed_value)
+	var keep_out: Array = []  # F1: nothing grows on the resource nodes
+	for n: Dictionary in sim.resource_nodes:
+		keep_out.append(Vector2(n["pos"].x, n["pos"].z))
+		keep_out.append(Vector2(n["prop_pos"].x, n["prop_pos"].z))
+	country = CountryPlan.generate(sim.seed_value, keep_out)
 	country_view = CountryView.new()
 	country_view.name = "CountryView"
 	add_child(country_view)
 	country_view.setup(country)
+	node_view = NodeView.new()
+	node_view.name = "NodeView"
+	add_child(node_view)
+	node_view.setup(sim)
 
 
 ## M17a: the industrial park north of the factory hall (ParkPlan): the park road's asphalt, the warehouses

@@ -11,6 +11,10 @@
 		"in": { "metal_plate": 1 },
 		"out": { "nails": 4 }
 	},
+	"salvage_scrap": { "name": "Scrap metal", "time": 8.0, "in": {}, "out": { "scrap_metal": 1 } },
+	"pump_water": { "name": "Well water", "time": 10.0, "in": {}, "out": { "dirty_water": 1 } },
+	"pump_fuel": { "name": "Gas", "time": 45.0, "in": {}, "out": { "gas_can": 1 } },
+	"saw_planks": { "name": "Planks", "time": 6.0, "in": {}, "out": { "plank": 1 } },
 	"collect_rain": {
 		"name": "Rainwater",
 		"time": 20.0,

@@ -34,7 +34,9 @@ const ROADS := [
 	{"id": "west_street", "kind": "asphalt", "width": 7.0, "drawn": true,
 			"points": [Vector2(-60, 60), Vector2(-60, -106), Vector2(-25, -106)]},
 	{"id": "east_street", "kind": "asphalt", "width": 7.0, "drawn": true,
-			"points": [Vector2(60, 60), Vector2(60, -106), Vector2(0, -106)]},
+			"points": [Vector2(60, 60), Vector2(60, -40), Vector2(60, -106), Vector2(0, -106)]},
+	{"id": "junkyard_lane", "kind": "dirt", "width": 5.0, "drawn": true,  # F1: out to the junkyard's scrap heaps
+			"points": [Vector2(60, -40), Vector2(140, -40)]},
 	{"id": "county_west", "kind": "asphalt", "width": 6.0, "drawn": true,
 			"points": [Vector2(-170, 60), Vector2(-360, 60)]},
 	{"id": "farm_lane", "kind": "dirt", "width": 5.0, "drawn": true,
@@ -64,6 +66,7 @@ const AREAS := {
 	"woods": Rect2(-360, -460, 300, 260),       # W3d: dense trees round the track
 	"cabin": Rect2(-245, -325, 38, 40),         # W3d: the hunting cabin, in a clearing west of the track
 	"highway": Rect2(246, -460, 32, 760),
+	"junkyard": Rect2(140, -70, 70, 60),        # F1: scrap heaps (resource nodes)
 }
 
 static var _graph: Dictionary = {}  # built once: {"nodes": [Vector2], "adj": [[ [node, length], ... ]]}

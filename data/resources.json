@@ -1,0 +1,28 @@
+{
+	"_about": "F1 resource nodes (Satisfactory-style): places in the world only a machine can work. Build the kind's extractor on the node's marked spot (pos, snapped to its 2 m cell) and it makes that resource at the node's purity times its recipe's speed. prop is where the node's own model stands, as an offset from the spot, turned yaw degrees.",
+	"kinds": {
+		"scrap_heap": { "name": "Scrap heap", "extractor": "salvager", "model": "scrap_heap" },
+		"well": { "name": "Farm well", "extractor": "water_pump", "model": "well" },
+		"fuel_tank": { "name": "Fuel tanker", "extractor": "fuel_pump", "model": "fuel_tanker" },
+		"timber": { "name": "Timber stand", "extractor": "sawmill", "model": "timber_stand" }
+	},
+	"purity": { "poor": 0.5, "normal": 1.0, "rich": 2.0 },
+	"nodes": [
+		{ "id": "junkyard_1", "kind": "scrap_heap", "purity": "rich", "pos": [153, -57], "prop": [0, -4.0], "yaw": 10 },
+		{ "id": "junkyard_2", "kind": "scrap_heap", "purity": "normal", "pos": [177, -53], "prop": [0, -4.0], "yaw": -20 },
+		{ "id": "junkyard_3", "kind": "scrap_heap", "purity": "normal", "pos": [197, -27], "prop": [4.0, 0], "yaw": 70 },
+		{ "id": "junkyard_4", "kind": "scrap_heap", "purity": "poor", "pos": [161, -21], "prop": [0, 4.0], "yaw": 160 },
+		{ "id": "highway_jam_1", "kind": "scrap_heap", "purity": "poor", "pos": [241, -171], "prop": [-4.0, 0], "yaw": 95 },
+		{ "id": "highway_jam_2", "kind": "scrap_heap", "purity": "poor", "pos": [241, 151], "prop": [-4.0, 0], "yaw": 80 },
+		{ "id": "farm_west_well", "kind": "well", "purity": "normal", "pos": [-263, 139], "prop": [0, -2.5], "yaw": 0 },
+		{ "id": "farm_south_well", "kind": "well", "purity": "rich", "pos": [-93, 197], "prop": [0, -2.5], "yaw": 0 },
+		{ "id": "roadside_well", "kind": "well", "purity": "poor", "pos": [17, 183], "prop": [2.5, 0], "yaw": 90 },
+		{ "id": "highway_tanker", "kind": "fuel_tank", "purity": "rich", "pos": [283, -61], "prop": [5.5, 0], "yaw": 90 },
+		{ "id": "junction_tanker", "kind": "fuel_tank", "purity": "normal", "pos": [239, 101], "prop": [-5.5, 0], "yaw": 85 },
+		{ "id": "timber_1", "kind": "timber", "purity": "rich", "pos": [-121, -173], "prop": [-3.5, 0], "yaw": 30 },
+		{ "id": "timber_2", "kind": "timber", "purity": "normal", "pos": [-183, -239], "prop": [-3.5, 0], "yaw": 60 },
+		{ "id": "timber_3", "kind": "timber", "purity": "normal", "pos": [-179, -345], "prop": [-3.5, 0], "yaw": 90 },
+		{ "id": "timber_4", "kind": "timber", "purity": "poor", "pos": [-123, -263], "prop": [3.5, 0], "yaw": -40 },
+		{ "id": "timber_5", "kind": "timber", "purity": "rich", "pos": [-271, -253], "prop": [0, 3.5], "yaw": 15 }
+	]
+}

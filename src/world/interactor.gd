@@ -21,6 +21,7 @@ var exclude: Array[RID] = []
 
 var target_cell := Vector2i.ZERO
 var has_target := false
+var target_node := ""  # F1: the resource node being looked at ("" if none)
 var target_bag := -1  # id of the death bag being looked at, -1 if none
 var target_container := ""  # id of the loot container being looked at, "" if none
 var target_key := ""  # piece key of the machine/belt/bed/crate being looked at
@@ -120,6 +121,7 @@ func update_target() -> void:
 	var was_car := target_car
 	has_target = false
 	target_bag = -1
+	target_node = ""
 	target_container = ""
 	target_key = ""
 	target_car = ""
@@ -145,6 +147,9 @@ func update_target() -> void:
 			target_container = car.id
 		if target_car != was_car:
 			last_message = ""
+		return
+	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("resource_node"):  # F1
+		target_node = str(hit["collider"].get_meta("resource_node"))
 		return
 	if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("project_id"):
 		target_project = hit["collider"].get_meta("project_id")
@@ -276,7 +281,21 @@ func door_blocked(key: String) -> bool:
 	return not get_world_3d().direct_space_state.intersect_shape(params, 1).is_empty()
 
 
+## F1: what a resource node says when you look at it.
+func node_status(id: String) -> String:
+	for n: Dictionary in sim.resource_nodes:
+		if n["id"] == id:
+			var extractor: String = sim.data.buildables[n["extractor"]]["name"]
+			var built := sim.factory.machines.get(n["cell"]) as Factory.Machine
+			if built != null:
+				return "%s (%s)%s%s: %s" % [n["name"], n["purity"], "\n", extractor, built.status()]
+			return "%s (%s)%sBuild a %s on the yellow spot (B, Extractors)" % [n["name"], n["purity"], "\n", extractor]
+	return ""
+
+
 func status_text() -> String:
+	if target_node != "":
+		return node_status(target_node)
 	if target_bag != -1:
 		return "Your bag\n[E] pick it up"
 	if target_car != "":
