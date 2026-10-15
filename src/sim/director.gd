@@ -175,7 +175,8 @@ func first_night_events(clock: GameClock, player_pos: Vector3, sheltered: bool, 
 	var events := []
 	if clock.day == 1 and clock.time_of_day >= 19.0 and not first_night_warning_sent:
 		first_night_warning_sent = true
-		events.append({"kind": "warning"})
+		if clock.time_of_day < 21.0:  # Q6: a game started or loaded after dark skips "It'll be dark at 21:00"
+			events.append({"kind": "warning"})
 	if clock.day == 1 and clock.time_of_day >= 21.0 and not first_night_wave_sent:
 		first_night_wave_sent = true
 		first_night_deaths = deaths

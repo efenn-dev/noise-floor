@@ -94,6 +94,9 @@ var _told_corpse := false  # S4: "dead zombies can be searched", once
 ## Written by the world each frame: moving while crouched (Sneaking xp near zombies that haven't noticed you).
 var player_sneaking := false
 var spawn_point := Vector3.ZERO
+## Q6: seconds after a respawn during which zombies take no notice of you (data/survival.json "respawn_grace"),
+## so dying near your bed doesn't mean dying again the moment you're back. Swinging, shooting or throwing ends it.
+var respawn_grace := 0.0
 ## Bags dropped where the player died: {id: int, pos: Vector3, items: {item: count}}.
 var bags: Array = []
 var _next_bag := 1
@@ -229,7 +232,8 @@ func step() -> void:
 	if not found.is_empty():
 		_finish_search(found)
 	var night := clock.is_night()
-	var ctx := {"player_pos": player_pos, "player_dead": player.dead, "night": night,
+	respawn_grace = maxf(0.0, respawn_grace - TICK)
+	var ctx := {"player_pos": player_pos, "player_dead": player.dead or respawn_grace > 0.0, "night": night,
 			"player_lit": player_lit or automation.in_light(player_pos), "pieces": build.pieces, "noise": noise}
 	for e: Dictionary in horde.tick(TICK, ctx):
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
@@ -1751,6 +1755,7 @@ func fit_muffler(cell: Vector2i) -> String:
 ## Starts a melee swing if the weapon is ready and there's stamina (PlayerStats.try_swing). Swinging
 ## trains Strength. Returns true if it swung.
 func swing() -> bool:
+	respawn_grace = 0.0
 	if not player_vault.is_empty() or not player.try_swing(swing_cooldown()):
 		return false
 	_practice("strength", "swing")
@@ -1824,6 +1829,7 @@ func weapon_skill() -> String:
 ## The player hits zombie `id` with their weapon (call after swing() succeeds and the swing
 ## connects). `head` doubles the damage. Returns true if it killed the zombie.
 func hit_zombie(id: int, head: bool) -> bool:
+	respawn_grace = 0.0
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null:
 		return false
@@ -1873,6 +1879,7 @@ func draw_weapon(slot: String) -> String:
 ## Trains Firearms. Returns "" if it fired, otherwise why not. The world then raycasts and calls
 ## shoot_zombie() if the ray met a zombie.
 func fire() -> String:
+	respawn_grace = 0.0
 	if not player_vault.is_empty():
 		return "Finish climbing first"
 	var why := guns.can_fire()
@@ -2014,6 +2021,7 @@ static func predict_throw_arc(origin: Vector3, velocity: Vector3, gravity: float
 
 
 func throw_ready_item(origin: Vector3, velocity: Vector3) -> String:
+	respawn_grace = 0.0
 	if ready_throw == "":
 		return "Nothing readied"
 	if inventory.count(ready_throw) <= 0:
@@ -2323,6 +2331,7 @@ func take_bag(id: int) -> Dictionary:
 
 
 func _on_player_respawned() -> void:
+	respawn_grace = float(data.survival.get("respawn_grace", 0.0))
 	player_vault = {}
 	clearing_glass = {}
 	vault_landing = Vector3.INF

@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
+
+The check DIRECTION.md asks for before a playtest, on `main` at #73 (attachments, guidance, save slots, crawler and brute, difficulty and the first night, new weapons, the arm fix all merged), by Claude Opus 5.5 on the PC. Also read the newest session logs (45 minutes on 10-14: 11 perk points earned and none spent, two gold pieces found but a white pipe worn, nothing built, no deaths; V25 and V29 were aimed at exactly that).
+
+**Found and fixed:**
+- **Iron sights sliced your right hand.** Since V16 the camera skipped everything closer than 34 cm while aiming a long gun, so the stock didn't fill the view, but that also cut the right glove and sleeve into a hollow horn shape. Now only the gun's own surfaces fade out up close (a per-pixel distance fade on the gun's materials, `Shooter._fading_gun_materials`), and the right arm runs whole to the bottom-right corner, like an arm. `test_ads_fade.gd`.
+- **Respawning into the zombies that killed you** (Q5 flagged it; this soak hit it on the first night: dead at 21:12, again at 21:19, again at 22:01). For 8 seconds after a respawn zombies take no notice of you (`respawn_grace` in `data/survival.json`), so you can get away; swinging, shooting or throwing ends it early. `test_respawn_grace.gd` (fails without the fix). The soak bot still dies three times, because it fights instead of running and its swing ends the head start; a person runs.
+- **The dusk warning after dark:** a game started or loaded on day 1 after 21:00 said "It'll be dark at 21:00" with "Night falls" under it (tour shot 08). The warning now only shows between 19:00 and 21:00. Test in `test_difficulty.gd`.
+- `docs/SPRINT.md` caught up: V6 to V22 marked merged, V23 to V31 and Q6 added.
+
+**Found, not changed:**
+- The bot ran out of water twice (dehydration on day 2 night and day 4); Q5 had one. That's mostly the bot never searching for water; worth watching in Playtest #2.
+- Director heat reads 145 in the soak: that's fine, the cap has been 150 since M5.
+
+**Result:** `tools/soak.sh --days=3` reports SOAK OK twice (136 and 150 s per game-day, no errors, no stuck physics). `tools/tour.sh`: all 16 shots fine. `tools/test.sh`: 13,518 passed.
+
+**Try it on the PC:** `play.bat --gun=rifle --time=12`, hold right click (iron sights). To see the head start, die near zombies on purpose and run when you come back.
+
+**Next:** Playtest #2 (V8): 30 minutes from a new game, pick a difficulty, and the session log pasted into `docs/PLAYTESTS.md`.
+
 ## 2026-10-14 — V31 The left arm on long guns is one arm again (Sprint 4)
 
 Seen in V30's screenshots: on the hunting rifle the left forearm looked like a separate floating pipe beside the hand. By Claude Opus 5.5.

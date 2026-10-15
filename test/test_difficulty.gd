@@ -151,6 +151,15 @@ func test_warning_and_first_wave_happen_once_and_hunt_outside() -> void:
 	eq(_said(sim, "Night falls"), 1, "the nightfall message does not repeat")
 
 
+func test_a_game_started_after_dark_gets_no_dusk_warning() -> void:
+	var sim := SimWorld.new(22.0, null, 11, "normal")
+	sim.step()
+	eq(_said(sim, "It'll be dark at 21:00. Find shelter: a bed inside walls with a door"), 0,
+			"Q6: starting at 22:00, no warning that it'll be dark at 21:00")
+	eq(_said(sim, "Night falls"), 1, "the night still falls, with its wave")
+	check(sim.director.first_night_warning_sent, "and the warning is marked done")
+
+
 func test_shelter_holds_the_wave_until_the_player_makes_noise() -> void:
 	var sim := SimWorld.new(20.99, null, 29, "normal")
 	_build_shelter(sim)
