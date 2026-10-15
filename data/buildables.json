@@ -248,6 +248,20 @@
 		"size": [1.9, 12.0, 1.9],
 		"cost": { "metal_plate": 40, "nails": 40 }
 	},
+	"splitter": {
+		"name": "Splitter",
+		"kind": "splitter",
+		"hp": 80,
+		"size": [1.4, 0.5, 1.4],
+		"cost": { "metal_plate": 3, "nails": 4 }
+	},
+	"merger": {
+		"name": "Merger",
+		"kind": "merger",
+		"hp": 80,
+		"size": [1.4, 0.5, 1.4],
+		"cost": { "metal_plate": 3, "nails": 4 }
+	},
 	"storage": {
 		"name": "Storage crate",
 		"kind": "storage",

@@ -5,7 +5,7 @@ extends Node3D
 ## menu (B) or a hotbar key (1-9, 0), and Esc turns it off; the mouse wheel steps through PIECES (the order
 ## the build menu lists them in). R turns the piece: walls move to the next edge, belts and machines turn to
 ## face the next way (default: facing away from you). Left-click builds, right-click removes the piece you're
-## looking at (full refund).
+## looking at (full refund). F3: hold left-click and drag to build a straight row.
 
 const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
@@ -21,7 +21,9 @@ const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "
 		# M16: heat
 		"stove", "electric_heater",
 		# M17a: unlocked by the water tower
-		"water_tap"]
+		"water_tap",
+		# F3: belt routing
+		"splitter", "merger"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 
@@ -44,6 +46,13 @@ var last_message := ""
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ghost_nose: MeshInstance3D  # marks the front of belts and machines
+## F3 (building like Satisfactory): hold the place button and drag to lay a straight run ("zoop") of up to
+## ZOOP_MAX pieces: foundations, walls along their edge, belts facing the way you drag. Release to build.
+const ZOOP_MAX := 32
+var dragging := false
+var drag_from := Vector2i.ZERO
+var drag_side := 0
+var _run_ghosts: Array[MeshInstance3D] = []
 
 
 func setup(p_sim: SimWorld, p_camera: Camera3D, p_exclude: Array[RID]) -> void:
@@ -71,6 +80,7 @@ func piece() -> String:
 
 
 func set_active(on: bool) -> void:
+	dragging = false
 	active = on
 	last_message = ""
 	if not on:
@@ -102,7 +112,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		turns = (turns + 1) % 4
 	elif InputSetup.captured():
 		if event.is_action_pressed("build_place"):
-			try_place()
+			start_drag()
+		elif event.is_action_released("build_place") and dragging:
+			finish_drag()
 		elif event.is_action_pressed("build_remove"):
 			try_remove()
 
@@ -124,6 +136,111 @@ func try_place() -> String:
 			SoundView.play_at(self, "build_place", sim.build.center_for(piece(), aim_cell, aim_side), -4.0, randf_range(0.9, 1.1))
 		update_aim()
 	return last_message
+
+
+## F3: the place button went down: a run starts here (released at once, it's a single piece).
+func start_drag() -> void:
+	update_aim()
+	if not aim_valid:
+		last_message = "Aim at the ground"
+		return
+	dragging = true
+	drag_from = aim_cell
+	drag_side = aim_side
+
+
+## F3: the place button came up: builds the run from where it went down to where you aim now.
+func finish_drag() -> String:
+	dragging = false
+	_hide_run()
+	update_aim()
+	var to := aim_cell if aim_valid else drag_from
+	var cells := run_cells(sim.build.is_edge(piece()), drag_from, to, drag_side)
+	var side := run_side(piece(), drag_from, to, drag_side)
+	var placed := 0
+	var why := ""
+	for c: Vector2i in cells:
+		var reason := sim.build.can_place(piece(), c, side, _stock())
+		if reason == "" and placement_blocked(piece(), c, side):
+			reason = "Something's in the way"
+		if reason == "":
+			reason = sim.build.place(piece(), c, side, _stock())
+		if reason == "":
+			placed += 1
+		elif why == "":
+			why = reason
+	if placed > 0:
+		SoundView.play_at(self, "build_place", sim.build.center_for(piece(), cells[0], side), -4.0, randf_range(0.9, 1.1))
+	var piece_name: String = sim.data.buildables[piece()]["name"]
+	if cells.size() == 1:
+		last_message = why
+	elif placed == cells.size():
+		last_message = "Built %d %s" % [placed, piece_name.to_lower()]
+	else:
+		last_message = "Built %d of %d %s (%s)" % [placed, cells.size(), piece_name.to_lower(), why.to_lower()]
+	update_aim()
+	return last_message
+
+
+## F3: the cells of a straight run from `from` toward `to`: along the edge for walls (a wall on a north or south
+## edge runs east-west), else along whichever way you dragged further. At most ZOOP_MAX, `from` first.
+static func run_cells(edge: bool, from: Vector2i, to: Vector2i, side: int) -> Array[Vector2i]:
+	var d := to - from
+	var along_x := (side == BuildGrid.Side.NORTH or side == BuildGrid.Side.SOUTH) if edge else absi(d.x) >= absi(d.y)
+	var n := absi(d.x) if along_x else absi(d.y)
+	var step := Vector2i(signi(d.x), 0) if along_x else Vector2i(0, signi(d.y))
+	var out: Array[Vector2i] = []
+	for i in mini(n, ZOOP_MAX - 1) + 1:
+		out.append(from + step * i)
+	return out
+
+
+## F3: the side a run's pieces face: belts, splitters and mergers face the way you dragged; anything else
+## keeps the side it had where the run began.
+static func run_side(id: String, from: Vector2i, to: Vector2i, side: int) -> int:
+	if not id in ["belt", "splitter", "merger"] or from == to:
+		return side
+	var d := to - from
+	if absi(d.x) >= absi(d.y):
+		return BuildGrid.Side.EAST if d.x > 0 else BuildGrid.Side.WEST
+	return BuildGrid.Side.SOUTH if d.y > 0 else BuildGrid.Side.NORTH
+
+
+func _show_run() -> void:
+	var cells := run_cells(sim.build.is_edge(piece()), drag_from, aim_cell, drag_side)
+	var side := run_side(piece(), drag_from, aim_cell, drag_side)
+	if cells.size() < 2:
+		_hide_run()
+		return
+	while _run_ghosts.size() < cells.size():
+		var g := MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		g.material_override = mat
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		g.top_level = true
+		add_child(g)
+		_run_ghosts.append(g)
+	var box := BoxMesh.new()
+	var size: Vector3 = sim.data.buildables[piece()]["size"]
+	box.size = Vector3(maxf(size.x - 0.2, 0.05), size.y + 0.02, maxf(size.z - 0.2, 0.05))  # a gap between, so you can count them
+	for i in _run_ghosts.size():
+		var g: MeshInstance3D = _run_ghosts[i]
+		g.visible = i < cells.size()
+		if not g.visible:
+			continue
+		g.mesh = box
+		g.global_position = sim.build.center_for(piece(), cells[i], side)
+		g.rotation_degrees = Vector3(0, sim.build.yaw_for(piece(), cells[i], side), 0)
+		var ok := sim.build.can_place(piece(), cells[i], side, _stock()) == ""
+		(g.material_override as StandardMaterial3D).albedo_color = Color(0.3, 1.0, 0.4, 0.35) if ok else Color(1.0, 0.25, 0.2, 0.35)
+	_ghost.visible = false
+
+
+func _hide_run() -> void:
+	for g: MeshInstance3D in _run_ghosts:
+		g.visible = false
 
 
 func try_remove() -> String:
@@ -168,6 +285,8 @@ func update_aim() -> void:
 	if aim_reason == "" and placement_blocked(id, aim_cell, aim_side):
 		aim_reason = "Something's in the way"
 	_show_ghost(id)
+	if dragging:
+		_show_run()  # F3
 
 
 ## True if a town building, car, the player, a zombie or anything else on the WORLD layer overlaps the piece.
@@ -210,7 +329,7 @@ func status_text() -> String:
 	var info: Dictionary = sim.data.buildables[piece()]
 	var lines := PackedStringArray()
 	lines.append("BUILD  %s  (%s)" % [info["name"], _cost_text(info["cost"])])
-	var hint := "1-0 hotbar · wheel: next piece · B menu · R rotate · LMB build · RMB remove · Esc stop · uses crates within %dm" % int(sim.data.survival["storage_range"])
+	var hint := "1-0 hotbar · wheel: next piece · B menu · R rotate · LMB build (drag: a row) · RMB remove · Esc stop · uses crates within %dm" % int(sim.data.survival["storage_range"])
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)

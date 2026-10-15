@@ -13,6 +13,8 @@ const COLORS := {
 	"foundation": Color(0.55, 0.45, 0.32),
 	"wall": Color(0.62, 0.52, 0.38),
 	"belt": Color(0.16, 0.16, 0.18),
+	"splitter": Color(0.22, 0.22, 0.25),  # F3
+	"merger": Color(0.22, 0.22, 0.25),
 	"machine": Color(0.42, 0.44, 0.4),
 	"bed": Color(0.35, 0.4, 0.6),
 	"storage": Color(0.5, 0.38, 0.22),
@@ -39,8 +41,9 @@ const COLORS := {
 	"stove": Color(0.2, 0.2, 0.2),
 	"heater": Color(0.85, 0.85, 0.8),
 }
-## M15: walk-over pieces (only rays see them): spike strips, bear traps, tripwires.
-const WALK_OVER := ["trap", "bear_trap", "tripwire"]
+## M15: walk-over pieces (only rays see them): spike strips, bear traps, tripwires. F3: and belts, so a belt run
+## out across a field doesn't fence you in.
+const WALK_OVER := ["trap", "bear_trap", "tripwire", "belt"]
 const INPUT_COLOR := Color(0.25, 0.45, 0.9)
 const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
 ## Art made with Codex: models built by tools/art/<id>.py (checked by test_art_models.gd) replace the box mesh,
@@ -145,6 +148,14 @@ func _on_added(key: String) -> void:
 			# Two pale chevron bars toward the front (-Z) show which way it runs.
 			for z in [-0.55, 0.25]:
 				_add_part(body, Vector3(0.7, 0.02, 0.12), Vector3(0, size.y / 2.0 + 0.01, z), Color(0.8, 0.75, 0.3))
+		"splitter", "merger":
+			# F3: a tab on each side, orange where items go out and blue where they come in (front is -Z): a
+			# splitter takes at its back and gives out the other three, a merger the other way round.
+			for d: Vector3 in [Vector3(0, 0, -1), Vector3(-1, 0, 0), Vector3(1, 0, 0), Vector3(0, 0, 1)]:
+				var out := d == Vector3(0, 0, -1) if info["kind"] == "merger" else d != Vector3(0, 0, 1)
+				var tab := Vector3(0.12, 0.3, 0.7) if d.x != 0.0 else Vector3(0.7, 0.3, 0.12)
+				_add_part(body, tab, d * (size.x / 2.0 + 0.06), OUTPUT_COLOR if out else INPUT_COLOR)
+			_add_part(body, Vector3(0.12, 0.02, 0.8), Vector3(0, size.y / 2.0 + 0.01, 0), Color(0.8, 0.75, 0.3))
 		"machine":
 			_add_part(body, Vector3(0.7, 0.5, 0.12), Vector3(0, -size.y / 2.0 + 0.4, -size.z / 2.0 - 0.06), OUTPUT_COLOR)
 			_add_part(body, Vector3(0.7, 0.5, 0.12), Vector3(0, -size.y / 2.0 + 0.4, size.z / 2.0 + 0.06), INPUT_COLOR)

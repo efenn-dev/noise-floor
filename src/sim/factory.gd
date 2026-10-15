@@ -11,6 +11,8 @@ const BELT_SPEED := 1.0
 const SPACING := 0.25
 const INPUT_CAP := 20   # per input item
 const OUTPUT_CAP := 50  # per output item
+const ROUTER_CAP := 2   # F3: items a splitter or merger holds while its outputs are blocked
+const STORAGE_FROM_BELT_CAP := 500  # F3: a crate fed by a belt stops taking at this many items
 ## A planter's crop: Farming adds planter_extra of these per harvest grown (M12).
 const CROP := "vegetable"
 
@@ -108,6 +110,21 @@ class Belt:
 		items.append({"item": item, "pos": 0.0, "prev": 0.0})
 
 
+## F3: a splitter or a merger. A splitter takes items at its back and hands them out front, left and right in
+## turn (skipping a side that's full or empty of belts); a merger takes them at its back, left and right and
+## hands them out front. Holds up to ROUTER_CAP while its outputs are blocked.
+class Router:
+	extends RefCounted
+	var cell: Vector2i
+	var facing: int
+	var kind := "splitter"
+	var items: Array = []  # waiting to go out, oldest first
+	var next_out := 0      # a splitter's turn: 0 front, 1 left, 2 right
+
+	func can_accept() -> bool:
+		return items.size() < ROUTER_CAP
+
+
 ## A turret's magazine: takes its ammo by hand, from a belt on any side or from a hopper behind it (M15).
 ## M15: it may also carry gun parts (a suppressor in "muzzle", a scope in "sight"), gear pieces attached by hand.
 class Turret:
@@ -130,6 +147,9 @@ var machines: Dictionary = {}  # Vector2i -> Machine
 var turrets: Dictionary = {}   # Vector2i -> Turret
 var belts: Dictionary = {}     # Vector2i -> Belt
 var bins: Dictionary = {}      # Vector2i -> Bin (M15: hoppers and repair stations)
+var routers: Dictionary = {}   # Vector2i -> Router (F3: splitters and mergers)
+## F3: the storage crate at a cell, if any (SimWorld sets it): a belt ending at a crate puts its items in.
+var storage_at: Callable
 
 
 ## M15: a piece that holds a stack of one item: a hopper (any turret ammo; feeds the turret in front of it)
@@ -232,6 +252,9 @@ func add_bin(id: String, cell: Vector2i, facing: int) -> Bin:
 ## Removes whatever is at `cell` and returns the items it held ({item: count}).
 func remove_at(cell: Vector2i) -> Dictionary:
 	var held := contents_at(cell)
+	for item: Variant in (routers[cell].items if routers.has(cell) else []):
+		held[item] = int(held.get(item, 0)) + 1
+	routers.erase(cell)
 	machines.erase(cell)
 	belts.erase(cell)
 	turrets.erase(cell)
@@ -264,6 +287,8 @@ func tick(dt: float) -> void:
 	var belt_cells := _sorted(belts)
 	for cell: Vector2i in belt_cells:
 		_move_belt(belts[cell], dt)
+	for cell: Vector2i in _sorted(routers):  # F3: splitters and mergers hand on what they hold
+		_route(routers[cell])
 	for cell: Vector2i in belt_cells:
 		var belt: Belt = belts[cell]
 		if not belt.items.is_empty() and belt.items[0]["pos"] >= 1.0:
@@ -368,8 +393,41 @@ func _move_belt(belt: Belt, dt: float) -> void:
 		entry["pos"] = maxf(entry["pos"], minf(entry["pos"] + speed * dt, limit))
 
 
+## F3: adds a splitter or merger.
+func add_router(kind: String, cell: Vector2i, facing: int) -> Router:
+	var r := Router.new()
+	r.kind = kind
+	r.cell = cell
+	r.facing = facing
+	routers[cell] = r
+	return r
+
+
+## F3: a router hands its oldest item on: a merger out of its front, a splitter to the next side in turn that
+## takes it (front, left, right).
+func _route(r: Router) -> void:
+	if r.items.is_empty():
+		return
+	var outs: Array = [r.facing] if r.kind == "merger" else [r.facing, (r.facing + 3) % 4, (r.facing + 1) % 4]
+	for k in outs.size():
+		var i := (r.next_out + k) % outs.size()
+		if _give(r.cell + DIRS[outs[i]], r.cell, r.items[0]):
+			r.items.pop_front()
+			r.next_out = (i + 1) % outs.size()
+			return
+
+
 ## Hands one item from `from` to whatever is at `to`, if it will take it from that side.
 func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
+	if routers.has(to):  # F3
+		var r: Router = routers[to]
+		var side := DIRS.find(from - to)  # which way `from` is from the router
+		var back := (r.facing + 2) % 4
+		var takes := side == back if r.kind == "splitter" else side != r.facing
+		if not takes or not r.can_accept():
+			return false
+		r.items.append(item)
+		return true
 	if belts.has(to):
 		var b: Belt = belts[to]
 		if to + DIRS[b.facing] == from or not b.can_accept():
@@ -394,6 +452,11 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 			return false  # machines only take input at their back
 		m.input[item] = m.input.get(item, 0) + 1
 		return true
+	if storage_at.is_valid():  # F3: a storage crate takes from a belt on any side
+		var crate: Variant = storage_at.call(to)
+		if crate != null and (crate as Inventory).items().reduce(func(acc: int, it: String) -> int: return acc + crate.count(it), 0) < STORAGE_FROM_BELT_CAP:
+			(crate as Inventory).add(item, 1)
+			return true
 	return false
 
 

@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — F3 Build feel: drag-placing, field belts, splitters and mergers (building like Satisfactory, part 3)
+
+Emmitt: building should feel like Satisfactory. Code and checks by Claude Opus 5.5. Stacked on F2 (#81).
+
+**Built:**
+- **Drag to build a row** ("zooping"): hold left-click, walk or look along, let go. Foundations go in a straight line along whichever way you dragged further; walls run along their edge (a wall on a north edge runs east-west); belts face the way you dragged. Up to 32 at once. Green/red ghosts show each piece while you drag; the HUD says "Built 6 foundations" or "Built 4 of 6 (not enough materials)". A click without dragging still builds one.
+- **Belts on bare ground:** belts, splitters and mergers no longer need a foundation, so a line can run from a salvager out at the junkyard back to base. On a foundation they sit on top as before. Belts are now walk-over (like spike strips) so a belt line doesn't fence you in.
+- **Belts fill crates:** a belt (or a machine's output) ending at a storage crate puts its items in, up to 500 items per crate. Extractor → belt → crate now works with no one standing there.
+- **Splitter and merger** (Factory group; new **Logistics** milestone, tier 2: 15 plates, 15 nails, 10 planks): a splitter takes items at its back and sends them out the front, left and right in turn, skipping a side with nothing to take them; a merger joins belts from its back, left and right into its front. Each holds up to two items while blocked; those save and come back with the refund. Placeholder look: a dark box with orange tabs where items go out and blue where they come in.
+- **Fix (F2):** the Hub and radio mast were stored like floor tiles, so a machine could be built floating inside the Hub. They're proper one-per-cell objects now and stand on a foundation if there is one.
+- Flags: `--demo-logistics` (a loaded belt line through a splitter into three crates), `--zoop=N` (with `--build`, a held drag preview).
+
+**Try it:** `play.bat`, B → Factory → Belt, hold left-click and walk. `play.bat --demo-logistics` shows a splitter feeding three crates.
+
+**Tests:** 14,446+ green (new `test_build_feel.gd`: ground belts and their height, belt → crate, splitter turns and dead ends, splitter only takes at its back, merger joins and refuses its front, a blocked router holds two through a save and refunds them, Logistics locks both, the Hub as an object, drag run cells and facing; `test_build_world.gd`: a real drag lays four foundations then four west-facing belts, the player walks over a ground belt line).
+
+**Known gaps:** splitter/merger are placeholder boxes (no Codex models yet); no belt lifts or curves (corners still work belt to belt); drag is straight lines only, no diagonal or area fill; crates fed by belts don't count weight.
+
+**Next:** W3b downtown (shops, police station, gas station), then W3c streets and W3d countryside.
+
 ## 2026-10-15 — F2 The Hub, milestones and the rescue (building like Satisfactory, part 2)
 
 Emmitt: building should feel like Satisfactory. Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.

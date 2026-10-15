@@ -99,6 +99,10 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	var belts := []
 	for cell: Vector2i in sim.factory.belts:
 		belts.append({"cell": _v2(cell), "items": sim.factory.belts[cell].items})
+	var routers := []  # F3: what splitters and mergers hold (no version bump: an older save just has none)
+	for cell: Vector2i in sim.factory.routers:
+		var r: Factory.Router = sim.factory.routers[cell]
+		routers.append({"cell": _v2(cell), "items": r.items.duplicate(), "next_out": r.next_out})
 	var turrets := []
 	for cell: Vector2i in sim.factory.turrets:
 		var t: Factory.Turret = sim.factory.turrets[cell]
@@ -154,6 +158,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"hotbar": sim.hotbar.to_dict(),  # S3; V19: both bars
 		"machines": machines,
 		"belts": belts,
+		"routers": routers,
 		"turrets": turrets,
 		"bins": bins,
 		"automation": sim.automation.to_dict(),
@@ -248,6 +253,11 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			belt.items = []
 			for e: Dictionary in bd["items"]:
 				belt.items.append({"item": e["item"], "pos": float(e["pos"]), "prev": float(e["prev"])})
+	for rd: Dictionary in d.get("routers", []):  # F3
+		var r: Factory.Router = sim.factory.routers.get(_to_v2(rd["cell"]))
+		if r != null:
+			r.items = Array(rd["items"]).map(func(it: Variant) -> String: return str(it))
+			r.next_out = int(rd.get("next_out", 0))
 	for td: Dictionary in d["turrets"]:
 		var t: Factory.Turret = sim.factory.turrets.get(_to_v2(td["cell"]))
 		if t != null:

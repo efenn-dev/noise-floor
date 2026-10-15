@@ -21,7 +21,9 @@ const EDGE_KINDS := ["wall", "door", "barricade", "window", "tripwire", "fence"]
 ## M15: edge pieces that stand on bare ground (no foundation needed), and never block sound or sight.
 const GROUND_EDGES := ["tripwire", "fence"]
 ## M15: objects that stand on bare ground, like power poles and spike strips.
-const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast"]
+const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast",
+		"belt", "splitter", "merger"]  # F3: belts run on bare ground too (out to an outpost)
+const ON_GROUND_OR_FOUNDATION := ["belt", "splitter", "merger", "hub", "radio_mast"]  # F3: sit on a foundation if there is one
 
 const GRID := 2.0
 const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
@@ -69,7 +71,8 @@ func key_for(id: String, cell: Vector2i, side: int = Side.NORTH) -> String:
 func is_object(id: String) -> bool:
 	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop", "workbench",
 			"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "repair_station",
-			"stove", "heater"]  # M16
+			"stove", "heater",  # M16
+			"hub", "radio_mast", "splitter", "merger"]  # F2, F3
 
 
 func kind_of(id: String) -> String:
@@ -360,6 +363,8 @@ func center_for(id: String, cell: Vector2i, side: int) -> Vector3:
 		return corner + Vector3(GRID / 2.0, size.y / 2.0, GRID / 2.0)
 	if is_object(id):
 		var floor_y := 0.0 if str(data.buildables[id].get("needs_node", "")) != "" else foundation_top()  # F1: extractors stand on the ground
+		if _kind(id) in ON_GROUND_OR_FOUNDATION and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
+			floor_y = 0.0  # F3: a belt out in the field lies on the ground
 		var mid := corner + Vector3(GRID / 2.0, floor_y + size.y / 2.0, GRID / 2.0)
 		if data.buildables[id].get("against_wall", false):  # W1c: back against the wall behind it, not mid-cell
 			var facing := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][side] as Vector3

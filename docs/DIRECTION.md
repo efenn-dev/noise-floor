@@ -14,7 +14,7 @@
 3. **F1-F3: building like Satisfactory.**
    - **F1 resource nodes** (done, #80): places in the new world you can only work with machines: scrap piles at a junkyard, the gas station's tank (fuel), a farm well (water), a quarry (stone). Build a salvager/pump/drill on one and belt it home. Loot gets scarcer as the days go on (finite loot is in already), so the factory takes over.
    - **F2 the Hub and milestones** (done): deliver parts to the Hub to unlock new machines and tiers; the last goal is a radio tower that calls in a rescue.
-   - **F3 build feel:** a build tool, belts you drag from point to point, splitters and mergers, machines that snap together, clear input/output.
+   - **F3 build feel** (done): drag to lay a row of foundations, walls or belts; belts on bare ground (walk-over) that fill crates; splitters and mergers (Logistics milestone); in/out tabs on every router.
 4. **W3b downtown** (grocery, hardware store, pharmacy, police station, gas station; the props are made), **W3c more streets of houses**, **W3d the countryside** (farms and barns, the hunting cabin in the woods, highway loot), each with its resource nodes from F1.
 5. **W3e population and balance:** zombies and loot per area, far zombies thinking less often, and a map (an item or a screen) so the bigger world is easy to find your way round.
 

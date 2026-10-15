@@ -10,7 +10,9 @@ const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "ma
 		# M16: heat
 		"stove", "heater",
 		# F2: the Hub and the rescue
-		"hub", "radio_mast"]
+		"hub", "radio_mast",
+		# F3: belt routing
+		"splitter", "merger"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}

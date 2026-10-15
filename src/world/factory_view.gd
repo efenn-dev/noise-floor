@@ -105,12 +105,12 @@ func _draw_items() -> void:
 	var used := 0
 	var grid := sim.build
 	var belt_h: float = sim.data.buildables["belt"]["size"].y
-	var y := grid.foundation_top() + belt_h + ITEM_SIZE / 2.0
 	for cell: Vector2i in sim.factory.belts:
 		var belt: Factory.Belt = sim.factory.belts[cell]
 		var d: Vector2i = Factory.DIRS[belt.facing]
 		var dir := Vector3(d.x, 0, d.y)
-		var center := Vector3((cell.x + 0.5) * BuildGrid.GRID, y, (cell.y + 0.5) * BuildGrid.GRID)
+		# F3: on top of the belt, on a foundation or out on the ground
+		var center := grid.center_for("belt", cell, belt.facing) + Vector3(0, belt_h / 2.0 + ITEM_SIZE / 2.0, 0)
 		for entry: Dictionary in belt.items:
 			var t := lerpf(entry["prev"], entry["pos"], alpha)
 			var mesh := _get_mesh(used)
