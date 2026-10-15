@@ -18,6 +18,38 @@ Emmitt: "could you add a PR for skins for the items dropped? also allow placing 
 **Tests:** 13,872 green (new `test_items_in_world.gd`: drop in front of you, stacking, naming, picking up, gear, placing reach, save round trip, old saves, a model that rests on the floor for every item and wearable, the placer on a floor vs. nothing in reach; `test_inventory_actions.gd` updated for drops as themselves).
 
 **Known gaps:** zombies ignore things on the ground; you can't place on top of another placed thing yet; labels on cans and boxes are colour bands, not printed text; the three backpacks are boxy.
+## 2026-10-14 — V33 Better hitboxes: hit zones on the bones (Sprint 4)
+
+Emmitt: "add better hitboxes". By Claude Opus 5.5. Stacked on V32 (blood toggle): both touch the hit code.
+
+**Built:**
+- **Hit zones that move with the animation.** Every zombie has a box on each of its 17 bones (head; neck, chest, spine and hips = torso; arms and hands; legs and feet), fitted to that body's own mesh, once per body variant (`ZombieHitboxes`, on a new physics layer `Layers.HITBOX`). A crawler's head is down by the floor, a runner's swinging arm is where you see it, a brute's zones are brute-sized.
+- **Guns are exact:** a round through the gap between arm and body flies on (a miss, or the zombie behind). **Melee is forgiving:** a swing that touches the body but slips between zones still hits, in the zone at that height.
+- **Damage by zone** (`data/hit_zones.json`): head = the weapon's or gun's own head multiplier as before, torso 1.0, arms 0.6, legs 0.75, and a **leg hit makes it limp** (55% speed for 1.5 s). Messages say "Headshot!", "Arm hit", "Leg hit".
+- **Crossbow bolts** (simulated in the sim) now land in a zone too, by where they meet the body: a bolt to the head is a headshot (with the headshot sound). A crawler's head is the front of its body (`head_ahead` in zombies.json). Shotgun pellets stay flat damage, as in V30.
+- Past 45 m from you the zones switch off and the old capsule with its head and leg lines decides (cheaper with a crowd far away). Dead bodies have no live zones; E searches them as before.
+- Screenshot flag `--hitboxes` draws the zones (head red, body yellow, arms blue, legs green).
+
+**Try it:** `play.bat --zombie=0,-3 --hitboxes --cam=0,0,-0.5,0,-8` to see the zones; then play normally and try legs, arms and heads with the rifle.
+
+**Tests:** new `test_hitboxes.gd` (zones on every bone and moving with the animation, a ray at each zone counts as that zone, a gap a round passes through but a swing doesn't, the crawler's head by the floor, zones off on a dead body, damage per zone, the limp, bolts by zone).
+
+**Known gaps:** pellets don't use zones (a shotgun is about the spread); hands count as arms; the zones are boxes, so the very edges of a shoulder or hip can be a few centimetres generous.
+
+## 2026-10-14 — V32 Blood on/off (Sprint 4)
+
+Emmitt: "add the blood toggle" (his son plays). By Claude Opus 5.5.
+
+**Built:**
+- **Settings → Blood** (on by default, saved in `user://settings.cfg` with the other settings). Off: a hit on a zombie puffs dust instead of spraying blood, and no blood stains are made under hits or bodies. Turning it off clears the stains already on the ground.
+- One gate for every caller (guns, shotgun pellets, melee, thrown bottles and bombs, bodies): `ImpactFx.shown_kind` and `ImpactFx.stain`.
+- Screenshot flag `--blood=off` (this run only, not saved).
+
+**Try it:** `play.bat`, Esc → Settings → untick Blood, then hit a zombie.
+
+**Tests:** 13,527 green (new `test_blood_setting.gd`).
+
+**Known gaps:** the zombies' own clothes and skin textures keep their grime; only sprays and stains are switched.
 
 ## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
 

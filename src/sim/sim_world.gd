@@ -1906,13 +1906,57 @@ func weapon_skill() -> String:
 
 ## The player hits zombie `id` with their weapon (call after swing() succeeds and the swing
 ## connects). `head` doubles the damage. Returns true if it killed the zombie.
-func hit_zombie(id: int, head: bool) -> bool:
+## V33 (Emmitt: "better hitboxes"): the zones a hit can land in. The world reads them off a zombie's bone hit
+## zones; old callers pass true (the head) or false (the body).
+const HIT_ZONES := ["head", "torso", "arm", "leg"]
+
+
+static func hit_zone(zone: Variant) -> String:
+	if zone is bool:
+		return "head" if zone else "torso"
+	return str(zone) if str(zone) in HIT_ZONES else "torso"
+
+
+## V33: the damage multiplier for `zone`; the head uses the weapon's or gun's own head multiplier.
+func zone_multiplier(zone: String, head_multiplier: float) -> float:
+	if zone == "head":
+		return head_multiplier
+	return float(data.hit_zones.get("damage", {}).get(zone, 1.0))
+
+
+## V33: the zone from where a hit landed on a zombie that has no bone zones (sim bolts): over its head line is
+## the head, under the leg line the legs. A crawler (head_ahead) lies flat: its head is the front of its body.
+func zone_at(z: ZombieBrain, at: Vector3) -> String:
+	if z.stats.has("head_ahead"):
+		var ahead := Vector2(at.x - z.pos.x, at.z - z.pos.z).dot(Vector2(z.facing.x, z.facing.z).normalized())
+		return "head" if ahead >= float(z.stats["head_ahead"]) else "torso"
+	return zone_at_height(z, at.y)
+
+
+func zone_at_height(z: ZombieBrain, y: float) -> String:
+	var above := y - z.pos.y
+	if above >= float(z.stats.get("head_height", 1.45)):
+		return "head"
+	if above <= float(z.stats.get("leg_height", data.hit_zones.get("leg_height", 0.8))):
+		return "leg"
+	return "torso"
+
+
+## V33: a leg hit makes it limp for a moment.
+func _zone_effect(z: ZombieBrain, zone: String) -> void:
+	if zone == "leg" and not z.is_dead():
+		z.limp = float(data.hit_zones.get("limp_time", 0.0))
+		z.limp_factor = float(data.hit_zones.get("limp_factor", 1.0))
+
+
+func hit_zombie(id: int, zone: Variant = "torso") -> bool:
 	respawn_grace = 0.0
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null:
 		return false
+	var where := hit_zone(zone)
 	var w := weapon_stats()
-	var dmg := melee_damage() * (float(w["head_multiplier"]) if head else 1.0)
+	var dmg := melee_damage() * zone_multiplier(where, float(w["head_multiplier"]))
 	noise.emit(z.pos, noise_loudness("melee_hit"), "melee_hit")
 	var skill := weapon_skill()  # before the wear: a weapon that breaks on this hit still trains its skill
 	var name := gear.weapon_name()
@@ -1924,6 +1968,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 			noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
 			stats.note("broke a " + name.to_lower())
 	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]) * (1.0 + skills.bonus("knockback")))
+	_zone_effect(z, where)
 	stats.note("hit a zombie")
 	if skill != "":
 		_practice(skill, "hit")
@@ -1977,13 +2022,17 @@ func fire() -> String:
 ## A shot that the world's ray put on zombie `id`: it hits (P2: the ray in the spread cone is the only roll;
 ## distance, Firearms, the scope and recoil act through Gunplay.spread_deg), headshots double. Trains Firearms.
 ## Returns {"hit": bool, "killed": bool}.
-func shoot_zombie(id: int, head: bool) -> Dictionary:
+func shoot_zombie(id: int, zone: Variant = "torso") -> Dictionary:
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null or z.is_dead():
 		return {"hit": false, "killed": false}
-	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
-	return _damage_zombie(id, dmg, float(guns.stats()["knockback"]), player_pos,
+	var where := hit_zone(zone)
+	var dmg := guns.damage() * zone_multiplier(where, float(data.guns["head_multiplier"]))
+	var result := _damage_zombie(id, dmg, float(guns.stats()["knockback"]), player_pos,
 			str(guns.gun().get("name", "firearm")), true)
+	_zone_effect(z, where)
+	result["zone"] = where
+	return result
 
 
 func _damage_zombie(id: int, damage: float, push: float, from: Vector3, weapon_name: String,
@@ -2151,11 +2200,15 @@ func _tick_bolt(bolt: Dictionary, dt: float) -> void:
 				best_id = id
 		if best_id >= 0:
 			bolt["pos"] = (bolt["previous"] as Vector3) + direction * best_t
-			var result := _damage_zombie(best_id, float(bolt["damage"]), float(bolt["knockback"]),
-					bolt["previous"], str(bolt["weapon"]), true)
+			# V33: a bolt lands where it meets the body: over the head line is a headshot, low is the legs.
+			var bz: ZombieBrain = horde.zombies[best_id]
+			var where := zone_at(bz, bolt["pos"])
+			var result := _damage_zombie(best_id, float(bolt["damage"]) * zone_multiplier(where, float(data.guns["head_multiplier"])),
+					float(bolt["knockback"]), bolt["previous"], str(bolt["weapon"]), true)
+			_zone_effect(bz, where)
 			if bolt_survives(_ballistic_rng.randf(), float(bolt["survival"])):
 				embedded_bolts[best_id] = int(embedded_bolts.get(best_id, 0)) + 1
-			projectile_events.append({"type": "bolt_hit", "pos": bolt["pos"], "zombie": best_id,
+			projectile_events.append({"type": "bolt_hit", "pos": bolt["pos"], "zombie": best_id, "zone": where,
 					"killed": result["killed"], "tick": ticks})
 			projectiles.erase(bolt)
 			return
