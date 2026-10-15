@@ -2,6 +2,21 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V32 Blood on/off (Sprint 4)
+
+Emmitt: "add the blood toggle" (his son plays). By Claude Opus 5.5.
+
+**Built:**
+- **Settings → Blood** (on by default, saved in `user://settings.cfg` with the other settings). Off: a hit on a zombie puffs dust instead of spraying blood, and no blood stains are made under hits or bodies. Turning it off clears the stains already on the ground.
+- One gate for every caller (guns, shotgun pellets, melee, thrown bottles and bombs, bodies): `ImpactFx.shown_kind` and `ImpactFx.stain`.
+- Screenshot flag `--blood=off` (this run only, not saved).
+
+**Try it:** `play.bat`, Esc → Settings → untick Blood, then hit a zombie.
+
+**Tests:** 13,527 green (new `test_blood_setting.gd`).
+
+**Known gaps:** the zombies' own clothes and skin textures keep their grime; only sprays and stains are switched.
+
 ## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
 
 The check DIRECTION.md asks for before a playtest, on `main` at #73 (attachments, guidance, save slots, crawler and brute, difficulty and the first night, new weapons, the arm fix all merged), by Claude Opus 5.5 on the PC. Also read the newest session logs (45 minutes on 10-14: 11 perk points earned and none spent, two gold pieces found but a white pipe worn, nothing built, no deaths; V25 and V29 were aimed at exactly that).
