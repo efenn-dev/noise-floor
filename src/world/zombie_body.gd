@@ -5,6 +5,7 @@ extends CharacterBody3D
 ## where the brain wants: along the navmesh if there's a path, straight at the target if not.
 
 const HEAD_Y := 1.45   # hits above this height (from the feet) count as head hits
+const LEG_Y := 0.8     # V33: and below this, the legs (when the bone hit zones are off; data/hit_zones.json leg_height)
 const HEIGHT := 1.8
 const RADIUS := 0.35
 ## V24: the arms' reach in front of the body (it walks toward -Z): a ball this big at this offset makes the
@@ -75,6 +76,18 @@ var nan_recoveries := 0
 const NUDGE_RADIUS := 0.75  # S5: your feet are on the body inside this distance
 const NUDGE_SHARE := 0.1  # S5: share of your walking speed a body shuffles at while you're on it
 var death_dir := Vector3.ZERO  # V7: which way it was knocked as it died (it falls and slides that way)
+## V35 (Emmitt: "the zombies seem to die facing away from the player each time"): the Death animation (UAL
+## Death01) falls backwards, and V7 turned the body to face away from the blow first, so every zombie showed you
+## its back as it went down. Now it dies facing whoever hit it, one of two ways: "back" (the Death animation: it
+## goes over backwards and slides away from the blow; most deaths and every hard hit) or "forward" (a hit
+## reaction, then it tips over toward you, about its feet).
+var death_style := ""
+static var settle_deaths := false  # --dead-zombies (screenshots): bodies are already down, the fall finished
+static var forced_death_style := ""  # --death-style=back|forward (screenshots)
+const BACK_FALL_SHARE := 3  # of every 5 zombies (by id) fall backwards; the rest forwards, unless hit hard
+const HARD_HIT := 3.0       # knockback (m/s) that always knocks it over backwards
+const FORWARD_FALL_TIME := 0.8  # seconds to tip over forwards
+const LYING_LIFT := 0.14    # a tipped-over body lies this high once flat (its front, not its spine, on the ground)
 var _death_slide := 0.0
 var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
 var _frame := 0
@@ -84,6 +97,8 @@ var _reach_shape: CollisionShape3D  # V24: keeps the reaching arms out of walls
 var _last_target := Vector3.INF
 var _fall := 0.0
 var _model: Node3D
+var _hit_shapes: Array[CollisionShape3D] = []  # V33: the bone hit zones (ZombieHitboxes)
+var _hitboxes_on := false
 ## A2: which of BODIES this zombie wears.
 var body_variant := ""
 var _anim: AnimationPlayer
@@ -147,6 +162,7 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 				mesh.set_surface_override_material(i, _material_for_look(source, texture, float(mapping["tile_m"]), tint))
 			elif tint != source.albedo_color:
 				mesh.set_surface_override_material(i, _plain_material_for_look(source, tint))
+	_build_hitboxes()  # V33: after the body and its size are final
 
 
 ## The same id always receives the same cloth and faded colour, before and after saving. The two picks use
@@ -251,6 +267,41 @@ func head_y() -> float:
 	return float(brain.stats.get("head_height", HEAD_Y))
 
 
+## V33: the zone a hit at height `y` lands in when the bone zones are off (or a swing slips between them).
+func zone_at(y: float, at: Vector3 = Vector3.INF) -> String:
+	if brain.stats.has("head_ahead") and at.is_finite():  # a crawler lies flat: its head is its front
+		var fwd := -global_basis.z
+		var ahead := Vector2(at.x - global_position.x, at.z - global_position.z).dot(Vector2(fwd.x, fwd.z).normalized())
+		return "head" if ahead >= float(brain.stats["head_ahead"]) else "torso"
+	var above := y - global_position.y
+	if above >= head_y():
+		return "head"
+	if above <= float(brain.stats.get("leg_height", LEG_Y)):
+		return "leg"
+	return "torso"
+
+
+## V33: whether the bone hit zones are on (near the player, alive).
+func hitboxes_on() -> bool:
+	return _hitboxes_on and not _hit_shapes.is_empty()
+
+
+func _build_hitboxes() -> void:
+	_hit_shapes = ZombieHitboxes.build(_model, ZombieHitboxes.fit(_model, body_variant), brain.id)
+	_hitboxes_on = true
+	_set_hitboxes(player != null and is_inside_tree() and player.is_inside_tree()
+			and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
+
+
+func _set_hitboxes(on: bool) -> void:
+	if on == _hitboxes_on:
+		return
+	_hitboxes_on = on
+	for cs: CollisionShape3D in _hit_shapes:
+		if is_instance_valid(cs):
+			cs.disabled = not on
+
+
 func _init() -> void:
 	collision_layer = Layers.ZOMBIE
 	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
@@ -304,8 +355,11 @@ func _physics_process(delta: float) -> void:
 	_speak(delta)
 	if brain.is_dead():
 		_end_climb_collision()
+		_set_hitboxes(false)
 		_lie_down(delta)
 		return
+	if (_frame + brain.id) % 10 == 0:  # V33: zones on near the player, off further out
+		_set_hitboxes(player != null and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
 	if brain.state == ZombieBrain.State.CLIMB:
 		_climb_window()
 		return
@@ -449,27 +503,49 @@ func _lie_down(delta: float) -> void:
 			for car: Node in get_tree().get_nodes_in_group("cars"):
 				if car is PhysicsBody3D:
 					add_collision_exception_with(car)
-		# V7: fall away from the blow. The Death animation tips the body forward, so it turns to face the way
-		# it was knocked (away from you when nothing knocked it) and slides back a little as it drops.
+		# V7: knocked away from the blow. V35: it keeps facing the blow (or you, when nothing knocked it) and
+		# either goes over backwards, sliding back a little, or collapses forward toward you.
 		var away := brain.knockback
+		var hard := away.is_finite() and away.length() >= HARD_HIT
 		if away.length_squared() < 0.01 and player != null:
 			away = global_position - player.global_position
 		away.y = 0.0
 		if away.is_finite() and away.length_squared() > 1e-4:
 			death_dir = away.normalized()
 			_death_slide = clampf(brain.knockback.length() * 0.3, 0.6, 2.2) if brain.knockback.is_finite() else 0.6
+		death_style = death_style_for(brain.id, hard)
+		if death_style == "forward":
+			_death_slide = 0.0  # it drops where it stands
+		if settle_deaths:
+			_fall = 1.0
+			_death_slide = 0.0
+			rotation.y = atan2(death_dir.x, death_dir.z)
 		brain.knockback = Vector3.ZERO
 		if get_parent() != null:  # a pool spreading under the body for as long as it lies there
 			ImpactFx.stain(get_parent(), global_position + Vector3.UP * 0.05, Vector3.UP, 1.5, ZombieBrain.CORPSE_TIME, 4.0)
-	_fall = minf(1.0, _fall + delta * 2.5)  # the Death animation does the falling
+	_fall = minf(1.0, _fall + delta * (1.0 / FORWARD_FALL_TIME if death_style == "forward" else 2.5))
 	var slide := death_dir * _death_slide * maxf(0.0, 1.0 - _fall * 1.4)
 	velocity = Vector3(slide.x, 0.0 if is_on_floor() else velocity.y - _gravity * delta, slide.z)
-	if death_dir != Vector3.ZERO and _fall < 0.6:
-		rotation.y = lerp_angle(rotation.y, atan2(-death_dir.x, -death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
+	if death_dir != Vector3.ZERO and _fall < 0.6:  # V35: face the blow (its front, -Z, against death_dir)
+		rotation.y = lerp_angle(rotation.y, atan2(death_dir.x, death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
 	var nudge := nudge_for(player, global_position) if _fall >= 1.0 else Vector3.ZERO
 	velocity.x += nudge.x
 	velocity.z += nudge.z
 	move_and_slide()
+
+
+## V35: how a zombie dies: "back" for every hard hit and BACK_FALL_SHARE of every 5 by id, else "forward".
+static func death_style_for(id: int, hard_hit: bool) -> String:
+	if forced_death_style != "":
+		return forced_death_style
+	return "back" if hard_hit or posmod(id, 5) < BACK_FALL_SHARE else "forward"
+
+
+## V35: how far over (radians about its feet, toward its front) a "forward" fall is at `fall` 0-1: slow to start,
+## then it drops, flat (90 degrees) at the end.
+static func forward_tilt(fall: float) -> float:
+	var t := clampf(fall, 0.0, 1.0)
+	return PI / 2.0 * t * t
 
 
 ## S5: how hard walking over a body shuffles it: a small share of your speed while your feet are on it,
@@ -533,8 +609,12 @@ func _animate(delta: float) -> void:
 	var climb_wave := sin(PI * brain.climb_fraction())
 	_model.rotation.x = deg_to_rad(float(brain.stats.get("climb_tilt_deg", 35.0))) * climb_wave if climbing else 0.0
 	_model.position.y = -float(brain.stats.get("climb_dip", 0.22)) * climb_wave if climbing else 0.0
+	if brain.is_dead() and death_style == "forward":
+		var tip := forward_tilt(_fall)  # V35: over forwards, toward you, about its feet
+		_model.rotation.x = tip
+		_model.position.y = LYING_LIFT * sin(tip)
 	if brain.is_dead():
-		want = "Death"
+		want = "HitReact" if death_style == "forward" and _anim.has_animation("HitReact") else "Death"
 	elif brain.screaming > 0.0 and _anim.has_animation("Scream"):
 		want = "Scream"
 	elif brain.stats.has("crawl_anim_speed"):
@@ -553,11 +633,13 @@ func _animate(delta: float) -> void:
 	elif moving > 0.1:
 		want = "Walk"
 		speed_scale = clampf(moving / (WALK_ANIM_SPEED * _model.scale.x / MODEL_SCALE), 0.5, 1.6)
-	var once := want == "Death" or want == "Scream"  # these play through once, then hold
+	var once := want == "Death" or want == "Scream" or brain.is_dead()  # these play through once, then hold
 	if _anim.current_animation != want and not (once and _anim.assigned_animation == want and _anim.is_playing()) \
-			and not (want == "Death" and _anim.assigned_animation == "Death"):
+			and not (brain.is_dead() and _anim.assigned_animation == want):
 		_anim.play(want, 0.2)
 	_anim.speed_scale = speed_scale
+	if brain.is_dead() and settle_deaths and _anim.current_animation != "":
+		_anim.seek(_anim.current_animation_length, true)  # already down (screenshots)
 
 
 ## Moans now and then (more often while chasing), a grunt when it starts an attack or gets hit,

@@ -61,7 +61,8 @@ func test_a_dying_zombie_falls_away_and_bleeds() -> void:
 	for i in 45:
 		await tree.physics_frame
 	check(body.death_dir.dot(Vector3.LEFT) > 0.9, "knocked west, away from the blow (%s)" % body.death_dir)
-	check((-body.global_basis.z).dot(Vector3.LEFT) > 0.7, "turned to fall that way")
+	eq(body.death_style, "back", "V35: a hard hit always knocks it over backwards")
+	check((-body.global_basis.z).dot(Vector3.RIGHT) > 0.7, "V35: facing the blow as it goes down, not turning its back")
 	check((body.global_position - start).dot(Vector3.LEFT) > 0.15, "slid back a little (%.2f m)" % (body.global_position - start).dot(Vector3.LEFT))
 	var pool := false
 	for d: Node in main.find_children("BloodStain*", "Decal", true, false):
@@ -70,3 +71,16 @@ func test_a_dying_zombie_falls_away_and_bleeds() -> void:
 	check(pool, "a pool of blood under the body")
 	main.free()
 	ImpactFx.clear_cache()
+
+
+func test_deaths_face_whoever_hit_them() -> void:
+	# V35 (Emmitt: "the zombies seem to die facing away from the player each time")
+	var styles := {}
+	for id in 10:
+		styles[ZombieBody.death_style_for(id, false)] = int(styles.get(ZombieBody.death_style_for(id, false), 0)) + 1
+	eq(styles.get("back", 0), 6, "most fall backwards (6 in 10)")
+	eq(styles.get("forward", 0), 4, "the rest collapse forward toward you")
+	eq(ZombieBody.death_style_for(4, true), "back", "a hard hit always knocks one over backwards")
+	near(ZombieBody.forward_tilt(0.0), 0.0, "a forward fall starts upright")
+	near(ZombieBody.forward_tilt(1.0), PI / 2.0, "and ends flat", 0.001)
+	check(ZombieBody.forward_tilt(0.5) < PI / 4.0, "slow to start, then it drops")

@@ -118,4 +118,4 @@ func test_version_13_melee_xp_carries_over() -> void:
 	check(not sim.skills.xp.has("melee"), "no leftover Melee")
 	var again := SaveGame.to_dict(sim)
 	eq(int(again["version"]), SaveGame.VERSION, "saves as the current version")
-	eq(SaveGame.VERSION, 20, "save version 20: V29 difficulty follows V25 guidance (19)")
+	eq(SaveGame.VERSION, 21, "save version 21: V34 items in the world follow V29 difficulty (20)")

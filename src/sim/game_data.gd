@@ -28,6 +28,7 @@ var projects: Dictionary = {}    # M17a: big projects (the water tower): phases,
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
 var resources: Dictionary = {}   # F1: resource node kinds, purities and the nodes on the map: data/resources.json
+var hit_zones: Dictionary = {}   # V33: damage per hit zone (torso, arm, leg), the leg line and the limp: data/hit_zones.json
 var load_errors: PackedStringArray = []
 
 
@@ -51,6 +52,8 @@ static func load_default() -> GameData:
 	data.difficulty = _read_json(DIR + "difficulty.json", data)
 	data.resources = _read_json(DIR + "resources.json", data)
 	data.resources.erase("_about")
+	data.hit_zones = _read_json(DIR + "hit_zones.json", data)
+	data.hit_zones.erase("_about")
 	return data
 
 
@@ -207,6 +210,13 @@ func validate() -> PackedStringArray:
 	for n: Dictionary in resources.get("nodes", []):
 		if not resources["kinds"].has(n.get("kind", "")) or not resources.get("purity", {}).has(n.get("purity", "")):
 			errors.append("resource node '%s' has an unknown kind or purity" % n.get("id", "?"))
+	if not hit_zones.is_empty():  # V33 (tests that build GameData by hand may leave it out)
+		for zone: String in ["torso", "arm", "leg"]:
+			if not float(hit_zones.get("damage", {}).get(zone, -1.0)) > 0.0:
+				errors.append("hit_zones.json needs a positive damage multiplier for '%s'" % zone)
+		for key: String in ["leg_height", "limp_time", "limp_factor"]:
+			if not hit_zones.get(key, null) is float:
+				errors.append("hit_zones.json needs a number '%s'" % key)
 	for id: String in zombies:
 		var z: Dictionary = zombies[id]
 		if not z.has("name") or str(z["name"]) == "":

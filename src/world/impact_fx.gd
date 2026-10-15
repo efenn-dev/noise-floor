@@ -6,6 +6,8 @@ extends RefCounted
 ## V7: blood stains (Decal nodes with tools/art/make_blood_splat.py's splat) on the ground under a hit and
 ## spreading under a body; they fade after a while and only MAX_STAINS exist at once (oldest go first).
 ## Decals need Forward+ or Mobile; the Compatibility renderer (cloud screenshots) doesn't draw them.
+## V32: with Settings.blood off, a blood puff becomes a dust puff and no stains are made (one gate for every
+## caller: guns, melee, thrown things, bodies).
 
 const KINDS := {
 	"blood": {"amount": 24, "lifetime": 0.55, "speed": Vector2(1.6, 3.6), "gravity": -9.8, "spread": 38.0,
@@ -40,6 +42,8 @@ static func basis_facing(up: Vector3) -> Basis:
 ## A blood stain on the surface at `pos` (`normal` points out of it), size_m across. With grow_s > 0 it
 ## spreads from a quarter of that size over grow_s seconds (a pool under a body). Fades after `life` s.
 static func stain(parent: Node, pos: Vector3, normal: Vector3, size_m: float, life: float = STAIN_LIFE, grow_s: float = 0.0) -> Decal:
+	if not Settings.blood:
+		return null
 	_stains = _stains.filter(func(d: Variant) -> bool: return is_instance_valid(d))
 	var d := Decal.new()
 	d.name = "BloodStain"
@@ -73,7 +77,21 @@ static func stain_count() -> int:
 	return _stains.size()
 
 
+## V32: the kind actually shown: blood turns to dust when blood is off in the settings.
+static func shown_kind(kind: String) -> String:
+	return "dust" if kind.begins_with("blood") and not Settings.blood else kind
+
+
+## V32: removes every blood stain at once (the setting was just turned off).
+static func clear_stains() -> void:
+	for d: Variant in _stains:
+		if is_instance_valid(d):
+			(d as Node).queue_free()
+	_stains.clear()
+
+
 static func spawn(parent: Node, pos: Vector3, normal: Vector3, kind: String) -> CPUParticles3D:
+	kind = shown_kind(kind)
 	var k: Dictionary = KINDS.get(kind, KINDS["dust"])
 	var p := CPUParticles3D.new()
 	p.name = "Impact_" + kind

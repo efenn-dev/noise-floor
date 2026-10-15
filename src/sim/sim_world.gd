@@ -1114,37 +1114,115 @@ func crates_near(at: Vector3) -> Array:
 	return found.map(func(e: Array) -> String: return e[1])
 
 
-## Drops items from your pockets in a bag at your feet (into a bag already lying there, if any).
-## Pick it back up with E like a death bag. Returns a message.
+## V34 (Emmitt: "skins for the items dropped, also allow placing items"): a dropped or placed thing lies in the
+## world as itself (kind "item": one item stack or one gear piece, drawn with its own model and turned to `yaw`),
+## not in a bag. Death bags stay bags (kind "bag"). Both live in `bags`, are picked up with E (take_bag) and saved.
+const ITEM := "item"
+const BAG := "bag"
+const DROP_AHEAD := 0.55   # how far in front of your feet a dropped thing lands
+const STACK_REACH := 0.45  # a drop this close to the same item lying there joins its stack
+const PLACE_REACH := 3.0   # how far from your feet (across the floor) you can place something
+const PLACE_HEIGHT := 2.4  # and how high above them (a shelf, a counter, a table)
+
+
+## Drops items from your pockets on the floor in front of you, as themselves; the same item dropped on the
+## same spot again joins that stack. Pick it back up with E. Returns a message.
 func drop_items(item: String, amount: int) -> String:
 	var n := mini(amount, inventory.count(item))
 	if n <= 0:
 		return "Nothing to drop"
 	inventory.remove(item, n)
-	var msg := "Dropped %d %s" % [n, data.item_name(item)]
-	var bag := _bag_at_feet()
-	bag["items"][item] = int(bag["items"].get(item, 0)) + n
-	return msg
+	var at := _drop_spot()
+	for lying: Dictionary in bags:
+		if lying.get("kind", BAG) == ITEM and lying["gear"].is_empty() and lying["items"].has(item) 				and _flat_dist(lying["pos"], at) <= STACK_REACH:
+			lying["items"][item] = int(lying["items"][item]) + n
+			return "Dropped %d %s" % [n, data.item_name(item)]
+	_lay(at, player_yaw(), {item: n}, [])
+	return "Dropped %d %s" % [n, data.item_name(item)]
 
 
-## M13: drops a gear piece from your pockets into the bag at your feet. Returns a message.
+## M13: drops a gear piece from your pockets on the floor in front of you (V34: as itself). Returns a message.
 func drop_gear(uid: int) -> String:
 	var piece := gear.take(uid)
 	if piece.is_empty():
 		return "Nothing to drop"
-	_bag_at_feet()["gear"].append(piece)
+	_lay(_drop_spot(), player_yaw(), {}, [piece])
 	return "Dropped " + piece["name"]
 
 
-## The bag lying within 1 m of you, or a new empty one there.
-func _bag_at_feet() -> Dictionary:
-	for bag: Dictionary in bags:
-		if _flat_dist(bag["pos"], player_pos) <= 1.0:
-			if not bag.has("gear"):
-				bag["gear"] = []
-			return bag
-	drop_bag(player_pos, {})
-	return bags.back()
+## V34: puts one `item` from your pockets exactly at `at` (a surface the world found under your crosshair),
+## turned to `yaw` radians. Returns "" or why not.
+func place_item(item: String, at: Vector3, yaw: float) -> String:
+	if inventory.count(item) <= 0:
+		return "No %s left" % data.item_name(item).to_lower()
+	var why := _why_not_place(at)
+	if why != "":
+		return why
+	inventory.remove(item, 1)
+	_lay(at, yaw, {item: 1}, [])
+	return ""
+
+
+## V34: puts a gear piece from your pockets exactly at `at`, turned to `yaw`. Returns "" or why not.
+func place_gear(uid: int, at: Vector3, yaw: float) -> String:
+	if gear.find(uid).is_empty():
+		return "That's not in your pockets"
+	var why := _why_not_place(at)
+	if why != "":
+		return why
+	_lay(at, yaw, {}, [gear.take(uid)])
+	return ""
+
+
+func _why_not_place(at: Vector3) -> String:
+	if not at.is_finite():
+		return "Nowhere to put it"
+	if not player_vault.is_empty() or vehicles.driving != "" or player.dead:
+		return "Not now"
+	if _flat_dist(at, player_pos) > PLACE_REACH or at.y - player_pos.y > PLACE_HEIGHT:
+		return "Too far away"
+	return ""
+
+
+## V34: which way you face, as a yaw in radians (0 = north, -Z), for things you drop.
+func player_yaw() -> float:
+	return atan2(-player_facing.x, -player_facing.z)
+
+
+func _drop_spot() -> Vector3:
+	var ahead := Vector3(player_facing.x, 0.0, player_facing.z)
+	ahead = ahead.normalized() * DROP_AHEAD if ahead.length_squared() > 1e-6 else Vector3.ZERO
+	return player_pos + ahead
+
+
+func _lay(at: Vector3, yaw: float, items: Dictionary, pieces: Array) -> void:
+	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces, "kind": ITEM, "yaw": yaw})
+	_next_bag += 1
+
+
+## V34: what you see when you look at bag `id` lying on the ground: "Your bag", a gear piece's name, or
+## "12 Nails". "" if there's no such bag.
+func lying_name(id: int) -> String:
+	for lying: Dictionary in bags:
+		if lying["id"] != id:
+			continue
+		if lying.get("kind", BAG) != ITEM:
+			return "Your bag"
+		if not (lying["gear"] as Array).is_empty():
+			return str(lying["gear"][0].get("name", "Gear"))
+		var item := lying_look(lying)
+		var n := int(lying["items"].get(item, 0))
+		return data.item_name(item) if n == 1 else "%d %s" % [n, data.item_name(item)]
+	return ""
+
+
+## V34: what a thing lying on the ground is: its item id, or a gear piece's base, for its model and name.
+static func lying_look(lying: Dictionary) -> String:
+	if lying.get("kind", BAG) != ITEM:
+		return BAG
+	if not (lying["gear"] as Array).is_empty():
+		return str(lying["gear"][0].get("base", ""))
+	return str((lying["items"] as Dictionary).keys()[0]) if not (lying["items"] as Dictionary).is_empty() else ""
 
 
 func equip_gear(uid: int) -> String:
@@ -1829,13 +1907,57 @@ func weapon_skill() -> String:
 
 ## The player hits zombie `id` with their weapon (call after swing() succeeds and the swing
 ## connects). `head` doubles the damage. Returns true if it killed the zombie.
-func hit_zombie(id: int, head: bool) -> bool:
+## V33 (Emmitt: "better hitboxes"): the zones a hit can land in. The world reads them off a zombie's bone hit
+## zones; old callers pass true (the head) or false (the body).
+const HIT_ZONES := ["head", "torso", "arm", "leg"]
+
+
+static func hit_zone(zone: Variant) -> String:
+	if zone is bool:
+		return "head" if zone else "torso"
+	return str(zone) if str(zone) in HIT_ZONES else "torso"
+
+
+## V33: the damage multiplier for `zone`; the head uses the weapon's or gun's own head multiplier.
+func zone_multiplier(zone: String, head_multiplier: float) -> float:
+	if zone == "head":
+		return head_multiplier
+	return float(data.hit_zones.get("damage", {}).get(zone, 1.0))
+
+
+## V33: the zone from where a hit landed on a zombie that has no bone zones (sim bolts): over its head line is
+## the head, under the leg line the legs. A crawler (head_ahead) lies flat: its head is the front of its body.
+func zone_at(z: ZombieBrain, at: Vector3) -> String:
+	if z.stats.has("head_ahead"):
+		var ahead := Vector2(at.x - z.pos.x, at.z - z.pos.z).dot(Vector2(z.facing.x, z.facing.z).normalized())
+		return "head" if ahead >= float(z.stats["head_ahead"]) else "torso"
+	return zone_at_height(z, at.y)
+
+
+func zone_at_height(z: ZombieBrain, y: float) -> String:
+	var above := y - z.pos.y
+	if above >= float(z.stats.get("head_height", 1.45)):
+		return "head"
+	if above <= float(z.stats.get("leg_height", data.hit_zones.get("leg_height", 0.8))):
+		return "leg"
+	return "torso"
+
+
+## V33: a leg hit makes it limp for a moment.
+func _zone_effect(z: ZombieBrain, zone: String) -> void:
+	if zone == "leg" and not z.is_dead():
+		z.limp = float(data.hit_zones.get("limp_time", 0.0))
+		z.limp_factor = float(data.hit_zones.get("limp_factor", 1.0))
+
+
+func hit_zombie(id: int, zone: Variant = "torso") -> bool:
 	respawn_grace = 0.0
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null:
 		return false
+	var where := hit_zone(zone)
 	var w := weapon_stats()
-	var dmg := melee_damage() * (float(w["head_multiplier"]) if head else 1.0)
+	var dmg := melee_damage() * zone_multiplier(where, float(w["head_multiplier"]))
 	noise.emit(z.pos, noise_loudness("melee_hit"), "melee_hit")
 	var skill := weapon_skill()  # before the wear: a weapon that breaks on this hit still trains its skill
 	var name := gear.weapon_name()
@@ -1847,6 +1969,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 			noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
 			stats.note("broke a " + name.to_lower())
 	var killed := z.take_hit(dmg, player_pos, float(w["knockback"]) * (1.0 + skills.bonus("knockback")))
+	_zone_effect(z, where)
 	stats.note("hit a zombie")
 	if skill != "":
 		_practice(skill, "hit")
@@ -1900,13 +2023,17 @@ func fire() -> String:
 ## A shot that the world's ray put on zombie `id`: it hits (P2: the ray in the spread cone is the only roll;
 ## distance, Firearms, the scope and recoil act through Gunplay.spread_deg), headshots double. Trains Firearms.
 ## Returns {"hit": bool, "killed": bool}.
-func shoot_zombie(id: int, head: bool) -> Dictionary:
+func shoot_zombie(id: int, zone: Variant = "torso") -> Dictionary:
 	var z: ZombieBrain = horde.zombies.get(id)
 	if z == null or z.is_dead():
 		return {"hit": false, "killed": false}
-	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
-	return _damage_zombie(id, dmg, float(guns.stats()["knockback"]), player_pos,
+	var where := hit_zone(zone)
+	var dmg := guns.damage() * zone_multiplier(where, float(data.guns["head_multiplier"]))
+	var result := _damage_zombie(id, dmg, float(guns.stats()["knockback"]), player_pos,
 			str(guns.gun().get("name", "firearm")), true)
+	_zone_effect(z, where)
+	result["zone"] = where
+	return result
 
 
 func _damage_zombie(id: int, damage: float, push: float, from: Vector3, weapon_name: String,
@@ -2074,11 +2201,15 @@ func _tick_bolt(bolt: Dictionary, dt: float) -> void:
 				best_id = id
 		if best_id >= 0:
 			bolt["pos"] = (bolt["previous"] as Vector3) + direction * best_t
-			var result := _damage_zombie(best_id, float(bolt["damage"]), float(bolt["knockback"]),
-					bolt["previous"], str(bolt["weapon"]), true)
+			# V33: a bolt lands where it meets the body: over the head line is a headshot, low is the legs.
+			var bz: ZombieBrain = horde.zombies[best_id]
+			var where := zone_at(bz, bolt["pos"])
+			var result := _damage_zombie(best_id, float(bolt["damage"]) * zone_multiplier(where, float(data.guns["head_multiplier"])),
+					float(bolt["knockback"]), bolt["previous"], str(bolt["weapon"]), true)
+			_zone_effect(bz, where)
 			if bolt_survives(_ballistic_rng.randf(), float(bolt["survival"])):
 				embedded_bolts[best_id] = int(embedded_bolts.get(best_id, 0)) + 1
-			projectile_events.append({"type": "bolt_hit", "pos": bolt["pos"], "zombie": best_id,
+			projectile_events.append({"type": "bolt_hit", "pos": bolt["pos"], "zombie": best_id, "zone": where,
 					"killed": result["killed"], "tick": ticks})
 			projectiles.erase(bolt)
 			return
@@ -2361,7 +2492,7 @@ func _on_player_died() -> void:
 
 
 func drop_bag(at: Vector3, items: Dictionary, pieces: Array = []) -> void:
-	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces})
+	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces, "kind": BAG, "yaw": 0.0})
 	_next_bag += 1
 
 

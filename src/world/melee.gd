@@ -308,9 +308,9 @@ func swing() -> int:
 	SoundView.play_at(self, "swing", camera.global_position, -8.0, randf_range(0.9, 1.1))
 	var from := camera.global_position
 	var to := from - camera.global_basis.z * float(sim.weapon_stats()["range"])
-	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT | Layers.ZOMBIE, exclude)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
+	# V33: the swing finds the zone it lands in; one that touches a body but slips between zones still hits.
+	var hit := ZombieHitboxes.cast(get_world_3d().direct_space_state, from, to, exclude, true)
+	if hit.is_empty() or int(hit["zombie_id"]) < 0:
 		if not hit.is_empty():  # V3: a swing into a wall puffs dust and jars the view (at the strike)
 			var fx := "dust"
 			var col: Object = hit["collider"]
@@ -320,14 +320,11 @@ func swing() -> int:
 					fx = "glass" if mat == "glass" else "wood"
 			_pending.append({"at": strike_in, "kind": "wall", "fx": fx, "pos": hit["position"], "normal": hit["normal"]})
 		return -1
-	var body: Node3D = hit["collider"]
-	var id: int = body.get_meta("zombie_id")
-	# V28: crawler heads are near the floor; each body exposes its data-driven head line.
-	var zombie_body := body as ZombieBody
-	var head_line := zombie_body.head_y() if zombie_body != null else ZombieBody.HEAD_Y
-	var head: bool = hit["position"].y > body.global_position.y + head_line
-	var killed := sim.hit_zombie(id, head)
-	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
+	var id: int = hit["zombie_id"]
+	var zone: String = hit["zone"]
+	var head := zone == "head"
+	var killed := sim.hit_zombie(id, zone)
+	last_message = "Killed it" if killed else Shooter.ZONE_WORDS.get(zone, "Hit")
 	_message_time = 1.0
 	_pending.append({"at": strike_in, "kind": "zombie", "pos": hit["position"], "normal": hit["normal"],
 			"killed": killed, "head": head})

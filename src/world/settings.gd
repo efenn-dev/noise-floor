@@ -11,6 +11,7 @@ static var day_minutes := 24
 static var fullscreen := false
 static var head_bob := true  # V3: head bob, weapon sway and camera shake (off for anyone who gets motion sick)
 static var show_objectives := true  # V25: the saved first-night checklist; O toggles it during play
+static var blood := true  # V32 (Emmitt): off = no blood sprays or stains; hits puff dust instead
 static var graphics := Atmosphere.DEFAULT_QUALITY  # V1: "low", "medium" or "high" (Atmosphere.PRESETS)
 static var _loaded := false
 
@@ -30,6 +31,7 @@ static func load_settings() -> void:
 	fullscreen = bool(cfg.get_value("video", "fullscreen", false))
 	head_bob = bool(cfg.get_value("video", "head_bob", true))
 	show_objectives = bool(cfg.get_value("game", "show_objectives", true))
+	blood = bool(cfg.get_value("game", "blood", true))
 	graphics = Atmosphere.valid_quality(str(cfg.get_value("video", "graphics", Atmosphere.DEFAULT_QUALITY)))
 
 
@@ -42,6 +44,7 @@ static func save_settings() -> void:
 	cfg.set_value("video", "graphics", graphics)
 	cfg.set_value("video", "head_bob", head_bob)
 	cfg.set_value("game", "show_objectives", show_objectives)
+	cfg.set_value("game", "blood", blood)
 	cfg.save(PATH)
 
 

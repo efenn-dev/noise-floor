@@ -102,6 +102,8 @@ const SCOPE_ADS_POSES := {
 	"crossbow": [Vector3(0.0, -0.130, -0.65), Vector3.ZERO],
 }
 const FLASH_TIME := 0.06
+## V33: what a gun hit says, by the zone it landed in.
+const ZONE_WORDS := {"head": "Headshot!", "torso": "Hit", "arm": "Arm hit", "leg": "Leg hit"}
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0, "shotgun": 9.0, "crossbow": 0.8}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
@@ -731,9 +733,9 @@ func fire() -> int:
 	if not no_spread:
 		dir = _in_cone(dir, deg_to_rad(sim.guns.spread_deg()))
 	var to := from + dir * float(sim.data.guns["ray_range"])
-	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT | Layers.ZOMBIE, exclude)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("zombie_id"):
+	# V33: zombies are hit through their bone zones; a round through the gap between arm and body flies on.
+	var hit := ZombieHitboxes.cast(get_world_3d().direct_space_state, from, to, exclude)
+	if hit.is_empty() or int(hit["zombie_id"]) < 0:
 		_say("Missed")
 		var fx := "dust"
 		if not hit.is_empty() and hit["collider"] != null and hit["collider"].has_meta("piece_key"):  # W2: glass and town doors
@@ -744,14 +746,11 @@ func fire() -> int:
 		if not hit.is_empty() and feel != null:
 			feel.impact(hit["position"], hit["normal"], fx)  # V3: the round kicks up dust where it lands
 		return -1
-	var body: Node3D = hit["collider"]
-	var id: int = body.get_meta("zombie_id")
-	# V28: crawler heads are near the floor; each body exposes its data-driven head line.
-	var zombie_body := body as ZombieBody
-	var head_line := zombie_body.head_y() if zombie_body != null else ZombieBody.HEAD_Y
-	var head: bool = hit["position"].y > body.global_position.y + head_line
-	var r := sim.shoot_zombie(id, head)
-	_say("Killed it" if r["killed"] else (("Headshot!" if head else "Hit") if r["hit"] else "Missed"))
+	var id: int = hit["zombie_id"]
+	var zone: String = hit["zone"]
+	var head := zone == "head"
+	var r := sim.shoot_zombie(id, zone)
+	_say("Killed it" if r["killed"] else (ZONE_WORDS.get(zone, "Hit") if r["hit"] else "Missed"))
 	if feel != null and r["hit"]:
 		feel.impact(hit["position"], hit["normal"], "blood_head" if head else "blood")
 		feel.hit_zombie(r["killed"], head)

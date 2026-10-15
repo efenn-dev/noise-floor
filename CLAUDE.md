@@ -27,7 +27,12 @@ V25 screenshot flag: `--objectives` shows the first-night objectives panel midwa
 
 V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
 
+V35 screenshot flag: with `--dead-zombies` bodies are shown already fallen; `--death-style=back|forward` forces how they went down (`ZombieBody.death_style_for`).
 W3a: the map is `WorldMap` (roads, exits, areas; 720 x 760 m), the countryside `CountryPlan`/`CountryView`, new roads `RoadView`; the navmesh is tiled (`NavBaker`, 64 m tiles; tests `await nav.wait_synced()` after a bake). Screenshot flag `--at=market|south|highway|woods|farms|west` stands you at a named spot (`main.gd` `AT_PLACES`); e.g. `tools/shot.sh hw --at=highway --time=12`. `tools/test.sh "a|b"` runs the files matching either name.
+V34 screenshot flags: `--drop=A,B,...` lays those items or gear bases (e.g. `canned_food,jacket,hunting_rifle,axe`) in a row ahead of you as they lie on the ground (`BagView`, models `assets/models/item_<id>.glb` from `tools/art/item_props.py`); `--place=ITEM` starts placing mode (`Placer`) with the see-through ghost showing; e.g. `tools/shot.sh drop --drop=canned_food,soda,jacket --cam=0,0,0,0,-38 --time=12`.
+V33 screenshot flag: `--hitboxes` draws the zombies' bone hit zones (`ZombieHitboxes`: head red, torso yellow, arms blue, legs green; zone damage in `data/hit_zones.json`); e.g. `tools/shot.sh zones --zombie=0,-3 --hitboxes --cam=0,0,-0.5,0,-8 --time=12`.
+
+V32 screenshot flag: `--blood=off` turns blood sprays and stains off for this run (Settings → Blood, saved, is the player's switch).
 
 F1: resource nodes (`data/resources.json`, `SimWorld.resource_nodes`, `BuildGrid.nodes`, buildables `needs_node`), drawn by `NodeView`; extractors (salvager, water_pump, fuel_pump, sawmill) go only on their node's spot, no foundation, and run at the node's purity (`Factory.Machine.node_rate`). Flags: `--demo-outpost` builds one of each on the first node of its kind, power free; `--at=junkyard|timber`; e.g. `tools/shot.sh outpost --at=junkyard --demo-outpost --time=12`.
 
