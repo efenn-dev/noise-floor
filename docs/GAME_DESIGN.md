@@ -214,6 +214,17 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 - [x] **M17a — The industrial park and the water tower.** A harder second area, the first big project, the water tap.
 - [ ] **M17b — Outposts and the substation.**
 
+**Building like Satisfactory, with the noise twist** (stances and order in `docs/DIRECTION.md`, 2026-10-15):
+
+- [x] **F1 — Resource nodes and extractors.** Scrap heaps, wells, fuel tankers and timber stands that only machines can work.
+- [ ] **F2 — The Hub and milestones.** Deliver parts to unlock machines and tiers; the radio tower calls in a rescue.
+- [ ] **F3 — Build feel.** Drag-placed belts, splitters and mergers, machines that snap together, clear input and output.
+- [ ] **F4 — The loop closes.** The factory feeds the defense against the hordes its own noise draws: belt-fed turrets, powered lights and fences, panels to the repair station; waves scale with the base's loudness. Session log shows builds, waves and a belt-fed turret still standing at dawn.
+- [ ] **F5 — Loudness as a puzzle.** The build ghost shows the heard-radius; muffler tiers and enclosures; outposts worth using; daytime running and dusk shutdown; decoys with a cost. Three visible ways to quiet any base.
+- [ ] **F6 — Compact and deep.** Recipes chain into what survival needs and loot runs out of; content sized for a backyard factory of about twenty machines, not Satisfactory's scale.
+- [ ] **PT — The first loud night.** Emmitt builds a loud base on day 1 and survives the wave it draws. Gate for judging the premise and for any outside release.
+- [ ] **R1 — Release readiness (private test).** Export preset and a clean-machine Windows build, CREDITS.md complete, a zip to five to ten friends, a 60-second clip. Friends playtest; the code stays solo.
+
 ## Open questions (decide when we get there)
 - Map: hand-built town vs. procedurally generated blocks? (Hand-built greybox until M6.)
 - Hardcore mode (permadeath): an opt-in option, after M17. Normal mode keeps skills on death and leaves your items on your body.
