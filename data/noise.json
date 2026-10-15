@@ -46,8 +46,14 @@
 		"one_off_floor": 40,
 		"one_off_rate": 0.05,
 		"ignore": ["zombie_bash", "wreck", "scream"],
+		"starting": [
+			{ "type": "crawler", "chance": 0.083333, "street_chance": 0.083333, "indoor_chance": 0.25 }
+		],
 		"unlocks": [
 			{ "type": "runner", "at": 3000, "chance": 0.25, "message": "You've been heard far away. Something fast is out there now" },
+			{ "type": "brute", "at": 5500, "chance": 0.10, "night_only": true, "max_per_wave": 1, "max_per_horde": 2,
+				"max_alive": 2,
+				"message": "Heavy footsteps answer the noise. Brutes now roam at night" },
 			{ "type": "screamer", "at": 8000, "chance": 0.12, "message": "Something out there screams when it sees you" }
 		]
 	}

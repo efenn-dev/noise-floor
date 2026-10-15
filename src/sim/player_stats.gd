@@ -43,6 +43,11 @@ var sprinting := false   # written by the world each frame
 var aiming := false      # V15: transient combat stance, written by the world
 var blocking := false
 var block_time := 0.0    # seconds since this guard came up; the first 0.25 s can parry
+## V28: a crawler's ankle grab temporarily cuts walking speed. The duration and factor come from its data.
+var stumble_left := 0.0
+var stumble_factor := 1.0
+## V28: pending shove velocity from a hard zombie hit. Main hands it to Player, then clears it.
+var knockback := Vector3.ZERO
 var carry_ratio := 0.0   # written by SimWorld each tick
 ## Stamina regen multiplier from Fitness and Second Wind (written by SimWorld each tick).
 var stamina_regen_mult := 1.0
@@ -80,6 +85,9 @@ func damage(amount: float, cause: String = "unknown") -> void:
 		dead = true
 		aiming = false
 		set_blocking(false)
+		stumble_left = 0.0
+		stumble_factor = 1.0
+		knockback = Vector3.ZERO
 		bleeding = false
 		respawn_timer = RESPAWN_TIME
 		deaths += 1
@@ -124,6 +132,14 @@ func try_block(cost: float) -> bool:
 	return true
 
 
+## V28: repeated ankle grabs restart the longer stumble and keep the strongest slow.
+func stumble(seconds: float, speed_factor: float) -> void:
+	if dead or seconds <= 0.0:
+		return
+	stumble_left = maxf(stumble_left, seconds)
+	stumble_factor = minf(stumble_factor, clampf(speed_factor, 0.0, 1.0))
+
+
 func can_sprint() -> bool:
 	return not dead and not asleep and stamina > 1.0 and energy > 0.0 and carry_ratio < _c("carry_no_sprint", 1.5)
 
@@ -135,6 +151,8 @@ func speed_multiplier() -> float:
 		m = maxf(_c("carry_min_speed", 0.5), 1.0 - (carry_ratio - 1.0) * _c("carry_slow_per_overload"))
 	if energy <= 0.0:
 		m *= 0.8
+	if stumble_left > 0.0:
+		m *= stumble_factor
 	if aiming:
 		m *= AIM_SPEED_MULT
 	elif blocking:
@@ -178,6 +196,9 @@ func wake() -> void:
 
 func tick(dt: float) -> void:
 	swing_cooldown = maxf(0.0, swing_cooldown - dt)
+	stumble_left = maxf(0.0, stumble_left - dt)
+	if stumble_left <= 0.0:
+		stumble_factor = 1.0
 	if blocking:
 		block_time += dt
 	if dead:
@@ -246,4 +267,7 @@ func _respawn() -> void:
 	stamina = 100.0
 	bleeding = false
 	asleep = false
+	stumble_left = 0.0
+	stumble_factor = 1.0
+	knockback = Vector3.ZERO
 	respawned.emit()

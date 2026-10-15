@@ -531,7 +531,10 @@ func fire() -> int:
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
-	var head: bool = hit["position"].y > body.global_position.y + ZombieBody.HEAD_Y
+	# V28: crawler heads are near the floor; each body exposes its data-driven head line.
+	var zombie_body := body as ZombieBody
+	var head_line := zombie_body.head_y() if zombie_body != null else ZombieBody.HEAD_Y
+	var head: bool = hit["position"].y > body.global_position.y + head_line
 	var r := sim.shoot_zombie(id, head)
 	_say("Killed it" if r["killed"] else (("Headshot!" if head else "Hit") if r["hit"] else "Missed"))
 	if feel != null and r["hit"]:

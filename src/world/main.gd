@@ -34,7 +34,7 @@ extends Node3D
 ##   --skills                        open the skills and perks screen (K in game)
 ##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
 ##                                   shown in the inventory screen (M13)
-##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
+##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, crawler, screamer, brute)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
@@ -663,6 +663,10 @@ func _sync_player() -> void:
 	sim.guns.aiming = aimed
 	p.aiming = aimed
 	p.set_blocking(driving == null and not vault_active and melee.blocking())
+	# V28: the sim supplies a brute's shove; the CharacterBody resolves it against world collision.
+	if p.knockback != Vector3.ZERO:
+		player.apply_knockback(p.knockback)
+		p.knockback = Vector3.ZERO
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5

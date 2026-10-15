@@ -110,6 +110,11 @@ func is_dead() -> bool:
 	return state == State.DEAD
 
 
+## V28: crawlers see from near the floor and brutes from above an ordinary zombie's head.
+func eye_height() -> float:
+	return float(stats.get("eye_height", EYE_HEIGHT))
+
+
 ## How fast the body should walk right now (m/s). 0 = stand still.
 func move_speed() -> float:
 	if screaming > 0.0 or pinned > 0.0 or stunned > 0.0:
@@ -422,7 +427,8 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 		return false
 	hp -= damage
 	var away := Vector3(pos.x - from.x, 0.0, pos.z - from.z)
-	knockback = away.normalized() * push if away.length_squared() > 1e-6 else Vector3.ZERO
+	var shove := push * float(stats.get("knockback_factor", 1.0))
+	knockback = away.normalized() * shove if away.length_squared() > 1e-6 else Vector3.ZERO
 	if hp <= 0.0:
 		hp = 0.0
 		state = State.DEAD

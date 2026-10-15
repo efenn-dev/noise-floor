@@ -2,6 +2,20 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V28 New zombies: the crawler and the brute (Sprint 4)
+
+The session logs say fighting is what keeps players going; more kinds of zombie to fight. Built by Codex (one job on his ChatGPT plan); three test fixes and the checks by Claude Opus 5.5.
+
+**Built:**
+- **Crawler:** ruined legs, drags itself along the floor (the Crawl animation). 70 HP, 0.6 m/s, a low box collider (shots must go low; its head is near the floor and headshots count there), hears and moans quieter, grabs your ankles (1.5 s stumble at 45% speed), never breaks doors, crawls through a broken window in 4 s. About 1 in 12 street zombies and 1 in 4 house zombies from day one.
+- **Brute:** the heavy body at 1.28x, darker and battered. 300 HP, 0.8 m/s, hits for 24 and shoves you about a metre, breaks doors, windows and barricades 3x faster, blocks only half work and a parry doesn't stagger it, melee barely moves it; a deeper groan. Unlocks at 5,500 infamy and joins night waves only (one per group, two per horde, two alive at most).
+- All numbers in `data/zombies.json`; headshot and sight heights follow each type; the session log and the noise overlay name them.
+- Test fixes: a disabled body leaves physics in Godot (the crawler hit-box test needed `DISABLE_MODE_KEEP_ACTIVE`), a kill capped the headshot damage the test compared, and the house-hearing test now skips crawlers (they hear less on purpose).
+
+**Try it on the PC:** `play.bat --zombies=0 --zombie=0,-4 --zombie-type=crawler` or `--zombie-type=brute`.
+
+**Tests:** 11,989 green (new `test_zombie_types.gd`).
+
 ## 2026-10-14 — V27 Take all button, wear gear straight from a container (Sprint 4)
 
 Emmitt: "a loot all button might help, I also noticed that we can't immediately equip items, it has to go to inventory before being equipped". By Claude Opus 5.5.
