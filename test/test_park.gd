@@ -211,10 +211,12 @@ func test_industrial_loot_and_police_chance() -> void:
 	var finds: Dictionary = data.guns["finds"]
 	for kind: String in ["gun", "part", "ammo"]:
 		for other: String in finds:
-			if other != "industrial":
+			if other != "industrial" and other != "gun_locker":  # W3b: the police station's gun lockers are richer still
 				check(float(finds["industrial"][kind]) > float(finds[other][kind]),
 						"more %s in warehouse crates than in %s" % [kind, other])
 	check(float(data.gear["containers"]["industrial"]) >= float(data.gear["containers"]["factory_crate"]), "gear as often as the factory's crates")
+	for kind: String in ["gun", "ammo"]:
+		check(float(finds["gun_locker"][kind]) > float(finds["industrial"][kind]), "W3b: gun lockers beat warehouse crates for %s" % kind)
 	var gear := Gear.new(data)
 	near(gear.police_chance("industrial"), 3.0 * gear.police_chance("kitchen"), "Police tier three times as likely in the park")
 	near(gear.police_chance("kitchen"), float(data.gear["tiers"]["police"]["chance"]), "the town's chance is unchanged")

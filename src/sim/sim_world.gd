@@ -1070,6 +1070,45 @@ func spawn_park_zombies(plan: Dictionary) -> Array:
 	return ids
 
 
+## W3b: downtown (DowntownPlan.generate). Lays the shops' pieces like place_park unless `lay_pieces` is false
+## (a save that already holds them), and always registers what isn't a piece: every prop with a loot table as
+## a container (shelves, counters, desks, gun lockers, pumps, dumpsters) and the wrecked cars on Market Street
+## (searchable trunks, gas to siphon, never drivable). Returns pieces laid.
+func place_downtown(plan: Dictionary, lay_pieces: bool = true) -> int:
+	var was_muted := stats.muted
+	stats.muted = true
+	var n := 0
+	if lay_pieces:
+		for p: Dictionary in plan["pieces"]:
+			build.restore(TownPlan.piece_key(p), {"id": p["id"], "cell": p["cell"], "side": p["side"],
+					"hp": data.buildables[p["id"]]["hp"], "town": true})
+			n += 1
+	for pr: Dictionary in plan["props"]:
+		if str(pr["table"]) != "":
+			loot.add(pr["id"], pr["table"], downtown_prop_pos(pr))
+	for w: Dictionary in plan["wrecks"]:
+		var size: Array = data.vehicles[w["type"]]["size"]
+		var pos: Vector3 = w["pos"] + Vector3(0, float(size[1]) / 2.0, 0)
+		loot.add(w["id"], "car_trunk", pos)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([seed_value, w["id"], "fuel"])
+		vehicles.add(w["id"], w["type"], pos, w["yaw"], rng.randi_range(0, 2), "Burned out: nothing left to drive", "lost")
+		loot.containers[w["id"]]["pos"] = vehicles.trunk_pos(w["id"])
+	stats.muted = was_muted
+	return n
+
+
+## W3b: the middle of a downtown prop's box (where its container is).
+static func downtown_prop_pos(pr: Dictionary) -> Vector3:
+	return pr["pos"] + Vector3(0, (pr["size"] as Vector3).y / 2.0, 0)
+
+
+## W3b: downtown's zombies (plan["zombies"]: two in each shop, a brute in the police station, more on the
+## street). Only for a new game, or a save from before downtown; a save brings its own back.
+func spawn_downtown_zombies(plan: Dictionary) -> Array:
+	return spawn_park_zombies(plan)
+
+
 ## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
 ## the data-driven indoor mix has more crawlers. Only a new game: a save brings its own zombies back.
 func spawn_house_zombies(plan: Dictionary) -> Array:

@@ -13,6 +13,11 @@ const RADIUS := 0.35
 const REACH_RADIUS := 0.22
 const REACH_OFFSET := Vector3(0.0, 1.25, -0.32)
 const LOS_EVERY := 3   # physics frames between line-of-sight checks
+## W3b: a zombie standing idle (and unhurt) further than this from the player rests: its animation stops and it
+## skips its physics move and its sight ray until it's woken or you come near. Beyond every zombie's sight (30 m)
+## and its bone zones' range, so it changes nothing it would notice; downtown's zombies cost a soak day 60% more
+## before this.
+const REST_BEYOND := 50.0
 const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
 ## A2: five bodies from the same script (`zombie.py -- --variant=NAME`), with the same bones and animations;
@@ -91,6 +96,9 @@ const LYING_LIFT := 0.14    # a tipped-over body lies this high once flat (its f
 var _death_slide := 0.0
 var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
 var _frame := 0
+var resting := false  # W3b: see REST_BEYOND
+var _far := false
+var _anim_mode := AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
 var _shape: CollisionShape3D
 var _corpse_shape: CollisionShape3D
 var _reach_shape: CollisionShape3D  # V24: keeps the reaching arms out of walls
@@ -351,6 +359,14 @@ func _physics_process(delta: float) -> void:
 		global_position = brain.climb_landing
 		brain.climb_landing = Vector3.INF
 		_end_climb_collision()
+	if (_frame + brain.id) % 10 == 0:
+		_far = player != null and global_position.distance_to(player.global_position) > REST_BEYOND
+	_rest(_far and not brain.is_dead() and brain.state == ZombieBrain.State.IDLE and brain.move_speed() == 0.0
+			and brain.knockback == Vector3.ZERO and brain.hp >= _last_hp and brain.screaming <= 0.0)
+	if resting:
+		_frame += 1
+		brain.los_clear = false
+		return
 	_animate(delta)
 	_speak(delta)
 	if brain.is_dead():
@@ -407,6 +423,19 @@ func _physics_process(delta: float) -> void:
 	if face.length_squared() > 1e-4:
 		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), clampf(6.0 * delta, 0.0, 1.0))
 	brain.blocked_by = _blocking_piece(dir)
+
+
+## W3b: starts or ends resting (see REST_BEYOND): the animation player stops advancing (manual mode keeps the
+## pose and the clip it was on) and the bone zones go off.
+func _rest(on: bool) -> void:
+	if on == resting:
+		return
+	resting = on
+	if on:
+		_set_hitboxes(false)
+		velocity = Vector3.ZERO
+	if _anim != null:
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL if on else _anim_mode
 
 
 ## V17: code-driven climb, independent of model animation names. The sim supplies its deterministic
@@ -589,6 +618,8 @@ func _set_body(index: int) -> void:
 	_model.scale = Vector3.ONE * MODEL_SCALE
 	add_child(_model)
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	_anim_mode = _anim.callback_mode_process
+	resting = false
 	for anim_name: String in LOOPED:
 		if _anim.has_animation(anim_name):
 			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
