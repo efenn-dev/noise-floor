@@ -89,6 +89,13 @@ func set_look(yaw_deg: float, pitch_deg: float) -> void:
 	head.rotation.x = deg_to_rad(clampf(pitch_deg, -89.0, 89.0))
 
 
+## V28: the sim decides the shove; the CharacterBody applies it against real walls and furniture.
+func apply_knockback(push: Vector3) -> void:
+	if push.is_finite():
+		velocity.x += push.x
+		velocity.z += push.z
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not use_device_input or frozen:
 		return

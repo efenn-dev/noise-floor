@@ -3,8 +3,8 @@ extends RefCounted
 ## What happened in one play session, for the session log (src/world/session_log.gd) that playtests
 ## leave behind: time played, deaths and what caused them, the Director's peak heat, what got built,
 ## kills, the loudest sounds, and a timeline of the first few real minutes. Since P3 also gear found by
-## rarity and what you wore at the end, skill levels and perk points, shots per gun, the base-log events that
-## mattered most while you were away, and the houses you went into.
+## rarity, what you equipped and wore at the end, skill levels and perk points, shots per gun, the base-log
+## events that mattered most while you were away, and the houses you went into.
 ## SimWorld calls the note_* functions where the events already happen; the world adds real time.
 ## While `muted` (the world building the town, a save or a demo base) nothing is recorded.
 
@@ -13,7 +13,7 @@ const TIMELINE_SECONDS := 300.0
 const TIMELINE_MAX := 15
 const DEATHS_SHOWN := 8
 const AWAY_SHOWN := 5  # P3: the most important base-log events while you were far from your base
-const GUNS_SHOWN := 3
+const GUNS_SHOWN := 6
 ## P3: how much a base-log event matters, by what its text says (first match wins; anything else is 1).
 const AWAY_WEIGHTS := [["destroyed", 6], ["under attack", 5], ["coming from", 4], [" out of ", 4],
 		["Old Pete", 3], ["worn out", 3], ["caught", 2], ["rang", 2], ["went off", 2]]
@@ -31,6 +31,8 @@ var waves := 0
 ## Piece id ("wall", "smelter") -> how many the player built.
 var built: Dictionary = {}
 var kills := 0
+## V28: session-log breakdown by zombie type (the timeline already says "killed a crawler").
+var kills_by_type: Dictionary = {}
 var mufflers := 0
 var used_crate := false
 ## {kind, loudness, when} or {} if nothing yet.
@@ -47,8 +49,12 @@ var levels_gained: Dictionary = {}
 var perk_points_earned := 0
 ## P3: perk id -> ranks bought this sitting.
 var perks_spent: Dictionary = {}
+## V25: piece name -> times equipped this sitting (quick-equip and the inventory use the same sim path).
+var gear_equipped: Dictionary = {}
 ## P3: gun name -> {"shots", "hits", "kills"}.
 var guns: Dictionary = {}
+## V30: throwable name -> throws. Pipe-bomb kills are also credited in `guns`, the existing per-weapon table.
+var throws: Dictionary = {}
 ## P3: the most important base-log events that happened more than the radio's range from you:
 ## [{"text", "when", "weight"}], best first, at most AWAY_SHOWN. away_total counts them all.
 var away: Array = []
@@ -101,9 +107,12 @@ func note_crate() -> void:
 	note("used the crate")
 
 
-func note_kill() -> void:
-	if not muted:
-		kills += 1
+func note_kill(type: String = "") -> void:
+	if muted:
+		return
+	kills += 1
+	if type != "":
+		kills_by_type[type] = int(kills_by_type.get(type, 0)) + 1
 
 
 func note_muffler() -> void:
@@ -146,6 +155,13 @@ func note_perk(perk: String) -> void:
 	note("took the perk " + _words(perk))
 
 
+func note_gear_equipped(piece_name: String) -> void:
+	if muted:
+		return
+	gear_equipped[piece_name] = int(gear_equipped.get(piece_name, 0)) + 1
+	note("equipped " + piece_name)
+
+
 ## P3: a shot from `gun` (its name); then note_gun_hit if the ray met a zombie.
 func note_shot(gun: String) -> void:
 	if not muted:
@@ -159,6 +175,13 @@ func note_gun_hit(gun: String, killed: bool) -> void:
 	g["hits"] += 1
 	if killed:
 		g["kills"] += 1
+
+
+func note_throw(item_name: String) -> void:
+	if muted:
+		return
+	throws[item_name] = int(throws.get(item_name, 0)) + 1
+	_gun(item_name)["shots"] += 1
 
 
 func _gun(gun: String) -> Dictionary:
@@ -264,7 +287,14 @@ func summary_lines() -> PackedStringArray:
 		parts.append("%d %s" % [built[id], _words(id)])
 		total += int(built[id])
 	out.append(("Built %d piece%s: %s." % [total, "" if total == 1 else "s", ", ".join(parts)]) if total > 0 else "Built nothing.")
-	out.append("Mufflers fitted: %d. Zombies killed: %d." % [mufflers, kills])
+	var killed := PackedStringArray()
+	var kill_types := kills_by_type.keys()
+	kill_types.sort()
+	for type: String in kill_types:
+		var n: int = kills_by_type[type]
+		killed.append("%d %s%s" % [n, _words(type), "" if n == 1 else "s"])
+	out.append("Mufflers fitted: %d. Zombies killed: %d%s." % [mufflers, kills,
+			(" (" + ", ".join(killed) + ")") if not killed.is_empty() else ""])
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))
 	out.append(_loud_line("Loudest machine or engine", loudest_continuous))
 	out.append_array(_p3_lines())
@@ -276,7 +306,7 @@ func summary_lines() -> PackedStringArray:
 	return out
 
 
-## P3: gear, skills and perks, guns, events at the base while you were away, houses (at most 13 lines).
+## P3/V25: gear, skills and perks, guns, events at the base while you were away, houses (at most 14 lines).
 func _p3_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	var found := PackedStringArray()
@@ -285,6 +315,11 @@ func _p3_lines() -> PackedStringArray:
 			found.append("%d %s" % [gear_found[rarity], rarity])
 	out.append(("Gear found: " + ", ".join(found) + ".") if not found.is_empty() else "Gear found: none.")
 	out.append(("Wearing at the end: " + ", ".join(worn) + ".") if not worn.is_empty() else "Wearing at the end: nothing.")
+	var equipped_parts := PackedStringArray()
+	for piece_name: String in gear_equipped:
+		var n := int(gear_equipped[piece_name])
+		equipped_parts.append(piece_name + ((" x%d" % n) if n > 1 else ""))
+	out.append(("Gear equipped: " + ", ".join(equipped_parts) + ".") if not equipped_parts.is_empty() else "Gear equipped: none.")
 	var lv := PackedStringArray()
 	for skill: String in levels_gained:
 		lv.append("%s +%d" % [_words(skill), levels_gained[skill]])
@@ -296,14 +331,18 @@ func _p3_lines() -> PackedStringArray:
 		pk.append(_words(perk) + ((" x%d" % perks_spent[perk]) if int(perks_spent[perk]) > 1 else ""))
 	out.append("Perk points earned: %d, spent: %d%s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else ""])
 	if guns.is_empty():
-		out.append("Firearms: never fired.")
+		out.append("Weapons: never fired or thrown.")
 	else:
-		out.append("Firearms (shots, hits, kills):")
+		out.append("Weapons (shots/throws, hits, kills):")
 		var names := guns.keys()
 		names.sort_custom(func(a: String, b: String) -> bool: return int(guns[a]["shots"]) > int(guns[b]["shots"]))
 		for i in mini(names.size(), GUNS_SHOWN):
 			var g: Dictionary = guns[names[i]]
 			out.append("  %s: %d, %d, %d" % [names[i], g["shots"], g["hits"], g["kills"]])
+	var thrown := PackedStringArray()
+	for item_name: String in throws:
+		thrown.append("%s %d" % [item_name, throws[item_name]])
+	out.append(("Throws: " + ", ".join(thrown) + ".") if not thrown.is_empty() else "Throws: none.")
 	if away_total == 0:
 		out.append("At your base while you were away: nothing logged.")
 	else:

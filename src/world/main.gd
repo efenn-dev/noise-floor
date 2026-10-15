@@ -10,6 +10,8 @@ extends Node3D
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
+##   --gun=BASE            V30: hold pistol, rifle, shotgun or crossbow (pete is the unique rifle)
+##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
@@ -29,15 +31,18 @@ extends Node3D
 ##   --noise-overlay       start with the noise overlay (N) on
 ##   --heat=N              start the Director's heat at N
 ##   --title / --pause / --settings   open that menu (for screenshots)
+##   --slots                         open the title screen's save-slot picker (for screenshots)
 ##   --inventory                     open the inventory screen (Tab in game)
 ##   --loot[=KIND]                   start beside searched loot of KIND (fridge by default), with it open
 ##   --skills                        open the skills and perks screen (K in game)
 ##   --gear[=RARITY]                 a rolled gear piece (white, blue, yellow (default), gold, set) in your pockets,
 ##                                   shown in the inventory screen (M13)
-##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, screamer)
+##   --mod-screen[=pistol|rifle]     that gun plus every part in pockets, with its modding panel open (V23)
+##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, crawler, screamer, brute)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
+##   --objectives                    show the first-night objectives midway through (for screenshots)
 ##   --inside[=N]                    start inside house N (0-11, default 0), looking at its fridge
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
@@ -64,6 +69,7 @@ var nav: NavBaker
 var zombie_view: ZombieView
 var melee: Melee
 var shooter: Shooter  # M14: the gun in your hands
+var thrower: Thrower  # V30: throwable input, arc and projectile presentation
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
@@ -79,6 +85,7 @@ var bag_view: BagView
 var noise_overlay: NoiseOverlay
 var session_log: SessionLog
 var hints: Hints  # first-game hints; null after a load, with --demo-*/--cam/--no-hints, or in screenshots
+var objectives_panel: ObjectivesPanel  # V25: saved first-night loop, under the clock
 var cars: Dictionary = {}  # car id -> CarBody
 var town: Dictionary = {}  # TownPlan.generate(seed): the houses, their pieces, containers and beds (W1a)
 var town_view: TownView
@@ -122,6 +129,9 @@ var _hurt_flash: ColorRect
 var _death_label: Label
 var _last_health := 100.0
 var _message_label: Label
+var _perk_badge: PanelContainer
+var _perk_badge_label: Label
+var _gear_toast_label: Label
 var _heat_label: Label
 var _step_timer := 0.0
 var menus: Menus
@@ -139,6 +149,10 @@ func _ready() -> void:
 	InputSetup.register()
 	Settings.load_settings()
 	var args := _parse_user_args()
+	if not GameSession.skip_menu:
+		var migration_error := GameSession.migrate_legacy_save()
+		if migration_error != "":
+			push_warning(migration_error)
 	if args.has("graphics"):
 		Settings.graphics = Atmosphere.valid_quality(str(args["graphics"]))  # V1: this run only, not saved
 	var save := {}
@@ -146,15 +160,19 @@ func _ready() -> void:
 		save = SaveGame.read(GameSession.pending_load)
 		GameSession.pending_load = ""
 		_loaded = not save.is_empty()
-	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)))
+	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)),
+			GameSession.current_difficulty)
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
 	if args.has("day"):
 		sim.clock.day = maxi(1, int(args["day"]))  # M16: --day=16 starts in winter (a save sets its own day)
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
+	if not _loaded and not args.has("no-hints") and (_wants_hints(args) or args.has("objectives")):
+		sim.guidance.start(sim.clock.day, int(sim.tally["deaths"]))
 	session_log = SessionLog.new()
 	session_log.enabled = _shot_path == "" and DisplayServer.get_name() != "headless"
+	SessionLog.prepare_slot()
 	if session_log.enabled and SessionLog.carried != null:
 		sim.stats = SessionLog.carried  # loading a save or quitting to the title is still the same sitting
 	sim.stats.muted = true  # building the town, a save or a demo base isn't the player's doing
@@ -213,6 +231,11 @@ func _ready() -> void:
 		_hud.get_parent().add_child(hints)  # the HUD layer, so the title screen hides it too
 	if _loaded:
 		_apply_save(save)
+	if args.has("objectives") and not args.has("no-hints"):
+		sim.guidance.debug_midway()
+		objectives_panel.force_visible = true
+	objectives_panel.suppressed = args.has("no-hints") or GameSession.skip_hints
+	objectives_panel.refresh()
 	_build_menus(args)
 	_apply_settings()
 	if args.has("heat"):
@@ -259,8 +282,17 @@ func _ready() -> void:
 		sim.gear.unequip("weapon")  # V12: --fists starts bare-handed (the weapon goes to your pockets)
 	if args.has("swing-at"):
 		melee.hold_at = clampf(float(args["swing-at"]), 0.0, 1.0)  # V11: freeze the swing there, for screenshots
-	if args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
+	if args.has("mod-screen"):
+		_give_mod_screen(str(args["mod-screen"]))
+	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("throw"):
+		var throwable := str(args["throw"])
+		if throwable not in ["pipe_bomb", "bottle"]:
+			throwable = "pipe_bomb"
+		sim.inventory.add(throwable, 1)
+		thrower.ready(throwable)
+		thrower.hold_preview = true
 	if args.has("window"):
 		var wh: PackedStringArray = str(args["window"]).split("x")  # P2: --window=1280x720, a smaller window
 		if wh.size() == 2:
@@ -323,30 +355,48 @@ func _give_rolled_gear(rarity: String) -> void:
 	inventory_screen.select_gear(piece["uid"])
 
 
-## --gun[=pistol|rifle|pete]: a gun (pistol by default; pete = Old Pete's Deer Rifle) in its gun slot,
-## loaded, raised and in your hands, with 30 standard rounds. --workbench also gives the parts and casings
+## --gun[=pistol|rifle|shotgun|crossbow|pete]: a loaded gun in its slot, raised and in your hands.
+## It also supplies that gun's ammo. --workbench gives every part and the crafting ingredients
 ## the bench uses, fits a crude suppressor and opens the workbench screen (for screenshots and trying it).
 func _give_gun(which: String, bench: bool) -> void:
 	var piece := {}
 	if which == "pete":
 		piece = sim.gear.roll_unique(RandomNumberGenerator.new(), "petes_deer_rifle")
 	else:
-		piece = sim.gear.make("hunting_rifle" if which == "rifle" else "pistol", "civilian", "white")
+		var gun_base: String = {"rifle": "hunting_rifle", "shotgun": "shotgun", "crossbow": "crossbow"}.get(which, "pistol")
+		piece = sim.gear.make(gun_base, "civilian", "white")
 	sim.gear.pieces.append(piece)
 	sim.gear.equip(int(piece["uid"]))  # V14: a pistol lands in the sidearm slot, a rifle in primary
 	piece["loaded"] = int(sim.gear.gun_stats(piece)["magazine"])
-	sim.inventory.add("ammo_standard", 30)
+	var ammo := str(sim.data.guns["guns"][piece["base"]].get("ammo", "ammo_standard"))
+	sim.inventory.add(ammo, 24 if ammo == "shells" else (12 if ammo == "bolt" else 30))
 	if not sim.guns.in_hand():
 		sim.swap_hands()
 	sim.guns.raising = 0.0
 	if bench:
-		for base: String in ["oil_filter_suppressor", "scope", "extended_mag", "padded_stock"]:
+		for base: String in ["oil_filter_suppressor", "scope", "extended_mag", "padded_stock", "choke"]:
 			sim.gear.pieces.append(sim.gear.make(base, "civilian", "blue" if base == "scope" else "white",
 					{"accuracy": 0.1} if base == "scope" else {}))
-		sim.attach_part(sim.gear.pieces[sim.gear.pieces.size() - 4]["uid"])
-		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 6, "nails": 12, "plank": 4})
+		var first_part := sim.gear.pieces.size() - 5
+		if sim.gear.can_attach(piece, int(sim.gear.pieces[first_part]["uid"])) == "":
+			sim.attach_part(int(sim.gear.pieces[first_part]["uid"]))
+		sim.inventory.give_all({"ammo_casing": 20, "scrap_metal": 8, "gunpowder": 3, "nails": 16, "plank": 5})
 		sim.player_pos = player.global_position
 		_open_workbench("")
+
+
+## --mod-screen[=pistol|rifle]: a bare gun and all five parts in pockets, selected in Tab so the
+## data-driven slot panel and stat deltas are ready for screenshots.
+func _give_mod_screen(which: String) -> void:
+	var gun_base := "hunting_rifle" if which == "rifle" else "pistol"
+	var gun := sim.gear.make(gun_base, "civilian", "white")
+	sim.gear.pieces.append(gun)
+	for part_base: String in sim.data.guns["parts"]:
+		sim.gear.pieces.append(sim.gear.make(part_base, "civilian", "white"))
+	sim.player_pos = player.global_position
+	if not inventory_screen.is_open():
+		inventory_screen.open()
+	inventory_screen.select_gear(int(gun["uid"]), InventoryScreen.POCKETS)
 
 
 func _open_workbench(key: String) -> void:
@@ -503,7 +553,9 @@ func _process(delta: float) -> void:
 		sound_view.indoor = indoor_fog  # V4: indoor echo and muffled wind follow the same eased value
 	if _shot_path == "":
 		if not sim.paused:
-			sim.stats.add_real_time(delta / maxf(Engine.time_scale, 1.0))  # sleeping speeds time up
+			var played := delta / maxf(Engine.time_scale, 1.0)  # sleeping speeds time up
+			sim.stats.add_real_time(played)
+			GameSession.slot_real_seconds += played
 		if sim.update(delta) > 0:
 			_apply_time()
 		return
@@ -663,6 +715,10 @@ func _sync_player() -> void:
 	sim.guns.aiming = aimed
 	p.aiming = aimed
 	p.set_blocking(driving == null and not vault_active and melee.blocking())
+	# V28: the sim supplies a brute's shove; the CharacterBody resolves it against world collision.
+	if p.knockback != Vector3.ZERO:
+		player.apply_knockback(p.knockback)
+		p.knockback = Vector3.ZERO
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
@@ -704,6 +760,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if menus.is_open():
 		return
+	if event.is_action_pressed("objectives"):
+		Settings.show_objectives = not Settings.show_objectives
+		Settings.save_settings()
+		objectives_panel.refresh()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("help") and not help_screen.is_open() and not inventory_screen.is_open() 			and not skills_screen.is_open() and not workbench_screen.is_open() and not _m15_screen_open():
 		help_screen.open()  # P3: F1; it closes itself on F1 or Esc
 		get_viewport().set_input_as_handled()
@@ -743,9 +805,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
+		thrower.cancel()
 		shooter.cancel_inspect()
 		melee.cancel_inspect()
 		sim.add_message(sim.swap_hands(), 2.0)  # M14: Q, melee weapon or gun
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("quick_equip") and not sim.player.dead and driving == null:
+		sim.add_message(sim.quick_equip_better(), 3.0)
+		if inventory_screen.is_open():
+			inventory_screen.refresh()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("inventory") and not sim.player.dead:
@@ -808,8 +877,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _build_menus(args: Dictionary) -> void:
 	menus = Menus.new()
 	add_child(menus)
-	menus.new_game.connect(_start_playing)
-	menus.continue_game.connect(func() -> void: _reload_with(GameSession.save_path))
+	menus.new_game.connect(_start_new_game)
+	menus.continue_game.connect(continue_game)
+	menus.delete_slot_requested.connect(func(slot: int) -> void:
+		var why := GameSession.delete_slot(slot)
+		menus.update_slots(GameSession.slot_summaries())
+		if why != "":
+			menus.set_status(why))
 	menus.resume.connect(_resume)
 	menus.save_requested.connect(func() -> void:
 		var why := save_game()
@@ -827,20 +901,27 @@ func _build_menus(args: Dictionary) -> void:
 		menus.hide_all()
 		help_screen.open(from))
 	help_screen.closed.connect(func(from: String) -> void:  # back to the menu it was opened from
-		var saved := FileAccess.file_exists(GameSession.save_path)
 		if from == "title":
-			menus.show_title(saved)
+			menus.show_title(GameSession.slot_summaries())
 		elif from == "pause":
-			menus.show_pause(saved))
+			menus.show_pause(FileAccess.file_exists(GameSession.save_path)))
 	var has_save := FileAccess.file_exists(GameSession.save_path)
-	var flags := not args.is_empty() and not (args.size() == 1 and args.has("title"))
-	if args.has("title") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
-		menus.show_title(has_save)
+	var title_only := args.size() == 1 and (args.has("title") or args.has("slots") or args.has("new-game"))
+	var flags := not args.is_empty() and not title_only
+	if args.has("title") or args.has("slots") or args.has("new-game") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
+		menus.show_title(GameSession.slot_summaries())
+		if args.has("slots"):
+			menus.open_slots(false)
+		elif args.has("new-game"):  # V29: the New game screen (name and difficulty) for that slot, for screenshots
+			var slot_arg := str(args["new-game"])
+			menus.open_slots(true)
+			menus.choose_slot(int(slot_arg) if slot_arg.is_valid_int() else 2)
 		_title_view(true)
 		if _shot_path == "":  # a screenshot needs the frame counter running
 			get_tree().paused = true
 	elif args.has("pause"):
 		menus.set_stats(sim.stats_text())
+		menus.set_difficulty(sim.difficulty.display_name())
 		menus.show_pause(has_save)
 	elif args.has("settings"):
 		menus.show_settings("pause")
@@ -848,16 +929,25 @@ func _build_menus(args: Dictionary) -> void:
 		GameSession.started = true
 
 
-func _start_playing() -> void:
+func _start_new_game(slot: int, profile_name: String, difficulty: String) -> void:
+	session_log.finish()  # finish the old profile's log before the selected slot name changes
+	var why := GameSession.start_new_slot(slot, profile_name, difficulty)
+	if why != "":
+		menus.set_status(why)
+		return
 	GameSession.started = true
-	_title_view(false)
-	menus.hide_all()
-	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_reload_with("")  # rebuild a truly fresh world before play starts
+
+
+func continue_game(slot: int) -> void:
+	session_log.finish()
+	GameSession.select_slot(slot)
+	_reload_with(GameSession.save_path)
 
 
 func _open_pause() -> void:
 	menus.set_stats(sim.stats_text())
+	menus.set_difficulty(sim.difficulty.display_name())
 	menus.show_pause(FileAccess.file_exists(GameSession.save_path))
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -881,7 +971,8 @@ func _apply_settings() -> void:
 func save_game() -> String:
 	sim.player_pos = player.global_position
 	return SaveGame.write(sim, GameSession.save_path,
-			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x]})
+			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x],
+			"meta": GameSession.make_meta(sim)})
 
 
 ## Loads the last save: the scene restarts and lays the save over a freshly built town.
@@ -931,7 +1022,7 @@ func _update_hud(delta: float) -> void:
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
-	var gun_up := driving == null and sim.guns.in_hand() and not builder.active and not sim.player.dead
+	var gun_up := driving == null and sim.guns.in_hand() and sim.ready_throw == "" and not builder.active and not sim.player.dead
 	crosshair.visible = gun_up and (not shooter.aiming() or sim.guns.scoped())  # V15: irons hide it, a scope keeps it as the reticle
 	_dot.visible = not gun_up
 	if gun_up:
@@ -940,6 +1031,13 @@ func _update_hud(delta: float) -> void:
 	for m: Dictionary in sim.messages:
 		notes.append(m["text"])
 	_message_label.text = "\n".join(notes)
+	_perk_badge.visible = sim.skills.perk_points > 0
+	_perk_badge_label.text = "K: %d perk point%s" % [sim.skills.perk_points, "" if sim.skills.perk_points == 1 else "s"]
+	_update_gear_toast()
+	objectives_panel.refresh()
+	_build_label.position.y = 52.0
+	if objectives_panel.visible:
+		_build_label.position.y = objectives_panel.position.y + objectives_panel.size.y + 8.0
 	var overlay := noise_overlay.status_text()
 	var level := sim.director.level_name()
 	_heat_label.text = overlay if overlay != "" else ({"calm": "", "noticed": "The noise is being noticed",
@@ -969,6 +1067,20 @@ func warmth_text() -> String:
 	if p.warmth >= 99.5:
 		return ""
 	return "   Warmth %d%s" % [ceili(p.warmth), " FREEZING" if p.is_freezing() else (" COLD" if p.is_cold() else "")]
+
+
+func _update_gear_toast() -> void:
+	var uid := sim.guidance.better_gear_uid
+	var piece := sim.gear.find(uid)
+	_gear_toast_label.visible = uid >= 0 and sim.guidance.better_gear_seconds > 0.0 and not piece.is_empty()
+	if not _gear_toast_label.visible:
+		return
+	var slot := sim.gear.slot_of(piece)
+	var rarity: Dictionary = sim.data.gear["rarities"][piece["rarity"]]
+	var item_name := str(piece["name"] if piece["rarity"] in ["gold", "set"] else sim.gear.base_of(piece)["name"])
+	_gear_toast_label.text = "%s %s: better than your %s slot. Press Y to wear" % [rarity["name"],
+			item_name.to_lower(), slot]
+	_gear_toast_label.add_theme_color_override("font_color", sim.gear.color(piece))
 
 
 func _build_ground() -> void:
@@ -1287,7 +1399,9 @@ func _build_zombies(args: Dictionary) -> void:
 	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
 	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
 	if not _loaded:
-		sim.horde.spawn_town(int(args.get("zombies", str(DEFAULT_ZOMBIES))))
+		var street_count := int(args["zombies"]) if args.has("zombies") \
+				else sim.difficulty.count("zombie_count", DEFAULT_ZOMBIES)
+		sim.horde.spawn_town(street_count)
 		if args.get("zombies", "") != "0":
 			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
 			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe
@@ -1308,11 +1422,15 @@ func _build_zombies(args: Dictionary) -> void:
 	shooter = Shooter.new()
 	add_child(shooter)
 	shooter.setup(sim, player.camera, builder, [player.get_rid()])
+	thrower = Thrower.new()
+	add_child(thrower)
+	thrower.setup(sim, player.camera, builder)
 	view_feel = ViewFeel.new()
 	add_child(view_feel)
 	view_feel.setup(sim, player)
 	melee.feel = view_feel
 	shooter.feel = view_feel
+	thrower.feel = view_feel
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
@@ -1402,12 +1520,35 @@ func _place_demo_defense() -> void:
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
+	var toast_layer := CanvasLayer.new()
+	toast_layer.layer = 6  # above the live loot/inventory screen, where the upgrade is usually taken
 	_hud = Label.new()
 	_hud.position = Vector2(16, 12)
 	_hud.add_theme_font_size_override("font_size", 26)
 	_hud.add_theme_color_override("font_outline_color", Color.BLACK)
 	_hud.add_theme_constant_override("outline_size", 6)
 	layer.add_child(_hud)
+	_perk_badge = PanelContainer.new()
+	_perk_badge.position = Vector2(300, 12)
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = Color(0.16, 0.12, 0.035, 0.9)
+	badge_style.border_color = Color(0.95, 0.8, 0.55)
+	badge_style.set_border_width_all(1)
+	badge_style.set_corner_radius_all(5)
+	badge_style.content_margin_left = 9
+	badge_style.content_margin_right = 9
+	badge_style.content_margin_top = 4
+	badge_style.content_margin_bottom = 4
+	_perk_badge.add_theme_stylebox_override("panel", badge_style)
+	_perk_badge_label = _outlined_label(16)
+	_perk_badge_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
+	_perk_badge.add_child(_perk_badge_label)
+	layer.add_child(_perk_badge)
+
+	objectives_panel = ObjectivesPanel.new()
+	objectives_panel.position = Vector2(16, 54)
+	objectives_panel.setup(sim)
+	layer.add_child(objectives_panel)
 
 	_build_label = _outlined_label(20)
 	_build_label.position = Vector2(16, 52)
@@ -1452,6 +1593,16 @@ func _build_hud() -> void:
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
 	layer.add_child(_message_label)
+
+	_gear_toast_label = _outlined_label(23)
+	_gear_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gear_toast_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_gear_toast_label.offset_left = MATERIALS_WIDTH + 32.0
+	_gear_toast_label.offset_right = -(MATERIALS_WIDTH + 32.0)
+	_gear_toast_label.offset_top = 128.0
+	_gear_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gear_toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast_layer.add_child(_gear_toast_label)
 
 	_heat_label = _outlined_label(18)
 	_heat_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
@@ -1498,6 +1649,7 @@ func _build_hud() -> void:
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
+	add_child(toast_layer)
 
 
 ## P3: the one-line key hint at the bottom: only the keys that fit what you're doing. In a car its keys; in
@@ -1513,7 +1665,11 @@ func key_hint_text() -> String:
 		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
 	else:
 		parts.append_array(interactor.keys())
-		if sim.guns.in_hand():
+		if sim.guidance.better_gear_uid >= 0 and sim.guidance.better_gear_seconds > 0.0:
+			parts.append("Y wear better gear")
+		if sim.ready_throw != "":
+			parts.append_array(["LMB hold/release throw", "RMB cancel"])  # V30: a throwable is readied
+		elif sim.guns.in_hand():
 			parts.append_array(["LMB fire", "RMB aim", "R reload", "V inspect"])
 			parts.append("Q pipe")
 		else:
@@ -1662,7 +1818,10 @@ func _hotbar_press(i: int) -> void:
 				builder.select_id(id)
 				builder.set_active(true)
 		"item":
-			sim.add_message(sim.use_item(sim.hotbar.id(i, bar)), 2.5)
+			var item := sim.hotbar.id(i, bar)
+			sim.add_message(sim.use_item(item), 2.5)
+			if sim.ready_throw == item:
+				thrower.hold_preview = true
 		"slot":
 			sim.add_message(sim.draw_weapon(sim.hotbar.id(i, bar)), 2.0)
 		_:

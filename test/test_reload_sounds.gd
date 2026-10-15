@@ -2,11 +2,14 @@ extends "res://test/base_test.gd"
 ## V16: reload mechanics follow the visible keyframes, survive coarse frames, and replace the generic click.
 
 const SOUND_IDS: Array[String] = ["mag_out", "mag_in", "slide_rack", "bolt_open", "bolt_close",
-		"round_in", "gun_handle", "blade_handle"]
+		"round_in", "shell_in", "pump_back", "pump_forward", "draw_string", "bolt_in",
+		"gun_handle", "blade_handle"]
 const EXPECTED := {
 	"pistol": [[0.18, "mag_out"], [0.62, "mag_in"], [0.74, "slide_rack"]],
 	"hunting_rifle": [[0.12, "bolt_open"], [0.47, "round_in"], [0.56, "round_in"],
 			[0.65, "round_in"], [0.72, "bolt_close"]],
+	"shotgun": [[0.62, "shell_in"]],
+	"crossbow": [[0.18, "draw_string"], [0.84, "bolt_in"]],
 }
 
 
@@ -17,7 +20,7 @@ func test_mechanical_sound_assets_exist_and_load() -> void:
 		var sound := load(path) as AudioStream
 		check(sound != null, "%s loads" % path)
 		if sound != null:
-			check(sound.get_length() >= 0.08 and sound.get_length() <= 0.6,
+			check(sound.get_length() >= 0.08 and sound.get_length() <= 0.7,
 					"%s is a short one-shot (%.3f s)" % [sound_id, sound.get_length()])
 			var wav := sound as AudioStreamWAV
 			check(wav != null and not wav.stereo, "%s is mono" % sound_id)
@@ -28,7 +31,10 @@ func test_reload_sound_tables_match_choreography_keys() -> void:
 	for gun_id: String in EXPECTED:
 		var cues: Array = Shooter.reload_sounds(gun_id)
 		eq(cues, EXPECTED[gun_id], "%s sound timing table" % gun_id)
-		var keys: Array = Shooter.PISTOL_RELOAD_KEYS if gun_id == "pistol" else Shooter.RIFLE_RELOAD_KEYS
+		var keys: Array = {"pistol": Shooter.PISTOL_RELOAD_KEYS,
+				"hunting_rifle": Shooter.RIFLE_RELOAD_KEYS,
+				"shotgun": Shooter.SHOTGUN_RELOAD_KEYS,
+				"crossbow": Shooter.CROSSBOW_RELOAD_KEYS}[gun_id]
 		var previous := 0.0
 		for cue: Array in cues:
 			var progress := float(cue[0])
@@ -38,6 +44,8 @@ func test_reload_sound_tables_match_choreography_keys() -> void:
 					"%s %.2f belongs to a pose keyframe" % [gun_id, progress])
 			previous = progress
 	near(float(Shooter.reload_sounds("pistol")[1][0]), 0.62, "pistol mag-in lands at the seat key")
+	eq(Shooter.passed_pump_sounds(0.0, 1.0), ["pump_back", "pump_forward"],
+			"one coarse pump frame still plays both mechanical cues")
 
 
 func test_small_and_large_steps_emit_every_cue_once_in_order() -> void:

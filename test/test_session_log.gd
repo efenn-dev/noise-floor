@@ -14,6 +14,8 @@ func _read(path: String) -> PackedStringArray:
 
 func test_a_death_writes_the_log() -> void:
 	DirAccess.remove_absolute(PATH)
+	var previous_slot_name := GameSession.current_slot_name
+	GameSession.current_slot_name = "Dad"
 	var sim := SimWorld.new(10.0)
 	var slog := SessionLog.new()
 	slog.path_override = PATH
@@ -36,6 +38,7 @@ func test_a_death_writes_the_log() -> void:
 	check(lines.size() > 5 and lines.size() < 55, "a short log was written (%d lines)" % lines.size())
 	var text := "\n".join(lines)
 	check(text.begins_with("Noise Floor session log, written "), "header")
+	check("Save slot: Dad" in text, "the log names its save slot")
 	check("World seed 1" in text, "the seed, since the game has no version string")
 	check("Real time played: 1:05 (m:ss). Game time lived through: 0 d 0:0" in text, "real and game time played")
 	check("Deaths: 1" in lines, "one death")
@@ -43,12 +46,14 @@ func test_a_death_writes_the_log() -> void:
 	check("Built 1 piece: 1 foundation." in lines, "what you built")
 	check("  0:00 built a foundation" in lines, "the timeline")
 	check("Wearing at the end: Melee: Pipe (white)." in lines, "what you wore at the end (P3)")
-	check("Firearms: never fired." in lines and "Houses entered: 0." in lines, "the P3 lines")
+	check("Weapons: never fired or thrown." in lines and "Throws: none." in lines \
+			and "Houses entered: 0." in lines, "the P3/V30 lines")
 	DirAccess.remove_absolute(PATH)
 	slog.queue_free()
 	await tree.process_frame
 	check(FileAccess.file_exists(PATH), "leaving the game writes it again")
 	DirAccess.remove_absolute(PATH)
+	GameSession.current_slot_name = previous_slot_name
 
 
 func test_off_unless_enabled() -> void:
@@ -84,6 +89,7 @@ func test_a_full_log_stays_under_55_lines() -> void:
 		st.note_level(skill, 2)
 	st.note_perk_points(4)
 	st.note_perk("soft_step")
+	st.note_gear_equipped("Rare work boots")
 	for g: String in ["Pistol", "Rifle", "Shotgun", "Old Pete's Deer Rifle"]:
 		st.note_shot(g)
 	for i in 9:
@@ -92,5 +98,7 @@ func test_a_full_log_stays_under_55_lines() -> void:
 		st.note_house("house %d" % i)
 	var lines := slog.lines()
 	check(lines.size() <= 55, "at most 55 lines (%d)" % lines.size())
+	check("Perk points earned: 4, spent: 1 (soft step)." in lines, "perk points spent are recorded")
+	check("Gear equipped: Rare work boots." in lines, "equipped gear is recorded")
 	check("First five minutes:" in lines, "the first-five-minutes timeline is still there")
 	slog.free()

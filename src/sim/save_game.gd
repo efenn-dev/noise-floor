@@ -46,7 +46,11 @@ extends RefCounted
 ## 17 = V18: searched containers keep their remaining items and gear, and built storage crates can hold gear.
 ## 18 = V19 two hotbars: "hotbar" is {"hands": [...], "build": [...]}; an older single bar is split by kind
 ## (Hotbar.load_saved), so no version check is needed to read it.
-const VERSION := 18
+## 19 = V25 first-hour guidance: objective progress and the current better-gear suggestion. Version-18 and
+## older saves are established games, so their missing guidance loads inactive instead of restarting it.
+## 20 = V29 difficulty and the one-shot first-night warning/wave/morning state. Older saves are Normal and
+## their elapsed day-one beats are marked sent so migration never invents a wave on load.
+const VERSION := 20
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -130,6 +134,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	var p := sim.player
 	return {
 		"version": VERSION,
+		"difficulty": sim.difficulty.id,
 		"seed": sim.seed_value,
 		"ticks": sim.ticks,
 		"clock": {"time": sim.clock.time_of_day, "day": sim.clock.day},
@@ -164,11 +169,13 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"skills": sim.skills.xp,
 		"perks": sim.skills.perks,
 		"perk_points": sim.skills.perk_points,
+		"guidance": sim.guidance.to_dict(),
 		"gear": sim.gear.to_dict(),
 		"hands": sim.guns.hands,
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
+		"first_night": sim.director.first_night_state(),
 		"bags": bags,
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
@@ -181,6 +188,9 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	var version := int(d.get("version", 0))
 	if version < 1 or version > VERSION:  # unknown or from a newer game: refuse rather than guess
 		return "This save is from a different version (%s)" % str(d.get("version", "?"))
+	# Difficulty did not exist before V29; the version gate is the migration, even if a hand-edited
+	# old save happens to contain a field with that name.
+	sim.apply_difficulty(str(d.get("difficulty", Difficulty.DEFAULT)) if version >= 20 else Difficulty.DEFAULT)
 	sim.ticks = int(d["ticks"])
 	sim.clock.time_of_day = float(d["clock"]["time"])
 	sim.clock.day = int(d["clock"]["day"])
@@ -304,6 +314,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	for perk: String in d.get("perks", {}):
 		sim.skills.perks[perk] = int(d["perks"][perk])
 	sim.skills.perk_points = int(d.get("perk_points", sim.skills.points_earned()))
+	sim.guidance.load_dict(d.get("guidance", {}))
 	if d.has("gear"):
 		sim.gear.load_dict(d["gear"])
 	else:  # before M13: the pipe you always had becomes a white piece in the weapon slot
@@ -325,6 +336,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))
 	sim.director.unlocked = Array(d.get("unlocked", []))
+	sim.director.load_first_night_state(d.get("first_night", {}), sim.clock, version < 20)
 	sim._day = sim.clock.day
 	for id: String in d.get("car_fuel", {}):  # saves from before M10c kept only the gas
 		if sim.vehicles.cars.has(id):
@@ -372,10 +384,21 @@ static func _mark_town(sim: SimWorld) -> void:
 static func write(sim: SimWorld, path: String, extra: Dictionary = {}) -> String:
 	var d := to_dict(sim)
 	d.merge(extra)
+	return write_dict(d, path)
+
+
+## Writes an already assembled save dictionary (V26 migration uses this without rebuilding a SimWorld).
+static func write_dict(d: Dictionary, path: String) -> String:
+	var folder := path.get_base_dir()
+	if folder != "":
+		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+		if dir_error != OK:
+			return "Couldn't make %s (%s)" % [folder, error_string(dir_error)]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return "Couldn't write %s (%s)" % [path, error_string(FileAccess.get_open_error())]
 	f.store_string(JSON.stringify(d, "\t"))
+	f.close()
 	return ""
 
 

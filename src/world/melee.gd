@@ -253,16 +253,18 @@ static func _inspect_offset(keys: Array, p: float) -> Array:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action("aim") and not event.is_echo():
-		_block_held = event.is_pressed() and InputSetup.captured()
+		_block_held = event.is_pressed() and InputSetup.captured() and sim.ready_throw == ""
 		if _block_held and not sim.guns.in_hand():
 			cancel_inspect()
-	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active and not sim.guns.in_hand():
+	if event.is_action_pressed("attack") and InputSetup.captured() and not builder.active and not sim.guns.in_hand() \
+			and sim.ready_throw == "":
 		swing()
 
 
 func _process(delta: float) -> void:
 	var id := weapon_id()
-	var show := not builder.active and not sim.player.dead and id != "" and not sim.guns.in_hand()  # M14: not while the gun is out
+	var show := not builder.active and not sim.player.dead and id != "" and not sim.guns.in_hand() \
+			and sim.ready_throw == ""  # M14/V30: not while a gun or throwable is out
 	if _inspect_elapsed >= 0.0 and (builder.active or sim.player.dead or sim.guns.in_hand() or id != _inspect_weapon):
 		cancel_inspect()
 	var inspect_p := -1.0
@@ -277,7 +279,8 @@ func _process(delta: float) -> void:
 	_note_block_feedback()
 	_block_jolt = maxf(0.0, _block_jolt - delta)
 	if _fists != null:  # V12: bare-handed, the fists show
-		_fists.visible = not builder.active and not sim.player.dead and id == "" and not sim.guns.in_hand()
+		_fists.visible = not builder.active and not sim.player.dead and id == "" and not sim.guns.in_hand() \
+				and sim.ready_throw == ""
 	for w: String in _models:
 		_models[w].visible = show and w == id
 	_swing = hold_at if hold_at >= 0.0 else minf(1.0, _swing + delta / maxf(0.05, _swing_time))
@@ -319,7 +322,10 @@ func swing() -> int:
 		return -1
 	var body: Node3D = hit["collider"]
 	var id: int = body.get_meta("zombie_id")
-	var head: bool = hit["position"].y > body.global_position.y + ZombieBody.HEAD_Y
+	# V28: crawler heads are near the floor; each body exposes its data-driven head line.
+	var zombie_body := body as ZombieBody
+	var head_line := zombie_body.head_y() if zombie_body != null else ZombieBody.HEAD_Y
+	var head: bool = hit["position"].y > body.global_position.y + head_line
 	var killed := sim.hit_zombie(id, head)
 	last_message = "Killed it" if killed else ("Headshot!" if head else "Hit")
 	_message_time = 1.0

@@ -33,6 +33,18 @@ const GUNS := {
 			"left": [Vector3(-0.03, -0.04, 0.065), Vector3(-15, -30, 0)]},
 	"hunting_rifle": {"right": [Vector3(-0.02, -0.03, 0.18), Vector3(-15, 0, 0)],
 			"left": [Vector3(-0.02, -0.035, -0.17), Vector3(90, 0, 0)]},
+	# V30: measured after kit.finish() centred and exported the authored GLBs. The right hand is on the
+	# trigger grip; the left hand is centred on the pump / crossbow foregrip.
+	"shotgun": {"right": [Vector3(0.0, -0.025, 0.28), Vector3(-15, 0, 0)],
+			"left": [Vector3(0.0, -0.015, -0.23), Vector3(90, 0, 0)]},
+	"crossbow": {"right": [Vector3(0.0, -0.020, 0.18), Vector3(-15, 0, 0)],
+			"left": [Vector3(0.0, 0.0, -0.18), Vector3(90, 0, 0)]},
+}
+
+## V30 throwables sit across the right palm with the forearm leaving the lower-right of the view.
+const THROWABLES := {
+	"pipe_bomb": {"right": [Vector3(0.0, -0.04, 0.0), Vector3(0, 0, 78)]},
+	"bottle": {"right": [Vector3(0.0, -0.10, 0.0), Vector3(0, 0, 12)]},
 }
 
 

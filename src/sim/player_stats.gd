@@ -23,6 +23,7 @@ const AIM_SPEED_MULT := 0.7  # V15: careful sight footwork, independent of carry
 const BLOCK_SPEED_MULT := 0.6
 
 var cfg: Dictionary = {}
+var difficulty: Difficulty
 
 var max_health := 100.0
 var health := 100.0
@@ -43,6 +44,11 @@ var sprinting := false   # written by the world each frame
 var aiming := false      # V15: transient combat stance, written by the world
 var blocking := false
 var block_time := 0.0    # seconds since this guard came up; the first 0.25 s can parry
+## V28: a crawler's ankle grab temporarily cuts walking speed. The duration and factor come from its data.
+var stumble_left := 0.0
+var stumble_factor := 1.0
+## V28: pending shove velocity from a hard zombie hit. Main hands it to Player, then clears it.
+var knockback := Vector3.ZERO
 var carry_ratio := 0.0   # written by SimWorld each tick
 ## Stamina regen multiplier from Fitness and Second Wind (written by SimWorld each tick).
 var stamina_regen_mult := 1.0
@@ -63,6 +69,10 @@ func _c(key: String, fallback: float = 0.0) -> float:
 	return float(cfg.get(key, fallback))
 
 
+func _drain(key: String) -> float:
+	return difficulty.scale("needs_drain", _c(key)) if difficulty != null else _c(key)
+
+
 ## Q5: a new cut; restarts the clock if you were already bleeding.
 func start_bleeding() -> void:
 	bleeding = true
@@ -80,6 +90,9 @@ func damage(amount: float, cause: String = "unknown") -> void:
 		dead = true
 		aiming = false
 		set_blocking(false)
+		stumble_left = 0.0
+		stumble_factor = 1.0
+		knockback = Vector3.ZERO
 		bleeding = false
 		respawn_timer = RESPAWN_TIME
 		deaths += 1
@@ -124,6 +137,14 @@ func try_block(cost: float) -> bool:
 	return true
 
 
+## V28: repeated ankle grabs restart the longer stumble and keep the strongest slow.
+func stumble(seconds: float, speed_factor: float) -> void:
+	if dead or seconds <= 0.0:
+		return
+	stumble_left = maxf(stumble_left, seconds)
+	stumble_factor = minf(stumble_factor, clampf(speed_factor, 0.0, 1.0))
+
+
 func can_sprint() -> bool:
 	return not dead and not asleep and stamina > 1.0 and energy > 0.0 and carry_ratio < _c("carry_no_sprint", 1.5)
 
@@ -135,6 +156,8 @@ func speed_multiplier() -> float:
 		m = maxf(_c("carry_min_speed", 0.5), 1.0 - (carry_ratio - 1.0) * _c("carry_slow_per_overload"))
 	if energy <= 0.0:
 		m *= 0.8
+	if stumble_left > 0.0:
+		m *= stumble_factor
 	if aiming:
 		m *= AIM_SPEED_MULT
 	elif blocking:
@@ -178,6 +201,9 @@ func wake() -> void:
 
 func tick(dt: float) -> void:
 	swing_cooldown = maxf(0.0, swing_cooldown - dt)
+	stumble_left = maxf(0.0, stumble_left - dt)
+	if stumble_left <= 0.0:
+		stumble_factor = 1.0
 	if blocking:
 		block_time += dt
 	if dead:
@@ -185,14 +211,14 @@ func tick(dt: float) -> void:
 		if respawn_timer <= 0.0:
 			_respawn()
 		return
-	food = maxf(0.0, food - _c("food_drain") * dt)
-	water = maxf(0.0, water - _c("water_drain") * dt)
+	food = maxf(0.0, food - _drain("food_drain") * dt)
+	water = maxf(0.0, water - _drain("water_drain") * dt)
 	if asleep:
 		energy = minf(100.0, energy + _c("energy_sleep_gain") * dt)
 		if energy >= 100.0:
 			wake()
 	else:
-		energy = maxf(0.0, energy - _c("energy_drain") * dt)
+		energy = maxf(0.0, energy - _drain("energy_drain") * dt)
 	if sprinting and not asleep and can_sprint():
 		stamina = maxf(0.0, stamina - _c("sprint_cost") * dt * maxf(1.0, carry_ratio))
 		_rested = 0.0
@@ -246,4 +272,7 @@ func _respawn() -> void:
 	stamina = 100.0
 	bleeding = false
 	asleep = false
+	stumble_left = 0.0
+	stumble_factor = 1.0
+	knockback = Vector3.ZERO
 	respawned.emit()

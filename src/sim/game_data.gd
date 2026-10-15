@@ -26,6 +26,7 @@ var defense: Dictionary = {}     # M15: hoppers, turret parts, sensors and actio
 var seasons: Dictionary = {}     # M16: calendar, per-season sun, crops, rain, cold and hearing; warmth, stove, heater
 var projects: Dictionary = {}    # M17a: big projects (the water tower): phases, needs, work, reward; data/projects.json
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
+var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
 var load_errors: PackedStringArray = []
 
 
@@ -46,6 +47,7 @@ static func load_default() -> GameData:
 	data.seasons = _read_json(DIR + "seasons.json", data)
 	data.projects = _read_json(DIR + "projects.json", data)
 	data.projects.erase("_about")
+	data.difficulty = _read_json(DIR + "difficulty.json", data)
 	return data
 
 
@@ -194,6 +196,22 @@ func validate() -> PackedStringArray:
 			if float(e.get("weight", 0)) <= 0.0 or int(e.get("min", 0)) < 1 or int(e.get("max", 0)) < int(e.get("min", 0)):
 				errors.append("loot '%s' entry '%s' needs weight > 0 and 1 <= min <= max" % [table, e.get("item", "")])
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
+	for id: String in zombies:
+		var z: Dictionary = zombies[id]
+		if not z.has("name") or str(z["name"]) == "":
+			errors.append("zombie '%s' needs a name" % id)
+		for key: String in ["door_break_multiplier", "parry_stagger_factor", "knockback_factor"]:
+			if z.has(key) and float(z[key]) < 0.0:
+				errors.append("zombie '%s' can't have a negative '%s'" % [id, key])
+		for key: String in ["break_multiplier", "block_factor", "stumble_time", "stumble_slow", "eye_height",
+				"head_height", "model_scale", "crawl_anim_speed", "voice_distance", "voice_pitch"]:
+			if z.has(key) and float(z[key]) <= 0.0:
+				errors.append("zombie '%s' needs a positive '%s'" % [id, key])
+		if z.has("stumble_slow") and float(z["stumble_slow"]) > 1.0:
+			errors.append("zombie '%s' stumble_slow can't exceed 1" % id)
+		for key: String in ["collider_size", "collider_offset", "reach_offset"]:
+			if z.has(key) and not (z[key] is Array and z[key].size() == 3):
+				errors.append("zombie '%s' needs '%s' as [x, y, z]" % [id, key])
 	_check_stats(errors, "weapon", weapons, WEAPON_STATS)
 	for id: String in weapons:  # V15: every guard needs a sane fractional damage cut
 		if float(weapons[id].get("block_reduction", 0.0)) > 1.0:
@@ -226,9 +244,15 @@ func validate() -> PackedStringArray:
 		_check_stats(errors, "noise", {"director": noise.get("director", {})}, DIRECTOR_STATS)
 		var inf: Dictionary = noise.get("infamy", {})
 		_check_stats(errors, "noise", {"infamy": inf}, ["one_off_floor", "one_off_rate"])
-		for u: Dictionary in inf.get("unlocks", []):
-			if not zombies.has(u.get("type", "")):
-				errors.append("infamy unlocks unknown zombie '%s'" % u.get("type", ""))
+		for table_key: String in ["starting", "unlocks"]:
+			for u: Dictionary in inf.get(table_key, []):
+				if not zombies.has(u.get("type", "")):
+					errors.append("infamy spawn table has unknown zombie '%s'" % u.get("type", ""))
+				if float(u.get("chance", 0.0)) <= 0.0 or float(u.get("chance", 0.0)) > 1.0:
+					errors.append("infamy spawn '%s' needs chance in (0, 1]" % u.get("type", ""))
+				for cap: String in ["max_per_wave", "max_per_horde", "max_alive"]:
+					if u.has(cap) and int(u[cap]) <= 0:
+						errors.append("infamy spawn '%s' needs a positive '%s'" % [u.get("type", ""), cap])
 		_check_gear(errors, self)
 		_check_guns(errors, self)
 		if not items.has("rotten_food"):
@@ -237,6 +261,7 @@ func validate() -> PackedStringArray:
 		_check_defense(errors, self)
 	_check_seasons(errors, self)
 	_check_projects(errors, self)
+	_check_difficulty(errors, difficulty)
 	return errors
 
 
@@ -261,6 +286,21 @@ const VEHICLE_STATS := ["tank", "metres_per_can", "idle_cans_per_minute", "loudn
 const DIRECTOR_STATS := ["listen_distance", "gain_floor", "gain_rate", "night_multiplier", "decay", "max_heat",
 		"check_every", "max_alive", "wanderers_at", "group_at", "horde_at", "wanderers", "group", "horde",
 		"heat_per_zombie", "lure_time"]
+
+
+## V29: every choice has the same complete, positive rule table. Runner count may be zero.
+static func _check_difficulty(errors: PackedStringArray, defs: Dictionary) -> void:
+	for id: String in Difficulty.ORDER:
+		var cfg: Dictionary = defs.get(id, {})
+		if not cfg.has("name"):
+			errors.append("difficulty '%s' needs a name" % id)
+		for key: String in Difficulty.REQUIRED:
+			if not cfg.has(key) or float(cfg.get(key, 0.0)) <= 0.0:
+				if key == "first_night_runners" and int(cfg.get(key, -1)) == 0:
+					continue
+				errors.append("difficulty '%s' needs positive '%s'" % [id, key])
+		if not cfg.get("death_keeps_skills") is bool:
+			errors.append("difficulty '%s' needs boolean death_keeps_skills" % id)
 
 
 ## M12: every skill in "order" has a name, xp and effects; every tree's perks exist with effects.
@@ -358,6 +398,12 @@ static func _check_guns(errors: PackedStringArray, d: GameData) -> void:
 		return
 	for id: String in gn.get("guns", {}):
 		var gun: Dictionary = gn["guns"][id]
+		var gun_slots: Array = gun.get("part_slots", [])
+		if gun_slots.is_empty():
+			errors.append("gun '%s' needs part_slots" % id)
+		for slot: String in gun_slots:
+			if not slot in gn.get("part_slots", []):
+				errors.append("gun '%s' has unknown part slot '%s'" % [id, slot])
 		for key: String in ["damage", "range", "spread", "ads_spread", "recoil", "settle", "handling", "magazine", "loudness",
 				"cooldown", "reload", "wear_per_shot"]:
 			if float(gun.get(key, 0)) <= 0.0:

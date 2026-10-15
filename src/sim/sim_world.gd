@@ -18,6 +18,7 @@ signal container_searched(id: String)  # V18: the world opens this container's l
 
 var clock: GameClock
 var data: GameData
+var difficulty: Difficulty
 var inventory := Inventory.new()
 var build: BuildGrid
 var factory: Factory
@@ -41,10 +42,21 @@ var vehicles: Vehicles
 var hotbar: Hotbar  # S3: the ten slots under keys 1-9 and 0
 ## Skills that level by doing and the perks they earn (M12). Kept when you die.
 var skills: Skills
+## V25: saved first-hour objectives and the most recent quick-equip suggestion.
+var guidance := Guidance.new()
 ## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
 var gear: Gear
 ## M14/V14 slots: what's in your hands (melee, primary or sidearm), spread, magazine and reloads.
 var guns: Gunplay
+## V30 ballistics live in the fixed sim: crossbow bolts, thrown bottles/bombs and their presentation events.
+var projectiles: Array = []
+var thrown: Array = []
+var projectile_events: Array = []
+var projectile_pickups: Dictionary = {}  # container id -> world position for the world pickup view
+var embedded_bolts: Dictionary = {}      # zombie id -> recoverable bolts added to its corpse
+var ready_throw := ""
+var _next_projectile := 1
+var _ballistic_rng := RandomNumberGenerator.new()
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
 var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sitting session log
 var _counted_dead: Dictionary = {}
@@ -91,10 +103,13 @@ var paused := false
 var _accumulator := 0.0
 
 
-func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) -> void:
+func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
+		p_difficulty: String = Difficulty.DEFAULT) -> void:
 	seed_value = p_seed
 	clock = GameClock.new(start_hour)
 	data = p_data if p_data != null else GameData.load_default()
+	difficulty = Difficulty.new(data.difficulty)
+	apply_difficulty(p_difficulty)
 	build = BuildGrid.new(data)
 	factory = Factory.new(data)
 	power = PowerGrid.new(data, build, factory)
@@ -103,10 +118,10 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 		clock.set_calendar(data.seasons)  # M16: four seasons; sunrise and sunset follow them
 		player.cold_cfg = data.seasons["warmth"]
 	defense = Defense.new(data, build, factory)
-	horde = Horde.new(data, seed_value)
+	horde = Horde.new(data, seed_value, difficulty)
 	noise = NoiseField.new(data, build)
-	director = Director.new(data, seed_value)
-	loot = Loot.new(data, seed_value)
+	director = Director.new(data, seed_value, difficulty)
+	loot = Loot.new(data, seed_value, difficulty)
 	vehicles = Vehicles.new(data)
 	hotbar = Hotbar.new(data)
 	scares = Scares.new()
@@ -130,12 +145,20 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1) ->
 	defense.gear = gear  # M15: turret suppressors and scopes are gear pieces
 	_day = clock.day
 	player.cfg = data.survival
+	player.difficulty = difficulty
 	_rng.seed = hash([seed_value, "sim"])
+	_ballistic_rng.seed = hash([seed_value, "v30_ballistics"])
 	player.died.connect(_on_player_died)
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
 	build.piece_removed.connect(_on_piece_removed)
 	build.piece_built.connect(_on_piece_built)
+
+
+## V29: the single sim entry point for selecting a tuning table. Call before spawning/restoring zombies;
+## all participating rules hold this same Difficulty object and read through it.
+func apply_difficulty(chosen: String) -> void:
+	difficulty.set_id(chosen)
 
 
 ## Starting materials for testing builds (data/debug_kit.json).
@@ -183,6 +206,7 @@ func step() -> void:
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
 	_note_noise()
+	_tick_first_night()
 	player.carry_ratio = carry_ratio()
 	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
 	player.heal_mult = 1.0 + skills.bonus("heal_rate")
@@ -196,6 +220,7 @@ func step() -> void:
 		add_message("The bleeding stopped", 3.0)  # Q5: on its own (a bandage clears it outside the tick)
 	_cold_messages()
 	guns.tick(TICK, inventory)
+	_tick_ballistics(TICK)
 	if sprinted:
 		_practice("fitness", "sprint_second", TICK)
 	if player_sneaking and not player.dead and _unnoticed_zombie_near():
@@ -213,7 +238,7 @@ func step() -> void:
 		if e["target"] == "scream":
 			noise.emit(z.pos, float(z.stats["scream_loudness"]), "scream")  # pulls in everything nearby
 		elif e["target"] == "player" and vehicles.driving != "":
-			vehicles.damage(vehicles.driving, float(z.stats["damage"]))  # the car takes it while you're inside
+			vehicles.damage(vehicles.driving, z.attack_damage())  # the car takes it while you're inside
 			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
 			zombie_hit_player(z)
@@ -225,7 +250,8 @@ func step() -> void:
 				base_log.add_once("hit:" + target, float(data.defense["log"]["attack_every"]), "%s under attack: %s" % [
 						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
 			var was_window := build.kind_of(build.pieces[target]["id"]) == "window"
-			if build.damage(target, int(z.stats["structure_damage"])):
+			var structure_damage := zombie_structure_damage(z, target)
+			if structure_damage > 0 and build.damage(target, structure_damage):
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.tick(TICK, horde, noise)
@@ -250,6 +276,7 @@ func step() -> void:
 		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
 				Director.EDGES[Director.EDGE_NAMES.find(wave["edge"])])
 	_radio()
+	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
@@ -327,6 +354,34 @@ func _cold_messages() -> void:
 ## the indoor fog go by.
 func is_indoors(at: Vector3) -> bool:
 	return ZombieBrain._indoors(build.pieces, at)
+
+
+## V29: the Director owns the one-shot dusk/night/morning state; the sim supplies shelter and player noise,
+## then turns its events into presentation-neutral messages and a sting request.
+func _tick_first_night() -> void:
+	var sheltered := guidance.is_sheltered(build, player_pos)
+	for event: Dictionary in director.first_night_events(clock, player_pos, sheltered, _player_made_noise(),
+			int(tally["deaths"]), horde):
+		match str(event["kind"]):
+			"warning":
+				add_message("It'll be dark at 21:00. Find shelter: a bed inside walls with a door", 10.0)
+			"night":
+				add_message("Night falls", 4.0)
+				scares.fire("night", player_pos)
+				var wave: Dictionary = event["wave"]
+				stats.note_wave("first_night", "nearby")
+				base_log.add("Night falls: %d zombies are closing in" % int(wave["size"]), player_pos)
+			"morning":
+				add_message("You made it to morning", 6.0)
+
+
+func _player_made_noise() -> bool:
+	for sound: Dictionary in noise.recent:
+		if float(sound.get("age", 1.0)) > TICK or sound.get("kind", "") in ["zombie_bash", "scream"]:
+			continue
+		if _flat_dist(sound["pos"], player_pos) <= 4.0:
+			return true
+	return false
 
 
 ## M16: E on a stove: loads planks from your pockets and nearby crates. Returns a message.
@@ -438,8 +493,8 @@ func bleed_chance() -> float:
 ## V15: resolves one zombie hit against the held guard. Returns the outcome for headless tests and future
 ## presentation; the ordinary horde path uses the same method. Armour reduces the hit before the guard.
 func zombie_hit_player(z: ZombieBrain) -> Dictionary:
-	var damage := float(z.stats["damage"]) * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
-	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage}
+	var damage := z.attack_damage() * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
+	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage, "stumbled": false}
 	var w: Dictionary = weapon_stats()
 	if player.blocking and not guns.in_hand() and block_faces(player_facing, player_pos, z.pos) \
 			and player.try_block(float(w["block_stamina"])):
@@ -449,18 +504,39 @@ func zombie_hit_player(z: ZombieBrain) -> Dictionary:
 		_wear_block_weapon()
 		if result["parried"]:
 			damage = 0.0
-			z.take_hit(0.0, player_pos, PARRY_KNOCKBACK)
-			z.stunned = maxf(z.stunned, PARRY_STUN)
+			var parry_factor := float(z.stats.get("parry_stagger_factor", 1.0))
+			z.take_hit(0.0, player_pos, PARRY_KNOCKBACK * parry_factor)
+			z.stunned = maxf(z.stunned, PARRY_STUN * parry_factor)
 			add_message("Parried", 0.8)
 		else:
-			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]))
+			var block_factor := float(z.stats.get("block_factor", 1.0))
+			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]) * block_factor)
 	result["damage"] = damage
 	player.damage(damage, z.type)
+	if damage > 0.0 and not player.dead:
+		if z.stats.has("stumble_time"):
+			player.stumble(float(z.stats["stumble_time"]), float(z.stats["stumble_slow"]))
+			result["stumbled"] = true
+		var shove := float(z.stats.get("player_knockback", 0.0))
+		var away := Vector3(player_pos.x - z.pos.x, 0.0, player_pos.z - z.pos.z)
+		if shove > 0.0 and away.length_squared() > 1e-6:
+			player.knockback += away.normalized() * shove
 	if damage > 0.0 and not player.dead and _rng.randf() < bleed_chance():
 		if not player.bleeding:
 			add_message("You're bleeding (H to bandage)", 4.0)
 		player.start_bleeding()
 	return result
+
+
+## V28: brute structure strength and the crawler's refusal to attack doors are data-driven.
+func zombie_structure_damage(z: ZombieBrain, key: String) -> int:
+	if not build.pieces.has(key):
+		return 0
+	var kind := build.kind_of(build.pieces[key]["id"])
+	var factor := float(z.stats.get("break_multiplier", 1.0))
+	if kind == "door":
+		factor = float(z.stats.get("door_break_multiplier", factor))
+	return maxi(0, roundi(z.structure_damage() * factor))  # V29: scaled by the difficulty
 
 
 ## The attacker must be within 70 degrees of the player's flat look direction.
@@ -729,6 +805,7 @@ func move_container_gear(id: String, uid: int, to_pockets: bool) -> Dictionary:
 				return {"moved": false, "why": "Too heavy"}
 			held.remove_at(i)
 			gear.pieces.append(piece)
+			_consider_better_gear(piece)
 			return {"moved": true, "why": ""}
 		return {"moved": false, "why": "Nothing to take"}
 	var piece := gear.take(uid)
@@ -961,19 +1038,37 @@ static func park_crate_pos(c: Dictionary) -> Vector3:
 ## Only for a new game, or a save from before the park; a save brings its own back.
 func spawn_park_zombies(plan: Dictionary) -> Array:
 	var ids: Array = []
-	for pz: Dictionary in plan["zombies"]:
+	var planned: Array = plan["zombies"]
+	if planned.is_empty():
+		return ids
+	var count := difficulty.count("zombie_count", planned.size())
+	for i in count:
+		var pz: Dictionary = planned[i % planned.size()]
 		var z := horde.spawn(pz["type"], pz["pos"])
+		if i >= planned.size():
+			z.pos += Vector3(float(i) / float(planned.size()) + 1.0, 0.0, 0.5)
+			z.home = z.pos
+			z.target_pos = z.pos
 		z.facing = pz["facing"]
 		ids.append(z.id)
 	return ids
 
 
-## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
-## new game: a save keeps its zombies (house ones included) and brings them back itself.
+## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
+## the data-driven indoor mix has more crawlers. Only a new game: a save brings its own zombies back.
 func spawn_house_zombies(plan: Dictionary) -> Array:
 	var ids: Array = []
-	for hz: Dictionary in plan["zombies"]:
-		var z := horde.spawn("shambler", hz["pos"])
+	var planned: Array = plan["zombies"]
+	if planned.is_empty():
+		return ids
+	var count := difficulty.count("zombie_count", planned.size())
+	for i in count:
+		var hz: Dictionary = planned[i % planned.size()]
+		var z := horde.spawn_starting(hz["pos"], true)
+		if i >= planned.size():
+			z.pos += Vector3(0.45, 0.0, 0.45)
+			z.home = z.pos
+			z.target_pos = z.pos
 		z.facing = hz["facing"]
 		ids.append(z.id)
 	return ids
@@ -1052,12 +1147,42 @@ func equip_gear(uid: int) -> String:
 	if piece.is_empty():
 		return "You don't have that"
 	if gear.slot_of(piece) == "part":
-		return "Attach it to a firearm at a workbench"
+		return "Select a firearm, then fit this part in its modding panel"
 	var why := can_equip_gear(uid, gear.slot_of(piece))
 	if why != "":
 		return why
 	why = gear.equip(uid)
-	return why if why != "" else "Equipped " + piece["name"]
+	if why != "":
+		return why
+	stats.note_gear_equipped("%s (%s)" % [piece["name"], piece["rarity"]])
+	if guidance.better_gear_uid == uid:
+		guidance.clear_better_gear()
+	return "Equipped " + piece["name"]
+
+
+## Y: wear the last acquired piece that was an upgrade. It is compared again, so changing gear cannot
+## accidentally replace a newer, better piece with an old suggestion.
+func quick_equip_better() -> String:
+	var uid := guidance.better_gear_uid
+	var piece := gear.find(uid)
+	if uid < 0 or piece.is_empty() or gear.is_equipped(uid):
+		guidance.clear_better_gear()
+		return "No better gear ready"
+	var slot := gear.slot_of(piece)
+	var value: Variant = gear.equipped.get(slot)
+	var current: Dictionary = value if value is Dictionary else {}
+	if not gear.is_better(piece, current):
+		guidance.clear_better_gear()
+		return "That piece is no longer better"
+	return equip_gear(uid)
+
+
+func _consider_better_gear(piece: Dictionary) -> void:
+	var slot := gear.slot_of(piece)
+	var value: Variant = gear.equipped.get(slot)
+	var current: Dictionary = value if value is Dictionary else {}
+	if gear.is_better(piece, current):
+		guidance.note_better_gear(int(piece["uid"]))
 
 
 ## Checks a drag from pockets onto a character slot without changing either side.
@@ -1106,6 +1231,7 @@ func equip_bag(item: String) -> String:
 		return "Too heavy"
 	inventory.remove(item, 1)
 	gear.equipped["back"] = item
+	stats.note_gear_equipped(data.item_name(item))
 	var suffix := _stow_bag(old)
 	return "Equipped %s%s" % [data.item_name(item), suffix]
 
@@ -1200,7 +1326,9 @@ func repair_gear(uid: int) -> String:
 
 ## True if `item` can be used from the inventory screen (food, drink or a bandage).
 func can_use(item: String) -> bool:
-	return data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0 			or data.item_value(item, "bandage") > 0.0
+	return (data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0
+			or data.item_value(item, "bandage") > 0.0
+			or str(data.items.get(item, {}).get("throwable", "")) != "")
 
 
 ## Uses one of a particular item from your pockets: eat or drink it, or put on a bandage.
@@ -1209,12 +1337,15 @@ func use_item(item: String) -> String:
 		return "You don't have that"
 	if data.item_value(item, "bandage") > 0.0:
 		return use_bandage()
+	if str(data.items[item].get("throwable", "")) != "":
+		return ready_throwable(item)
 	var food := data.item_value(item, "food")
 	var water := data.item_value(item, "water")
 	if food <= 0.0 and water <= 0.0:
 		return "Can't use %s" % data.item_name(item)
 	inventory.remove(item, 1)
 	player.consume(food, water)
+	guidance.note_consumed(food, water)
 	return "%s %s" % ["Ate" if food >= water else "Drank", data.item_name(item)]
 
 
@@ -1244,6 +1375,7 @@ func use_bandage() -> String:
 func sleep_in(key: String) -> String:
 	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "bed":
 		return "No bed"
+	guidance.note_bed()
 	spawn_point = build.piece_center(key) + Vector3(1.2, -build.piece_center(key).y, 0)
 	if player.energy >= float(data.survival["sleep_below_energy"]):
 		return "Not tired. You'll wake up here if you die"
@@ -1261,7 +1393,10 @@ func _consume_best(key: String, none: String) -> String:
 	if best == "":
 		return none
 	inventory.remove(best, 1)
-	player.consume(data.item_value(best, "food"), data.item_value(best, "water"))
+	var food := data.item_value(best, "food")
+	var water := data.item_value(best, "water")
+	player.consume(food, water)
+	guidance.note_consumed(food, water)
 	return "%s %s" % ["Ate" if key == "food" else "Drank", data.item_name(best)]
 
 
@@ -1530,7 +1665,7 @@ func car_hits_zombie(zombie_id: int, speed: float) -> bool:
 	noise.emit_kind(z.pos, "zombie_bash")
 	var killed := z.take_hit(damage, car["pos"], speed * 0.6)
 	if killed:
-		stats.note_kill()
+		stats.note_kill(z.type)
 		stats.note("ran over a " + z.type)
 	return killed
 
@@ -1712,7 +1847,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 	if killed:
 		if skill != "":
 			_practice(skill, "kill")
-		stats.note_kill()
+		stats.note_kill(z.type)
 		stats.note("killed a " + z.type)
 	return killed
 
@@ -1762,15 +1897,261 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 	if z == null or z.is_dead():
 		return {"hit": false, "killed": false}
 	var dmg := guns.damage() * (float(data.guns["head_multiplier"]) if head else 1.0)
-	var killed := z.take_hit(dmg, player_pos, float(guns.stats()["knockback"]))
+	return _damage_zombie(id, dmg, float(guns.stats()["knockback"]), player_pos,
+			str(guns.gun().get("name", "firearm")), true)
+
+
+func _damage_zombie(id: int, damage: float, push: float, from: Vector3, weapon_name: String,
+		practice_firearms: bool = false) -> Dictionary:
+	var z: ZombieBrain = horde.zombies.get(id)
+	if z == null or z.is_dead():
+		return {"hit": false, "killed": false}
+	var killed := z.take_hit(damage, from, push)
 	stats.note("shot a zombie")
-	stats.note_gun_hit(str(guns.gun().get("name", "firearm")), killed)
-	_practice("firearms", "hit")
-	if killed:
+	stats.note_gun_hit(weapon_name, killed)
+	if practice_firearms:
+		_practice("firearms", "hit")
+	if killed and practice_firearms:
 		_practice("firearms", "kill")
-		stats.note_kill()
+	if killed:
+		stats.note_kill(z.type)
 		stats.note("killed a " + z.type)
 	return {"hit": true, "killed": killed}
+
+
+## V30 shotgun: every pellet direction and zombie intersection is a deterministic sim hit check. Returns one
+## entry per pellet that met a zombie: {zombie, distance, damage, killed, position}.
+func fire_shotgun_pellets(from: Vector3, forward: Vector3) -> Array:
+	var hits: Array = []
+	var max_range := float(guns.stats().get("range", 35.0))
+	for direction: Vector3 in guns.shot_directions(forward, true):
+		var best_id := -1
+		var best_t := max_range + 1.0
+		for id: int in horde.zombies:
+			var z: ZombieBrain = horde.zombies[id]
+			if z.is_dead():
+				continue
+			var t := _segment_sphere_t(from, direction, z.pos + Vector3.UP, 0.58, max_range)
+			if t >= 0.0 and t < best_t:
+				best_t = t
+				best_id = id
+		if best_id < 0:
+			continue
+		var damage := guns.damage(best_t)
+		var result := _damage_zombie(best_id, damage, float(guns.stats()["knockback"]), from,
+				str(guns.gun().get("name", "Pump shotgun")), true)
+		hits.append({"zombie": best_id, "distance": best_t, "damage": damage, "killed": result["killed"],
+				"position": from + direction * best_t})
+	return hits
+
+
+static func _segment_sphere_t(origin: Vector3, direction: Vector3, center: Vector3, radius: float,
+		max_distance: float) -> float:
+	var to_center := center - origin
+	var along := to_center.dot(direction)
+	if along < 0.0 or along > max_distance:
+		return -1.0
+	var closest := origin + direction * along
+	if closest.distance_squared_to(center) > radius * radius:
+		return -1.0
+	return along
+
+
+## Crossbow bolts keep position and velocity in the sim; ProjectileView only mirrors this list.
+func launch_bolt(from: Vector3, forward: Vector3, from_fired_shot: bool = false) -> int:
+	var directions := guns.shot_directions(forward, from_fired_shot)
+	var direction: Vector3 = directions[0] if not directions.is_empty() else forward.normalized()
+	var id := _next_projectile
+	_next_projectile += 1
+	projectiles.append({"id": id, "kind": "bolt", "pos": from, "previous": from,
+			"velocity": direction * float(guns.stats().get("projectile_speed", 55.0)), "age": 0.0,
+			"damage": guns.damage(), "knockback": float(guns.stats().get("knockback", 2.0)),
+			"gravity": float(guns.stats().get("projectile_gravity", 9.8)),
+			"survival": float(guns.stats().get("bolt_survival", 0.70)),
+			"weapon": str(guns.gun().get("name", "Crossbow"))})
+	return id
+
+
+static func bolt_survives(roll: float, chance: float = 0.70) -> bool:
+	return roll < chance
+
+
+func ready_throwable(item: String) -> String:
+	if not data.items.has(item) or str(data.items[item].get("throwable", "")) == "":
+		return "That cannot be thrown"
+	if inventory.count(item) <= 0:
+		return "No %s" % data.item_name(item).to_lower()
+	ready_throw = item
+	guns.aiming = false
+	return "%s ready · hold LMB, release to throw · RMB cancel" % data.item_name(item)
+
+
+func cancel_throwable() -> void:
+	ready_throw = ""
+
+
+## Charge 0..1 maps to a controlled toss through a full-strength throw. The small lift keeps a level-camera
+## throw useful while still allowing the camera pitch to aim high or low.
+static func throw_velocity(forward: Vector3, charge: float) -> Vector3:
+	var speed := lerpf(9.0, 20.0, clampf(charge, 0.0, 1.0))
+	return forward.normalized() * speed + Vector3.UP * lerpf(1.5, 3.0, clampf(charge, 0.0, 1.0))
+
+
+## Uses the same fixed-step integration as a real throw, stopping at its first ground contact.
+static func predict_throw_arc(origin: Vector3, velocity: Vector3, gravity: float = 9.8) -> PackedVector3Array:
+	var points := PackedVector3Array([origin])
+	var pos := origin
+	var v := velocity
+	for _step in 120:
+		v.y -= gravity * TICK
+		pos += v * TICK
+		if pos.y <= 0.08:
+			pos.y = 0.08
+			points.append(pos)
+			break
+		points.append(pos)
+	return points
+
+
+func throw_ready_item(origin: Vector3, velocity: Vector3) -> String:
+	if ready_throw == "":
+		return "Nothing readied"
+	if inventory.count(ready_throw) <= 0:
+		var missing := ready_throw
+		ready_throw = ""
+		return "No %s" % data.item_name(missing).to_lower()
+	var item := ready_throw
+	var kind := str(data.items[item]["throwable"])
+	inventory.remove(item, 1)
+	var id := _next_projectile
+	_next_projectile += 1
+	thrown.append({"id": id, "kind": kind, "item": item, "pos": origin, "previous": origin,
+			"velocity": velocity, "fuse": 3.0 if kind == "pipe_bomb" else -1.0, "bounces": 0})
+	stats.note_throw(data.item_name(item))
+	stats.note("threw a %s" % data.item_name(item).to_lower())
+	ready_throw = ""
+	return ""
+
+
+func _tick_ballistics(dt: float) -> void:
+	projectile_events = projectile_events.filter(func(e: Dictionary) -> bool:
+		return ticks - int(e.get("tick", ticks)) <= TICK_RATE * 3)
+	for bolt: Dictionary in projectiles.duplicate():
+		_tick_bolt(bolt, dt)
+	for throwable: Dictionary in thrown.duplicate():
+		_tick_throwable(throwable, dt)
+
+
+func _tick_bolt(bolt: Dictionary, dt: float) -> void:
+	bolt["previous"] = bolt["pos"]
+	var velocity: Vector3 = bolt["velocity"]
+	velocity.y -= float(bolt["gravity"]) * dt
+	bolt["velocity"] = velocity
+	bolt["pos"] = (bolt["pos"] as Vector3) + velocity * dt
+	bolt["age"] = float(bolt["age"]) + dt
+	var segment: Vector3 = (bolt["pos"] as Vector3) - (bolt["previous"] as Vector3)
+	var length := segment.length()
+	if length > 0.0001:
+		var direction := segment / length
+		var best_id := -1
+		var best_t := length + 1.0
+		for id: int in horde.zombies:
+			var z: ZombieBrain = horde.zombies[id]
+			if z.is_dead():
+				continue
+			var t := _segment_sphere_t(bolt["previous"], direction, z.pos + Vector3.UP, 0.52, length)
+			if t >= 0.0 and t < best_t:
+				best_t = t
+				best_id = id
+		if best_id >= 0:
+			bolt["pos"] = (bolt["previous"] as Vector3) + direction * best_t
+			var result := _damage_zombie(best_id, float(bolt["damage"]), float(bolt["knockback"]),
+					bolt["previous"], str(bolt["weapon"]), true)
+			if bolt_survives(_ballistic_rng.randf(), float(bolt["survival"])):
+				embedded_bolts[best_id] = int(embedded_bolts.get(best_id, 0)) + 1
+			projectile_events.append({"type": "bolt_hit", "pos": bolt["pos"], "zombie": best_id,
+					"killed": result["killed"], "tick": ticks})
+			projectiles.erase(bolt)
+			return
+	if (bolt["pos"] as Vector3).y <= 0.08 or float(bolt["age"]) >= 4.0:
+		var land: Vector3 = bolt["pos"]
+		land.y = 0.08
+		bolt["pos"] = land
+		if bolt_survives(_ballistic_rng.randf(), float(bolt["survival"])):
+			_drop_bolt_pickup(land)
+		projectile_events.append({"type": "bolt_land", "pos": land, "tick": ticks})
+		projectiles.erase(bolt)
+
+
+func _drop_bolt_pickup(pos: Vector3) -> void:
+	var cid := "bolt_pickup_%d" % _next_projectile
+	_next_projectile += 1
+	loot.add(cid, "ground_pickup", pos)
+	loot.containers[cid]["searched"] = true
+	loot.inventory(cid).add("bolt", 1)
+	projectile_pickups[cid] = pos
+
+
+func _tick_throwable(body: Dictionary, dt: float) -> void:
+	body["previous"] = body["pos"]
+	var velocity: Vector3 = body["velocity"]
+	velocity.y -= 9.8 * dt
+	body["velocity"] = velocity
+	body["pos"] = (body["pos"] as Vector3) + velocity * dt
+	if float(body["fuse"]) >= 0.0:
+		body["fuse"] = float(body["fuse"]) - dt
+		if float(body["fuse"]) <= 0.0:
+			_explode_pipe_bomb(body["pos"])
+			thrown.erase(body)
+			return
+	if (body["pos"] as Vector3).y > 0.08:
+		return
+	var land: Vector3 = body["pos"]
+	land.y = 0.08
+	body["pos"] = land
+	if body["kind"] == "bottle":
+		noise.emit(land, noise_loudness("bottle_break"), "bottle_break")
+		projectile_events.append({"type": "bottle_break", "pos": land, "tick": ticks})
+		thrown.erase(body)
+		return
+	velocity = body["velocity"]
+	if absf(velocity.y) > 1.2:
+		velocity.y = absf(velocity.y) * 0.34
+		velocity.x *= 0.68
+		velocity.z *= 0.68
+		body["bounces"] = int(body["bounces"]) + 1
+		projectile_events.append({"type": "bounce", "pos": land, "tick": ticks})
+	else:
+		velocity = Vector3.ZERO
+	body["velocity"] = velocity
+
+
+func _explode_pipe_bomb(pos: Vector3) -> void:
+	var center := pos
+	center.y = maxf(center.y, 0.2)
+	var radius := 5.0
+	noise.emit(center, noise_loudness("pipe_bomb"), "pipe_bomb")
+	projectile_events.append({"type": "explosion", "pos": center, "tick": ticks})
+	for id: int in horde.zombies:
+		var z: ZombieBrain = horde.zombies[id]
+		if z.is_dead():
+			continue
+		var distance := z.pos.distance_to(center)
+		if distance > radius:
+			continue
+		var falloff := 1.0 - distance / radius
+		var result := _damage_zombie(id, lerpf(15.0, 110.0, falloff), lerpf(1.0, 8.0, falloff), center,
+				"Pipe bomb", false)
+		z.stunned = maxf(z.stunned, lerpf(0.4, 2.2, falloff))
+		if result["killed"]:
+			stats.note("blew up a " + z.type)
+	var player_distance := player_pos.distance_to(center)
+	if player_distance <= radius:
+		player.damage(lerpf(8.0, 80.0, 1.0 - player_distance / radius), "pipe bomb")
+	for key: String in build.pieces.keys():
+		var distance := build.piece_center(key).distance_to(center)
+		if distance <= radius:
+			build.damage(key, roundi(lerpf(2.0, 20.0, 1.0 - distance / radius)))
 
 
 ## R with a gun in hand: starts a reload (or switches ammo type). A reload click carries a few metres.
@@ -1783,22 +2164,58 @@ func reload() -> String:
 	return msg
 
 
-## At a workbench: attach a part from your pockets to the firearm Q most recently selected. Returns a message.
+## Finds a firearm by uid in your pockets/equipment or in the open container named by `container_id`.
+func gun_piece(uid: int, container_id: String = "") -> Dictionary:
+	var held := gear.find(uid)
+	if gear.is_gun(held):
+		return held
+	if container_id != "":
+		for piece: Dictionary in container_gear(container_id):
+			if int(piece["uid"]) == uid and gear.is_gun(piece):
+				return piece
+	return {}
+
+
+## Read-only drag/drop check for fitting a pocket part to a specific gun and slot anywhere in the field.
+func can_attach_part_to_gun(gun_uid: int, part_uid: int, slot: String = "", container_id: String = "") -> String:
+	return gear.can_attach(gun_piece(gun_uid, container_id), part_uid, slot)
+
+
+## Fits a pocket part to a specific firearm, including one carried in pockets or lying in the open container.
+## Fitting is instant but makes the small handling noise from data/noise.json.
+func attach_part_to_gun(gun_uid: int, part_uid: int, slot: String = "", container_id: String = "") -> String:
+	var gun := gun_piece(gun_uid, container_id)
+	var part := gear.find(part_uid)
+	var why := gear.attach(gun, part_uid, slot)
+	if why != "":
+		return why
+	make_noise(player_pos, "gun_mod")
+	return "%s fitted: %s" % [part["name"], gear.part_fit_text(part)]
+
+
+## Legacy/workbench convenience: fits to the firearm Q most recently selected.
 func attach_part(uid: int) -> String:
-	var part := gear.find(uid)
-	var why := gear.attach(gear.gun(), uid)
-	return why if why != "" else "Attached %s to %s" % [part["name"], gear.gun_name()]
+	var gun := gear.gun()
+	return attach_part_to_gun(int(gun.get("uid", -1)), uid)
 
 
-## At a workbench: take a part off your gun, back into your pockets (with any rounds that no longer fit).
-func detach_part(slot: String) -> String:
-	var part: Dictionary = gear.gun().get("parts", {}).get(slot, {})
-	var out := gear.detach(gear.gun(), slot)
+## Takes a part off a specific firearm into your pockets (with rounds that no longer fit).
+func detach_part_from_gun(gun_uid: int, slot: String, container_id: String = "") -> String:
+	var gun := gun_piece(gun_uid, container_id)
+	var part: Dictionary = gun.get("parts", {}).get(slot, {})
+	var out := gear.detach(gun, slot)
 	if out["why"] != "":
 		return out["why"]
 	if int(out["rounds"]) > 0:
-		inventory.add(gear.gun()["ammo"], int(out["rounds"]))
-	return "Took off " + part["name"]
+		inventory.add(gun["ammo"], int(out["rounds"]))
+	make_noise(player_pos, "gun_mod")
+	return "%s removed%s" % [part["name"], " · %d rounds moved to pockets" % int(out["rounds"]) if int(out["rounds"]) > 0 else ""]
+
+
+## Legacy/workbench convenience: removes from the firearm Q most recently selected.
+func detach_part(slot: String) -> String:
+	var gun := gear.gun()
+	return detach_part_from_gun(int(gun.get("uid", -1)), slot)
 
 
 ## The workbench's recipes (recipes.json "station": "workbench"), in file order.
@@ -1842,13 +2259,19 @@ func _search_guns(found: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, found.get("id", ""), "guns"])
 	for kind: String in ["gun", "part"]:
-		if rng.randf() < float(table.get(kind, 0.0)):
+		if rng.randf() < difficulty.chance("loot_abundance", float(table.get(kind, 0.0))):
 			out["pieces"].append(_found_gun(rng, kind, false, found.get("table", "")))
-	if rng.randf() < float(data.guns["police_find"]):
+	if rng.randf() < difficulty.chance("loot_abundance", float(data.guns["police_find"])):
 		out["pieces"].append(_found_gun(rng, "gun" if rng.randf() < 0.5 else "part", true))
-	if rng.randf() < float(table.get("ammo", 0.0)):
+	var gun_ammo := ""
+	for piece: Dictionary in out["pieces"]:
+		if gear.is_gun(piece):
+			gun_ammo = str(piece["ammo"])
+			break
+	if gun_ammo != "" or rng.randf() < difficulty.chance("loot_abundance", float(table.get("ammo", 0.0))):
 		var span: Array = data.guns["ammo_found"]
-		out["items"]["ammo_standard"] = rng.randi_range(int(span[0]), int(span[1]))
+		var ammo := gun_ammo if gun_ammo != "" else "ammo_standard"
+		out["items"][ammo] = rng.randi_range(int(span[0]), int(span[1]))
 	return out
 
 
@@ -1892,6 +2315,7 @@ func take_bag(id: int) -> Dictionary:
 			inventory.give_all(items)
 			for piece: Dictionary in bags[i].get("gear", []):
 				gear.pieces.append(piece)
+				_consider_better_gear(piece)
 				items[piece["name"]] = 1  # so the "Took ..." message names it
 			bags.remove_at(i)
 			return items
@@ -1914,6 +2338,10 @@ func _on_player_died() -> void:
 	clearing_glass = {}
 	stats.note_death(player.last_cause, when_text())
 	tally["deaths"] += 1
+	if not difficulty.keeps_skills_on_death():
+		skills.xp.clear()
+		skills.perks.clear()
+		skills.perk_points = 0
 	var items := _counts_of(inventory)
 	var pieces := gear.pieces.duplicate()
 	if not items.is_empty() or not pieces.is_empty():
@@ -1994,7 +2422,7 @@ func _practice(skill: String, action: String, times: float = 1.0) -> void:
 		add_message("%s %d" % [skills.skill_name(skill), skills.level(skill)], 5.0)
 		stats.note_level(skill, skills.level(skill))
 	if skills.perk_points > points:
-		add_message("Perk point earned: K to spend", 6.0)
+		add_message("Perk point! Press K to spend it", 6.0)
 		stats.note_perk_points(skills.perk_points - points)
 
 
@@ -2095,6 +2523,9 @@ func _count_kills() -> void:
 func _add_corpse(z: ZombieBrain) -> void:
 	var cid := CORPSE + str(z.id)
 	loot.add(cid, "zombie", z.pos)
+	if int(embedded_bolts.get(z.id, 0)) > 0:
+		loot.add_extra(cid, {"bolt": int(embedded_bolts[z.id])})
+		embedded_bolts.erase(z.id)
 	_zombie_drop(z, cid)
 	if not _told_corpse:
 		_told_corpse = true
@@ -2106,7 +2537,8 @@ func _add_corpse(z: ZombieBrain) -> void:
 ## Gear a finished search turns up: the container's chance (gear.json "containers"), rolled again on
 ## a Lucky Find. Its own seeded stream, so the same seed finds the same gear.
 func _search_gear(found: Dictionary) -> Array:
-	var chance := float(data.gear["containers"].get(found.get("table", ""), 0.0))
+	var chance := difficulty.chance("loot_abundance",
+			float(data.gear["containers"].get(found.get("table", ""), 0.0)))
 	var out := []
 	if chance <= 0.0:
 		return out
@@ -2127,7 +2559,8 @@ func _zombie_drop(z: ZombieBrain, cid: String) -> void:
 	var unique: String = data.gear["zombie_uniques"].get(z.type, "")
 	if unique != "":
 		piece = gear.roll_unique(rng, unique)
-	elif rng.randf() < float(data.gear["zombie_drop"].get(z.type, data.gear["zombie_drop"]["default"])):
+	elif rng.randf() < difficulty.chance("loot_abundance",
+			float(data.gear["zombie_drop"].get(z.type, data.gear["zombie_drop"]["default"]))):
 		piece = gear.roll_piece(rng, "zombie")
 	if piece.is_empty():
 		return

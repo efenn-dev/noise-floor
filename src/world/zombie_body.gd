@@ -52,7 +52,11 @@ const LOOK_DATA := {
 const LOOKS := {
 	"runner": {"skin": Color(0.17, 0.2, 0.15), "shirts": [Color(0.18, 0.18, 0.2), Color(0.2, 0.22, 0.3)], "scale": 0.92,
 			"dim": 0.7},  # A2: a runner's vest, hat and trousers go dark too, whichever body it got
+	"crawler": {"skin": Color(0.28, 0.31, 0.25), "shirts": [Color(0.24, 0.20, 0.18), Color(0.18, 0.22, 0.20)],
+			"dim": 0.55},
 	"screamer": {"skin": Color(0.62, 0.62, 0.58), "shirts": [Color(0.55, 0.12, 0.1)], "scale": 1.0},
+	"brute": {"skin": Color(0.19, 0.21, 0.17), "shirts": [Color(0.16, 0.14, 0.12), Color(0.20, 0.18, 0.13)],
+			"dim": 0.42},
 	"old_pete": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.62, 0.16, 0.08)], "scale": 1.25},  # M13: the fireman
 }
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
@@ -107,13 +111,17 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 		rotation.y = atan2(-f.x, -f.z)
 	_frame = brain.id  # stagger sight checks across zombies
 	_last_hp = brain.hp
-	_voice.pitch_scale = 0.85 + 0.06 * (brain.id % 5)
+	_voice.pitch_scale = (0.85 + 0.06 * (brain.id % 5)) * float(brain.stats.get("voice_pitch", 1.0))
+	_voice.max_distance = float(brain.stats.get("voice_distance", _voice.max_distance))
+	_voice.volume_db = float(brain.stats.get("voice_volume_db", _voice.volume_db))
 	_next_moan = 1.5 + brain.id % 9
+	_configure_collision()
 	var variant := variant_for(brain.id, brain.type)
 	if BODIES[variant] != body_variant:
 		_set_body(variant)
 	var look: Dictionary = LOOKS.get(brain.type, {})
-	_model.scale = Vector3.ONE * MODEL_SCALE * (0.94 + 0.04 * (brain.id % 4)) * float(look.get("scale", 1.0))
+	var scale_variation := 1.0 if brain.stats.has("model_scale") else 0.94 + 0.04 * (brain.id % 4)
+	_model.scale = Vector3.ONE * MODEL_SCALE * scale_variation * float(brain.stats.get("model_scale", look.get("scale", 1.0)))
 	var shirt_look := shirt_look_for(brain.id)
 	var shirts: Array = look.get("shirts", LOOK_DATA["shirt_tints"])
 	for mesh: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
@@ -194,6 +202,8 @@ static func _plain_material_for_look(source: StandardMaterial3D, tint: Color) ->
 ## reloads and every PC agree). Ids come in blocks of five, each block a hashed shuffle of the five bodies,
 ## so any handful of zombies spawned together is a mix rather than a run of the same person.
 static func variant_for(id: int, type: String) -> int:
+	if type == "brute":
+		return BODIES.find("heavy")
 	var n := BODIES.size()
 	var h := (floori(float(id) / n) + 1) * 0x9E3779B1 + type.hash()
 	h = (h ^ (h >> 15)) * 0x2C1B3C6D
@@ -206,6 +216,39 @@ static func variant_for(id: int, type: String) -> int:
 		order[i] = order[j]
 		order[j] = t
 	return order[posmod(id, n)]
+
+
+## V28: collider, navigation footprint and reach follow the type's data. A crawler is a low box stretched
+## along its facing; a brute uses a wider, taller capsule and reach ball.
+func _configure_collision() -> void:
+	if brain.stats.has("collider_size"):
+		var raw_size: Array = brain.stats["collider_size"]
+		var box := BoxShape3D.new()
+		box.size = Vector3(float(raw_size[0]), float(raw_size[1]), float(raw_size[2]))
+		_shape.shape = box
+		var raw_offset: Array = brain.stats.get("collider_offset", [0.0, box.size.y / 2.0, 0.0])
+		_shape.position = Vector3(float(raw_offset[0]), float(raw_offset[1]), float(raw_offset[2]))
+		agent.radius = box.size.x / 2.0
+		agent.height = box.size.y
+	else:
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = float(brain.stats.get("body_radius", RADIUS))
+		capsule.height = float(brain.stats.get("body_height", HEIGHT))
+		_shape.shape = capsule
+		_shape.position = Vector3.UP * capsule.height / 2.0
+		agent.radius = capsule.radius
+		agent.height = capsule.height
+	var reach_radius := float(brain.stats.get("reach_radius", REACH_RADIUS))
+	_reach_shape.disabled = reach_radius <= 0.0
+	if reach_radius > 0.0:
+		(_reach_shape.shape as SphereShape3D).radius = reach_radius
+		var raw_reach: Array = brain.stats.get("reach_offset", [REACH_OFFSET.x, REACH_OFFSET.y, REACH_OFFSET.z])
+		_reach_shape.position = Vector3(float(raw_reach[0]), float(raw_reach[1]), float(raw_reach[2]))
+
+
+## Height above this body's feet where a ray or swing counts as a head hit.
+func head_y() -> float:
+	return float(brain.stats.get("head_height", HEAD_Y))
 
 
 func _init() -> void:
@@ -324,7 +367,8 @@ func _climb_window() -> void:
 				add_collision_exception_with(_climb_body)
 				break
 	var k := smoothstep(0.0, 1.0, brain.climb_fraction())
-	global_position = brain.climb_start.lerp(brain.climb_to, k) + Vector3.UP * sin(PI * k) * 0.45
+	var arc := float(brain.stats.get("climb_arc", 0.45))
+	global_position = brain.climb_start.lerp(brain.climb_to, k) + Vector3.UP * sin(PI * k) * arc
 	brain.pos = global_position
 	velocity = Vector3.ZERO
 	var face := _flat(brain.climb_to - brain.climb_start)
@@ -355,7 +399,7 @@ func _steer() -> Vector3:
 func _has_line_of_sight() -> bool:
 	if player == null:
 		return false
-	var from := global_position + Vector3.UP * ZombieBrain.EYE_HEIGHT
+	var from := global_position + Vector3.UP * brain.eye_height()
 	var to := player.global_position + Vector3.UP * 1.5
 	var query := PhysicsRayQueryParameters3D.create(from, to, Layers.WORLD | Layers.BUILT, [get_rid()])
 	if player is CollisionObject3D:
@@ -486,12 +530,16 @@ func _animate(delta: float) -> void:
 	var speed_scale := 1.0
 	var moving := Vector2(velocity.x, velocity.z).length()
 	var climbing := brain.state == ZombieBrain.State.CLIMB
-	_model.rotation.x = deg_to_rad(35.0) * sin(PI * brain.climb_fraction()) if climbing else 0.0
-	_model.position.y = -0.22 * sin(PI * brain.climb_fraction()) if climbing else 0.0
+	var climb_wave := sin(PI * brain.climb_fraction())
+	_model.rotation.x = deg_to_rad(float(brain.stats.get("climb_tilt_deg", 35.0))) * climb_wave if climbing else 0.0
+	_model.position.y = -float(brain.stats.get("climb_dip", 0.22)) * climb_wave if climbing else 0.0
 	if brain.is_dead():
 		want = "Death"
 	elif brain.screaming > 0.0 and _anim.has_animation("Scream"):
 		want = "Scream"
+	elif brain.stats.has("crawl_anim_speed"):
+		want = "Crawl"
+		speed_scale = clampf(moving / float(brain.stats["crawl_anim_speed"]), 0.5, 1.6)
 	elif _flinch > 0.0:
 		want = "HitReact"
 	elif climbing:

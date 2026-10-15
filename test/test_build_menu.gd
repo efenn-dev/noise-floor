@@ -165,7 +165,7 @@ func test_pockets_put_items_on_keys() -> void:
 	inv.select("plank", InventoryScreen.POCKETS)
 	_key(KEY_4)
 	eq(sim.hotbar.entry(3), "item:canned_food", "planks can't go on a key")
-	check("Only food" in _last_message(), "it says why (%s)" % _last_message())
+	check("Only usable items" in _last_message(), "it says why (%s)" % _last_message())
 	inv.select("", InventoryScreen.POCKETS)
 	eq(inv.assign_hotbar(0), "Click an item in your pockets first", "nothing picked")
 	_key(KEY_TAB)

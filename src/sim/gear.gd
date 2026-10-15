@@ -9,7 +9,7 @@ extends RefCounted
 ## (only while condition is at least broken_below), and set bonuses. Skills.bonus() adds it in, so the
 ## rules keep asking one question. Rolls take the caller's seeded rng, so the same seed finds the same gear.
 ## M14: guns are gear, and gun parts are gear (slot "part") carried in your pockets and
-## attached to a gun at a workbench: a gun piece also has {parts: {muzzle|magazine|sight|stock: piece},
+## attached to a gun in the field: a gun piece also has {parts: {slot: piece},
 ## loaded: rounds in it, ammo: the ammo item it's loaded with}. gun_stats(piece) = its base (guns.json, damage
 ## times its tier) plus its own rolled gun stats plus its working parts. Gun-only stats (those whose
 ## gear.json entry lists "slots") count only through gun_stats, never bonus(). Ordinary finds and drops never
@@ -28,6 +28,13 @@ const SUFFIX := {"melee_damage": "of Hurt", "fighter_perks": "of the Brawler", "
 const RARE_FIRST := ["Rust", "Grim", "Night", "Ash", "Bone", "Storm", "Dead", "Iron", "Hollow", "Static"]
 const FIREARM_SLOTS := ["primary", "sidearm"]
 const GUN_SLOTS := ["primary", "sidearm", "part"]
+const RARITY_RANK := {"white": 0, "blue": 1, "yellow": 2, "set": 3, "gold": 4, "orange": 5}
+const TIER_RANK := {"civilian": 0, "police": 1, "military": 2}
+## The stat that best describes each wearable slot at a glance. Rarity and tier still matter; this keeps a
+## stronger axe or quieter pair of shoes from losing merely because its generated name sorts differently.
+const MAIN_STAT := {"head": "damage_cut", "body": "damage_cut", "hands": "melee_damage",
+		"legs": "carry_kg", "feet": "gear_quiet", "light": "search_speed",
+		"weapon": "damage", "primary": "gun_damage", "sidearm": "gun_damage"}
 const RARE_SECOND := {"primary": ["Thunder", "Barker", "Rattler"], "sidearm": ["Thunder", "Barker", "Rattler"],
 		"part": ["Hush", "Edge", "Eye"],
 		"weapon": ["Bite", "Mangler", "Knock", "Cleaver"], "head": ["Crown", "Lid", "Visor"],
@@ -56,6 +63,10 @@ func slot_of(piece: Dictionary) -> String:
 	return base_of(piece)["slot"]
 
 
+func is_gun(piece: Dictionary) -> bool:
+	return not piece.is_empty() and base_of(piece).has("gun")
+
+
 # --- Making pieces --------------------------------------------------------------
 
 func make(base: String, tier: String, rarity: String, stats: Dictionary = {}, condition: float = 1.0,
@@ -68,7 +79,7 @@ func make(base: String, tier: String, rarity: String, stats: Dictionary = {}, co
 	if slot_of(piece) in FIREARM_SLOTS:
 		piece["parts"] = {}
 		piece["loaded"] = 0
-		piece["ammo"] = data.guns["ammo_order"][0]
+		piece["ammo"] = str(data.guns["guns"][base_of(piece)["gun"]].get("ammo", data.guns["ammo_order"][0]))
 	return piece
 
 
@@ -119,11 +130,14 @@ func _roll_as(rng: RandomNumberGenerator, base: String, tier: String, rarity: St
 ## chance, or `police` forced), a rarity by weight (no sets), stats from the gun stats only.
 func roll_gun_piece(rng: RandomNumberGenerator, kind: String, police: bool = false, source: String = "") -> Dictionary:
 	var tier := "police" if police or rng.randf() < police_chance(source) else "civilian"
-	var weights := {}
+	var rarity_weights := {}
 	for r: String in ["white", "blue", "yellow"]:
-		weights[r] = float(g()["rarities"][r]["weight"])
-	var rarity: String = _weighted(rng, weights)
-	var base: String = _weighted(rng, data.guns["gun_weights" if kind == "gun" else "part_weights"])
+		rarity_weights[r] = float(g()["rarities"][r]["weight"])
+	var rarity: String = _weighted(rng, rarity_weights)
+	var base_weights: Dictionary = data.guns["gun_weights" if kind == "gun" else "part_weights"]
+	if kind == "gun" and data.guns.get("gun_weights_by_source", {}).has(source):
+		base_weights = data.guns["gun_weights_by_source"][source]
+	var base: String = _weighted(rng, base_weights)
 	return _roll_as(rng, base, tier, rarity)
 
 
@@ -240,7 +254,7 @@ func take(uid: int) -> Dictionary:
 func equip(uid: int) -> String:
 	var found := find(uid)
 	if not found.is_empty() and slot_of(found) == "part":
-		return "Attach it to a firearm at a workbench"
+		return "Select a firearm, then fit this part in its modding panel"
 	var piece := take(uid)
 	if piece.is_empty():
 		return "You don't have that"
@@ -309,6 +323,50 @@ func bonus(effect: String) -> float:
 
 func tier_mult(piece: Dictionary) -> float:
 	return float(g()["tiers"][piece["tier"]]["base_mult"])
+
+
+## True when `candidate` is a sensible upgrade for the same equipment slot. An empty slot always wins.
+## The score deliberately has visible, stable parts: rarity, base tier, condition, and the slot's main stat.
+func is_better(candidate: Dictionary, current: Dictionary = {}) -> bool:
+	if candidate.is_empty() or slot_of(candidate) == "part":
+		return false
+	if current.is_empty():
+		return true
+	if slot_of(candidate) != slot_of(current):
+		return false
+	return quality_score(candidate) > quality_score(current) + 0.001
+
+
+func quality_score(piece: Dictionary) -> float:
+	if piece.is_empty():
+		return -INF
+	return float(RARITY_RANK.get(piece["rarity"], 0)) * 20.0 \
+			+ float(TIER_RANK.get(piece["tier"], 0)) * 12.0 \
+			+ clampf(float(piece["condition"]), 0.0, 1.0) * 10.0 \
+			+ _main_stat_score(piece)
+
+
+func _main_stat_score(piece: Dictionary) -> float:
+	var slot := slot_of(piece)
+	if slot == "weapon":
+		var w: Dictionary = data.weapons[base_of(piece)["weapon"]]
+		return float(w["damage"]) * tier_mult(piece) * (1.0 + float(piece["stats"].get("melee_damage", 0.0))) * 0.2
+	if slot in FIREARM_SLOTS:
+		var gun: Dictionary = data.guns["guns"][base_of(piece)["gun"]]
+		return float(gun["damage"]) * tier_mult(piece) * (1.0 + float(piece["stats"].get("gun_damage", 0.0))) * 0.1
+	var effect: String = MAIN_STAT.get(slot, "")
+	var value := float(base_of(piece).get("base", {}).get(effect, 0.0)) * tier_mult(piece)
+	if working(piece):
+		value += float(piece["stats"].get(effect, 0.0))
+	match effect:
+		"damage_cut", "melee_damage", "search_speed":
+			return value * 100.0
+		"carry_kg":
+			return value * 2.0
+		"gear_quiet":
+			return value * 3.0
+		_:
+			return value
 
 
 ## How many working pieces of a set you're wearing.
@@ -384,11 +442,19 @@ func part_def(piece: Dictionary) -> Dictionary:
 	return data.guns["parts"].get(base_of(piece).get("part", ""), {})
 
 
+## The attachment points this exact gun supports, in the order its modding panel shows them.
+func gun_part_slots(piece: Dictionary) -> Array:
+	if not is_gun(piece):
+		return []
+	var gun_id := str(base_of(piece).get("gun", ""))
+	return Array(data.guns["guns"].get(gun_id, {}).get("part_slots", []))
+
+
 ## The gun's effective numbers: its base (guns.json; damage times its tier), its own rolled gun stats and
 ## its working parts. Keys: damage, range, spread, recoil, settle, handling, magazine, loudness, cooldown,
 ## reload, knockback, wear_per_shot, sound, plus suppressed (a working muzzle part cuts loudness) and
 ## muzzle_wear (per shot, less with a threaded barrel). The rules and the HUD both read this.
-func gun_stats(piece: Dictionary) -> Dictionary:
+func gun_stats(piece: Dictionary, include_parts: bool = true) -> Dictionary:
 	var s: Dictionary = data.guns["guns"][base_of(piece)["gun"]].duplicate()
 	var dmg := 0.0
 	var quiet := 0.0
@@ -396,9 +462,11 @@ func gun_stats(piece: Dictionary) -> Dictionary:
 	var recoil := 0.0
 	var mag := 0.0
 	var muzzle := 0.0
+	var spread := 0.0
 	var all := [piece]
-	for slot: String in piece.get("parts", {}):
-		all.append(piece["parts"][slot])
+	if include_parts:
+		for slot: String in piece.get("parts", {}):
+			all.append(piece["parts"][slot])
 	for p: Dictionary in all:
 		if not working(p):
 			continue
@@ -411,29 +479,89 @@ func gun_stats(piece: Dictionary) -> Dictionary:
 		recoil += float(pd.get("recoil", 0.0))
 		mag += float(pd.get("magazine", 0.0))
 		muzzle += float(pd.get("loudness", 0.0))
+		spread += float(pd.get("spread", 0.0))
 	s["damage"] = float(s["damage"]) * tier_mult(piece) * (1.0 + dmg)
 	s["range"] = float(s["range"]) * (1.0 + acc)
 	s["recoil"] = float(s["recoil"]) * maxf(0.2, 1.0 + recoil)
 	s["magazine"] = floori(float(s["magazine"]) * (1.0 + mag))
 	s["loudness"] = maxf(0.0, float(s["loudness"]) + muzzle - quiet)
+	s["spread"] = float(s["spread"]) * maxf(0.2, 1.0 + spread)
 	s["suppressed"] = muzzle < 0.0
-	var m: Dictionary = piece.get("parts", {}).get("muzzle", {})
+	var m: Dictionary = piece.get("parts", {}).get("muzzle", {}) if include_parts else {}
 	s["muzzle_wear"] = float(part_def(m).get("wear_per_shot", 0.0)) * (1.0 - float(piece["stats"].get("threaded", 0.0)))
+	var base_range := float(data.guns["guns"][base_of(piece)["gun"]]["range"])
+	s["accuracy"] = float(s["spread"]) * float(s["ads_spread"]) * base_range / maxf(0.001, float(s["range"]))
 	return s
 
 
-## Attaches a part from your pockets to `gun_piece` (worn or carried). A part already in that slot comes
-## back to your pockets. "" or why not.
-func attach(gun_piece: Dictionary, part_uid: int) -> String:
-	if gun_piece.is_empty() or not slot_of(gun_piece) in FIREARM_SLOTS:
-		return "Select a primary or sidearm first (equip one from Tab)"
+## Tarkov-style rows for the inventory modding panel. All values and deltas are computed here so the
+## presentation never reimplements a gun rule. `better` is true when the fitted-parts delta helps.
+func gun_stat_rows(piece: Dictionary) -> Array:
+	if not is_gun(piece):
+		return []
+	var bare := gun_stats(piece, false)
+	var fitted := gun_stats(piece, true)
+	var specs := [
+		["Damage", "damage", false, 0],
+		["Recoil", "recoil", true, 2],
+		["Accuracy cone", "accuracy", true, 2],
+		["Raise time", "handling", true, 2],
+		["Magazine", "magazine", false, 0],
+		["Loudness", "loudness", true, 0],
+	]
+	var rows := []
+	for spec: Array in specs:
+		var key := str(spec[1])
+		var lower_is_better := bool(spec[2])
+		var decimals := int(spec[3])
+		var base_value := float(bare[key])
+		var value := float(fitted[key])
+		var delta := value - base_value
+		var row := {"label": str(spec[0]), "value": _stat_number(value, decimals), "delta": delta,
+				"delta_text": "", "better": (delta < 0.0) if lower_is_better else (delta > 0.0)}
+		if absf(delta) >= 0.005:
+			row["delta_text"] = "%s%s" % ["+" if delta > 0.0 else "", _stat_number(delta, decimals)]
+		rows.append(row)
+	return rows
+
+
+static func _stat_number(value: float, decimals: int) -> String:
+	if decimals <= 0:
+		return str(roundi(value))
+	return ("%%.%df" % decimals) % value
+
+
+## Checks a field fit without changing either piece. `into_slot` is supplied by drag/drop; an empty value
+## means use the part's own slot (double-click and the legacy workbench path).
+func can_attach(gun_piece: Dictionary, part_uid: int, into_slot: String = "") -> String:
+	if not is_gun(gun_piece):
+		return "Select a firearm first"
 	var part := {}
 	for p: Dictionary in pieces:
 		if int(p["uid"]) == part_uid and slot_of(p) == "part":
 			part = p
 	if part.is_empty():
 		return "You don't have that part"
-	var slot: String = part_def(part)["slot"]
+	var slot := str(part_def(part).get("slot", ""))
+	if into_slot != "" and into_slot != slot:
+		return "%s fits the %s slot, not %s" % [part["name"], slot, into_slot]
+	if not slot in gun_part_slots(gun_piece):
+		return "%s has no %s slot" % [gun_piece["name"], slot]
+	var gun_id := str(base_of(gun_piece).get("gun", ""))
+	var fits: Array = part_def(part).get("guns", [])
+	if not fits.is_empty() and not gun_id in fits:
+		return "%s does not fit %s" % [part["name"], gun_piece["name"]]
+	return ""
+
+
+## Attaches a part from your pockets to `gun_piece` (equipped, carried, or in the open container). A part
+## already in that slot comes back to your pockets. "" or why not.
+func attach(gun_piece: Dictionary, part_uid: int, into_slot: String = "") -> String:
+	var why := can_attach(gun_piece, part_uid, into_slot)
+	if why != "":
+		return why
+	var part: Dictionary = find(part_uid)
+	var slot := str(part_def(part)["slot"])
 	take(part_uid)
 	if gun_piece["parts"].has(slot):
 		pieces.append(gun_piece["parts"][slot])
@@ -583,7 +711,25 @@ func part_text(piece: Dictionary) -> String:
 		bits.append("+%d%% accuracy at range" % roundi(float(pd["range"]) * 100.0))
 	if pd.has("recoil"):
 		bits.append("%d%% less recoil" % roundi(-float(pd["recoil"]) * 100.0))
+	if pd.has("spread"):
+		bits.append("%d%% tighter pellet cone" % roundi(-float(pd["spread"]) * 100.0))
 	return "%s: %s" % [str(pd.get("slot", "")).capitalize(), ", ".join(bits)]
+
+
+## Short outcome text for the HUD after a field fit.
+func part_fit_text(piece: Dictionary) -> String:
+	var pd := part_def(piece)
+	if pd.has("loudness"):
+		return "shots %d quieter" % -int(pd["loudness"])
+	if pd.has("magazine"):
+		return "%d%% more rounds per reload" % roundi(float(pd["magazine"]) * 100.0)
+	if pd.has("range"):
+		return "+%d%% accuracy at range" % roundi(float(pd["range"]) * 100.0)
+	if pd.has("recoil"):
+		return "%d%% less recoil" % roundi(-float(pd["recoil"]) * 100.0)
+	if pd.has("spread"):
+		return "%d%% tighter pellet cone" % roundi(-float(pd["spread"]) * 100.0)
+	return "ready"
 
 
 static func _base_text(effect: String, v: float) -> String:
@@ -620,11 +766,32 @@ func load_dict(d: Dictionary) -> void:
 			equipped[s] = str(value)
 	next_uid = int(d.get("next_uid", 1))
 	var moved := migrate_legacy_gun()
+	_return_invalid_parts()
 	if moved == "":
 		for slot: String in FIREARM_SLOTS:
 			if equipped.get(slot) is Dictionary:
 				active_gun_slot = slot
 				break
+
+
+## V23 compatibility: old saves could fit any global part slot to any gun. Return a now-unsupported
+## part to pockets so it never becomes an invisible, irremovable bonus (not a new save field/version).
+func _return_invalid_parts() -> void:
+	var guns: Array = []
+	for piece: Dictionary in pieces:
+		if is_gun(piece):
+			guns.append(piece)
+	for slot: String in FIREARM_SLOTS:
+		var equipped_piece: Variant = equipped.get(slot)
+		if equipped_piece is Dictionary:
+			var equipped_gun: Dictionary = equipped_piece
+			if is_gun(equipped_gun):
+				guns.append(equipped_gun)
+	for gun: Dictionary in guns:
+		for part_slot: String in Array(gun.get("parts", {}).keys()):
+			if not part_slot in gun_part_slots(gun):
+				pieces.append(gun["parts"][part_slot])
+				gun["parts"].erase(part_slot)
 
 
 ## A piece read back from JSON (numbers come back as floats).

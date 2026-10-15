@@ -22,6 +22,10 @@
 	"ammo_subsonic": { "name": "Subsonic rounds", "color": "#70a0c0", "weight": 0.012 },
 	"ammo_ap": { "name": "Armour-piercing rounds", "color": "#c05050", "weight": 0.014 },
 	"bolt": { "name": "Crossbow bolts", "color": "#8c7a5a", "weight": 0.03 },
+	"shells": { "name": "Shotgun shells", "color": "#b83c32", "weight": 0.045 },
+	"gunpowder": { "name": "Gunpowder", "color": "#383838", "weight": 0.05 },
+	"pipe_bomb": { "name": "Pipe bomb", "color": "#6f7475", "weight": 0.8, "throwable": "pipe_bomb" },
+	"bottle": { "name": "Empty bottle", "color": "#a8c8c0", "weight": 0.35, "throwable": "bottle" },
 	"wall_panel": { "name": "Wall panel", "color": "#9a9a92", "weight": 2.0 },
 	"radio": { "name": "Handheld radio", "color": "#404a40", "weight": 0.3 }
 }

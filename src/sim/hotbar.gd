@@ -76,7 +76,7 @@ func validate(entry: String) -> String:
 		if not data.items.has(item):
 			return "Unknown item"
 		if not usable(item):
-			return "Only food, drink and bandages go on the hotbar"
+			return "Only usable items and throwables go on the hotbar"
 		return ""
 	if entry.begins_with(SLOT):
 		return "" if WEAPON_SLOTS.has(entry.trim_prefix(SLOT)) else "Not a weapon slot"
@@ -85,7 +85,9 @@ func validate(entry: String) -> String:
 
 ## Items a key can use: anything you eat, drink or bandage with.
 func usable(item: String) -> bool:
-	return data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0 			or data.item_value(item, "bandage") > 0.0
+	return (data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0
+			or data.item_value(item, "bandage") > 0.0
+			or str(data.items.get(item, {}).get("throwable", "")) != "")
 
 
 func _bar(bar: String) -> Array:
