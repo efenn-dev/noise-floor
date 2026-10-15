@@ -14,7 +14,7 @@ extends RefCounted
 ## runs along the park's west, east and north edges and the two ends of its south edge, with gaps. The water
 ## tower stands at TOWER_POS, east of the road between the two east warehouses.
 ## The road runs north from the factory hall's north wall (ROAD_SOUTH_Z) to ROAD_NORTH_Z; the Director's north
-## road end is just past it (Director.EDGES[0]).
+## road carries on north to the map edge (WorldMap "north_road").
 
 const ROAD_SOUTH_Z := -138.0   # the factory hall's north wall
 const ROAD_NORTH_Z := -258.0   # the park road's north end
@@ -25,7 +25,7 @@ const FENCE_NORTH_Z := -256.0
 const FENCE_SOUTH_Z := -142.0
 const FENCE_ROAD_GAP := 6.0    # the north fence stops this far either side of the road's middle
 ## The south edge only has fence at its two ends: the factory hall fills the middle, and the Director's road
-## route comes round the hall's west side at x = -25 (Director.NORTH_VIA), so the west run stops at x = -30.
+## route comes round the hall's west side at x = -25 (WorldMap "factory_way"), so the west run stops at x = -30.
 const FENCE_SOUTH_RUNS := [[-36.0, -30.0], [18.0, 36.0]]
 const FENCE_LENGTH := 2.0
 const SIZE := Vector2i(6, 10)  # warehouse cells: 6 deep (x, away from the road), 10 along the road (z)

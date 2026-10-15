@@ -70,8 +70,7 @@ func _nav_around_window(broken: bool) -> float:
 	scene.add_child(nav)
 	nav.setup(scene, AABB(Vector3(-3, -1, -4), Vector3(8, 5, 8)))
 	nav.bake_now()
-	for i in 12:  # the map takes a few frames to sync after a bake (test_zombie_world waits 0.2 s)
-		await tree.physics_frame
+	await nav.wait_synced()  # W3a: the map syncs on a worker thread; wait for it, not a fixed number of frames
 	var map := scene.get_world_3d().navigation_map
 	var path := NavigationServer3D.map_get_path(map, Vector3(1, 0, 1.8), Vector3(1, 0, -1.8), true)
 	var detour := 0.0
