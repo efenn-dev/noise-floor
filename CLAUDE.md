@@ -34,6 +34,8 @@ V33 screenshot flag: `--hitboxes` draws the zombies' bone hit zones (`ZombieHitb
 
 V32 screenshot flag: `--blood=off` turns blood sprays and stains off for this run (Settings → Blood, saved, is the player's switch).
 
+F1: resource nodes (`data/resources.json`, `SimWorld.resource_nodes`, `BuildGrid.nodes`, buildables `needs_node`), drawn by `NodeView`; extractors (salvager, water_pump, fuel_pump, sawmill) go only on their node's spot, no foundation, and run at the node's purity (`Factory.Machine.node_rate`). Flags: `--demo-outpost` builds one of each on the first node of its kind, power free; `--at=junkyard|timber`; e.g. `tools/shot.sh outpost --at=junkyard --demo-outpost --time=12`.
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

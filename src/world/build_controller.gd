@@ -11,6 +11,8 @@ const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
 		"purifier", "planter", "canner", "bed", "storage", "generator", "solar_panel", "power_pole", "spikes",
 		"nail_turret", "workbench",
+		# F1: extractors (built on resource nodes)
+		"salvager", "water_pump", "fuel_pump", "sawmill",
 		# M15: automated defense (mouse wheel)
 		"crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor", "floodlight", "noisemaker",
 		"bear_trap", "tripwire", "electric_fence", "repair_station",

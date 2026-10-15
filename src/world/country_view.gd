@@ -11,7 +11,7 @@ const WRECK_BOXES := {"sedan": Vector3(1.9, 1.5, 4.4), "pickup": Vector3(2.0, 1.
 const WALL_HEIGHT := 6.0
 ## How each kind is solid: "trunk" (a thin cylinder), "box" (its model's box), or not at all (bushes).
 const COLLIDE := {"tree": "trunk", "pine_tree": "trunk", "pine_tree_small": "trunk", "rock": "box",
-		"guardrail": "box", "concrete_barrier": "box", "road_sign": "box"}
+		"guardrail": "box", "concrete_barrier": "box", "road_sign": "box", "farm_fence": "box"}
 ## The props' materials (Codex's tools/art/world_props.py), textured by name like the guns; others keep their colour.
 const PROP_LOOKS := {
 	"Prop Metal": {"texture": "gun_metal", "tile_m": 0.3, "metallic": 0.5, "roughness": 0.55},
@@ -196,6 +196,19 @@ func _add_edge_wall() -> void:
 		cs.position = side[0]
 		body.add_child(cs)
 	add_child(body)
+
+
+## F1: the "Prop ..." materials on one model instance (NodeView's resource nodes), textured like the props here.
+static func texture_props(model: Node3D) -> void:
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			var mat := mi.mesh.surface_get_material(s) as StandardMaterial3D
+			if mat != null and PROP_LOOKS.has(mat.resource_name):
+				var m: Dictionary = PROP_LOOKS[mat.resource_name]
+				mi.set_surface_override_material(s, Shooter._gun_material(mat, String(m["texture"]), float(m["tile_m"]),
+						mat.albedo_color, m))
 
 
 ## M16-style: the season's leaf colours on every countryside tree at once.

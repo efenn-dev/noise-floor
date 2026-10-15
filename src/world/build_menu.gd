@@ -12,6 +12,7 @@ const GOLD := Color(0.95, 0.8, 0.55)
 const GROUPS := [
 	["Base", ["foundation", "wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
 	["Factory", ["belt", "smelter", "press", "rain_collector", "purifier", "planter", "canner", "water_tap"]],
+	["Extractors", ["salvager", "water_pump", "fuel_pump", "sawmill"]],
 	["Power", ["generator", "solar_panel", "power_pole"]],
 	["Defense", ["spikes", "nail_turret", "crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor",
 			"floodlight", "noisemaker", "bear_trap", "tripwire", "electric_fence", "repair_station"]],
@@ -20,6 +21,7 @@ const GROUPS := [
 const GROUP_NOTES := {
 	"Base": "Lay foundations first (key 1): walls, doors and machines stand on them.",
 	"Factory": "Machines stand on a foundation and most need power. E on a machine loads it and takes what it made.",
+	"Extractors": "F1: built on a resource node's yellow spot (no foundation): scrap heaps, farm wells, fuel tankers, timber stands. Loud: an outpost draws zombies.",
 	"Power": "A generator (E loads gas cans) or a solar panel, plus a power pole within reach of what it feeds.",
 	"Defense": "Turrets need ammo (E, a belt or a hopper). Sensors pick an action with E.",
 }
@@ -36,6 +38,10 @@ const BLURBS := {
 	"electric_heater": "Warms the room on power. Silent.",
 	"belt": "Carries items forward at 2 m a second. R turns it.",
 	"smelter": "Scrap metal into metal plates. Loud. Needs power.",
+	"salvager": "Grinds a scrap heap into scrap metal, nonstop. Very loud. Needs power. Build it on a scrap heap's yellow spot.",
+	"water_pump": "Pumps dirty water from a farm well. Needs power. Build it on a well's yellow spot.",
+	"fuel_pump": "Draws gas cans out of a crashed fuel tanker. Needs power. Build it on a tanker's yellow spot.",
+	"sawmill": "A portable bandsaw mill: logs from a timber stand into planks. Loud. Needs power. Build it on a timber stand's yellow spot.",
 	"press": "Plates into nails, wall panels, repair kits or casings (R switches). Needs power.",
 	"rain_collector": "Fills with rainwater over time. Quiet.",
 	"purifier": "Rainwater into clean water. Needs power.",

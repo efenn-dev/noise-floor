@@ -12,7 +12,7 @@
 1. **W3a: the bigger world's groundwork** (done in this PR): the road network (`WorldMap`), the map 720 x 760 m, waves starting out of sight 110-180 m along the roads, the navmesh in 64 m tiles, woods, fields, the highway with wreck jams, the map's edge.
 2. **V35: zombies die facing you** (Emmitt saw every zombie turn its back as it died): a backward fall that keeps facing you, mixed with some falling forward toward you.
 3. **F1-F3: building like Satisfactory.**
-   - **F1 resource nodes:** places in the new world you can only work with machines: scrap piles at a junkyard, the gas station's tank (fuel), a farm well (water), a quarry (stone). Build a salvager/pump/drill on one and belt it home. Loot gets scarcer as the days go on (finite loot is in already), so the factory takes over.
+   - **F1 resource nodes** (done, #80): places in the new world you can only work with machines: scrap piles at a junkyard, the gas station's tank (fuel), a farm well (water), a quarry (stone). Build a salvager/pump/drill on one and belt it home. Loot gets scarcer as the days go on (finite loot is in already), so the factory takes over.
    - **F2 the Hub and milestones:** deliver parts to the Hub to unlock new machines and tiers; the last goal is a radio tower that calls in a rescue.
    - **F3 build feel:** a build tool, belts you drag from point to point, splitters and mergers, machines that snap together, clear input/output.
 4. **W3b downtown** (grocery, hardware store, pharmacy, police station, gas station; the props are made), **W3c more streets of houses**, **W3d the countryside** (farms and barns, the hunting cabin in the woods, highway loot), each with its resource nodes from F1.

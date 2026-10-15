@@ -203,6 +203,11 @@ func repair_cost(key: String, discount: float = 0.0) -> Dictionary:
 	return cost
 
 
+## F1: resource nodes on the map, by cell (SimWorld fills it): Vector2i -> node kind. An extractor (buildables
+## "needs_node") goes only on its kind's cell, and stands on the ground there (no foundation).
+var nodes: Dictionary = {}
+
+
 ## "" if the piece can go here with what's in `inv`, otherwise a short reason for the HUD.
 func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	if not data.buildables.has(id):
@@ -218,7 +223,10 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		var edge := canonical_edge(cell, side)
 		if not _kind(id) in GROUND_EDGES and not _edge_supported(edge[0], edge[1], ""):
 			return "Needs a foundation"
-	if is_object(id) and not _kind(id) in GROUND_OBJECTS and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
+	var needs_node := str(data.buildables[id].get("needs_node", ""))
+	if needs_node != "" and str(nodes.get(cell, "")) != needs_node:
+		return "Build it on a %s (the yellow spot)" % String(data.resources.get("kinds", {}).get(needs_node, {}).get("name", needs_node)).to_lower()
+	if is_object(id) and not _kind(id) in GROUND_OBJECTS and needs_node == "" and not pieces.has("f:%d:%d" % [cell.x, cell.y]):
 		return "Needs a foundation"
 	if not inv.has_all(data.buildables[id]["cost"]):
 		return "Not enough materials"
@@ -346,7 +354,8 @@ func center_for(id: String, cell: Vector2i, side: int) -> Vector3:
 	if _kind(id) == "foundation":
 		return corner + Vector3(GRID / 2.0, size.y / 2.0, GRID / 2.0)
 	if is_object(id):
-		var mid := corner + Vector3(GRID / 2.0, foundation_top() + size.y / 2.0, GRID / 2.0)
+		var floor_y := 0.0 if str(data.buildables[id].get("needs_node", "")) != "" else foundation_top()  # F1: extractors stand on the ground
+		var mid := corner + Vector3(GRID / 2.0, floor_y + size.y / 2.0, GRID / 2.0)
 		if data.buildables[id].get("against_wall", false):  # W1c: back against the wall behind it, not mid-cell
 			var facing := [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][side] as Vector3
 			mid -= facing * (GRID / 2.0 - WALL_HALF - size.z / 2.0 - WALL_GAP)

@@ -47,6 +47,10 @@ const OUTPUT_COLOR := Color(0.95, 0.55, 0.15)
 ## collider unchanged. Pieces not listed stay plain coloured boxes.
 const MODELS := {
 	"press": "res://assets/models/press.glb",
+	"salvager": "res://assets/models/salvager.glb",  # F1: extractors (tools/art/f1_models.py)
+	"water_pump": "res://assets/models/water_pump.glb",
+	"fuel_pump": "res://assets/models/fuel_pump.glb",
+	"sawmill": "res://assets/models/sawmill.glb",
 	"smelter": "res://assets/models/smelter.glb",
 	"rain_collector": "res://assets/models/rain_collector.glb",
 	"purifier": "res://assets/models/purifier.glb",
