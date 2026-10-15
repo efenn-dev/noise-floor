@@ -9,6 +9,7 @@ extends Node3D
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
+##   --blood=off|on        V32: blood sprays and stains off (or on) for this run only (not saved)
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
 ##   --gun=BASE            V30: hold pistol, rifle, shotgun or crossbow (pete is the unique rifle)
 ##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
@@ -155,6 +156,8 @@ func _ready() -> void:
 			push_warning(migration_error)
 	if args.has("graphics"):
 		Settings.graphics = Atmosphere.valid_quality(str(args["graphics"]))  # V1: this run only, not saved
+	if args.has("blood"):
+		Settings.blood = str(args["blood"]) != "off"  # V32: this run only, not saved
 	var save := {}
 	if GameSession.pending_load != "":
 		save = SaveGame.read(GameSession.pending_load)

@@ -378,6 +378,13 @@ func _build_settings(box: VBoxContainer) -> void:
 	bob.add_theme_font_size_override("font_size", 22)
 	bob.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(bob)
+	var blood := CheckBox.new()
+	blood.text = "Blood"
+	blood.name = "BloodCheck"
+	blood.button_pressed = Settings.blood
+	blood.add_theme_font_size_override("font_size", 22)
+	blood.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(blood)
 	_objectives_check = CheckBox.new()
 	_objectives_check.text = "Show objectives"
 	_objectives_check.button_pressed = Settings.show_objectives
@@ -407,6 +414,11 @@ func _build_settings(box: VBoxContainer) -> void:
 		settings_changed.emit())
 	_objectives_check.toggled.connect(func(on: bool) -> void:
 		Settings.show_objectives = on
+		settings_changed.emit())
+	blood.toggled.connect(func(on: bool) -> void:
+		Settings.blood = on
+		if not on:
+			ImpactFx.clear_stains()
 		settings_changed.emit())
 	full.toggled.connect(func(on: bool) -> void:
 		Settings.fullscreen = on
