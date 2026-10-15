@@ -178,9 +178,9 @@ func test_director_road_route_stays_clear() -> void:
 	var lures := [Vector3(0, 0, 0), Vector3(12, 0, -40), Vector3(-12, 0, -80), Vector3(20, 0, -100), Vector3(-30, 0, -20)]
 	var bad: Array = []
 	var points := 0
-	for e: int in [0, 1]:
+	for start: Vector3 in [Vector3(0, 0, -300), Vector3(0, 0, 200), Vector3(262, 0, 0)]:  # W3a: north road, south road, highway
 		for lure: Vector3 in lures:
-			var route: Array = [Director.EDGES[e]] + Director.road_route(Director.EDGE_NAMES[e], lure)
+			var route: Array = WorldMap.route(start, lure)
 			for i in route.size():
 				points += 1
 				var a: Vector3 = route[i]

@@ -27,6 +27,8 @@ V25 screenshot flag: `--objectives` shows the first-night objectives panel midwa
 
 V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
 
+W3a: the map is `WorldMap` (roads, exits, areas; 720 x 760 m), the countryside `CountryPlan`/`CountryView`, new roads `RoadView`; the navmesh is tiled (`NavBaker`, 64 m tiles; tests `await nav.wait_synced()` after a bake). Screenshot flag `--at=market|south|highway|woods|farms|west` stands you at a named spot (`main.gd` `AT_PLACES`); e.g. `tools/shot.sh hw --at=highway --time=12`. `tools/test.sh "a|b"` runs the files matching either name.
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

@@ -2,6 +2,22 @@
 
 *Written 2026-10-12 by Claude Fable 5.1 at Emmitt's request, after reading the design doc, the devlog, the sim code and the first fifteen pull requests. This file outranks the milestone list in `GAME_DESIGN.md`: when they disagree, follow this one. Update it when a decision below changes.*
 
+## Update, 2026-10-15: a much bigger world, then Satisfactory-style building (Emmitt's calls)
+
+*Written by Claude Opus 5.5 at Emmitt's request. He said: "I like the game a lot but it needs a much bigger world. Then we can start working on in-depth mechanics and building", picked **town + countryside** (about 15-20x the old map) over "bigger town only" and "several towns", and later: "I'd like the building to be more like Satisfactory but it doesn't feel like it fits into the game right now." Sprint 4's feature freeze is over by his call.*
+
+**Why building doesn't fit today:** nothing in the survival loop needs a factory. Loot gives you everything, and a machine only makes noise that brings zombies, so building is all risk and no reward (the session logs: 0-1 builds per session). The fix is to make the factory the answer to survival, the Satisfactory way, with Noise Floor's own twist: the bigger the factory, the louder it is and the bigger the hordes, so it has to make the ammo, turrets and walls that defend it.
+
+**Order of work:**
+1. **W3a: the bigger world's groundwork** (done in this PR): the road network (`WorldMap`), the map 720 x 760 m, waves starting out of sight 110-180 m along the roads, the navmesh in 64 m tiles, woods, fields, the highway with wreck jams, the map's edge.
+2. **V35: zombies die facing you** (Emmitt saw every zombie turn its back as it died): a backward fall that keeps facing you, mixed with some falling forward toward you.
+3. **F1-F3: building like Satisfactory.**
+   - **F1 resource nodes:** places in the new world you can only work with machines: scrap piles at a junkyard, the gas station's tank (fuel), a farm well (water), a quarry (stone). Build a salvager/pump/drill on one and belt it home. Loot gets scarcer as the days go on (finite loot is in already), so the factory takes over.
+   - **F2 the Hub and milestones:** deliver parts to the Hub to unlock new machines and tiers; the last goal is a radio tower that calls in a rescue.
+   - **F3 build feel:** a build tool, belts you drag from point to point, splitters and mergers, machines that snap together, clear input/output.
+4. **W3b downtown** (grocery, hardware store, pharmacy, police station, gas station; the props are made), **W3c more streets of houses**, **W3d the countryside** (farms and barns, the hunting cabin in the woods, highway loot), each with its resource nodes from F1.
+5. **W3e population and balance:** zombies and loot per area, far zombies thinking less often, and a map (an item or a screen) so the bigger world is easy to find your way round.
+
 ## Update, night of 2026-10-13: Sprint 4, "The first 30 minutes" (Emmitt's call)
 
 *Written by Claude Opus 5.5 at Emmitt's request. He asked how to make Noise Floor feel like a AAA game, then said: stay free for now, write the sprint into direction, and start it.*

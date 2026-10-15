@@ -278,7 +278,7 @@ func step() -> void:
 		add_message("%s from the %s..." % [what, wave["edge"]])
 		var label: String = {"wanderers": "Wanderers", "group": "A group", "horde": "A horde"}[wave["kind"]]
 		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
-				Director.EDGES[Director.EDGE_NAMES.find(wave["edge"])])
+				wave.get("start", player_pos))
 	_radio()
 	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
 	for m: Dictionary in messages:

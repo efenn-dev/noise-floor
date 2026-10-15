@@ -6,6 +6,7 @@ extends Node3D
 ##   --time=HOURS          start at this hour, e.g. --time=22 for night
 ##   --day=N               start on day N (M16: days 1-7 summer, 8-14 autumn, 15-21 winter, 22-28 spring)
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
+##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
@@ -50,11 +51,19 @@ const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
 const DEFAULT_ZOMBIES := 8
 const STASH_CELL := Vector2i(1, 3)  # just east of the spawn point
-## The area the zombie navmesh covers: the street and a margin around it.
-## M17a: north to the industrial park's north fence and the Director's north road end (z -275).
-const NAV_BOUNDS := AABB(Vector3(-45, -1, -275), Vector3(90, 8, 315))
-const GROUND_SIZE := Vector2(400, 640)  # M17a: x -200..200, z -440..200 (centred at GROUND_Z)
-const GROUND_Z := -120.0
+## The area the zombie navmesh covers. W3a: the whole bigger map (WorldMap.EXTENT), in NavBaker tiles.
+const NAV_BOUNDS := AABB(Vector3(-360, -1, -460), Vector3(720, 8, 760))
+const GROUND_SIZE := Vector2(840, 880)  # W3a: x -420..420, z -520..360 (centred at GROUND_Z), past the map's edge
+const GROUND_Z := -80.0
+## W3a: --at=PLACE spots: [feet position, yaw, pitch] (yaw 0 = north, +90 = west).
+const AT_PLACES := {
+	"market": [Vector3(4, 0, 66), -70.0, 0.0],        # Market Street, looking east toward downtown
+	"south": [Vector3(3, 0, 130), 0.0, 0.0],          # the south road, looking back north at the town
+	"highway": [Vector3(262, 0, 120), 0.0, 0.0],      # on the highway looking north at a jam
+	"woods": [Vector3(-120, 0, -192), 60.0, 0.0],     # on the woods track, looking north-west into the trees
+	"farms": [Vector3(-170, 0, 100), 0.0, 0.0],       # the farm lane by the county road
+	"west": [Vector3(-60, 0, 0), 0.0, 0.0],           # West Street, looking north
+}
 
 var sim: SimWorld
 var player: Player
@@ -75,6 +84,9 @@ var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
 var park: Dictionary = {}  # M17a: ParkPlan.generate(seed): warehouses, crates, zombies, wrecks, fences, the tower
 var park_view: ParkView
+var road_view: RoadView  # W3a: the bigger map's new roads
+var country_view: CountryView  # W3a: woods, field trees, highway wrecks, the map's edge
+var country: Dictionary = {}
 var park_pieces := 0  # M17a: warehouse pieces the park plan laid this run (0 when the save holds them)
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
 var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
@@ -187,6 +199,7 @@ func _ready() -> void:
 	# W1c: a new game lays the furniture with the town; a pre-W1c save gets it after the save is applied.
 	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)), not _loaded)
 	_build_park(not (_loaded and SaveGame.holds_park(save)))  # M17a: a pre-park save gets the park laid fresh
+	_build_country()  # W3a: the bigger map round the town (nothing in it is saved: the same land every game)
 	_build_player(args)
 	_build_building(args)
 	_build_zombies(args)
@@ -606,6 +619,8 @@ func apply_season(season: String) -> void:
 		town_view.apply_season(season)
 	if park_view != null:
 		park_view.apply_season(season)
+	if country_view != null:
+		country_view.apply_season(season)
 
 
 ## Q2: 1 while the camera is under a roof (TownView knows the house cells and the factory hall), else 0.
@@ -1156,6 +1171,18 @@ func _build_town(lay_houses: bool = true, lay_factory: bool = true, lay_props: b
 	street_view.setup(sim, street)
 
 
+## W3a (Emmitt: "it needs a much bigger world"): the roads out of town (WorldMap) and the countryside round it.
+func _build_country() -> void:
+	road_view = RoadView.new()
+	road_view.name = "RoadView"
+	add_child(road_view)
+	country = CountryPlan.generate(sim.seed_value)
+	country_view = CountryView.new()
+	country_view.name = "CountryView"
+	add_child(country_view)
+	country_view.setup(country)
+
+
 ## M17a: the industrial park north of the factory hall (ParkPlan): the park road's asphalt, the warehouses
 ## (pieces laid unless the save holds them), their crates, the wrecks on the road (CarBodies), the wire fence
 ## and the water tower (ParkView), and the tower's project site.
@@ -1218,6 +1245,10 @@ func _build_player(args: Dictionary) -> void:
 			v.append(0.0)
 		player.position = Vector3(v[0], v[1], v[2])
 		player.set_look(v[3], v[4])
+	if args.has("at") and AT_PLACES.has(str(args["at"])):  # W3a: a named spot on the bigger map, for screenshots
+		var at: Array = AT_PLACES[str(args["at"])]
+		player.position = at[0]
+		player.set_look(at[1], at[2])
 	if args.has("park"):  # M17a: at the park's south entrance, outside the hall's north doorway, looking north
 		player.position = ParkPlan.ENTRANCE
 		player.set_look(0.0, 0.0)
@@ -1388,16 +1419,17 @@ func _place_demo_base() -> void:
 func _build_zombies(args: Dictionary) -> void:
 	nav = NavBaker.new()
 	add_child(nav)
-	nav.setup(self, NAV_BOUNDS)
+	nav.setup(self, NAV_BOUNDS, build_view)  # W3a: tiles; the pieces re-read on their own
 	var t0 := Time.get_ticks_usec()
-	nav.bake_now()
+	nav.bake_near(player.global_position)  # where you are now; the rest of the map bakes in the background
 	first_bake_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	if DisplayServer.get_name() != "headless":
 		print("Town: %d town pieces laid (houses and factory), %d park pieces, first navmesh bake %.0f ms" % [town_pieces,
 				park_pieces, first_bake_ms])
-	sim.build.piece_added.connect(func(_k: String) -> void: nav.request_rebake())
-	sim.build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: nav.request_rebake())
-	sim.build.piece_changed.connect(func(_k: String) -> void: nav.request_rebake())  # doors
+	sim.build.piece_added.connect(func(k: String) -> void: nav.request_rebake(sim.build.piece_center(k)))
+	sim.build.piece_removed.connect(func(_k: String, p: Dictionary) -> void:
+		nav.request_rebake(sim.build.center_for(p["id"], p["cell"], p.get("side", BuildGrid.Side.NORTH))))
+	sim.build.piece_changed.connect(func(k: String) -> void: nav.request_rebake(sim.build.piece_center(k)))  # doors
 	if not _loaded:
 		var street_count := int(args["zombies"]) if args.has("zombies") \
 				else sim.difficulty.count("zombie_count", DEFAULT_ZOMBIES)
@@ -1856,7 +1888,7 @@ func _exit_car() -> void:
 	player.velocity = Vector3.ZERO
 	_set_walker(true)
 	player.camera.current = true
-	nav.request_rebake()  # zombies walk round the parked car
+	nav.request_rebake(Vector3(at.x, 0, at.z))  # zombies walk round the parked car
 
 
 func _set_walker(on: bool) -> void:

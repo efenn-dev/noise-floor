@@ -2,6 +2,27 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — W3a The bigger world: roads, countryside and a tiled navmesh
+
+Emmitt: "it needs a much bigger world" (town + countryside). Props by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
+
+**Built:**
+- **The map is 720 x 760 m** (`WorldMap.EXTENT`), about 28x the old street. Main Street, the factory hall and the park keep their places, so saves load as before; nothing new is saved (the same land every game).
+- **A road network** (`WorldMap.ROADS`): Main Street runs on south to Market Street (downtown, next), West and East Street (more houses, next), County Road West and a farm lane, a dirt track from West Street into the woods, the north road past the park, and a 4-lane highway down the east side. `RoadView` draws them (asphalt with centre dashes, dirt, the highway with lanes, edge lines and guardrails).
+- **Zombie waves use the roads:** a group or horde starts on a road 110-180 m along the roads from the noise (and at least 70 m away in a straight line, so never on the next street over), out of sight, and walks `WorldMap.route()` to it; the message names the compass way ("A horde is coming from the south-east..."). Wanderers start 70-120 m out.
+- **The countryside** (`CountryPlan`, `CountryView`): pine woods in the north-west, leafy and pine trees over the fields, rocks and bushes, a forest belt and concrete barriers where the world ends (an invisible wall behind them), and jams of rusted wrecks on the highway. Trees and props are drawn from one MultiMesh per kind; trunks, rocks, guardrails and barriers are solid. Leaves follow the seasons.
+- **The navmesh is tiled** (`NavBaker`): 64 m tiles, each its own region (baked with a border so tiles meet exactly, even through a wall on a seam). The fixed scenery is read once; building something re-bakes only the tiles round it, one at a time in the background. Startup bakes where you are (~0.5 s) and the rest of the map in the background.
+- **22 new props by Codex** (`tools/art/world_props.py`, contact sheet `tools/art/world_props_contact.jpg`): pines, bushes, rocks, guardrails, barriers and road signs are used now; the shop shelves, checkout, pharmacy counter, police desk, gun locker, gas pump, dumpster, bench, hay bales, corn, farm fence, tractor and water trough are for downtown and the farms.
+- Screenshot flag `--at=market|south|highway|woods|farms|west`. `tools/test.sh "a|b"` runs the files matching either.
+
+**Try it:** `play.bat`, then walk or drive south past the end of Main Street, or `play.bat --at=highway`.
+
+**Tests:** 13,697 green (new `test_world_map.gd`; the road-horde, park and street-plan route tests rewritten for the network; navmesh tests now wait for the map to sync in real time). Soak 1 day: SOAK OK.
+
+**Known gaps:** the new areas are open land for now (downtown, the new streets and the farms come next); memory is about 455 MB (was 270) and the worst physics frame about 7 ms (was 3); the tree belt hides the map's edge but the barriers don't say why; wrecks on the highway can't be searched yet.
+
+**Next:** V35 (deaths facing you), then F1-F3 (building like Satisfactory), then W3b-d. See the top of `docs/DIRECTION.md`.
+
 ## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
 
 The check DIRECTION.md asks for before a playtest, on `main` at #73 (attachments, guidance, save slots, crawler and brute, difficulty and the first night, new weapons, the arm fix all merged), by Claude Opus 5.5 on the PC. Also read the newest session logs (45 minutes on 10-14: 11 perk points earned and none spent, two gold pieces found but a white pipe worn, nothing built, no deaths; V25 and V29 were aimed at exactly that).

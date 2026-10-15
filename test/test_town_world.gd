@@ -41,6 +41,7 @@ func _bake() -> void:
 	var z := _door_mid().z
 	nav.setup(_scene, AABB(Vector3(-4, -1, z - 14), Vector3(26, 6, 28)))
 	nav.bake_now()
+	await nav.wait_synced()  # W3a: the map syncs on a worker thread
 
 
 func _teardown() -> void:
@@ -98,7 +99,7 @@ func test_closed_door_stops_you() -> void:
 func test_zombie_follows_you_in_through_the_open_door() -> void:
 	_setup()
 	sim.toggle_door(_door_key())
-	_bake()
+	await _bake()
 	var mid := _door_mid()
 	player.position = mid + Vector3(1.6, 0, 0)  # in the front room, at the far side
 	var z := sim.horde.spawn("shambler", Vector3(3.0, 0, mid.z - 7.0))  # up the street a way
@@ -115,7 +116,7 @@ func test_zombie_follows_you_in_through_the_open_door() -> void:
 
 func test_zombie_breaks_a_closed_front_door() -> void:
 	_setup()
-	_bake()
+	await _bake()
 	var mid := _door_mid()
 	player.position = mid + Vector3(1.6, 0, 0)
 	var z := sim.horde.spawn("shambler", mid + Vector3(-3.0, -0.1, 0))  # on the lawn, by the door

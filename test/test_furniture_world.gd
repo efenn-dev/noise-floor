@@ -87,6 +87,7 @@ func test_zombie_reaches_you_in_a_furnished_kitchen() -> void:
 	_scene.add_child(nav)
 	nav.setup(_scene, AABB(Vector3(-4, -1, door.z - 14), Vector3(26, 6, 28)))
 	nav.bake_now()
+	await nav.wait_synced()  # W3a: the map syncs on a worker thread
 	player.position = _counter_mid() + _facing() * 1.0  # at the sink
 	var z := sim.horde.spawn("shambler", Vector3(3.0, 0, door.z - 6.0))  # up the street a way
 	z.take_hit(0, player.position, 0)  # it knows where you are
