@@ -14,6 +14,7 @@ var _root: Control
 var _skill_rows: Dictionary = {}  # skill -> {"label": Label, "bar": ProgressBar}
 var _perk_rows: Dictionary = {}   # perk -> {"label": Label, "button": Button}
 var _points_label: Label
+var _points_panel: PanelContainer
 var _skills_scroll: ScrollContainer
 var _tree_scrolls: Dictionary = {}  # tree -> ScrollContainer
 
@@ -104,7 +105,11 @@ func refresh() -> void:
 	var every := int(sim.data.skills["levels_per_perk_point"])
 	_points_label.text = "Perk points: %d    (one for every %d skill levels; %d levels so far)" % [sk.perk_points, every,
 			sk.total_levels()]
+	if sk.perk_points > 0:
+		_points_label.text = "%d UNSPENT PERK POINT%s — click +1 below" % [sk.perk_points, "" if sk.perk_points == 1 else "S"]
 	_points_label.add_theme_color_override("font_color", GOLD if sk.perk_points > 0 else Color(0.9, 0.9, 0.85))
+	_points_label.add_theme_font_size_override("font_size", 22 if sk.perk_points > 0 else 18)
+	_points_panel.modulate = Color.WHITE if sk.perk_points > 0 else Color(1, 1, 1, 0.55)
 	for p: String in _perk_rows:
 		var row: Dictionary = _perk_rows[p]
 		(row["label"] as Label).text = "%s %d/%d" % [sk.perk_name(p), sk.rank(p), sk.max_rank()]
@@ -175,9 +180,21 @@ func _build() -> void:
 	right.add_theme_constant_override("separation", 6)
 	sides.add_child(right)
 	right.add_child(_title("Perks"))
+	_points_panel = PanelContainer.new()
+	var points_style := StyleBoxFlat.new()
+	points_style.bg_color = Color(0.16, 0.12, 0.035, 0.92)
+	points_style.border_color = GOLD
+	points_style.set_border_width_all(2)
+	points_style.set_corner_radius_all(5)
+	points_style.content_margin_left = 10
+	points_style.content_margin_right = 10
+	points_style.content_margin_top = 6
+	points_style.content_margin_bottom = 6
+	_points_panel.add_theme_stylebox_override("panel", points_style)
 	_points_label = Label.new()
 	_points_label.add_theme_font_size_override("font_size", 18)
-	right.add_child(_points_label)
+	_points_panel.add_child(_points_label)
+	right.add_child(_points_panel)
 	var tree_row := HBoxContainer.new()
 	tree_row.add_theme_constant_override("separation", TREE_GAP)
 	right.add_child(tree_row)

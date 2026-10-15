@@ -14,18 +14,20 @@ const NEVER_BREAK_IDS := ["water_tap"]
 
 var data: GameData
 var seed_value: int
+var difficulty: Difficulty
 var zombies: Dictionary = {}  # id -> ZombieBrain
 var _next_id := 1
 var _ticks := 0
 
 
-func _init(p_data: GameData, p_seed: int = 1) -> void:
+func _init(p_data: GameData, p_seed: int = 1, p_difficulty: Difficulty = null) -> void:
 	data = p_data
 	seed_value = p_seed
+	difficulty = p_difficulty
 
 
 func spawn(type: String, pos: Vector3) -> ZombieBrain:
-	var z := ZombieBrain.new(_next_id, type, data.zombies[type], pos, hash([seed_value, _next_id]))
+	var z := ZombieBrain.new(_next_id, type, data.zombies[type], pos, hash([seed_value, _next_id]), difficulty)
 	zombies[_next_id] = z
 	_next_id += 1
 	return z
@@ -33,20 +35,32 @@ func spawn(type: String, pos: Vector3) -> ZombieBrain:
 
 ## Brings back a saved zombie with its old id.
 func restore(id: int, type: String, pos: Vector3) -> ZombieBrain:
-	var z := ZombieBrain.new(id, type, data.zombies[type], pos, hash([seed_value, id]))
+	var z := ZombieBrain.new(id, type, data.zombies[type], pos, hash([seed_value, id]), difficulty)
 	zombies[id] = z
 	_next_id = maxi(_next_id, id + 1)
 	return z
 
 
-## Scatters `count` shamblers along the sidewalks of the main street, away from the spawn point.
+## Scatters `count` starting zombies along the sidewalks, away from the spawn point. V28: the Director's
+## data table gives crawlers a small day-one share; the same deterministic id always rolls the same kind.
 func spawn_town(count: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	for i in count:
 		var side := -1.0 if rng.randf() < 0.5 else 1.0
 		var pos := Vector3(side * rng.randf_range(4.5, 6.5), 0.0, rng.randf_range(-110.0, -25.0))
-		spawn("shambler", pos)
+		spawn_starting(pos, false)
+
+
+## V28: rolls a type from noise.json's starting spawn table. Houses use the larger indoor chance.
+func spawn_starting(pos: Vector3, indoors: bool) -> ZombieBrain:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, _next_id, "starting_zombie", indoors])
+	for entry: Dictionary in data.noise["infamy"].get("starting", []):
+		var key := "indoor_chance" if indoors else "street_chance"
+		if rng.randf() < float(entry.get(key, entry.get("chance", 0.0))):
+			return spawn(str(entry["type"]), pos)
+	return spawn("shambler", pos)
 
 
 func alive_count() -> int:
@@ -68,14 +82,16 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 	ids.sort()
 	for id: int in ids:
 		var z: ZombieBrain = zombies[id]
+		z.night = bool(ctx["night"])
 		if noise != null and not z.is_dead() and (_ticks + id) % listen_every == 0:
 			var heard := noise.loudest_heard(z.pos, z.hearing(ctx["night"]))
 			if not heard.is_empty():  # Q4: a sound from something it may not break is walked to, not wrecked
 				z.hear(heard["pos"], heard["key"] if breakable(ctx["pieces"], heard["key"]) else "")
-		var eye := z.pos + Vector3.UP * ZombieBrain.EYE_HEIGHT
+		var eye := z.pos + Vector3.UP * z.eye_height()
 		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, ctx["player_pos"], z.los_clear,
 				ctx["night"], ctx["player_lit"], z.stats)
-		if _spared(ctx["pieces"], z.blocked_by) or (z.state == ZombieBrain.State.BREAK and _spared(ctx["pieces"], z.break_key)):
+		if _spared_for(z, ctx["pieces"], z.blocked_by) \
+				or (z.state == ZombieBrain.State.BREAK and _spared_for(z, ctx["pieces"], z.break_key)):
 			z.leave_furniture()  # M16, Q4: zombies only break what's on BREAKABLE_KINDS
 		for e: Dictionary in z.think(dt, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
 			e["zombie"] = id
@@ -98,6 +114,14 @@ func breakable(pieces: Dictionary, key: String) -> bool:
 	return data.buildables[id]["kind"] in BREAKABLE_KINDS
 
 
+## V28: a crawler treats a door like furniture: it paths around it and never starts bashing it.
+func breakable_for(z: ZombieBrain, pieces: Dictionary, key: String) -> bool:
+	if not breakable(pieces, key):
+		return false
+	var id: String = pieces[key].get("id", "")
+	return data.buildables[id]["kind"] != "door" or float(z.stats.get("door_break_multiplier", 1.0)) > 0.0
+
+
 ## A piece it bumped (or is breaking) that it must leave alone (M16 furniture; Q4 everything not breakable).
-func _spared(pieces: Dictionary, key: String) -> bool:
-	return key != "" and pieces.has(key) and not breakable(pieces, key)
+func _spared_for(z: ZombieBrain, pieces: Dictionary, key: String) -> bool:
+	return key != "" and pieces.has(key) and not breakable_for(z, pieces, key)

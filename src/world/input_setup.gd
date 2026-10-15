@@ -39,6 +39,8 @@ const KEYS := {
 	"upgrade": [KEY_U],
 	"noise_overlay": [KEY_N],
 	"skills": [KEY_K],  # the skills and perks screen (M12)
+	"quick_equip": [KEY_Y],  # V25: wear the most recently looted upgrade without opening Tab
+	"objectives": [KEY_O],  # V25: show or hide the first-night objectives
 	"base_log": [KEY_L],  # M15: the base log screen
 	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
 	"inspect": [KEY_V],  # V13: turn the held gun or melee weapon over in your hands

@@ -90,5 +90,16 @@ func status_text() -> String:
 	if not visible:
 		return ""
 	var d := sim.director
-	return "NOISE  heat %d (%s)  ·  +%.1f/s from machines, -%.2f/s cooling  ·  N hides" % [
-		roundi(d.heat), d.level_name(), d.gain, float(d.cfg["decay"])]
+	# V28: the debug HUD names every live type as well as drawing its state marker.
+	var counts := {}
+	for brain: ZombieBrain in sim.horde.zombies.values():
+		if not brain.is_dead():
+			counts[brain.type] = int(counts.get(brain.type, 0)) + 1
+	var names := counts.keys()
+	names.sort()
+	var types := PackedStringArray()
+	for type: String in names:
+		types.append("%s %d" % [sim.data.zombies[type]["name"], counts[type]])
+	var alive := "none" if types.is_empty() else ", ".join(types)
+	return "NOISE  heat %d (%s)  ·  +%.1f/s from machines, -%.2f/s cooling  ·  alive: %s  ·  N hides" % [
+		roundi(d.heat), d.level_name(), d.gain, float(d.cfg["decay"]), alive]

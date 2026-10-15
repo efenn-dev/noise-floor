@@ -64,7 +64,8 @@ var _shots: Array = []  # turret shots already played (by reference)
 var _scares: Array = []  # S4: jumpscare stings already played (by reference)
 var scares_played := 0  # for tests
 ## S4: the stings, not positional: they're in your head, not in the world.
-const STINGS := {"close": ["sting_close", -3.0], "horde": ["sting_horde", -1.0]}
+const STINGS := {"close": ["sting_close", -3.0], "horde": ["sting_horde", -1.0],
+		"night": ["sting_horde", -4.0]}
 var _wind_day: AudioStreamPlayer
 var _wind_night: AudioStreamPlayer
 var _step := 0

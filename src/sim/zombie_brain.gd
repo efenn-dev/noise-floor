@@ -41,6 +41,7 @@ const MACHINE_REACH := 2.2  # close enough to a noisy machine to start wrecking 
 var id: int
 var type: String
 var stats: Dictionary
+var difficulty: Difficulty
 var hp: float
 var state: int = State.IDLE
 var home: Vector3
@@ -81,6 +82,8 @@ var blocked_by := ""       # piece key it is walking into, "" if none
 var knockback := Vector3.ZERO
 ## Set each tick by traps it stands on (1 = full speed).
 var slow := 1.0
+## V29: written by Horde each tick. Night movement and hearing use the shared Difficulty rule.
+var night := false
 
 var _cooldown := 0.0
 var _timer := 0.0
@@ -90,11 +93,13 @@ var _rng := RandomNumberGenerator.new()
 var _leg_time := INVESTIGATE_TIME  # each leg of a route gets this long before it gives up
 
 
-func _init(p_id: int, p_type: String, p_stats: Dictionary, p_pos: Vector3, seed_value: int) -> void:
+func _init(p_id: int, p_type: String, p_stats: Dictionary, p_pos: Vector3, seed_value: int,
+		p_difficulty: Difficulty = null) -> void:
 	id = p_id
 	type = p_type
 	stats = p_stats
-	hp = float(stats["hp"])
+	difficulty = p_difficulty
+	hp = max_hp()
 	pos = p_pos
 	home = p_pos
 	target_pos = p_pos
@@ -110,18 +115,40 @@ func is_dead() -> bool:
 	return state == State.DEAD
 
 
+## V28: crawlers see from near the floor and brutes from above an ordinary zombie's head.
+func eye_height() -> float:
+	return float(stats.get("eye_height", EYE_HEIGHT))
+
+
 ## How fast the body should walk right now (m/s). 0 = stand still.
 func move_speed() -> float:
 	if screaming > 0.0 or pinned > 0.0 or stunned > 0.0:
 		return 0.0
 	match state:
 		State.WANDER:
-			return float(stats["wander_speed"]) * slow
+			return _night_speed(float(stats["wander_speed"])) * slow
 		State.CHASE:
-			return float(stats["chase_speed"]) * slow
+			return _night_speed(float(stats["chase_speed"])) * slow
 		State.INVESTIGATE:
-			return float(stats["investigate_speed"]) * slow
+			return _night_speed(float(stats["investigate_speed"])) * slow
 	return 0.0
+
+
+func max_hp() -> float:
+	return difficulty.scale("zombie_health", float(stats["hp"])) if difficulty != null else float(stats["hp"])
+
+
+func attack_damage() -> float:
+	return difficulty.scale("zombie_damage", float(stats["damage"])) if difficulty != null else float(stats["damage"])
+
+
+func structure_damage() -> float:
+	return difficulty.scale("zombie_damage", float(stats["structure_damage"])) \
+			if difficulty != null else float(stats["structure_damage"])
+
+
+func _night_speed(base: float) -> float:
+	return difficulty.move_speed(base, night) if difficulty != null else base
 
 
 ## Damage that doesn't come from anyone (traps): hurts, but doesn't tell it where you are.
@@ -139,7 +166,21 @@ func hurt(damage: float) -> bool:
 
 ## Hearing threshold: heard level must reach this for it to notice a sound.
 func hearing(night: bool) -> float:
-	return float(stats["hearing_night"] if night else stats["hearing_day"])
+	return difficulty.hearing(stats, night) if difficulty != null \
+			else float(stats["hearing_night"] if night else stats["hearing_day"])
+
+
+## V29: an exposed first-night wave knows the player's location and actively hunts it.
+func hunt(at: Vector3) -> void:
+	if state == State.DEAD:
+		return
+	state = State.CHASE
+	last_seen = at
+	target_pos = at
+	blocked_by = ""
+	route = []
+	_lost = 0.0
+	_unseen = 0.0
 
 
 ## Heard a sound at `at` (`key` = the machine making it, if any). Only idle, wandering or already
@@ -422,7 +463,8 @@ func take_hit(damage: float, from: Vector3, push: float) -> bool:
 		return false
 	hp -= damage
 	var away := Vector3(pos.x - from.x, 0.0, pos.z - from.z)
-	knockback = away.normalized() * push if away.length_squared() > 1e-6 else Vector3.ZERO
+	var shove := push * float(stats.get("knockback_factor", 1.0))
+	knockback = away.normalized() * shove if away.length_squared() > 1e-6 else Vector3.ZERO
 	if hp <= 0.0:
 		hp = 0.0
 		state = State.DEAD

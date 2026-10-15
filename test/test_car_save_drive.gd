@@ -2,19 +2,20 @@ extends "res://test/base_test.gd"
 ## Fix (2026-10-13): Emmitt's car went NaN in the engine's vehicle maths right after he got in (his save, the
 ## V3 build). Every car with gas: get in from where a player stands (beside the door, the walker left
 ## there), then drive hard with steering for a few seconds through the real town, and check the car and
-## every zombie stay finite. Uses a copy of the player's save when one exists, else a new game.
+## every zombie stay finite. Uses a committed save fixture and never reads or copies a player's save.
 
 const MAIN := "res://scenes/main.tscn"
 const COPY := "user://test_car_save_drive.json"
 
 
-func test_drive_every_car_from_a_real_save() -> void:
+func test_drive_every_car_from_a_save_fixture() -> void:
 	GameSession.skip_menu = true
 	GameSession.skip_hints = true
-	var had_save := FileAccess.file_exists(GameSession.SAVE_PATH)
-	if had_save:
-		DirAccess.copy_absolute(ProjectSettings.globalize_path(GameSession.SAVE_PATH), ProjectSettings.globalize_path(COPY))
-		GameSession.pending_load = COPY
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(COPY))
+	var copy_error := DirAccess.copy_absolute(ProjectSettings.globalize_path("res://test/fixtures/save_v17.json"),
+			ProjectSettings.globalize_path(COPY))
+	eq(copy_error, OK, "staged the committed save fixture")
+	GameSession.pending_load = COPY
 	var keep_path := GameSession.save_path
 	GameSession.save_path = COPY  # anything saved goes to the copy, never the player's file
 	var main: Node3D = load(MAIN).instantiate()
@@ -59,4 +60,6 @@ func test_drive_every_car_from_a_real_save() -> void:
 	main.free()
 	GameSession.pending_load = ""
 	GameSession.save_path = keep_path
+	GameSession.skip_menu = false
+	GameSession.skip_hints = false
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(COPY))
