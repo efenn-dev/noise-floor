@@ -92,6 +92,46 @@ func test_aim_place_and_remove() -> void:
 	await _teardown()
 
 
+## F3: hold the button at one cell, walk along, let go: a row.
+func test_drag_lays_a_row() -> void:
+	await _setup()
+	await _frames(5)
+	player.set_look(0, -30)  # aims at cell (0, 2), as above
+	await _frames(2)
+	builder.start_drag()
+	check(builder.dragging, "the drag starts")
+	player.position.x += 6.0  # three cells east
+	await _frames(3)
+	eq(builder.aim_cell, Vector2i(3, 2), "now aiming three cells east")
+	builder.finish_drag()
+	for x in 4:
+		check(sim.build.pieces.has("f:%d:2" % x), "foundation %d of the row" % x)
+	check(builder.last_message.begins_with("Built 4"), "says how many (%s)" % builder.last_message)
+	builder.select_id("belt")
+	await _frames(2)
+	builder.start_drag()
+	player.position.x -= 6.0
+	await _frames(3)
+	builder.finish_drag()
+	for x in 4:
+		var belt: Dictionary = sim.build.pieces.get("o:%d:2" % x, {})
+		eq(int(belt.get("side", -1)), BuildGrid.Side.WEST, "belt %d faces the way you dragged" % x)
+	check(sim.factory.belts.size() == 4, "the factory runs all four")
+	await _teardown()
+
+
+## F3: a belt run across a field doesn't fence you in: you step over it.
+func test_player_steps_over_a_belt_on_the_ground() -> void:
+	await _setup()
+	for x in range(-3, 4):
+		eq(sim.build.place("belt", Vector2i(x, 1), BuildGrid.Side.EAST, sim.inventory), "", "a ground belt (%d)" % x)
+	await _frames(10)
+	player.wish_move = Vector2(0, 1)  # north, across the belt line at z 2..4
+	await _frames(150)
+	check(player.position.z < 1.5, "walked over the belts (z = %.2f)" % player.position.z)
+	await _teardown()
+
+
 func test_obstacles_block_but_own_pieces_dont() -> void:
 	await _setup()
 	_add_box(Vector3(5, 1, 1), Vector3(2, 2, 2))  # a crate filling cell (2, 0)

@@ -9,6 +9,8 @@ extends Node3D
 ##   --hub[=N]             F2: a Hub built a few metres ahead (N milestones already done) with its screen open
 ##   --mast                F2: a radio mast built ahead (the final milestone done); after 18:00 it starts broadcasting
 ##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
+##   --demo-logistics      F3: a loaded belt line on bare ground ahead, through a splitter into three crates
+##   --zoop=N              F3: with --build, hold a drag preview: a run of N pieces ending where you aim
 ##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
@@ -1447,9 +1449,39 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_defense()
 	if args.has("demo-stove"):
 		_place_demo_stove()
+	if args.has("demo-logistics"):
+		_place_demo_logistics()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select_id(args["build"])
+		if args.has("zoop"):  # F3: a drag in progress, for screenshots
+			var ahead := player.global_position - player.global_basis.z * 3.5
+			var right := player.global_basis.x
+			builder.dragging = true
+			builder.drag_from = BuildGrid.world_to_cell(ahead - right * BuildGrid.GRID * (maxi(2, int(str(args["zoop"]))) - 1))
+			builder.drag_side = BuildGrid.Side.NORTH
+
+
+## F3 --demo-logistics: four belts on bare ground running north from 4 m ahead, loaded with nails, into a
+## splitter that feeds a crate (on its foundation) ahead, left and right. Built from a stock, not your pockets.
+func _place_demo_logistics() -> void:
+	var stock := Inventory.new()
+	stock.give_all({"plank": 200, "scrap_metal": 200, "nails": 200, "metal_plate": 200})
+	var c0 := BuildGrid.world_to_cell(player.global_position) + Vector2i(0, -2)
+	var n := BuildGrid.Side.NORTH
+	for i in 4:
+		sim.build.place("belt", c0 + Vector2i(0, -i), n, stock)
+		var belt: Factory.Belt = sim.factory.belts.get(c0 + Vector2i(0, -i))
+		if belt != null:
+			for k in 4:
+				belt.items.append({"item": "nails", "pos": 0.75 - 0.25 * k, "prev": 0.75 - 0.25 * k})
+	var at := c0 + Vector2i(0, -4)
+	sim.build.place("splitter", at, n, stock)
+	for out: Array in [[Vector2i(0, -1), n], [Vector2i(-1, 0), BuildGrid.Side.WEST], [Vector2i(1, 0), BuildGrid.Side.EAST]]:
+		var d: Vector2i = out[0]
+		sim.build.place("belt", at + d, out[1], stock)
+		sim.build.place("foundation", at + d * 2, n, stock)
+		sim.build.place("storage", at + d * 2, n, stock)
 
 
 ## M16 --demo-stove: a stove loaded with 10 planks (burning) in the free floor cell of the house you stand in
@@ -1842,7 +1874,7 @@ func key_hint_text() -> String:
 	elif driving != null:
 		parts.append_array(["WASD drive", "Space handbrake", "E get out", "H horn", "F lights"])
 	elif builder.active:
-		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
+		parts.append_array(["1-0 hotbar", "R rotate", "LMB place (drag: a row)", "RMB remove", "B menu", "Esc stop", "wheel next"])
 	elif placer != null and placer.active():
 		parts.append_array(["LMB put down", "wheel turn", "RMB or Esc stop"])  # V34
 	else:

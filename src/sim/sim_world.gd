@@ -140,6 +140,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	defense.base_log = base_log
 	projects = Projects.new(data)
 	build.projects = projects  # M17a: the water tap can't be built until the tower runs
+	factory.storage_at = _storage_at_cell  # F3: belts can fill crates
 	milestones = Milestones.new(data)
 	# Tests' worlds start with every milestone but the rescue done (like power.free, but on by default), so the
 	# many tests that build turrets or extractors don't need to; a real new game clears this (main.gd).
@@ -2542,6 +2543,12 @@ func node_at(cell: Vector2i) -> Dictionary:
 	return {}
 
 
+## F3: the storage crate standing on `cell` (an Inventory), or null.
+func _storage_at_cell(cell: Vector2i) -> Variant:
+	var key := "o:%d:%d" % [cell.x, cell.y]
+	return storages.get(key, null)
+
+
 ## F2: the Hub's piece key ("" if you haven't built one).
 func hub_key() -> String:
 	return build.first_of_kind("hub")
@@ -2641,6 +2648,8 @@ func _on_piece_added(key: String) -> void:
 				m.node_rate = float(node_at(piece["cell"]).get("rate", 1.0))
 		"belt":
 			factory.add_belt(piece["cell"], piece["side"])
+		"splitter", "merger":  # F3
+			factory.add_router(build.kind_of(piece["id"]), piece["cell"], piece["side"])
 		"hopper", "repair_station":
 			factory.add_bin(piece["id"], piece["cell"], piece["side"])
 
@@ -2669,7 +2678,8 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 		if not piece.get("destroyed", false):
 			for slot: String in parts:
 				gear.pieces.append(parts[slot])  # M15: a suppressor or scope comes back with the turret
-	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt", "turret", "hopper", "repair_station"]:
+	if build.is_object(piece["id"]) and build.kind_of(piece["id"]) in ["machine", "belt", "turret", "hopper", "repair_station",
+			"splitter", "merger"]:  # F3
 		var m: Factory.Machine = factory.machines.get(piece["cell"])
 		var muffled := m != null and m.muffled
 		var held := factory.remove_at(piece["cell"])

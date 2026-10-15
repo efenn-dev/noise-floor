@@ -12,7 +12,7 @@ const GOLD := Color(0.95, 0.8, 0.55)
 const GROUPS := [
 	["Base", ["foundation", "wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
 	["Hub", ["hub", "radio_mast"]],
-	["Factory", ["belt", "smelter", "press", "rain_collector", "purifier", "planter", "canner", "water_tap"]],
+	["Factory", ["belt", "splitter", "merger", "smelter", "press", "rain_collector", "purifier", "planter", "canner", "water_tap"]],
 	["Extractors", ["salvager", "water_pump", "fuel_pump", "sawmill"]],
 	["Power", ["generator", "solar_panel", "power_pole"]],
 	["Defense", ["spikes", "nail_turret", "crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor",
@@ -38,7 +38,9 @@ const BLURBS := {
 	"workbench": "Make firearm parts and ammo by hand (E).",
 	"stove": "Burns planks (E to load). Warms the room in winter; crackles a little.",
 	"electric_heater": "Warms the room on power. Silent.",
-	"belt": "Carries items forward at 2 m a second. R turns it.",
+	"belt": "Carries items forward at 2 m a second. R turns it. Runs on bare ground too; drag to lay a row. A belt ending at a crate fills it.",
+	"splitter": "Takes items at its back and sends them out the front, left and right in turn. Unlocked by Logistics.",
+	"merger": "Joins belts: takes items at its back, left and right and sends them out the front. Unlocked by Logistics.",
 	"smelter": "Scrap metal into metal plates. Loud. Needs power.",
 	"hub": "Your base's command post (one per game). E: milestones. Hand in parts to unlock new machines, ending with the rescue.",
 	"radio_mast": "Calls for rescue. Start the broadcast at dusk and keep the mast standing until dawn. Every zombie for miles hears it.",
@@ -287,7 +289,7 @@ func _build() -> void:
 	_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_details)
 	var hint := Label.new()
-	hint.text = "Click a piece to build it (then LMB places, R turns, RMB removes, Esc stops)  ·  1-9, 0 puts the piece you point at on that hotbar key  ·  B or Esc closes this"
+	hint.text = "Click a piece to build it (then LMB places, drag for a row, R turns, RMB removes, Esc stops)  ·  1-9, 0 puts the piece you point at on that hotbar key  ·  B or Esc closes this"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.modulate = Color(1, 1, 1, 0.65)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
