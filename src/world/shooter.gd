@@ -105,9 +105,12 @@ const FLASH_TIME := 0.06
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0, "shotgun": 9.0, "crossbow": 0.8}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
-## V16: on iron sights the camera skips what's closer than this, so the rifle's stock under your cheek doesn't
-## fill the bottom of the view (the receiver, sights and both hands are farther out).
+## V16: on iron sights the gun skips what's closer to your eye than this, so the stock under your cheek doesn't
+## fill the bottom of the view (the receiver, sights and both hands are farther out). Q6: only the gun's own
+## surfaces fade out (distance fade, per pixel); it used to be the camera's near plane, which also sliced the
+## right glove and sleeve into a hollow horn shape.
 const ADS_NEAR := {"hunting_rifle": 0.34, "shotgun": 0.35, "crossbow": 0.34}
+const ADS_FADE_BAND := 0.03  # the last few cm before ADS_NEAR dither in, so the cut edge isn't a hard line
 const IRON_FOV_MULT := 0.85  # V15: iron sights narrow the normal field of view by 15%
 const ADS_SWAY_MULT := 0.12
 const ZOOM_SPEED := 400.0  # degrees of field of view a second, zooming in or out
@@ -195,6 +198,7 @@ var _reload_sound_gun := ""
 var _inspect_elapsed := -1.0
 var _inspect_uid := -1
 var _mag_in_hand: Dictionary = {}  # gun base -> the prop parented to Hand_L
+var _fade_materials: Dictionary = {}  # Q6: gun base -> its own surfaces' distance-faded materials (ADS_NEAR)
 var _drop_mag: MeshInstance3D
 var _last_cooldown := 0.0
 
@@ -234,6 +238,8 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 			left.add_child(mag)
 			_mag_in_hand[base] = mag
 		apply_textured_materials(node)
+		if ADS_NEAR.has(base):
+			_fade_materials[base] = _fading_gun_materials(node)
 		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false) + ([node] if node is MeshInstance3D else []):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		camera.add_child(node)
@@ -244,6 +250,36 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_builder: BuildController, p_ex
 	_flash.light_energy = 0.0
 	_flash.position = Vector3(0.2, -0.15, -0.9)
 	camera.add_child(_flash)
+
+
+## Q6: gives the gun's own surfaces (its parts too, not the hands) their own copies of their materials with a
+## per-pixel distance fade, all visible until iron-sight aiming raises the fade distance (see ADS_NEAR).
+static func _fading_gun_materials(gun_node: Node3D) -> Array[BaseMaterial3D]:
+	var out: Array[BaseMaterial3D] = []
+	var copies := {}
+	var hands: Array[Node] = []
+	for hand_name: String in ["Hand_R", "Hand_L"]:
+		if gun_node.has_node(hand_name):
+			hands.append(gun_node.get_node(hand_name))
+	for child: Node in gun_node.find_children("*", "MeshInstance3D", true, false) + ([gun_node] if gun_node is MeshInstance3D else []):
+		var mesh := child as MeshInstance3D
+		if mesh.mesh == null or hands.any(func(h: Node) -> bool: return h.is_ancestor_of(mesh)):
+			continue
+		for surface in mesh.mesh.get_surface_count():
+			var source := mesh.get_surface_override_material(surface)
+			if source == null:
+				source = mesh.mesh.surface_get_material(surface)
+			if not source is BaseMaterial3D:
+				continue
+			if not copies.has(source):
+				var copy := source.duplicate() as BaseMaterial3D
+				copy.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+				copy.distance_fade_min_distance = 0.0
+				copy.distance_fade_max_distance = 0.001
+				copies[source] = copy
+				out.append(copy)
+			mesh.set_surface_override_material(surface, copies[source])
+	return out
 
 
 func _attach_part_models(gun_node: Node3D, gun_id: String) -> void:
@@ -644,8 +680,11 @@ func _process(delta: float) -> void:
 		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
 	var aimed_fov := AIM_FOV if sim.guns.scoped() else base_fov * IRON_FOV_MULT
 	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
-	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(sim.gear.gun().get("base", ""), 0.0))
-	camera.near = lerpf(base_near, maxf(base_near, clip), _aim_weight)
+	var gun_base := str(sim.gear.gun().get("base", ""))
+	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(gun_base, 0.0)) * _aim_weight
+	for mat: BaseMaterial3D in _fade_materials.get(gun_base, []):
+		mat.distance_fade_min_distance = maxf(0.0, clip - ADS_FADE_BAND)
+		mat.distance_fade_max_distance = maxf(0.001, clip)
 	_kick = maxf(0.0, _kick - KICK_BACK * delta * maxf(_kick, 0.02))
 	_last_cooldown = sim.guns.cooldown
 	_message_time -= delta

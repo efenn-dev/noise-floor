@@ -5,6 +5,7 @@
 	"energy_sleep_gain": 0.21,
 	"starve_damage": 0.25,
 	"respawn_minimum": 50,
+	"respawn_grace": 8.0,
 	"heal_rate": 0.08,
 	"heal_sleep_rate": 0.25,
 	"heal_min": 30,
