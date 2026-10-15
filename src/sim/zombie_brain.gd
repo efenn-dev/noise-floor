@@ -66,6 +66,8 @@ var screaming := 0.0  # seconds left of a screamer's shriek (it stands still)
 ## M15: seconds left pinned by a bear trap (can't walk, can still bite) and stunned by an electric fence
 ## (can't walk or attack). Set by Defense.
 var pinned := 0.0
+var limp := 0.0  # V33: seconds left of the limp a leg hit gives
+var limp_factor := 1.0  # its speed factor while it lasts
 var stunned := 0.0
 var _scream_cd := 0.0
 ## Q4: a guardian's home area (x, z in metres; empty = not a guardian) and its spot in it. Saved.
@@ -126,12 +128,16 @@ func move_speed() -> float:
 		return 0.0
 	match state:
 		State.WANDER:
-			return _night_speed(float(stats["wander_speed"])) * slow
+			return _night_speed(float(stats["wander_speed"])) * slow * _limping()
 		State.CHASE:
-			return _night_speed(float(stats["chase_speed"])) * slow
+			return _night_speed(float(stats["chase_speed"])) * slow * _limping()
 		State.INVESTIGATE:
-			return _night_speed(float(stats["investigate_speed"])) * slow
+			return _night_speed(float(stats["investigate_speed"])) * slow * _limping()
 	return 0.0
+
+
+func _limping() -> float:
+	return limp_factor if limp > 0.0 else 1.0
 
 
 func max_hp() -> float:
@@ -246,6 +252,7 @@ func think(dt: float, player_pos: Vector3, sees: bool, player_dead: bool, pieces
 	_scream_cd = maxf(0.0, _scream_cd - dt)
 	screaming = maxf(0.0, screaming - dt)
 	pinned = maxf(0.0, pinned - dt)
+	limp = maxf(0.0, limp - dt)
 	if stunned > 0.0:
 		stunned = maxf(0.0, stunned - dt)
 		return events  # M15: shocked by a fence: it does nothing at all for a moment

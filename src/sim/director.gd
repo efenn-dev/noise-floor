@@ -5,25 +5,18 @@ extends RefCounted
 ## Every check_every seconds it may send zombies in from a road end, walking toward the loudest
 ## machine: wanderers once heat passes wanderers_at, and at night groups (group_at) or a horde (horde_at).
 ## Sending a wave spends heat. Numbers live in data/noise.json "director".
-## W1b: wanderers still come from any of the four EDGES straight at the noise, but groups and hordes come
-## from the north or south end of the road (EDGES 0 and 1) and walk down the road first: to the road point
-## nearest the noise, then they turn toward it (ZombieBrain.hear_via with road_route()).
-
-## M17a: the north road end is past the industrial park's north fence (ParkPlan.ROAD_NORTH_Z), so a wave from
-## the north walks the park road south first, comes round the factory hall's west side (NORTH_VIA), and then
-## down the town road. ROAD_LINE is that whole way, north end first.
-const EDGES := [Vector3(0, 0, -266), Vector3(0, 0, 35), Vector3(-40, 0, -60), Vector3(40, 0, -60)]
-const EDGE_NAMES := ["north", "south", "west", "east"]
-const ROAD_X := 0.0
-const ROAD_NORTH_Z := -258.0  # M17a: the north end of the park road (was -106, the town road's north end)
-const TOWN_NORTH_Z := -106.0  # the north end of the town road, in front of the factory's south doorway
-const PARK_SOUTH_Z := -142.0  # where the park road meets the way round the hall, by its north doorway
-const ROAD_SOUTH_Z := 10.0    # the south end of the asphalt
-## Round the factory hall's west side, from the park road to the town road.
-const NORTH_VIA := [Vector3(-25, 0, -142), Vector3(-25, 0, -106)]
-const ROAD_LINE := [Vector3(0, 0, -258), Vector3(0, 0, -142), Vector3(-25, 0, -142), Vector3(-25, 0, -106),
-		Vector3(0, 0, -106), Vector3(0, 0, 10)]
-const ROAD_LEG := 40.0        # longest stretch between road waypoints (each leg gets lure_time to walk)
+## W1b: groups and hordes come by road: they walk the roads to the road point nearest the noise, then turn
+## toward it (ZombieBrain.hear_via with a road route). Wanderers come straight at it.
+## W3a (the bigger world): a wave starts on the road network ROAD_MIN..ROAD_MAX metres along the roads from the
+## noise (WorldMap.spawn_points), out of sight but close enough to arrive in a minute or two however big the
+## map is, and follows WorldMap.route(); wanderers start WANDER_MIN..WANDER_MAX away. Its "edge" is the compass
+## way it comes from ("north", "south-east"...).
+const ROAD_MIN := 110.0
+const ROAD_MAX := 180.0
+const WANDER_MIN := 70.0
+const WANDER_MAX := 120.0
+const SPREAD := 4.0  # a wave stands this far either way of its starting point
+const MIN_FLAT := 70.0  # and never closer than this in a straight line (a parallel street can be far by road)
 
 var cfg: Dictionary
 var heat := 0.0
@@ -93,15 +86,15 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		return {}
 	var lure := _loudest(noise)
 	var by_road := kind != "wanderers"
-	var e := _rng.randi_range(0, 1) if by_road else _rng.randi_range(0, EDGES.size() - 1)
-	var route := road_route(EDGE_NAMES[e], lure["pos"]) if by_road else []
+	var start := wave_start(lure["pos"], by_road)
+	var route := WorldMap.route(start, lure["pos"]) if by_road else []
 	var type_counts := {}
 	var live_counts := {}
 	for living: ZombieBrain in horde.zombies.values():
 		if not living.is_dead():
 			live_counts[living.type] = int(live_counts.get(living.type, 0)) + 1
 	for i in size:
-		var spot: Vector3 = EDGES[e] + Vector3(_rng.randf_range(-4, 4), 0, _rng.randf_range(-4, 4))
+		var spot: Vector3 = start + Vector3(_rng.randf_range(-SPREAD, SPREAD), 0, _rng.randf_range(-SPREAD, SPREAD))
 		var type := pick_type(night, type_counts, kind, live_counts)
 		type_counts[type] = int(type_counts.get(type, 0)) + 1
 		live_counts[type] = int(live_counts.get(type, 0)) + 1
@@ -110,40 +103,19 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		z.facing = (first - spot).normalized()
 		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
-	return {"size": size, "edge": EDGE_NAMES[e], "kind": kind, "route": route, "types": type_counts}
+	return {"size": size, "edge": WorldMap.direction_name(lure["pos"], start), "kind": kind, "route": route,
+			"types": type_counts, "start": start}
 
 
-## The waypoints a wave from the `edge` road end ("north" or "south") walks before turning toward
-## `lure`: along ROAD_LINE from that end (in legs of at most ROAD_LEG) to the point on it nearest the lure.
-## M17a: from the north that's the park road, round the factory hall's west side, then the town road.
-static func road_route(edge: String, lure: Vector3) -> Array:
-	var line: Array = ROAD_LINE.duplicate()
-	if edge != "north":
-		line.reverse()
-	var at := Vector2(lure.x, lure.z)
-	var best_seg := 0
-	var best_point := Vector2.ZERO
-	var best_d := INF
-	for i in line.size() - 1:
-		var a := Vector2(line[i].x, line[i].z)
-		var b := Vector2(line[i + 1].x, line[i + 1].z)
-		var q := Geometry2D.get_closest_point_to_segment(at, a, b)
-		if at.distance_to(q) < best_d - 1e-6:
-			best_d = at.distance_to(q)
-			best_seg = i
-			best_point = q
-	var points: Array = [line[0]]
-	for i in best_seg + 1:
-		var from: Vector3 = line[i]
-		var to: Vector3 = line[i + 1] if i < best_seg else Vector3(best_point.x, 0, best_point.y)
-		var legs := maxi(1, ceili(from.distance_to(to) / ROAD_LEG))
-		for k in range(1, legs + 1):
-			points.append(from.lerp(to, float(k) / legs))
-	var out: Array = []
-	for p: Vector3 in points:  # drop points on top of the one before
-		if out.is_empty() or p.distance_to(out.back()) > 3.0:
-			out.append(p)
-	return out
+## W3a: where a wave starts: a point on the roads ROAD_MIN..ROAD_MAX (wanderers WANDER_MIN..WANDER_MAX) metres
+## along them from `lure`, one of the far ones the seeded roll picks.
+func wave_start(lure: Vector3, by_road: bool) -> Vector3:
+	var points := WorldMap.spawn_points(lure, ROAD_MIN if by_road else WANDER_MIN, ROAD_MAX if by_road else WANDER_MAX)
+	points = points.filter(func(p: Dictionary) -> bool:
+		return Vector2(p["pos"].x - lure.x, p["pos"].z - lure.z).length() >= MIN_FLAT)
+	if points.is_empty():  # off the map's roads entirely: straight out to the north
+		return lure + Vector3(0, 0, -ROAD_MIN)
+	return points[_rng.randi_range(0, points.size() - 1)]["pos"]
 
 
 ## Heat per second from the machines running now: each adds gain_rate per dB it's heard over

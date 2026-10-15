@@ -19,6 +19,74 @@ Emmitt: "the zombies seem to die facing away from the player each time". By Clau
 **Tests:** 13,525 green (`test_hits_deaths.gd`: facing the blow, hard hits go backwards, the 6-in-10 split, the forward tip).
 
 **Known gaps:** a forward fall uses the hit reaction's bent-knee pose, so the feet stay a little raised once it's down; a proper forward-death animation would need a new motion clip (none in the free packs).
+## 2026-10-15 — W3a The bigger world: roads, countryside and a tiled navmesh
+
+Emmitt: "it needs a much bigger world" (town + countryside). Props by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
+
+**Built:**
+- **The map is 720 x 760 m** (`WorldMap.EXTENT`), about 28x the old street. Main Street, the factory hall and the park keep their places, so saves load as before; nothing new is saved (the same land every game).
+- **A road network** (`WorldMap.ROADS`): Main Street runs on south to Market Street (downtown, next), West and East Street (more houses, next), County Road West and a farm lane, a dirt track from West Street into the woods, the north road past the park, and a 4-lane highway down the east side. `RoadView` draws them (asphalt with centre dashes, dirt, the highway with lanes, edge lines and guardrails).
+- **Zombie waves use the roads:** a group or horde starts on a road 110-180 m along the roads from the noise (and at least 70 m away in a straight line, so never on the next street over), out of sight, and walks `WorldMap.route()` to it; the message names the compass way ("A horde is coming from the south-east..."). Wanderers start 70-120 m out.
+- **The countryside** (`CountryPlan`, `CountryView`): pine woods in the north-west, leafy and pine trees over the fields, rocks and bushes, a forest belt and concrete barriers where the world ends (an invisible wall behind them), and jams of rusted wrecks on the highway. Trees and props are drawn from one MultiMesh per kind; trunks, rocks, guardrails and barriers are solid. Leaves follow the seasons.
+- **The navmesh is tiled** (`NavBaker`): 64 m tiles, each its own region (baked with a border so tiles meet exactly, even through a wall on a seam). The fixed scenery is read once; building something re-bakes only the tiles round it, one at a time in the background. Startup bakes where you are (~0.5 s) and the rest of the map in the background.
+- **22 new props by Codex** (`tools/art/world_props.py`, contact sheet `tools/art/world_props_contact.jpg`): pines, bushes, rocks, guardrails, barriers and road signs are used now; the shop shelves, checkout, pharmacy counter, police desk, gun locker, gas pump, dumpster, bench, hay bales, corn, farm fence, tractor and water trough are for downtown and the farms.
+- Screenshot flag `--at=market|south|highway|woods|farms|west`. `tools/test.sh "a|b"` runs the files matching either.
+
+**Try it:** `play.bat`, then walk or drive south past the end of Main Street, or `play.bat --at=highway`.
+
+**Tests:** 13,697 green (new `test_world_map.gd`; the road-horde, park and street-plan route tests rewritten for the network; navmesh tests now wait for the map to sync in real time). Soak 1 day: SOAK OK.
+
+**Known gaps:** the new areas are open land for now (downtown, the new streets and the farms come next); memory is about 455 MB (was 270) and the worst physics frame about 7 ms (was 3); the tree belt hides the map's edge but the barriers don't say why; wrecks on the highway can't be searched yet.
+
+**Next:** V35 (deaths facing you), then F1-F3 (building like Satisfactory), then W3b-d. See the top of `docs/DIRECTION.md`.
+## 2026-10-14 — V34 Items in the world: dropped things look like themselves, and placing (Sprint 4)
+
+Emmitt: "could you add a PR for skins for the items dropped? also allow placing items". Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
+
+**Built:**
+- **37 new item models** (`tools/art/item_props.py` -> `assets/models/item_<id>.glb`): every stack item (food, water, nails, planks, ammo boxes, bags, gas can, radio...) and every wearable (jacket and vest folded, pants, boots and sneakers as pairs, gloves, hard hat, cap, headlamp). Weapons, guns, gun parts, the bottle and the pipe bomb use their own models. Materials are named "Item ..." and textured by `BagView.ITEM_LOOKS`. Contact sheet: `tools/art/item_props_contact.jpg`.
+- **Dropping:** Drop in the inventory puts the thing on the floor a step in front of you as itself (a rifle on its side, an axe flat), turned the way you face; the same item dropped on the same spot joins that stack (up to three shown side by side). Looking at it says what it is ("12 Nails", "Work boots"); E picks it up. Death bags now look like a stuffed rucksack.
+- **Placing:** Place in the inventory (items and gear) closes it and shows the thing see-through where you aim: any floor, table, counter or shelf within about 3 m. Mouse wheel turns it, left click puts one down (stays ready while you have more), right click or Esc stops. The sim checks reach (`SimWorld.place_item` / `place_gear`).
+- Saves: version 21. Each thing on the ground keeps its kind and facing; older saves load their bags as bags (fixture `test/fixtures/save_v20.json`).
+- Screenshot flags `--drop=A,B,...` (a row of things ahead of you) and `--place=ITEM` (placing mode on).
+
+**Try it:** `play.bat`, Tab, pick something, Drop or Place. Or `play.bat --drop=canned_food,soda,jacket,hunting_rifle,axe --cam=0,0,0,0,-38` to see a row.
+
+**Tests:** 13,872 green (new `test_items_in_world.gd`: drop in front of you, stacking, naming, picking up, gear, placing reach, save round trip, old saves, a model that rests on the floor for every item and wearable, the placer on a floor vs. nothing in reach; `test_inventory_actions.gd` updated for drops as themselves).
+
+**Known gaps:** zombies ignore things on the ground; you can't place on top of another placed thing yet; labels on cans and boxes are colour bands, not printed text; the three backpacks are boxy.
+## 2026-10-14 — V33 Better hitboxes: hit zones on the bones (Sprint 4)
+
+Emmitt: "add better hitboxes". By Claude Opus 5.5. Stacked on V32 (blood toggle): both touch the hit code.
+
+**Built:**
+- **Hit zones that move with the animation.** Every zombie has a box on each of its 17 bones (head; neck, chest, spine and hips = torso; arms and hands; legs and feet), fitted to that body's own mesh, once per body variant (`ZombieHitboxes`, on a new physics layer `Layers.HITBOX`). A crawler's head is down by the floor, a runner's swinging arm is where you see it, a brute's zones are brute-sized.
+- **Guns are exact:** a round through the gap between arm and body flies on (a miss, or the zombie behind). **Melee is forgiving:** a swing that touches the body but slips between zones still hits, in the zone at that height.
+- **Damage by zone** (`data/hit_zones.json`): head = the weapon's or gun's own head multiplier as before, torso 1.0, arms 0.6, legs 0.75, and a **leg hit makes it limp** (55% speed for 1.5 s). Messages say "Headshot!", "Arm hit", "Leg hit".
+- **Crossbow bolts** (simulated in the sim) now land in a zone too, by where they meet the body: a bolt to the head is a headshot (with the headshot sound). A crawler's head is the front of its body (`head_ahead` in zombies.json). Shotgun pellets stay flat damage, as in V30.
+- Past 45 m from you the zones switch off and the old capsule with its head and leg lines decides (cheaper with a crowd far away). Dead bodies have no live zones; E searches them as before.
+- Screenshot flag `--hitboxes` draws the zones (head red, body yellow, arms blue, legs green).
+
+**Try it:** `play.bat --zombie=0,-3 --hitboxes --cam=0,0,-0.5,0,-8` to see the zones; then play normally and try legs, arms and heads with the rifle.
+
+**Tests:** new `test_hitboxes.gd` (zones on every bone and moving with the animation, a ray at each zone counts as that zone, a gap a round passes through but a swing doesn't, the crawler's head by the floor, zones off on a dead body, damage per zone, the limp, bolts by zone).
+
+**Known gaps:** pellets don't use zones (a shotgun is about the spread); hands count as arms; the zones are boxes, so the very edges of a shoulder or hip can be a few centimetres generous.
+
+## 2026-10-14 — V32 Blood on/off (Sprint 4)
+
+Emmitt: "add the blood toggle" (his son plays). By Claude Opus 5.5.
+
+**Built:**
+- **Settings → Blood** (on by default, saved in `user://settings.cfg` with the other settings). Off: a hit on a zombie puffs dust instead of spraying blood, and no blood stains are made under hits or bodies. Turning it off clears the stains already on the ground.
+- One gate for every caller (guns, shotgun pellets, melee, thrown bottles and bombs, bodies): `ImpactFx.shown_kind` and `ImpactFx.stain`.
+- Screenshot flag `--blood=off` (this run only, not saved).
+
+**Try it:** `play.bat`, Esc → Settings → untick Blood, then hit a zombie.
+
+**Tests:** 13,527 green (new `test_blood_setting.gd`).
+
+**Known gaps:** the zombies' own clothes and skin textures keep their grime; only sprays and stains are switched.
 
 ## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
 

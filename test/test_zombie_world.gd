@@ -121,6 +121,7 @@ func test_navmesh_leads_around_a_building() -> void:
 	_scene.add_child(nav)
 	nav.setup(_scene, AABB(Vector3(-20, -1, -20), Vector3(40, 6, 40)))
 	nav.bake_now()
+	await nav.wait_synced()  # W3a: the map syncs on a worker thread
 	await _run(0.2)
 	var map := _scene.get_world_3d().navigation_map
 	var path := NavigationServer3D.map_get_path(map, Vector3(0, 0, -5), Vector3(0, 0, 5), true)

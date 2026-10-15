@@ -1,6 +1,7 @@
 extends "res://test/base_test.gd"
-## W1b: groups and hordes come down the road. They spawn at the north or south road end, walk the road
-## to the road point nearest the noise, then turn toward it. Wanderers still come straight from any edge.
+## W1b: groups and hordes come down the road: they walk the roads to the road point nearest the noise, then
+## turn toward it. Wanderers come straight. W3a: on the bigger map's road network (WorldMap), a wave starts on a
+## road ROAD_MIN..ROAD_MAX metres along the roads from the noise, out of sight.
 
 const TICK := SimWorld.TICK
 const N := BuildGrid.Side.NORTH
@@ -27,30 +28,40 @@ func _smelter_east(hour: float, seed_value: int) -> SimWorld:
 	return sim
 
 
+func _on_roads(route: Array) -> bool:
+	for p: Vector3 in route:
+		if not WorldMap.on_road(Vector2(p.x, p.z), 0.05):
+			return false
+	return true
+
+
 func test_road_route_follows_the_road() -> void:
 	var lure := Vector3(21, 1, -49)
-	var north := Director.road_route("north", lure)
-	eq(north[0], Vector3(0, 0, -258), "M17a: from the north: the park road's north end first")
+	var north := WorldMap.route(Vector3(0, 0, -300), lure)
+	eq(north[0], Vector3(0, 0, -300), "from the north road: where it starts")
+	check(north.has(Vector3(0, 0, -258)) and north.has(Vector3(0, 0, -142)), "down the park road")
 	var bypass := north.find(Vector3(-25, 0, -106))
-	check(north.find(Vector3(-25, 0, -142)) == bypass - 1 and bypass > 0, "then round the factory's west side")
-	eq(north[bypass + 1], Vector3(0, 0, -106), "then onto the town road at its north end")
+	check(north.find(Vector3(-25, 0, -142)) == bypass - 1 and bypass > 0, "round the factory's west side")
+	eq(north[bypass + 1], Vector3(0, 0, -106), "onto the town road at its north end")
 	eq(north.back(), Vector3(0, 0, -49), "and down it to the road point nearest the noise")
-	var south := Director.road_route("south", lure)
-	eq(south[0], Vector3(0, 0, 10), "from the south: onto the road at its south end")
-	eq(south.back(), Vector3(0, 0, -49), "and up it to the same road point")
-	for route: Array in [north, south]:
+	var south := WorldMap.route(Vector3(0, 0, 200), lure)
+	eq(south.back(), Vector3(0, 0, -49), "from the south road: up Main Street to the same point")
+	var highway := WorldMap.route(Vector3(262, 0, -300), lure)
+	check(highway.has(Vector3(262, 0, 60)) and highway.has(Vector3(0, 0, 60)), "from the highway: off at Market Street, along it")
+	eq(highway.back(), Vector3(0, 0, -49), "and up Main Street")
+	for route: Array in [north, south, highway]:
+		check(_on_roads(route), "every waypoint is on a road")
 		for i in range(1, route.size()):
-			check(route[i].distance_to(route[i - 1]) <= Director.ROAD_LEG + 0.01, "legs no longer than %d m" % Director.ROAD_LEG)
-			if i > bypass + 1 or route == south:
-				eq(route[i].x, 0.0, "on the road")
-	eq(Director.road_route("south", Vector3(3, 0, 0)), [Vector3(0, 0, 10), Vector3(0, 0, 0)], "a noise by the spawn: the road end, then the point by it")
-	eq(Director.road_route("south", Vector3(3, 0, 8)), [Vector3(0, 0, 10)], "no extra point right next to the road end")
+			check(route[i].distance_to(route[i - 1]) <= WorldMap.LEG + 0.01, "legs no longer than %d m" % WorldMap.LEG)
+	var short := WorldMap.route(Vector3(0, 0, -20), Vector3(3, 0, -40))
+	eq(short.size(), 2, "on the same stretch of road: straight along it")
+	check(short[0].distance_to(Vector3(0, 0, -20)) < 0.01 and short[1].distance_to(Vector3(0, 0, -40)) < 0.01, "from here to there")
 
 
 func test_a_north_wave_walks_the_road_then_turns_to_the_noise() -> void:
 	var lure := Vector3(21, 1, -49)
 	var z := ZombieBrain.new(1, "shambler", GameData.load_default().zombies["shambler"], Vector3(-25, 0, -145), 7)
-	var route := Director.road_route("north", lure)
+	var route := WorldMap.route(Vector3(-25, 0, -145), lure)
 	z.hear_via(route.slice(route.find(Vector3(-25, 0, -106))), lure, "o:10:-25", 120.0)  # M17a: from the hall's west side on
 	eq(z.state_name(), "investigate", "on its way")
 	eq(z.target_pos, Vector3(-25, 0, -106), "heading for the first waypoint, not the noise")
@@ -86,7 +97,7 @@ func test_a_north_wave_walks_the_road_then_turns_to_the_noise() -> void:
 	check(z2.route.is_empty(), "and drops the route")
 
 
-func test_waves_by_road_match_their_edge() -> void:
+func test_waves_by_road_start_out_of_sight_on_a_road() -> void:
 	var seen := {}
 	for seed_value in [1, 2, 3, 4, 5, 6]:
 		var sim := _smelter_east(23.0, seed_value)
@@ -98,18 +109,16 @@ func test_waves_by_road_match_their_edge() -> void:
 			if not sim.messages.is_empty() and wave.is_empty():
 				wave = {"text": sim.messages.back()["text"]}
 		eq(sim.horde.zombies.size() - before, 8, "seed %d: a horde of 8 at night" % seed_value)
-		var edge := "north" if wave["text"].ends_with("north...") else ("south" if wave["text"].ends_with("south...") else "?")
-		check(edge != "?", "seed %d: the HUD says where from (%s)" % [seed_value, wave["text"]])
-		seen[edge] = true
+		check(wave.get("text", "").begins_with("A horde is coming from the "), "seed %d: the HUD says where from (%s)" % [seed_value, wave.get("text", "")])
+		seen[wave.get("text", "")] = true
 		for z: ZombieBrain in sim.horde.zombies.values():
-			if edge == "north":
-				check(z.home.z < -135.0, "seed %d: spawned at the north end (z %.0f)" % [seed_value, z.home.z])
-			else:
-				check(z.home.z > 25.0, "seed %d: spawned at the south end (z %.0f)" % [seed_value, z.home.z])
+			var flat := Vector2(z.home.x - 21.0, z.home.z + 49.0).length()
+			check(flat > Director.MIN_FLAT - Director.SPREAD * 1.5, "seed %d: it starts well away from the smelter (%.0f m)" % [seed_value, flat])
+			check(WorldMap.on_road(Vector2(z.home.x, z.home.z), Director.SPREAD + 0.1), "seed %d: on a road" % seed_value)
 			check(not z.route.is_empty(), "seed %d: has a road to walk" % seed_value)
 			eq(z.route.back(), Vector3(0, 0, -49), "seed %d: ending at the road point by the smelter" % seed_value)
 			check(z.sound_pos.distance_to(Vector3(21, 1, -49)) < 0.01, "seed %d: then the smelter" % seed_value)
-	eq(seen.size(), 2, "both road ends get used")
+	check(seen.size() >= 2, "waves come from more than one way")
 
 
 func test_wanderers_still_come_straight() -> void:

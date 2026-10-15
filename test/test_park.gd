@@ -139,31 +139,31 @@ func _in_wreck(p: Vector2, w: Dictionary, data: GameData) -> bool:
 
 func test_road_routes_reach_the_north_end_through_the_park() -> void:
 	var lure := Vector3(21, 1, -49)
-	var north := Director.road_route("north", lure)
-	eq(north[0], Vector3(0, 0, ParkPlan.ROAD_NORTH_Z), "from the north: the park road's north end first")
-	check(Director.EDGES[0].z < ParkPlan.FENCE_NORTH_Z, "the north wave spawns past the park's north fence")
+	var north := WorldMap.route(Vector3(0, 0, -300), lure)  # W3a: a wave starting on the north road
+	check(north.has(Vector3(0, 0, ParkPlan.ROAD_NORTH_Z)), "from the north: past the park road's north end")
+	check(WorldMap.EXITS["north"].y < ParkPlan.FENCE_NORTH_Z, "the north road leaves the map past the park's north fence")
 	var in_park := north.filter(func(p: Vector3) -> bool: return p.z < -150.0 and p.x == 0.0).size()
 	check(in_park >= 2, "it walks the park road (%d points)" % in_park)
 	check(north.has(Vector3(-25, 0, -142)) and north.has(Vector3(-25, 0, -106)), "round the hall's west side")
 	eq(north.back(), Vector3(0, 0, -49), "then down the town road to the noise")
 	var tower := ParkPlan.TOWER_POS
-	var from_south := Director.road_route("south", tower)
+	var from_south := WorldMap.route(Vector3(0, 0, 200), tower)
 	eq(from_south.back(), Vector3(0, 0, tower.z), "from the south, a noise at the tower: up into the park")
 	check(from_south.has(Vector3(-25, 0, -106)) and from_south.has(Vector3(0, 0, -142)), "round the hall and onto the park road")
-	var from_north := Director.road_route("north", tower)
+	var from_north := WorldMap.route(Vector3(0, 0, -300), tower)
 	eq(from_north.back(), Vector3(0, 0, tower.z), "from the north: down the park road to the tower")
 	check(not from_north.has(Vector3(-25, 0, -142)), "without going round the hall")
 	for route: Array in [north, from_south, from_north]:
 		for i in range(1, route.size()):
-			check(route[i].distance_to(route[i - 1]) <= Director.ROAD_LEG + 0.01, "legs no longer than %d m" % Director.ROAD_LEG)
+			check(route[i].distance_to(route[i - 1]) <= WorldMap.LEG + 0.01, "legs no longer than %d m" % WorldMap.LEG)
 	# Nothing in the park stands on the routes.
 	var data := GameData.load_default()
 	var bad: Array = []
 	for s: int in SEEDS:
 		var p := ParkPlan.generate(s)
-		for e: int in [0, 1]:
+		for start: Vector3 in [Vector3(0, 0, -300), Vector3(0, 0, 200)]:
 			for l: Vector3 in [tower, Vector3(-20, 0, -240), Vector3(12, 0, -40)]:
-				var route: Array = [Director.EDGES[e]] + Director.road_route(Director.EDGE_NAMES[e], l)
+				var route: Array = WorldMap.route(start, l)
 				for i in route.size() - 1:
 					for k in 41:
 						var q: Vector3 = (route[i] as Vector3).lerp(route[i + 1], k / 40.0)
@@ -180,28 +180,18 @@ func test_road_routes_reach_the_north_end_through_the_park() -> void:
 	check(bad.is_empty(), "no route runs into a wreck, a fence or a warehouse %s" % [bad.slice(0, 3)])
 
 
-func test_waves_from_the_north_spawn_past_the_park() -> void:
-	var seen_north := false
-	for s: int in [1, 2, 3, 4, 5, 6]:
-		var w := SimWorld.new(23.0, null, s)
-		w.director.first_night_warning_sent = true
-		w.director.first_night_wave_sent = true  # this test isolates the existing road wave
-		w.director.first_morning_sent = true
-		w.power.free = true
-		w.give_debug_kit()
-		w.build.place("foundation", Vector2i(10, -25), BuildGrid.Side.NORTH, w.inventory)
-		w.build.place("smelter", Vector2i(10, -25), BuildGrid.Side.EAST, w.inventory)
-		w.factory.machines[Vector2i(10, -25)].input["scrap_metal"] = 20
-		w.player_pos = Vector3(0, 0, 500)
-		w.director.heat = 100.0
-		for i in roundi(30.1 / SimWorld.TICK):
-			w.step()
-		for z: ZombieBrain in w.horde.zombies.values():
-			if z.home.z < -200.0:
-				seen_north = true
-				check(z.home.z < ParkPlan.FENCE_NORTH_Z, "seed %d: spawned past the park's north fence (z %.0f)" % [s, z.home.z])
-				eq(z.route[0], Vector3(0, 0, ParkPlan.ROAD_NORTH_Z), "seed %d: walks the park road first" % s)
-	check(seen_north, "a wave came from the north")
+func test_waves_from_the_park_walk_the_park_road() -> void:
+	# W3a: waves start 110-180 m along the roads from the noise; for a base on Main Street some of those starts
+	# are up the park road, and a wave from there walks it south and round the hall.
+	var lure := Vector3(21, 1, -49)
+	var park_starts := WorldMap.spawn_points(lure, Director.ROAD_MIN, Director.ROAD_MAX).filter(
+			func(p: Dictionary) -> bool: return p["pos"].z < -145.0 and absf(p["pos"].x) < 1.0)
+	check(not park_starts.is_empty(), "some starts are up the park road")
+	for p: Dictionary in park_starts:
+		var route := WorldMap.route(p["pos"], lure)
+		check(route.has(Vector3(0, 0, -142)) and route.has(Vector3(-25, 0, -106)),
+				"from z %.0f: down the park road and round the hall" % p["pos"].z)
+		eq(route.back(), Vector3(0, 0, -49), "to the road point by the noise")
 
 
 func test_industrial_loot_and_police_chance() -> void:

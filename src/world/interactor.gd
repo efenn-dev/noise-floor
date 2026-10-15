@@ -278,7 +278,7 @@ func door_blocked(key: String) -> bool:
 
 func status_text() -> String:
 	if target_bag != -1:
-		return "Your bag\n[E] pick it up"
+		return "%s\n[E] pick it up" % sim.lying_name(target_bag)  # V34: a dropped thing says what it is
 	if target_car != "":
 		return _car_status()
 	if target_project != "":

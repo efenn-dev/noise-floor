@@ -4,7 +4,7 @@ extends SceneTree
 ## Use tools/test.sh (it refreshes the class cache first and fails on script errors).
 ## A test may `await` (e.g. `await tree.physics_frame`) to run real physics; `tree` is set on every suite.
 ## Output stays compact on purpose: one line per file, plus one line per failure.
-## S3: `-- --only=hotbar` runs only the files whose name contains that (tools/test.sh hotbar).
+## S3: `-- --only=hotbar` runs only the files whose name contains that (tools/test.sh hotbar); "a|b" either.
 
 const TEST_DIR := "res://test/"
 
@@ -21,8 +21,8 @@ func _initialize() -> void:
 	for file: String in files:
 		if not (file.begins_with("test_") and file.ends_with(".gd")):
 			continue
-		if only != "" and not file.contains(only):
-			continue
+		if only != "" and not Array(only.split("|")).any(func(o: String) -> bool: return file.contains(o)):
+			continue  # W3a: "a|b" runs the files matching either
 		var script: GDScript = load(TEST_DIR + file)
 		if script == null or not script.can_instantiate():
 			print("FAIL  %s did not load (parse error?)" % file)

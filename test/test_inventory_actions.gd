@@ -46,26 +46,26 @@ func test_use_a_particular_item() -> void:
 	eq(sim.use_item("soda"), "You don't have that", "nothing to use")
 
 
-func test_drop_into_a_bag_at_your_feet() -> void:
+func test_drop_lays_things_at_your_feet() -> void:
+	# V34: a drop lies on the floor as itself (it used to go into one bag at your feet).
 	var sim := _sim()
 	sim.player_pos = Vector3(5, 0, 5)
 	var before := sim.bags.size()
 	eq(sim.drop_items("plank", 3), "Dropped 3 Plank", "drop planks")
-	eq(sim.bags.size(), before + 1, "a bag appears")
+	eq(sim.bags.size(), before + 1, "planks appear on the floor")
 	eq(sim.inventory.count("plank"), 197, "they left your pockets")
+	var planks: Dictionary = sim.bags[-1]
 	sim.drop_items("nails", 5)
-	eq(sim.bags.size(), before + 1, "dropping again joins the same bag")
-	var bag: Dictionary = sim.bags[-1]
-	eq(bag["items"], {"plank": 3, "nails": 5}, "with both stacks in it")
+	eq(sim.bags.size(), before + 2, "nails lie beside them, as nails")
 	sim.drop_items("plank", 1000)
 	eq(sim.inventory.count("plank"), 0, "can't drop more than you have")
-	eq(int(bag["items"]["plank"]), 200, "all the planks are in the bag")
+	eq(int(planks["items"]["plank"]), 200, "more planks on the same spot join that stack")
 	sim.player_pos = Vector3(30, 0, 30)
 	sim.inventory.add("chips", 1)
 	sim.drop_items("chips", 1)
-	eq(sim.bags.size(), before + 2, "somewhere else, a new bag")
-	var got := sim.take_bag(bag["id"])
-	eq(int(got.get("nails", 0)), 5, "and E picks the first one back up")
+	eq(sim.bags.size(), before + 3, "somewhere else, on its own")
+	var got := sim.take_bag(planks["id"])
+	eq(int(got.get("plank", 0)), 200, "and E picks the planks back up")
 
 
 func test_crates_within_reach() -> void:

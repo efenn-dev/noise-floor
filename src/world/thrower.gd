@@ -198,7 +198,10 @@ func _play_events() -> void:
 			"bottle_break":
 				ImpactFx.spawn(self, pos, Vector3.UP, "glass")
 			"bolt_hit":
-				ImpactFx.spawn(self, pos, Vector3.UP, "blood")
+				var head := str(event.get("zone", "")) == "head"
+				ImpactFx.spawn(self, pos, Vector3.UP, "blood_head" if head else "blood")
+				if head:
+					SoundView.play_at(self, "headshot", pos, -2.0, randf_range(0.9, 1.1))  # V33: a bolt to the head reads
 			"bolt_land", "bounce":
 				ImpactFx.spawn(self, pos, Vector3.UP, "dust")
 			"explosion":
