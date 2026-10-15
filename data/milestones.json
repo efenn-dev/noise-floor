@@ -1,0 +1,57 @@
+{
+	"_about": "F2 the Hub's milestones (Satisfactory-style): hand in each milestone's parts at the Hub (from your pockets or a storage crate within deliver_range of it) and it unlocks its pieces. A tier opens once every milestone of the tier before is done; tier 1 is open from the start. Pieces no milestone unlocks can always be built. The final milestone unlocks the radio mast: start its rescue broadcast between broadcast_from and midnight, keep the mast standing and yourself alive until rescue_hour, and help comes.",
+	"deliver_range": 8.0,
+	"broadcast_from": 18.0,
+	"rescue_hour": 6.0,
+	"broadcast_loudness": 100.0,
+	"tiers": {
+		"1": "Scavenger",
+		"2": "Settler",
+		"3": "Fortress",
+		"4": "Rescue"
+	},
+	"milestones": {
+		"salvage_rig": {
+			"name": "Salvage rig", "tier": 1,
+			"blurb": "Machines that work the scrap heaps and wells out in the world.",
+			"cost": { "plank": 20, "scrap_metal": 20, "nails": 10 },
+			"unlocks": ["salvager", "water_pump"]
+		},
+		"lumber_yard": {
+			"name": "Lumber yard", "tier": 1,
+			"blurb": "A portable bandsaw mill for the timber stands in the woods.",
+			"cost": { "plank": 30, "metal_plate": 10 },
+			"unlocks": ["sawmill"]
+		},
+		"fuel_line": {
+			"name": "Fuel line", "tier": 2,
+			"blurb": "Gas from the crashed tankers, and power from the sun.",
+			"cost": { "metal_plate": 20, "nails": 20, "scrap_metal": 20 },
+			"unlocks": ["fuel_pump", "solar_panel"]
+		},
+		"kitchen": {
+			"name": "Kitchen", "tier": 2,
+			"blurb": "Clean water and canned food that keep.",
+			"cost": { "metal_plate": 15, "plank": 20, "dirty_water": 5 },
+			"unlocks": ["purifier", "canner"]
+		},
+		"sentry": {
+			"name": "Sentry", "tier": 2,
+			"blurb": "Turrets that shoot nails, fed by hand, belt or hopper, with sensors and lights.",
+			"cost": { "metal_plate": 25, "nails": 40 },
+			"unlocks": ["nail_turret", "hopper", "motion_sensor", "floodlight"]
+		},
+		"heavy_defense": {
+			"name": "Heavy defense", "tier": 3,
+			"blurb": "Crossbow and rifle turrets, an electric fence, a repair station and noise tricks.",
+			"cost": { "metal_plate": 60, "nails": 80, "plank": 40 },
+			"unlocks": ["crossbow_turret", "rifle_turret", "electric_fence", "repair_station", "noise_sensor", "noisemaker"]
+		},
+		"rescue_signal": {
+			"name": "Rescue signal", "tier": 4, "final": true,
+			"blurb": "A radio mast to call for rescue. Broadcast one night, keep it standing, and help comes at dawn. Every zombie for miles will hear it.",
+			"cost": { "metal_plate": 120, "nails": 120, "wall_panel": 10, "gas_can": 6, "radio": 1 },
+			"unlocks": ["radio_mast"]
+		}
+	}
+}

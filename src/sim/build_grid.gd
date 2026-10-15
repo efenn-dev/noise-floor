@@ -21,7 +21,7 @@ const EDGE_KINDS := ["wall", "door", "barricade", "window", "tripwire", "fence"]
 ## M15: edge pieces that stand on bare ground (no foundation needed), and never block sound or sight.
 const GROUND_EDGES := ["tripwire", "fence"]
 ## M15: objects that stand on bare ground, like power poles and spike strips.
-const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap"]
+const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast"]
 
 const GRID := 2.0
 const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
@@ -32,8 +32,13 @@ const SIDE_NAMES := ["north", "east", "south", "west"]
 var data: GameData
 ## key -> {id, cell: Vector2i, side: int}. Walls: canonical NORTH or WEST edge. Objects: the way it faces.
 var pieces: Dictionary = {}
+## Piece keys by kind (kind -> {key: true}) and each key's kind, kept up to date wherever `pieces` changes, so
+## "where's the Hub / the radio mast" is one lookup, not a walk over every piece (the mast's lamp asks every frame).
+var _by_kind: Dictionary = {}
+var _key_kind: Dictionary = {}
 ## M17a: set by SimWorld, so pieces with a data "needs_project" (the water tap) wait for that project.
 var projects: Projects
+var milestones: Milestones  # F2: pieces the Hub's milestones unlock
 
 
 func _init(p_data: GameData) -> void:
@@ -214,6 +219,10 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Unknown piece"
 	if not player_placeable(id):
 		return "Only found in town"
+	if milestones != null and not milestones.unlocked(id):
+		return "Unlock it at the Hub: %s" % milestones.cfg(milestones.unlocked_by(id)).get("name", "a milestone")
+	if _kind(id) == "hub" and first_of_kind("hub") != "":
+		return "You already have a Hub"
 	if projects != null and not projects.unlocked(id):
 		return "Needs the %s running" % String(data.projects.get(data.buildables[id]["needs_project"], {}).get("name", "project")).to_lower()
 	var existing := key_for(id, cell, side)
@@ -243,6 +252,7 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	if pieces.has(key):  # boarding up a broken window: it goes, with no refund
 		var window: Dictionary = pieces[key]
 		pieces.erase(key)
+		_unindex(key)
 		window["destroyed"] = true
 		piece_removed.emit(key, window)
 	var piece := {"id": id, "cell": cell, "side": side, "hp": data.buildables[id]["hp"]}
@@ -251,6 +261,7 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		piece["cell"] = edge[0]
 		piece["side"] = edge[1]
 	pieces[key] = piece
+	_index(key)
 	piece_added.emit(key)
 	piece_built.emit(key)
 	return ""
@@ -259,6 +270,7 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 ## Puts back a saved piece exactly as it was (no rules, no cost), announcing it like a new one.
 func restore(key: String, piece: Dictionary) -> void:
 	pieces[key] = piece
+	_index(key)
 	piece_added.emit(key)
 	if piece.get("open", false):
 		piece_changed.emit(key)
@@ -286,6 +298,7 @@ func remove(key: String, inv: Inventory) -> String:
 	var piece: Dictionary = pieces[key]
 	var broken := is_broken(key)
 	pieces.erase(key)
+	_unindex(key)
 	if not broken:  # a broken window is worth nothing
 		inv.give_all(refund_for(piece))
 	piece_removed.emit(key, piece)
@@ -338,8 +351,30 @@ func destroy(key: String) -> void:
 	for k: String in doomed:
 		destroy(k)
 	pieces.erase(key)
+	_unindex(key)
 	piece["destroyed"] = true
 	piece_removed.emit(key, piece)
+
+
+## The key of a piece of `kind` ("" if there's none): one lookup (see _by_kind).
+func first_of_kind(kind: String) -> String:
+	var keys: Dictionary = _by_kind.get(kind, {})
+	return "" if keys.is_empty() else str(keys.keys()[0])
+
+
+func _index(key: String) -> void:
+	_unindex(key)
+	var kind := _kind(pieces[key]["id"])
+	_key_kind[key] = kind
+	if not _by_kind.has(kind):
+		_by_kind[kind] = {}
+	_by_kind[kind][key] = true
+
+
+func _unindex(key: String) -> void:
+	if _key_kind.has(key):
+		(_by_kind[_key_kind[key]] as Dictionary).erase(key)
+		_key_kind.erase(key)
 
 
 ## World-space center of a piece (its box is data size; walls are turned 90 degrees on WEST edges).

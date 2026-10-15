@@ -52,7 +52,9 @@ extends RefCounted
 ## their elapsed day-one beats are marked sent so migration never invents a wave on load.
 ## 21 = V34 items in the world: each entry in "bags" has a "kind" ("bag" for death bags, "item" for something
 ## dropped or placed as itself) and a "yaw". Older entries load as bags lying flat, so nothing moves or vanishes.
-const VERSION := 21
+## 22 = F2 the Hub: "milestones" (done and handed in) and "rescue" (the broadcast's state and day). A save from
+## before 22 had every piece unlocked, so it gets every milestone but the final one: nothing it built is locked.
+const VERSION := 22
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -163,6 +165,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"stoves": sim.climate.to_dict(),
 		"projects": sim.projects.to_dict(),
 		"projects_done": sim.projects.done.duplicate(),
+		"milestones": sim.milestones.to_dict(),
+		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day},
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
@@ -279,6 +283,12 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 					"load": 0.0, "muffled": bool(g["muffled"])}
 	sim.climate.from_dict(d.get("stoves", {}))  # M16: none before 11
 	sim.projects.load_dict(d.get("projects", {}), d.get("projects_done", []))  # M17a: phase 0 before 12
+	sim.milestones.load_dict(d.get("milestones", {}))  # F2
+	if version < 22:
+		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build
+	var rescue: Dictionary = d.get("rescue", {})
+	sim.rescue_state = str(rescue.get("state", ""))
+	sim.rescue_day = int(rescue.get("day", -1))
 	for zd: Dictionary in d["zombies"]:
 		var z := sim.horde.restore(int(zd["id"]), zd["type"], _to_v3(zd["pos"]))
 		z.home = _to_v3(zd["home"])

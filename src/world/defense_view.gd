@@ -23,6 +23,7 @@ func setup(p_sim: SimWorld, p_build_view: BuildView) -> void:
 
 
 func _process(delta: float) -> void:
+	_mast(delta)  # F2
 	_t += delta
 	_heat()
 	var auto := sim.automation
@@ -95,6 +96,22 @@ func _heat() -> void:
 		if hbody != null:
 			var on := c.heater_on(key)
 			_lamp(hbody, Color(1.0, 0.45, 0.15) if on else Color(0.2, 0.2, 0.2), on)
+
+
+## F2: the radio mast's warning light: blinking red while it broadcasts, dark otherwise.
+var _blink := 0.0
+
+
+func _mast(delta: float) -> void:
+	var key := sim.mast_key()
+	if key == "" or build_view == null:
+		return
+	var body := build_view.body_for(key)
+	if body == null:
+		return
+	_blink += delta
+	var on := sim.rescue_state == "broadcasting" and fmod(_blink, 1.2) < 0.7
+	_lamp(body, Color(1.0, 0.12, 0.08) if on else Color(0.25, 0.08, 0.06), on)
 
 
 func _lamp(body: Node3D, color: Color, glow: bool) -> void:

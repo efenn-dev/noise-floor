@@ -32,6 +32,10 @@ var defense: Defense
 var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
+var milestones: Milestones  # F2: the Hub
+## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
+var rescue_state := ""
+var rescue_day := -1  # the day the broadcast started (rescue comes the next morning), then the day rescued
 ## M15: what happened at your base (the last 50 events with game time). L opens it.
 var base_log: BaseLog
 ## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
@@ -136,6 +140,11 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	defense.base_log = base_log
 	projects = Projects.new(data)
 	build.projects = projects  # M17a: the water tap can't be built until the tower runs
+	milestones = Milestones.new(data)
+	# Tests' worlds start with every milestone but the rescue done (like power.free, but on by default), so the
+	# many tests that build turrets or extractors don't need to; a real new game clears this (main.gd).
+	milestones.grant_all_but_final()
+	build.milestones = milestones  # F2: the Hub's milestones unlock the advanced pieces
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
 	factory.skills = skills  # belt speed, craft speed, planter yield
@@ -209,6 +218,7 @@ func step() -> void:
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
+	_tick_rescue()  # F2
 	_note_noise()
 	_tick_first_night()
 	player.carry_ratio = carry_ratio()
@@ -2530,6 +2540,90 @@ func node_at(cell: Vector2i) -> Dictionary:
 		if n["cell"] == cell:
 			return n
 	return {}
+
+
+## F2: the Hub's piece key ("" if you haven't built one).
+func hub_key() -> String:
+	return build.first_of_kind("hub")
+
+
+## F2: what's in reach of the Hub to hand in: your pockets and any storage crate within deliver_range of it.
+func hub_stock() -> Stock:
+	var at := build.piece_center(hub_key()) if hub_key() != "" else player_pos
+	var crates := []
+	for key: String in storages:
+		if build.pieces.has(key) and _flat_dist(build.piece_center(key), at) <= float(data.milestones.get("deliver_range", 8.0)):
+			crates.append(storages[key])
+	return Stock.new(inventory, crates)
+
+
+## F2: hands in what's in reach for milestone `id`. Returns the message to show.
+func hub_deliver(id: String) -> String:
+	if hub_key() == "":
+		return "Build a Hub first"
+	if milestones.is_done(id):
+		return "Already done"
+	if not milestones.available(id):
+		return "Finish the tier before first"
+	var moved := milestones.deliver(id, hub_stock())
+	if moved.is_empty():
+		return "Nothing in reach that it needs"
+	var finished := bool(moved.get("done", false))
+	moved.erase("done")
+	var parts := []
+	for item: String in moved:
+		parts.append("%d %s" % [moved[item], data.item_name(item)])
+	var ms_name: String = milestones.cfg(id)["name"]
+	if finished:
+		var unlocks: Array = milestones.cfg(id).get("unlocks", []).map(func(b: String) -> String: return data.buildables[b]["name"])
+		stats.note("finished the %s milestone" % ms_name.to_lower())
+		base_log.add("Hub milestone done: %s (unlocked %s)" % [ms_name, ", ".join(unlocks)], build.piece_center(hub_key()))
+		return "%s done! Unlocked: %s" % [ms_name, ", ".join(unlocks)]
+	return "Handed in %s for %s" % [", ".join(parts), ms_name]
+
+
+## F2: E on the radio mast: start the rescue broadcast (from broadcast_from till midnight). Returns a message.
+func start_broadcast(key: String) -> String:
+	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "radio_mast":
+		return ""
+	if rescue_state == "rescued":
+		return "You were rescued. The radio is quiet."
+	if rescue_state == "broadcasting":
+		return "Broadcasting. Keep the mast standing until morning."
+	var from := float(data.milestones.get("broadcast_from", 18.0))
+	if clock.time_of_day < from:
+		return "Start the broadcast at dusk (after %d:00): rescue comes at dawn" % int(from)
+	rescue_state = "broadcasting"
+	rescue_day = clock.day
+	director.heat = float(data.noise["director"]["max_heat"])  # every zombie for miles hears it
+	stats.note("started the rescue broadcast")
+	base_log.add("Rescue broadcast started. Hold the mast until dawn.", build.piece_center(key))
+	return "Broadcasting! Keep the mast standing until %d:00." % int(data.milestones.get("rescue_hour", 6.0))
+
+
+## F2: the radio mast's piece key ("" if none stands).
+func mast_key() -> String:
+	return build.first_of_kind("radio_mast")
+
+
+func _tick_rescue() -> void:
+	if rescue_state != "broadcasting":
+		return
+	var mast := mast_key()
+	if mast == "":
+		rescue_state = ""
+		rescue_day = -1
+		add_message("The radio mast fell. The broadcast is lost: rebuild it and try again.", 8.0)
+		base_log.add("The radio mast fell: the rescue broadcast was lost", player_pos)
+		return
+	noise.continuous.append({"pos": build.piece_center(mast), "loudness": float(data.milestones.get("broadcast_loudness", 100.0)),
+			"key": mast, "kind": "radio_mast"})
+	if clock.day > rescue_day and clock.time_of_day >= float(data.milestones.get("rescue_hour", 6.0)):
+		rescue_state = "rescued"
+		rescue_day = clock.day
+		stats.note("was rescued")
+		base_log.add("RESCUED on day %d" % clock.day, build.piece_center(mast))
+		add_message("Rotors in the dawn: rescue is here. You made it.", 12.0)
 
 
 func _on_piece_added(key: String) -> void:

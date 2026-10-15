@@ -7,6 +7,7 @@ extends Node3D
 
 signal entered_car(id: String)
 signal opened_workbench(key: String)  # M14: E on a workbench (main opens the screen)
+signal opened_hub(key: String)  # F2: E on the Hub (main opens the milestones screen)
 signal opened_project(id: String)  # M17a: E on the water tower (main opens the project screen)
 signal opened_sensor(key: String)  # M15: E on a motion or noise sensor (main opens the sensor screen)
 signal opened_container(id: String)  # V18: searched world loot opens in the inventory screen
@@ -233,6 +234,12 @@ func interact() -> String:
 		"workbench":
 			opened_workbench.emit(target_key)
 			return ""
+		"hub":  # F2
+			opened_hub.emit(target_key)
+			return ""
+		"radio_mast":  # F2: the rescue broadcast
+			last_message = sim.start_broadcast(target_key)
+			return last_message
 		# M15: automated defense
 		"turret":
 			last_message = sim.turret_interact(target_cell, sim.build.piece_center(target_key))
@@ -433,6 +440,14 @@ func status_text() -> String:
 	elif kind == "workbench":
 		lines.append("Workbench · firearm parts and ammo by hand")
 		lines.append("[E] use it")
+	elif kind == "hub":  # F2
+		lines.append("Hub · %d of %d milestones done" % [sim.milestones.done.size(), sim.milestones.all().size()])
+		lines.append("[E] milestones: hand in parts to unlock machines")
+	elif kind == "radio_mast":  # F2
+		var state := {"": "[E] start the rescue broadcast (at dusk)", "broadcasting": "BROADCASTING: hold it until dawn",
+				"rescued": "Rescued. The radio is quiet."}
+		lines.append("Radio mast")
+		lines.append(state.get(sim.rescue_state, ""))
 	elif kind == "bed":
 		lines.append("Bed · energy %d" % roundi(sim.player.energy))
 		lines.append("[E] sleep here (you'll respawn here)")

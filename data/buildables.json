@@ -234,6 +234,20 @@
 		"needs_node": "timber",
 		"cost": { "metal_plate": 14, "nails": 12, "scrap_metal": 8 }
 	},
+	"hub": {
+		"name": "Hub",
+		"kind": "hub",
+		"hp": 300,
+		"size": [1.9, 1.7, 1.9],
+		"cost": { "plank": 20, "scrap_metal": 10, "nails": 10 }
+	},
+	"radio_mast": {
+		"name": "Radio mast",
+		"kind": "radio_mast",
+		"hp": 500,
+		"size": [1.9, 12.0, 1.9],
+		"cost": { "metal_plate": 40, "nails": 40 }
+	},
 	"storage": {
 		"name": "Storage crate",
 		"kind": "storage",

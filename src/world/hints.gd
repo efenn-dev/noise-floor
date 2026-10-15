@@ -17,6 +17,9 @@ const STEPS := [
 	"Press E on the smelter: it loads scrap metal and makes metal plates (E again takes them)",
 	"It's loud. Zombies hear it. Press N to see how far",
 	"Wall it in, or press U on it to fit a muffler",
+	# F2: the Hub
+	"Build a Hub at your base (B, Hub group): it unlocks new machines",
+	"Press E on the Hub and hand in parts for a milestone",
 ]
 
 var sim: SimWorld
@@ -74,6 +77,10 @@ func _done(i: int) -> bool:
 			return _time >= NOISE_SECONDS or (overlay != null and overlay.visible)
 		7:
 			return sim.stats.mufflers > 0 or _walls() >= 4
+		8:
+			return sim.hub_key() != ""
+		9:
+			return not sim.milestones.delivered.is_empty()
 	return true
 
 
