@@ -5,6 +5,7 @@ extends CharacterBody3D
 ## where the brain wants: along the navmesh if there's a path, straight at the target if not.
 
 const HEAD_Y := 1.45   # hits above this height (from the feet) count as head hits
+const LEG_Y := 0.8     # V33: and below this, the legs (when the bone hit zones are off; data/hit_zones.json leg_height)
 const HEIGHT := 1.8
 const RADIUS := 0.35
 ## V24: the arms' reach in front of the body (it walks toward -Z): a ball this big at this offset makes the
@@ -84,6 +85,8 @@ var _reach_shape: CollisionShape3D  # V24: keeps the reaching arms out of walls
 var _last_target := Vector3.INF
 var _fall := 0.0
 var _model: Node3D
+var _hit_shapes: Array[CollisionShape3D] = []  # V33: the bone hit zones (ZombieHitboxes)
+var _hitboxes_on := false
 ## A2: which of BODIES this zombie wears.
 var body_variant := ""
 var _anim: AnimationPlayer
@@ -147,6 +150,7 @@ func setup(p_brain: ZombieBrain, p_player: Node3D) -> void:
 				mesh.set_surface_override_material(i, _material_for_look(source, texture, float(mapping["tile_m"]), tint))
 			elif tint != source.albedo_color:
 				mesh.set_surface_override_material(i, _plain_material_for_look(source, tint))
+	_build_hitboxes()  # V33: after the body and its size are final
 
 
 ## The same id always receives the same cloth and faded colour, before and after saving. The two picks use
@@ -251,6 +255,41 @@ func head_y() -> float:
 	return float(brain.stats.get("head_height", HEAD_Y))
 
 
+## V33: the zone a hit at height `y` lands in when the bone zones are off (or a swing slips between them).
+func zone_at(y: float, at: Vector3 = Vector3.INF) -> String:
+	if brain.stats.has("head_ahead") and at.is_finite():  # a crawler lies flat: its head is its front
+		var fwd := -global_basis.z
+		var ahead := Vector2(at.x - global_position.x, at.z - global_position.z).dot(Vector2(fwd.x, fwd.z).normalized())
+		return "head" if ahead >= float(brain.stats["head_ahead"]) else "torso"
+	var above := y - global_position.y
+	if above >= head_y():
+		return "head"
+	if above <= float(brain.stats.get("leg_height", LEG_Y)):
+		return "leg"
+	return "torso"
+
+
+## V33: whether the bone hit zones are on (near the player, alive).
+func hitboxes_on() -> bool:
+	return _hitboxes_on and not _hit_shapes.is_empty()
+
+
+func _build_hitboxes() -> void:
+	_hit_shapes = ZombieHitboxes.build(_model, ZombieHitboxes.fit(_model, body_variant), brain.id)
+	_hitboxes_on = true
+	_set_hitboxes(player != null and is_inside_tree() and player.is_inside_tree()
+			and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
+
+
+func _set_hitboxes(on: bool) -> void:
+	if on == _hitboxes_on:
+		return
+	_hitboxes_on = on
+	for cs: CollisionShape3D in _hit_shapes:
+		if is_instance_valid(cs):
+			cs.disabled = not on
+
+
 func _init() -> void:
 	collision_layer = Layers.ZOMBIE
 	collision_mask = Layers.WORLD | Layers.BUILT | Layers.ZOMBIE
@@ -304,8 +343,11 @@ func _physics_process(delta: float) -> void:
 	_speak(delta)
 	if brain.is_dead():
 		_end_climb_collision()
+		_set_hitboxes(false)
 		_lie_down(delta)
 		return
+	if (_frame + brain.id) % 10 == 0:  # V33: zones on near the player, off further out
+		_set_hitboxes(player != null and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
 	if brain.state == ZombieBrain.State.CLIMB:
 		_climb_window()
 		return

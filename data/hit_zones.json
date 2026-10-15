@@ -1,0 +1,7 @@
+{
+	"_about": "V33 hit zones: damage multipliers for where a hit lands (the head uses the weapon or gun head_multiplier), the height under which a hit counts as the legs on a zombie without bone hit zones, and the limp a leg hit gives.",
+	"damage": {"torso": 1.0, "arm": 0.6, "leg": 0.75},
+	"leg_height": 0.8,
+	"limp_time": 1.5,
+	"limp_factor": 0.55
+}
