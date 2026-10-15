@@ -21,7 +21,7 @@ const EDGE_KINDS := ["wall", "door", "barricade", "window", "tripwire", "fence"]
 ## M15: edge pieces that stand on bare ground (no foundation needed), and never block sound or sight.
 const GROUND_EDGES := ["tripwire", "fence"]
 ## M15: objects that stand on bare ground, like power poles and spike strips.
-const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap"]
+const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast"]
 
 const GRID := 2.0
 const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
@@ -34,6 +34,7 @@ var data: GameData
 var pieces: Dictionary = {}
 ## M17a: set by SimWorld, so pieces with a data "needs_project" (the water tap) wait for that project.
 var projects: Projects
+var milestones: Milestones  # F2: pieces the Hub's milestones unlock
 
 
 func _init(p_data: GameData) -> void:
@@ -214,6 +215,10 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Unknown piece"
 	if not player_placeable(id):
 		return "Only found in town"
+	if milestones != null and not milestones.unlocked(id):
+		return "Unlock it at the Hub: %s" % milestones.cfg(milestones.unlocked_by(id)).get("name", "a milestone")
+	if _kind(id) == "hub" and pieces.values().any(func(p: Dictionary) -> bool: return _kind(p["id"]) == "hub"):
+		return "You already have a Hub"
 	if projects != null and not projects.unlocked(id):
 		return "Needs the %s running" % String(data.projects.get(data.buildables[id]["needs_project"], {}).get("name", "project")).to_lower()
 	var existing := key_for(id, cell, side)

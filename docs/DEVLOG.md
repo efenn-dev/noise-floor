@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — F2 The Hub, milestones and the rescue (building like Satisfactory, part 2)
+
+Emmitt: building should feel like Satisfactory. Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
+
+**Built:**
+- **The Hub** (Build menu, new **Hub** group; one per game, no foundation): your base's command post, a desk with a map, a radio and a milestone board. E opens the **milestones screen**: every milestone tier by tier (done, open, locked); pick one to see its parts (handed in / needed, and how many are in reach: your pockets and any crate within 8 m of the Hub), what it unlocks, and **Hand in what's in reach**. Parts go in part at a time and stay in.
+- **Seven milestones in four tiers** (`data/milestones.json`): Tier 1 Scavenger (Salvage rig: salvager + water pump; Lumber yard: sawmill), Tier 2 Settler (Fuel line: fuel pump + solar panel; Kitchen: purifier + canner; Sentry: nail turret, hopper, motion sensor, floodlight), Tier 3 Fortress (Heavy defense: crossbow and rifle turrets, electric fence, repair station, noise sensor, noisemaker), Tier 4 Rescue (Rescue signal: the radio mast). A tier opens when the one before is all done. Locked pieces say which milestone opens them; the basics (foundations, walls, smelter, press, generator, belts...) are never locked.
+- **The rescue (the game's goal):** build the 12 m **radio mast**, press E at dusk (after 18:00) to start the broadcast: it's a 100-loud noise all night and the Director's heat jumps to the top, so the hordes come. Keep the mast standing until 06:00 and the helicopter comes: a **RESCUED** screen with your day, kills and milestones (Keep playing carries on). If the mast falls, the broadcast is lost; rebuild and try again. Its warning light blinks red while it broadcasts.
+- **Saves:** version 22 keeps milestones, handed-in parts and the broadcast. **A save from before the Hub gets every milestone but the rescue**, so nothing it built is locked away. A new game starts with all of them ahead.
+- First-game tips gain two steps: build a Hub, hand something in.
+- Flags: `--hub[=N]` (a Hub ahead with N milestones done, its screen open), `--mast` (a radio mast ahead, broadcasting after 18:00).
+
+**Try it:** `play.bat` (new game), build a Hub from the Hub group, press E on it. `play.bat --mast --time=19` shows a broadcasting mast.
+
+**Tests:** 14,360+ green (new `test_hub_milestones.gd`: tiers open in order, part-at-a-time hand-ins, locks and unlocks, one Hub, hand-ins from crates near the Hub, the broadcast refused at noon / started at dusk / heard by everything / rescue at dawn / lost if the mast falls, saves, the old-save grant; `test_hints.gd` for the two new tips). Test worlds (`SimWorld.new`) start with everything but the rescue unlocked, like `power.free`; a real new game clears it.
+
+**Known gaps:** no rescue cinematic (a screen, not a helicopter yet); milestone costs are first guesses for Playtest #2 to tune; a Hub you lose is just rebuilt (its progress is kept).
+
+**Next:** F3 build feel (drag belts, splitters and mergers, snapping), then W3b downtown.
+
 ## 2026-10-15 — F1 Resource nodes and extractors (building like Satisfactory, part 1)
 
 Emmitt: "I'd like the building to be more like Satisfactory but it doesn't feel like it fits into the game right now." Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5. Stacked on W3a (#78).

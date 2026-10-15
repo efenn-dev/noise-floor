@@ -6,6 +6,8 @@ extends Node3D
 ##   --time=HOURS          start at this hour, e.g. --time=22 for night
 ##   --day=N               start on day N (M16: days 1-7 summer, 8-14 autumn, 15-21 winter, 22-28 spring)
 ##   --cam=X,Y,Z[,YAW[,PITCH]]  put the player's feet at X,Y,Z looking YAW/PITCH degrees
+##   --hub[=N]             F2: a Hub built a few metres ahead (N milestones already done) with its screen open
+##   --mast                F2: a radio mast built ahead (the final milestone done); after 18:00 it starts broadcasting
 ##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
 ##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
@@ -90,6 +92,9 @@ var placer: Placer  # V34: Place from the inventory: put a thing down where you 
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
+var hub_screen: HubScreen  # F2: E on the Hub
+var _victory: CanvasLayer  # F2: shown once when rescue comes
+var _rescue_was := ""  # F2: the rescue state last frame (the victory shows when broadcasting turns rescued)
 var park: Dictionary = {}  # M17a: ParkPlan.generate(seed): warehouses, crates, zombies, wrecks, fences, the tower
 var park_view: ParkView
 var road_view: RoadView  # W3a: the bigger map's new roads
@@ -187,6 +192,8 @@ func _ready() -> void:
 	sim = SimWorld.new(float(args.get("time", "8.0")), null, int(save.get("seed", 1)),
 			GameSession.current_difficulty)
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
+	if not _demo_run(args):
+		sim.milestones.done.clear()  # F2: a real game starts with every Hub milestone ahead (a save brings its own)
 	if args.has("day"):
 		sim.clock.day = maxi(1, int(args["day"]))  # M16: --day=16 starts in winter (a save sets its own day)
 	if args.has("screenshot"):
@@ -247,6 +254,10 @@ func _ready() -> void:
 	add_child(project_screen)
 	project_screen.setup(sim)
 	project_screen.message.connect(func(text: String) -> void: sim.add_message(text, 4.0))
+	hub_screen = HubScreen.new()
+	add_child(hub_screen)
+	hub_screen.setup(sim)
+	hub_screen.message.connect(func(text: String) -> void: sim.add_message(text, 5.0))
 	base_log_screen = BaseLogScreen.new()
 	add_child(base_log_screen)
 	base_log_screen.setup(sim)
@@ -317,6 +328,22 @@ func _ready() -> void:
 		_give_mod_screen(str(args["mod-screen"]))
 	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("hub") or args.has("mast"):  # F2: for screenshots
+		var ahead := player.global_position - player.global_basis.z * 5.0
+		var cell := Vector2i(floori(ahead.x / BuildGrid.GRID), floori(ahead.z / BuildGrid.GRID))
+		var stock := Inventory.new()
+		stock.give_all({"plank": 200, "scrap_metal": 200, "nails": 200, "metal_plate": 200})
+		if args.has("hub"):
+			for id: String in sim.milestones.all().slice(0, int(str(args["hub"])) if str(args["hub"]) != "" else 0):
+				sim.milestones.done.append(id)
+			sim.build.place("hub", cell, BuildGrid.Side.NORTH, stock)
+			sim.inventory.give_all({"plank": 12, "scrap_metal": 8, "nails": 4})
+			hub_screen.open()
+		else:
+			sim.milestones.grant_all_but_final()
+			sim.milestones.done.append(sim.milestones.final_id())
+			sim.build.place("radio_mast", cell, BuildGrid.Side.NORTH, stock)
+			sim.start_broadcast(sim.mast_key())
 	if args.has("demo-outpost"):  # F1: one of each extractor on its node, running
 		sim.power.free = true
 		var stock := Inventory.new()
@@ -477,7 +504,7 @@ func _open_sensor(key: String) -> void:
 
 func _m15_screen_open() -> bool:
 	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open() \
-			or project_screen.is_open()  # P3: and help; M17a: and the project screen
+			or project_screen.is_open() or (hub_screen != null and hub_screen.is_open())  # P3: help; M17a: project; F2: Hub
 
 
 ## M17a: E on the water tower.
@@ -605,6 +632,9 @@ func _process(delta: float) -> void:
 	if _shot_path == "":
 		_footsteps(delta)
 	_update_hud(delta)
+	if sim.rescue_state == "rescued" and _rescue_was == "broadcasting" and _victory == null:
+		_show_victory()  # F2
+	_rescue_was = sim.rescue_state
 	_update_indoor_fog(delta)
 	if sound_view != null:
 		sound_view.indoor = indoor_fog  # V4: indoor echo and muffled wind follow the same eased value
@@ -1399,6 +1429,7 @@ func _build_building(args: Dictionary) -> void:
 	interactor.setup(sim, player.camera, builder, [player.get_rid()])
 	interactor.entered_car.connect(_enter_car)
 	interactor.opened_workbench.connect(_open_workbench)
+	interactor.opened_hub.connect(func(_key: String) -> void: hub_screen.open())  # F2
 	interactor.opened_sensor.connect(_open_sensor)
 	interactor.opened_project.connect(_open_project)
 	interactor.opened_container.connect(_open_loot_container)
@@ -1753,6 +1784,55 @@ func _lay_for_shot(look: String, at: Vector3, yaw: float) -> void:
 		sim.bags.append({"id": sim._next_bag, "pos": at, "items": {}, "gear": [sim.gear.make(look, "civilian", "white")],
 				"kind": SimWorld.ITEM, "yaw": yaw})
 		sim._next_bag += 1
+
+
+## F2: a run that shows something built (a --demo-*, an outpost, the hit zones...) keeps the test world's unlocked
+## pieces, so its turrets, panels and extractors can go up.
+func _demo_run(args: Dictionary) -> bool:
+	for key: String in args:
+		if key.begins_with("demo") or key in ["workbench", "sensor-screen", "mast"]:
+			return true
+	return false
+
+
+## F2: the rescue came: a screen saying so, once, over the game (which carries on behind it).
+func _show_victory() -> void:
+	_victory = CanvasLayer.new()
+	_victory.layer = 8
+	add_child(_victory)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_victory.add_child(dim)
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 18)
+	_victory.add_child(box)
+	var title := Label.new()
+	title.text = "RESCUED"
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.55))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var body := Label.new()
+	body.name = "VictoryText"
+	body.text = "The helicopter came at dawn on day %d.\nZombies killed: %d    Milestones: %d of %d" % [sim.rescue_day,
+			sim.stats.kills, sim.milestones.done.size(), sim.milestones.all().size()]
+	body.add_theme_font_size_override("font_size", 22)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(body)
+	var keep := Button.new()
+	keep.name = "KeepPlaying"
+	keep.text = "Keep playing"
+	keep.custom_minimum_size = Vector2(260, 52)
+	keep.focus_mode = Control.FOCUS_NONE
+	keep.pressed.connect(func() -> void:
+		_victory.visible = false
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
+	box.add_child(keep)
+	box.position -= box.get_combined_minimum_size() / 2.0
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func key_hint_text() -> String:

@@ -11,6 +11,7 @@ signal picked(id: String)
 const GOLD := Color(0.95, 0.8, 0.55)
 const GROUPS := [
 	["Base", ["foundation", "wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
+	["Hub", ["hub", "radio_mast"]],
 	["Factory", ["belt", "smelter", "press", "rain_collector", "purifier", "planter", "canner", "water_tap"]],
 	["Extractors", ["salvager", "water_pump", "fuel_pump", "sawmill"]],
 	["Power", ["generator", "solar_panel", "power_pole"]],
@@ -21,6 +22,7 @@ const GROUPS := [
 const GROUP_NOTES := {
 	"Base": "Lay foundations first (key 1): walls, doors and machines stand on them.",
 	"Factory": "Machines stand on a foundation and most need power. E on a machine loads it and takes what it made.",
+	"Hub": "F2: build a Hub at your base and press E on it: milestones unlock the advanced machines. Locked pieces say which milestone opens them.",
 	"Extractors": "F1: built on a resource node's yellow spot (no foundation): scrap heaps, farm wells, fuel tankers, timber stands. Loud: an outpost draws zombies.",
 	"Power": "A generator (E loads gas cans) or a solar panel, plus a power pole within reach of what it feeds.",
 	"Defense": "Turrets need ammo (E, a belt or a hopper). Sensors pick an action with E.",
@@ -38,6 +40,8 @@ const BLURBS := {
 	"electric_heater": "Warms the room on power. Silent.",
 	"belt": "Carries items forward at 2 m a second. R turns it.",
 	"smelter": "Scrap metal into metal plates. Loud. Needs power.",
+	"hub": "Your base's command post (one per game). E: milestones. Hand in parts to unlock new machines, ending with the rescue.",
+	"radio_mast": "Calls for rescue. Start the broadcast at dusk and keep the mast standing until dawn. Every zombie for miles hears it.",
 	"salvager": "Grinds a scrap heap into scrap metal, nonstop. Very loud. Needs power. Build it on a scrap heap's yellow spot.",
 	"water_pump": "Pumps dirty water from a farm well. Needs power. Build it on a well's yellow spot.",
 	"fuel_pump": "Draws gas cans out of a crashed fuel tanker. Needs power. Build it on a tanker's yellow spot.",

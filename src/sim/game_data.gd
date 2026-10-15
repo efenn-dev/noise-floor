@@ -8,7 +8,9 @@ const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "ma
 		# M15: automated defense
 		"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "tripwire", "fence", "repair_station",
 		# M16: heat
-		"stove", "heater"]
+		"stove", "heater",
+		# F2: the Hub and the rescue
+		"hub", "radio_mast"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -28,6 +30,7 @@ var projects: Dictionary = {}    # M17a: big projects (the water tower): phases,
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
 var resources: Dictionary = {}   # F1: resource node kinds, purities and the nodes on the map: data/resources.json
+var milestones: Dictionary = {}  # F2: the Hub's tiers and milestones, and the rescue broadcast: data/milestones.json
 var hit_zones: Dictionary = {}   # V33: damage per hit zone (torso, arm, leg), the leg line and the limp: data/hit_zones.json
 var load_errors: PackedStringArray = []
 
@@ -52,6 +55,8 @@ static func load_default() -> GameData:
 	data.difficulty = _read_json(DIR + "difficulty.json", data)
 	data.resources = _read_json(DIR + "resources.json", data)
 	data.resources.erase("_about")
+	data.milestones = _read_json(DIR + "milestones.json", data)
+	data.milestones.erase("_about")
 	data.hit_zones = _read_json(DIR + "hit_zones.json", data)
 	data.hit_zones.erase("_about")
 	return data
@@ -203,6 +208,14 @@ func validate() -> PackedStringArray:
 			if float(e.get("weight", 0)) <= 0.0 or int(e.get("min", 0)) < 1 or int(e.get("max", 0)) < int(e.get("min", 0)):
 				errors.append("loot '%s' entry '%s' needs weight > 0 and 1 <= min <= max" % [table, e.get("item", "")])
 	_check_stats(errors, "zombie", zombies, ZOMBIE_STATS)
+	for id: String in milestones.get("milestones", {}):  # F2
+		var ms: Dictionary = milestones["milestones"][id]
+		for b: String in ms.get("unlocks", []):
+			if not buildables.has(b):
+				errors.append("milestone '%s' unlocks unknown piece '%s'" % [id, b])
+		for item: String in ms.get("cost", {}):
+			if not items.has(item):
+				errors.append("milestone '%s' costs unknown item '%s'" % [id, item])
 	for kind: String in resources.get("kinds", {}):  # F1
 		var ex := str(resources["kinds"][kind].get("extractor", ""))
 		if not buildables.has(ex) or str(buildables[ex].get("needs_node", "")) != kind:
