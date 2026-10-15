@@ -61,6 +61,8 @@ class CharacterSilhouette:
 		draw_line(Vector2(178, 184), Vector2(196, 276), ink, 24.0, true)
 
 signal message(text: String)
+## V34: "Place" on an item or gear piece in your pockets: the screen closes and the world's placer takes over.
+signal place_requested(item: String, uid: int)
 
 const SLOT := Vector2(78, 78)
 const COLS := 4
@@ -339,6 +341,15 @@ func drop_gear_selected() -> void:
 func use_selected() -> void:
 	message.emit(sim.use_item(_selected))
 	refresh()
+
+
+## V34: hands the selected item or gear piece to the placer (aim at a floor, table or shelf; LMB puts it down).
+func place_selected() -> void:
+	if _selected.begins_with(GEAR):
+		place_requested.emit("", int(_selected.trim_prefix(GEAR)))
+	elif _selected != "":
+		place_requested.emit(_selected, -1)
+	close()
 
 
 func drop_selected(whole_stack: bool) -> void:
@@ -981,9 +992,11 @@ func _show_gear(piece: Dictionary) -> void:
 		if not selected_mod_gun().is_empty():
 			_action("Fit to %s" % selected_mod_gun()["name"], fit_part.bind(int(piece["uid"])))
 		_action("Drop", drop_gear_selected)
+		_action("Place", place_selected)
 	else:
 		_action("Equip", equip_selected)
 		_action("Drop", drop_gear_selected)
+		_action("Place", place_selected)
 	if _selected_side != CRATE and sim.inventory.count("repair_kit") > 0 and float(piece["condition"]) < 1.0:
 		_action("Repair (1 kit)", repair_selected)
 
@@ -1061,6 +1074,7 @@ func _show_details(held: Inventory) -> void:
 	if _selected_side == POCKETS:
 		_action("Drop 1", drop_selected.bind(false))
 		_action("Drop all", drop_selected.bind(true))
+		_action("Place", place_selected)
 
 
 ## Item names, with car keys saying which car they start.

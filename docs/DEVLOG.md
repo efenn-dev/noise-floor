@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V34 Items in the world: dropped things look like themselves, and placing (Sprint 4)
+
+Emmitt: "could you add a PR for skins for the items dropped? also allow placing items". Models by Codex (one job on his ChatGPT plan), code and checks by Claude Opus 5.5.
+
+**Built:**
+- **37 new item models** (`tools/art/item_props.py` -> `assets/models/item_<id>.glb`): every stack item (food, water, nails, planks, ammo boxes, bags, gas can, radio...) and every wearable (jacket and vest folded, pants, boots and sneakers as pairs, gloves, hard hat, cap, headlamp). Weapons, guns, gun parts, the bottle and the pipe bomb use their own models. Materials are named "Item ..." and textured by `BagView.ITEM_LOOKS`. Contact sheet: `tools/art/item_props_contact.jpg`.
+- **Dropping:** Drop in the inventory puts the thing on the floor a step in front of you as itself (a rifle on its side, an axe flat), turned the way you face; the same item dropped on the same spot joins that stack (up to three shown side by side). Looking at it says what it is ("12 Nails", "Work boots"); E picks it up. Death bags now look like a stuffed rucksack.
+- **Placing:** Place in the inventory (items and gear) closes it and shows the thing see-through where you aim: any floor, table, counter or shelf within about 3 m. Mouse wheel turns it, left click puts one down (stays ready while you have more), right click or Esc stops. The sim checks reach (`SimWorld.place_item` / `place_gear`).
+- Saves: version 21. Each thing on the ground keeps its kind and facing; older saves load their bags as bags (fixture `test/fixtures/save_v20.json`).
+- Screenshot flags `--drop=A,B,...` (a row of things ahead of you) and `--place=ITEM` (placing mode on).
+
+**Try it:** `play.bat`, Tab, pick something, Drop or Place. Or `play.bat --drop=canned_food,soda,jacket,hunting_rifle,axe --cam=0,0,0,0,-38` to see a row.
+
+**Tests:** 13,872 green (new `test_items_in_world.gd`: drop in front of you, stacking, naming, picking up, gear, placing reach, save round trip, old saves, a model that rests on the floor for every item and wearable, the placer on a floor vs. nothing in reach; `test_inventory_actions.gd` updated for drops as themselves).
+
+**Known gaps:** zombies ignore things on the ground; you can't place on top of another placed thing yet; labels on cans and boxes are colour bands, not printed text; the three backpacks are boxy.
+
 ## 2026-10-14 — Q6 Second pre-playtest check, after V23-V31 (Sprint 4)
 
 The check DIRECTION.md asks for before a playtest, on `main` at #73 (attachments, guidance, save slots, crawler and brute, difficulty and the first night, new weapons, the arm fix all merged), by Claude Opus 5.5 on the PC. Also read the newest session logs (45 minutes on 10-14: 11 perk points earned and none spent, two gold pieces found but a white pipe worn, nothing built, no deaths; V25 and V29 were aimed at exactly that).

@@ -12,6 +12,8 @@ extends Node3D
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
 ##   --gun=BASE            V30: hold pistol, rifle, shotgun or crossbow (pete is the unique rifle)
 ##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
+##   --drop=A,B,...        V34: lay these items or gear bases (rifle, jacket, axe...) in a row in front of you
+##   --place=ITEM          V34: start placing ITEM (an item or a gear base) with its see-through ghost showing
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
@@ -70,6 +72,7 @@ var zombie_view: ZombieView
 var melee: Melee
 var shooter: Shooter  # M14: the gun in your hands
 var thrower: Thrower  # V30: throwable input, arc and projectile presentation
+var placer: Placer  # V34: Place from the inventory: put a thing down where you aim
 var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
@@ -195,6 +198,12 @@ func _ready() -> void:
 	add_child(inventory_screen)
 	inventory_screen.setup(sim)
 	inventory_screen.message.connect(func(text: String) -> void: sim.add_message(text, 2.5))
+	inventory_screen.place_requested.connect(func(item: String, uid: int) -> void:
+		builder.set_active(false)
+		thrower.cancel()
+		placer.start(item, uid)
+		if placer.active():
+			sim.add_message(placer.last_message, 4.0))
 	sim.container_searched.connect(_open_loot_container)
 	build_menu = BuildMenu.new()
 	add_child(build_menu)
@@ -286,6 +295,23 @@ func _ready() -> void:
 		_give_mod_screen(str(args["mod-screen"]))
 	elif args.has("gun") or args.has("workbench") or args.has("shoot") or args.has("aim"):
 		_give_gun(args.get("gun", ""), args.has("workbench"))  # M14: --gun[=pistol|rifle|pete], --workbench
+	if args.has("drop"):  # V34: a row of things lying 1.6-3 m ahead, for screenshots
+		var looks := str(args["drop"]).split(",", false)
+		var ahead := -player.global_basis.z
+		var side := player.global_basis.x
+		for i in looks.size():
+			var at := player.global_position + ahead * 1.8 + side * (float(i) - (looks.size() - 1) / 2.0) * 0.55
+			_lay_for_shot(looks[i], at, player.global_rotation.y + PI + 0.4 * i)
+	if args.has("place"):
+		var look := str(args["place"])
+		if sim.data.items.has(look):
+			sim.inventory.add(look, 3)
+			placer.start(look)
+		else:
+			if sim.data.gear["bases"].has(look):
+				var piece := sim.gear.make(look, "civilian", "white")
+				sim.gear.pieces.append(piece)
+				placer.start("", int(piece["uid"]))
 	if args.has("throw"):
 		var throwable := str(args["throw"])
 		if throwable not in ["pipe_bomb", "bottle"]:
@@ -1434,6 +1460,9 @@ func _build_zombies(args: Dictionary) -> void:
 	bag_view = BagView.new()
 	add_child(bag_view)
 	bag_view.setup(sim)
+	placer = Placer.new()  # V34: added after melee, shooter and thrower, so it sees the clicks first while placing
+	add_child(placer)
+	placer.setup(sim, player.camera, [player.get_rid()])
 	noise_overlay = NoiseOverlay.new()
 	add_child(noise_overlay)
 	noise_overlay.setup(sim)
@@ -1655,6 +1684,17 @@ func _build_hud() -> void:
 ## P3: the one-line key hint at the bottom: only the keys that fit what you're doing. In a car its keys; in
 ## build mode the piece keys; otherwise the keys of what you look at (Interactor.keys()), the gun's or the
 ## pipe's, then walking about. F1 help is always last, and the least useful keys drop off to fit KEY_HINT_MAX.
+## V34 (--drop): lays one item or a white gear piece of base `look` on the ground at `at`, turned to `yaw`.
+func _lay_for_shot(look: String, at: Vector3, yaw: float) -> void:
+	if sim.data.items.has(look):
+		sim.bags.append({"id": sim._next_bag, "pos": at, "items": {look: 1}, "gear": [], "kind": SimWorld.ITEM, "yaw": yaw})
+		sim._next_bag += 1
+	elif sim.data.gear["bases"].has(look):
+		sim.bags.append({"id": sim._next_bag, "pos": at, "items": {}, "gear": [sim.gear.make(look, "civilian", "white")],
+				"kind": SimWorld.ITEM, "yaw": yaw})
+		sim._next_bag += 1
+
+
 func key_hint_text() -> String:
 	var parts := PackedStringArray()
 	if sim.player.dead:
@@ -1663,6 +1703,8 @@ func key_hint_text() -> String:
 		parts.append_array(["WASD drive", "Space handbrake", "E get out", "H horn", "F lights"])
 	elif builder.active:
 		parts.append_array(["1-0 hotbar", "R rotate", "LMB place", "RMB remove", "B menu", "Esc stop", "wheel next"])
+	elif placer != null and placer.active():
+		parts.append_array(["LMB put down", "wheel turn", "RMB or Esc stop"])  # V34
 	else:
 		parts.append_array(interactor.keys())
 		if sim.guidance.better_gear_uid >= 0 and sim.guidance.better_gear_seconds > 0.0:

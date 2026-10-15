@@ -27,6 +27,8 @@ V25 screenshot flag: `--objectives` shows the first-night objectives panel midwa
 
 V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
 
+V34 screenshot flags: `--drop=A,B,...` lays those items or gear bases (e.g. `canned_food,jacket,hunting_rifle,axe`) in a row ahead of you as they lie on the ground (`BagView`, models `assets/models/item_<id>.glb` from `tools/art/item_props.py`); `--place=ITEM` starts placing mode (`Placer`) with the see-through ghost showing; e.g. `tools/shot.sh drop --drop=canned_food,soda,jacket --cam=0,0,0,0,-38 --time=12`.
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

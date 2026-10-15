@@ -233,7 +233,7 @@ func test_morning_message_save_round_trip_and_v19_migration() -> void:
 	a.step()
 	eq(_said(a, "You made it to morning"), 1, "06:00 after the first night gets the morning message")
 	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a)))
-	eq(int(d["version"]), 20, "difficulty uses save version 20")
+	check(int(d["version"]) >= 20, "difficulty is saved from version 20 on")
 	eq(d["difficulty"], "hard", "difficulty is in the sim payload")
 	var b := SimWorld.new(8.0, null, 29)
 	eq(SaveGame.apply(b, d), "", "current difficulty save loads")
