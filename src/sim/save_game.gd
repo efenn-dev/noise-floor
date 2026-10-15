@@ -50,7 +50,9 @@ extends RefCounted
 ## older saves are established games, so their missing guidance loads inactive instead of restarting it.
 ## 20 = V29 difficulty and the one-shot first-night warning/wave/morning state. Older saves are Normal and
 ## their elapsed day-one beats are marked sent so migration never invents a wave on load.
-const VERSION := 20
+## 21 = V34 items in the world: each entry in "bags" has a "kind" ("bag" for death bags, "item" for something
+## dropped or placed as itself) and a "yaw". Older entries load as bags lying flat, so nothing moves or vanishes.
+const VERSION := 21
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
@@ -130,7 +132,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 					"gear": sim.loot.containers[id]["gear"].duplicate(true)}
 	var bags := []
 	for b: Dictionary in sim.bags:
-		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"], "gear": b.get("gear", []).duplicate(true)})
+		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"], "gear": b.get("gear", []).duplicate(true),
+				"kind": b.get("kind", SimWorld.BAG), "yaw": float(b.get("yaw", 0.0))})
 	var p := sim.player
 	return {
 		"version": VERSION,
@@ -346,7 +349,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		var pieces := []
 		for gp: Dictionary in b.get("gear", []):
 			pieces.append(Gear.clean(gp))
-		sim.bags.append({"id": int(b["id"]), "pos": _to_v3(b["pos"]), "items": _ints(b["items"]), "gear": pieces})
+		sim.bags.append({"id": int(b["id"]), "pos": _to_v3(b["pos"]), "items": _ints(b["items"]), "gear": pieces,
+				"kind": str(b.get("kind", SimWorld.BAG)), "yaw": float(b.get("yaw", 0.0))})  # V34: older saves: bags
 	sim._next_bag = int(d["next_bag"])
 	sim._rng.state = int(d["rng_state"])
 	return ""

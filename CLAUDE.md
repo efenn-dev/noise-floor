@@ -27,6 +27,7 @@ V25 screenshot flag: `--objectives` shows the first-night objectives panel midwa
 
 V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
 
+V34 screenshot flags: `--drop=A,B,...` lays those items or gear bases (e.g. `canned_food,jacket,hunting_rifle,axe`) in a row ahead of you as they lie on the ground (`BagView`, models `assets/models/item_<id>.glb` from `tools/art/item_props.py`); `--place=ITEM` starts placing mode (`Placer`) with the see-through ghost showing; e.g. `tools/shot.sh drop --drop=canned_food,soda,jacket --cam=0,0,0,0,-38 --time=12`.
 V33 screenshot flag: `--hitboxes` draws the zombies' bone hit zones (`ZombieHitboxes`: head red, torso yellow, arms blue, legs green; zone damage in `data/hit_zones.json`); e.g. `tools/shot.sh zones --zombie=0,-3 --hitboxes --cam=0,0,-0.5,0,-8 --time=12`.
 
 V32 screenshot flag: `--blood=off` turns blood sprays and stains off for this run (Settings → Blood, saved, is the player's switch).

@@ -1113,37 +1113,115 @@ func crates_near(at: Vector3) -> Array:
 	return found.map(func(e: Array) -> String: return e[1])
 
 
-## Drops items from your pockets in a bag at your feet (into a bag already lying there, if any).
-## Pick it back up with E like a death bag. Returns a message.
+## V34 (Emmitt: "skins for the items dropped, also allow placing items"): a dropped or placed thing lies in the
+## world as itself (kind "item": one item stack or one gear piece, drawn with its own model and turned to `yaw`),
+## not in a bag. Death bags stay bags (kind "bag"). Both live in `bags`, are picked up with E (take_bag) and saved.
+const ITEM := "item"
+const BAG := "bag"
+const DROP_AHEAD := 0.55   # how far in front of your feet a dropped thing lands
+const STACK_REACH := 0.45  # a drop this close to the same item lying there joins its stack
+const PLACE_REACH := 3.0   # how far from your feet (across the floor) you can place something
+const PLACE_HEIGHT := 2.4  # and how high above them (a shelf, a counter, a table)
+
+
+## Drops items from your pockets on the floor in front of you, as themselves; the same item dropped on the
+## same spot again joins that stack. Pick it back up with E. Returns a message.
 func drop_items(item: String, amount: int) -> String:
 	var n := mini(amount, inventory.count(item))
 	if n <= 0:
 		return "Nothing to drop"
 	inventory.remove(item, n)
-	var msg := "Dropped %d %s" % [n, data.item_name(item)]
-	var bag := _bag_at_feet()
-	bag["items"][item] = int(bag["items"].get(item, 0)) + n
-	return msg
+	var at := _drop_spot()
+	for lying: Dictionary in bags:
+		if lying.get("kind", BAG) == ITEM and lying["gear"].is_empty() and lying["items"].has(item) 				and _flat_dist(lying["pos"], at) <= STACK_REACH:
+			lying["items"][item] = int(lying["items"][item]) + n
+			return "Dropped %d %s" % [n, data.item_name(item)]
+	_lay(at, player_yaw(), {item: n}, [])
+	return "Dropped %d %s" % [n, data.item_name(item)]
 
 
-## M13: drops a gear piece from your pockets into the bag at your feet. Returns a message.
+## M13: drops a gear piece from your pockets on the floor in front of you (V34: as itself). Returns a message.
 func drop_gear(uid: int) -> String:
 	var piece := gear.take(uid)
 	if piece.is_empty():
 		return "Nothing to drop"
-	_bag_at_feet()["gear"].append(piece)
+	_lay(_drop_spot(), player_yaw(), {}, [piece])
 	return "Dropped " + piece["name"]
 
 
-## The bag lying within 1 m of you, or a new empty one there.
-func _bag_at_feet() -> Dictionary:
-	for bag: Dictionary in bags:
-		if _flat_dist(bag["pos"], player_pos) <= 1.0:
-			if not bag.has("gear"):
-				bag["gear"] = []
-			return bag
-	drop_bag(player_pos, {})
-	return bags.back()
+## V34: puts one `item` from your pockets exactly at `at` (a surface the world found under your crosshair),
+## turned to `yaw` radians. Returns "" or why not.
+func place_item(item: String, at: Vector3, yaw: float) -> String:
+	if inventory.count(item) <= 0:
+		return "No %s left" % data.item_name(item).to_lower()
+	var why := _why_not_place(at)
+	if why != "":
+		return why
+	inventory.remove(item, 1)
+	_lay(at, yaw, {item: 1}, [])
+	return ""
+
+
+## V34: puts a gear piece from your pockets exactly at `at`, turned to `yaw`. Returns "" or why not.
+func place_gear(uid: int, at: Vector3, yaw: float) -> String:
+	if gear.find(uid).is_empty():
+		return "That's not in your pockets"
+	var why := _why_not_place(at)
+	if why != "":
+		return why
+	_lay(at, yaw, {}, [gear.take(uid)])
+	return ""
+
+
+func _why_not_place(at: Vector3) -> String:
+	if not at.is_finite():
+		return "Nowhere to put it"
+	if not player_vault.is_empty() or vehicles.driving != "" or player.dead:
+		return "Not now"
+	if _flat_dist(at, player_pos) > PLACE_REACH or at.y - player_pos.y > PLACE_HEIGHT:
+		return "Too far away"
+	return ""
+
+
+## V34: which way you face, as a yaw in radians (0 = north, -Z), for things you drop.
+func player_yaw() -> float:
+	return atan2(-player_facing.x, -player_facing.z)
+
+
+func _drop_spot() -> Vector3:
+	var ahead := Vector3(player_facing.x, 0.0, player_facing.z)
+	ahead = ahead.normalized() * DROP_AHEAD if ahead.length_squared() > 1e-6 else Vector3.ZERO
+	return player_pos + ahead
+
+
+func _lay(at: Vector3, yaw: float, items: Dictionary, pieces: Array) -> void:
+	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces, "kind": ITEM, "yaw": yaw})
+	_next_bag += 1
+
+
+## V34: what you see when you look at bag `id` lying on the ground: "Your bag", a gear piece's name, or
+## "12 Nails". "" if there's no such bag.
+func lying_name(id: int) -> String:
+	for lying: Dictionary in bags:
+		if lying["id"] != id:
+			continue
+		if lying.get("kind", BAG) != ITEM:
+			return "Your bag"
+		if not (lying["gear"] as Array).is_empty():
+			return str(lying["gear"][0].get("name", "Gear"))
+		var item := lying_look(lying)
+		var n := int(lying["items"].get(item, 0))
+		return data.item_name(item) if n == 1 else "%d %s" % [n, data.item_name(item)]
+	return ""
+
+
+## V34: what a thing lying on the ground is: its item id, or a gear piece's base, for its model and name.
+static func lying_look(lying: Dictionary) -> String:
+	if lying.get("kind", BAG) != ITEM:
+		return BAG
+	if not (lying["gear"] as Array).is_empty():
+		return str(lying["gear"][0].get("base", ""))
+	return str((lying["items"] as Dictionary).keys()[0]) if not (lying["items"] as Dictionary).is_empty() else ""
 
 
 func equip_gear(uid: int) -> String:
@@ -2413,7 +2491,7 @@ func _on_player_died() -> void:
 
 
 func drop_bag(at: Vector3, items: Dictionary, pieces: Array = []) -> void:
-	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces})
+	bags.append({"id": _next_bag, "pos": at, "items": items, "gear": pieces, "kind": BAG, "yaw": 0.0})
 	_next_bag += 1
 
 
