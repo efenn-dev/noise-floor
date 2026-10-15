@@ -195,11 +195,15 @@ const POSE_BENDS := {
 	"HoldMag": {"*": [44.0, 34.0, 38.0], "Index": [20.0, 18.0, 12.0], "Thumb": [26.0, 23.0, 4.0]},
 }
 const SKELETON_PATH := "Armature/Skeleton3D"
-## The jacket sleeve carries on past the end of the model's forearm (toward the shoulder), so the arm always runs
-## off the screen and never looks cut off: a tapered tube on the Forearm bone, measured to meet the sleeve's end
-## (radius 5.2-6.0 cm at the bone's head).
-const SLEEVE_EXTENSION := {"length": 0.45, "top_radius": 0.058, "bottom_radius": 0.066, "overlap": 0.03}
+## The jacket sleeve: one tapered tube on the Forearm bone from over the glove's cuff, up the forearm and on
+## past the elbow toward the shoulder, so the arm always runs off the screen and reads as one sleeve.
+## V31: the model's own sleeve runs straight down the bone, but its hand and cuff sit about 8 cm to one side of
+## that line, so on a long gun's fore-end the sleeve showed as a separate pipe beside the wrist. The tube is
+## centred on the cuff now (measured from the mesh) and the model's own sleeve is hidden.
+const SLEEVE_EXTENSION := {"wrist_gap": 0.0, "past_elbow": 0.45, "wrist_radius": 0.042, "shoulder_radius": 0.066}
 static var _pose_libraries: Dictionary = {}  # side -> AnimationLibrary, built once
+static var _cuff_centres: Dictionary = {}  # side -> Vector3, measured once
+static var _hidden: StandardMaterial3D
 
 
 ## How bent each joint of `bones` is in the rest pose (degrees between a bone and its parent), and the finger's
@@ -267,19 +271,62 @@ static func _prepare_rig(node: Node3D, side: String) -> void:
 	attach.name = "SleeveExtension"
 	attach.bone_name = "Forearm"
 	sk.add_child(attach)
+	if not _cuff_centres.has(side):
+		_cuff_centres[side] = cuff_centre(node, sk)
+	var cuff: Vector3 = _cuff_centres[side]
 	var tube := MeshInstance3D.new()
+	# The Forearm bone runs +Y from the elbow end (its head) to the wrist; the Hand bone starts at the wrist.
+	var forearm_len := sk.get_bone_rest(sk.find_bone("Hand")).origin.length()
+	var wrist_end := forearm_len - float(SLEEVE_EXTENSION["wrist_gap"])
+	var shoulder_end := -float(SLEEVE_EXTENSION["past_elbow"])
 	var mesh := CylinderMesh.new()
-	mesh.top_radius = SLEEVE_EXTENSION["bottom_radius"]  # the cylinder's top is the shoulder end (-Y, away from the wrist)
-	mesh.bottom_radius = SLEEVE_EXTENSION["top_radius"]
-	mesh.height = SLEEVE_EXTENSION["length"]
-	mesh.radial_segments = 20
-	mesh.rings = 2
+	mesh.top_radius = SLEEVE_EXTENSION["wrist_radius"]  # the cylinder's top (+Y) is the wrist end
+	mesh.bottom_radius = SLEEVE_EXTENSION["shoulder_radius"]
+	mesh.height = wrist_end - shoulder_end
+	mesh.radial_segments = 24
+	mesh.rings = 3
 	tube.mesh = mesh
-	tube.position = Vector3(0.0, -float(SLEEVE_EXTENSION["length"]) / 2.0 + float(SLEEVE_EXTENSION["overlap"]), 0.0)
-	tube.rotation.x = PI  # flip so the wide end goes toward the shoulder
+	tube.position = Vector3(cuff.x, (wrist_end + shoulder_end) / 2.0, cuff.z)
 	tube.material_override = _sleeve_material(node)
 	tube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	attach.add_child(tube)
+	_hide_model_sleeve(node)
+
+
+## V31: the middle of the glove's cuff ("Arm Skin") across the Forearm bone, in that bone's space (y is 0). The
+## arm is skinned in its rest pose, so the mesh's own vertices give it. Zero if the model has no cuff.
+static func cuff_centre(node: Node3D, sk: Skeleton3D) -> Vector3:
+	var to_bone := sk.get_bone_global_rest(sk.find_bone("Forearm")).affine_inverse()
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for i in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(i)
+			if source == null or source.resource_name != "Arm Skin":
+				continue
+			var sum := Vector3.ZERO
+			var verts: PackedVector3Array = mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+			for v in verts:
+				sum += to_bone * (mesh.transform * v)
+			if verts.size() > 0:
+				return Vector3(sum.x / verts.size(), 0.0, sum.z / verts.size())
+	return Vector3.ZERO
+
+
+## V31: the model's own sleeve runs down the bone, off to one side of the hand; the extension replaces it.
+static func _hide_model_sleeve(node: Node3D) -> void:
+	if _hidden == null:
+		_hidden = StandardMaterial3D.new()
+		_hidden.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		_hidden.albedo_color = Color(0, 0, 0, 0)
+		_hidden.resource_name = "Arm Sleeve (hidden)"
+	for mesh: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for i in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(i)
+			if source != null and source.resource_name == "Arm Sleeve":
+				mesh.set_surface_override_material(i, _hidden)
 
 
 ## The arm's own (already textured) sleeve material, so the extension matches it.

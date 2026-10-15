@@ -91,8 +91,24 @@ func test_the_sleeve_carries_on_to_the_shoulder() -> void:
 	check(ext != null, "the sleeve extension is on the arm")
 	eq(ext.bone_name, "Forearm", "riding the forearm bone")
 	var tube := ext.get_child(0) as MeshInstance3D
-	near((tube.mesh as CylinderMesh).height, float(Hands.SLEEVE_EXTENSION["length"]), "about 45 cm more sleeve")
-	check(tube.material_override != null, "dressed in the sleeve's own cloth")
+	var mesh := tube.mesh as CylinderMesh
+	check(mesh.height > 0.65 and mesh.height < 0.85, "one sleeve over the forearm and on past the elbow (%.2f m)" % mesh.height)
+	check(tube.position.y + mesh.height / 2.0 > 0.2, "it starts near the wrist, over the forearm (V31), not at the elbow")
+	check(mesh.top_radius < mesh.bottom_radius, "narrow at the wrist, wider toward the shoulder")
+	check(tube.material_override != null and tube.material_override.resource_name != "Arm Sleeve (hidden)",
+			"dressed in the sleeve's own cloth")
+	var sk := arm.get_node(Hands.SKELETON_PATH) as Skeleton3D
+	var cuff := Hands.cuff_centre(arm, sk)
+	check(Vector2(cuff.x, cuff.z).length() > 0.05, "the model's cuff sits well off the bone's line (%.3f m)" % Vector2(cuff.x, cuff.z).length())
+	near(tube.position.x, cuff.x, "the sleeve is centred on the cuff, not on the bone (V31)", 0.001)
+	near(tube.position.z, cuff.z, "the sleeve is centred on the cuff (z)", 0.001)
+	var hidden := false
+	for mi: MeshInstance3D in arm.find_children("*", "MeshInstance3D", true, false):
+		for i in (mi.mesh.get_surface_count() if mi.mesh else 0):
+			var source := mi.mesh.surface_get_material(i)
+			if source != null and source.resource_name == "Arm Sleeve":
+				hidden = mi.get_surface_override_material(i).resource_name == "Arm Sleeve (hidden)"
+	check(hidden, "the model's own off-line sleeve is hidden")
 	var player := arm.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	check(player.has_animation("Fist") and player.get_animation("Fist").get_track_count() == 15,
 			"the arm plays the engine-built poses")

@@ -2,6 +2,20 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-14 — V31 The left arm on long guns is one arm again (Sprint 4)
+
+Seen in V30's screenshots: on the hunting rifle the left forearm looked like a separate floating pipe beside the hand. By Claude Opus 5.5.
+
+**Fixed:**
+- **Found by measuring the arm model:** its own sleeve runs straight down the forearm bone, but its hand and wrist cuff sit about 8 cm to one side of that line, so the sleeve never met the wrist. V22's extension followed the bone too, so it made the gap longer.
+- **One sleeve, centred on the cuff:** `Hands._prepare_rig` now builds a single tapered sleeve from over the glove's cuff, up the forearm to the wrist joint and 45 cm past the elbow, centred on the cuff (`Hands.cuff_centre`, measured from the mesh once per side). The model's own off-line sleeve is hidden.
+- Checked on the rifle (day, night, iron sights, reload), the pistol rack, fists blocking, the pistol and the axe. Pistol and axe frame the same as before (their hands sit below the screen at rest).
+
+**Try it:** `play.bat --gun=rifle --time=12`, then R to reload.
+
+**Tests:** 11,896 green (`test_hand_poses.gd`: the sleeve is centred on the cuff, starts near the wrist, and the model's sleeve is hidden).
+
+**Known gaps:** the MakeHuman glove has a long, thin wrist that bends off to the side, so a thin brown strip still shows between the hand and the sleeve. On iron sights the right glove still fills the lower middle of the screen (the camera sits right at the stock), and when a reload brings the left hand near the camera the sleeve shows as a big close-up cylinder. A real fix is a proper FPS arms model (the paid pack we talked about).
 ## 2026-10-14 — V30 Shotgun, crossbow, pipe bomb and bottle (Sprint 4)
 
 The session logs say fighting is the fun; Emmitt asked for grenades earlier. Built by Codex (one job on his ChatGPT plan, on top of V23 attachments); fixes and the checks by Claude Opus 5.5.
