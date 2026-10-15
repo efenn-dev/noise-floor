@@ -2551,10 +2551,7 @@ func _storage_at_cell(cell: Vector2i) -> Variant:
 
 ## F2: the Hub's piece key ("" if you haven't built one).
 func hub_key() -> String:
-	for key: String in build.pieces:
-		if build.kind_of(build.pieces[key]["id"]) == "hub":
-			return key
-	return ""
+	return build.first_of_kind("hub")
 
 
 ## F2: what's in reach of the Hub to hand in: your pockets and any storage crate within deliver_range of it.
@@ -2613,10 +2610,7 @@ func start_broadcast(key: String) -> String:
 
 ## F2: the radio mast's piece key ("" if none stands).
 func mast_key() -> String:
-	for key: String in build.pieces:
-		if build.kind_of(build.pieces[key]["id"]) == "radio_mast":
-			return key
-	return ""
+	return build.first_of_kind("radio_mast")
 
 
 func _tick_rescue() -> void:
