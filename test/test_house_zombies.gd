@@ -95,6 +95,8 @@ func test_searching_its_kitchen_brings_it() -> void:
 		var ids := sim.spawn_house_zombies(plan)
 		for i in ids.size():
 			var z: ZombieBrain = sim.horde.zombies[ids[i]]
+			if z.type == "crawler":
+				continue  # V28: a crawler hears less by design (test_zombie_types covers it); this is about the others
 			var house: Dictionary = plan["houses"][plan["zombies"][i]["house"]]
 			var nearest := ""
 			for c: Dictionary in plan["containers"]:

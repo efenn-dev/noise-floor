@@ -31,6 +31,8 @@ var waves := 0
 ## Piece id ("wall", "smelter") -> how many the player built.
 var built: Dictionary = {}
 var kills := 0
+## V28: session-log breakdown by zombie type (the timeline already says "killed a crawler").
+var kills_by_type: Dictionary = {}
 var mufflers := 0
 var used_crate := false
 ## {kind, loudness, when} or {} if nothing yet.
@@ -103,9 +105,12 @@ func note_crate() -> void:
 	note("used the crate")
 
 
-func note_kill() -> void:
-	if not muted:
-		kills += 1
+func note_kill(type: String = "") -> void:
+	if muted:
+		return
+	kills += 1
+	if type != "":
+		kills_by_type[type] = int(kills_by_type.get(type, 0)) + 1
 
 
 func note_muffler() -> void:
@@ -273,7 +278,14 @@ func summary_lines() -> PackedStringArray:
 		parts.append("%d %s" % [built[id], _words(id)])
 		total += int(built[id])
 	out.append(("Built %d piece%s: %s." % [total, "" if total == 1 else "s", ", ".join(parts)]) if total > 0 else "Built nothing.")
-	out.append("Mufflers fitted: %d. Zombies killed: %d." % [mufflers, kills])
+	var killed := PackedStringArray()
+	var kill_types := kills_by_type.keys()
+	kill_types.sort()
+	for type: String in kill_types:
+		var n: int = kills_by_type[type]
+		killed.append("%d %s%s" % [n, _words(type), "" if n == 1 else "s"])
+	out.append("Mufflers fitted: %d. Zombies killed: %d%s." % [mufflers, kills,
+			(" (" + ", ".join(killed) + ")") if not killed.is_empty() else ""])
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))
 	out.append(_loud_line("Loudest machine or engine", loudest_continuous))
 	out.append_array(_p3_lines())

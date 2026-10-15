@@ -239,7 +239,8 @@ func step() -> void:
 				base_log.add_once("hit:" + target, float(data.defense["log"]["attack_every"]), "%s under attack: %s" % [
 						base_log.place_name(target), _zombies_near(build.piece_center(target))], build.piece_center(target))
 			var was_window := build.kind_of(build.pieces[target]["id"]) == "window"
-			if build.damage(target, maxi(1, roundi(z.structure_damage()))):
+			var structure_damage := zombie_structure_damage(z, target)
+			if structure_damage > 0 and build.damage(target, structure_damage):
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.tick(TICK, horde, noise)
@@ -482,7 +483,7 @@ func bleed_chance() -> float:
 ## presentation; the ordinary horde path uses the same method. Armour reduces the hit before the guard.
 func zombie_hit_player(z: ZombieBrain) -> Dictionary:
 	var damage := z.attack_damage() * maxf(0.0, 1.0 - skills.bonus("damage_cut"))
-	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage}
+	var result: Dictionary = {"blocked": false, "parried": false, "damage": damage, "stumbled": false}
 	var w: Dictionary = weapon_stats()
 	if player.blocking and not guns.in_hand() and block_faces(player_facing, player_pos, z.pos) \
 			and player.try_block(float(w["block_stamina"])):
@@ -492,18 +493,39 @@ func zombie_hit_player(z: ZombieBrain) -> Dictionary:
 		_wear_block_weapon()
 		if result["parried"]:
 			damage = 0.0
-			z.take_hit(0.0, player_pos, PARRY_KNOCKBACK)
-			z.stunned = maxf(z.stunned, PARRY_STUN)
+			var parry_factor := float(z.stats.get("parry_stagger_factor", 1.0))
+			z.take_hit(0.0, player_pos, PARRY_KNOCKBACK * parry_factor)
+			z.stunned = maxf(z.stunned, PARRY_STUN * parry_factor)
 			add_message("Parried", 0.8)
 		else:
-			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]))
+			var block_factor := float(z.stats.get("block_factor", 1.0))
+			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]) * block_factor)
 	result["damage"] = damage
 	player.damage(damage, z.type)
+	if damage > 0.0 and not player.dead:
+		if z.stats.has("stumble_time"):
+			player.stumble(float(z.stats["stumble_time"]), float(z.stats["stumble_slow"]))
+			result["stumbled"] = true
+		var shove := float(z.stats.get("player_knockback", 0.0))
+		var away := Vector3(player_pos.x - z.pos.x, 0.0, player_pos.z - z.pos.z)
+		if shove > 0.0 and away.length_squared() > 1e-6:
+			player.knockback += away.normalized() * shove
 	if damage > 0.0 and not player.dead and _rng.randf() < bleed_chance():
 		if not player.bleeding:
 			add_message("You're bleeding (H to bandage)", 4.0)
 		player.start_bleeding()
 	return result
+
+
+## V28: brute structure strength and the crawler's refusal to attack doors are data-driven.
+func zombie_structure_damage(z: ZombieBrain, key: String) -> int:
+	if not build.pieces.has(key):
+		return 0
+	var kind := build.kind_of(build.pieces[key]["id"])
+	var factor := float(z.stats.get("break_multiplier", 1.0))
+	if kind == "door":
+		factor = float(z.stats.get("door_break_multiplier", factor))
+	return maxi(0, roundi(z.structure_damage() * factor))  # V29: scaled by the difficulty
 
 
 ## The attacker must be within 70 degrees of the player's flat look direction.
@@ -1021,8 +1043,8 @@ func spawn_park_zombies(plan: Dictionary) -> Array:
 	return ids
 
 
-## W1b: one shambler in each house the plan picked (plan["zombies"]), facing its front door. Only for a
-## new game: a save keeps its zombies (house ones included) and brings them back itself.
+## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
+## the data-driven indoor mix has more crawlers. Only a new game: a save brings its own zombies back.
 func spawn_house_zombies(plan: Dictionary) -> Array:
 	var ids: Array = []
 	var planned: Array = plan["zombies"]
@@ -1031,7 +1053,7 @@ func spawn_house_zombies(plan: Dictionary) -> Array:
 	var count := difficulty.count("zombie_count", planned.size())
 	for i in count:
 		var hz: Dictionary = planned[i % planned.size()]
-		var z := horde.spawn("shambler", hz["pos"])
+		var z := horde.spawn_starting(hz["pos"], true)
 		if i >= planned.size():
 			z.pos += Vector3(0.45, 0.0, 0.45)
 			z.home = z.pos
@@ -1628,7 +1650,7 @@ func car_hits_zombie(zombie_id: int, speed: float) -> bool:
 	noise.emit_kind(z.pos, "zombie_bash")
 	var killed := z.take_hit(damage, car["pos"], speed * 0.6)
 	if killed:
-		stats.note_kill()
+		stats.note_kill(z.type)
 		stats.note("ran over a " + z.type)
 	return killed
 
@@ -1810,7 +1832,7 @@ func hit_zombie(id: int, head: bool) -> bool:
 	if killed:
 		if skill != "":
 			_practice(skill, "kill")
-		stats.note_kill()
+		stats.note_kill(z.type)
 		stats.note("killed a " + z.type)
 	return killed
 
@@ -1866,7 +1888,7 @@ func shoot_zombie(id: int, head: bool) -> Dictionary:
 	_practice("firearms", "hit")
 	if killed:
 		_practice("firearms", "kill")
-		stats.note_kill()
+		stats.note_kill(z.type)
 		stats.note("killed a " + z.type)
 	return {"hit": true, "killed": killed}
 
