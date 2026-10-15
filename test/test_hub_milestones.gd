@@ -150,3 +150,30 @@ func test_saves_keep_the_hub_and_old_saves_keep_their_pieces() -> void:
 	eq(SaveGame.apply(migrated, old), "", "loads")
 	check(migrated.milestones.unlocked("nail_turret") and migrated.milestones.unlocked("salvager"), "everything it could build stays buildable")
 	check(not migrated.milestones.is_done("rescue_signal"), "but the rescue is still ahead")
+
+
+## The Hub and mast lookups come from an index kept up to date wherever pieces change (the mast's lamp asks
+## every frame, so it mustn't walk every piece in the world).
+func test_hub_and_mast_lookups_follow_every_change() -> void:
+	var sim := _sim()
+	eq(sim.hub_key(), "", "no Hub yet")
+	eq(sim.mast_key(), "", "no mast yet")
+	var key := _hub(sim)
+	check(key != "" and sim.build.pieces.has(key), "built: found")
+	eq(sim.build.remove(key, _rich()), "", "taken down")
+	eq(sim.hub_key(), "", "gone from the lookup")
+	key = _hub(sim)
+	sim.build.destroy(key)
+	eq(sim.hub_key(), "", "wrecked by zombies: gone too")
+	sim.milestones.grant_all_but_final()
+	sim.milestones.done.append(sim.milestones.final_id())
+	eq(sim.build.place("radio_mast", Vector2i(8, 8), BuildGrid.Side.NORTH, _rich()), "", "a mast")
+	var mast := sim.mast_key()
+	check(mast != "", "found")
+	var d := SaveGame.to_dict(sim)
+	var back := _sim()
+	eq(SaveGame.apply(back, d), "", "saved and loaded")
+	eq(back.mast_key(), mast, "found after a load")
+	eq(sim.build.place("hub", Vector2i(2, 2), BuildGrid.Side.NORTH, _rich()), "", "a Hub again")
+	check(sim.build.can_place("hub", Vector2i(12, 2), BuildGrid.Side.NORTH, _rich()) == "You already have a Hub", "still only one")
+
