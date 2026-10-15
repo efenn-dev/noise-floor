@@ -10,6 +10,7 @@ extends Node3D
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
 ##   --blood=off|on        V32: blood sprays and stains off (or on) for this run only (not saved)
+##   --hitboxes            V33: draw the zombies' bone hit zones (head red, body yellow, arms blue, legs green)
 ##   --weapon=BASE         V11: hold a mint melee weapon (pipe, bat, axe, machete, knife)
 ##   --gun=BASE            V30: hold pistol, rifle, shotgun or crossbow (pete is the unique rifle)
 ##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
@@ -158,6 +159,7 @@ func _ready() -> void:
 		Settings.graphics = Atmosphere.valid_quality(str(args["graphics"]))  # V1: this run only, not saved
 	if args.has("blood"):
 		Settings.blood = str(args["blood"]) != "off"  # V32: this run only, not saved
+	ZombieHitboxes.show = args.has("hitboxes")  # V33
 	var save := {}
 	if GameSession.pending_load != "":
 		save = SaveGame.read(GameSession.pending_load)

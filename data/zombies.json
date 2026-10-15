@@ -57,6 +57,8 @@
 		"stumble_slow": 0.45,
 		"eye_height": 0.3,
 		"head_height": 0.24,
+		"leg_height": 0.0,
+		"head_ahead": 0.5,
 		"collider_size": [0.72, 0.42, 1.45],
 		"collider_offset": [0.0, 0.21, -0.12],
 		"model_scale": 0.95,
