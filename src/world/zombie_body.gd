@@ -75,6 +75,18 @@ var nan_recoveries := 0
 const NUDGE_RADIUS := 0.75  # S5: your feet are on the body inside this distance
 const NUDGE_SHARE := 0.1  # S5: share of your walking speed a body shuffles at while you're on it
 var death_dir := Vector3.ZERO  # V7: which way it was knocked as it died (it falls and slides that way)
+## V35 (Emmitt: "the zombies seem to die facing away from the player each time"): the Death animation (UAL
+## Death01) falls backwards, and V7 turned the body to face away from the blow first, so every zombie showed you
+## its back as it went down. Now it dies facing whoever hit it, one of two ways: "back" (the Death animation: it
+## goes over backwards and slides away from the blow; most deaths and every hard hit) or "forward" (a hit
+## reaction, then it tips over toward you, about its feet).
+var death_style := ""
+static var settle_deaths := false  # --dead-zombies (screenshots): bodies are already down, the fall finished
+static var forced_death_style := ""  # --death-style=back|forward (screenshots)
+const BACK_FALL_SHARE := 3  # of every 5 zombies (by id) fall backwards; the rest forwards, unless hit hard
+const HARD_HIT := 3.0       # knockback (m/s) that always knocks it over backwards
+const FORWARD_FALL_TIME := 0.8  # seconds to tip over forwards
+const LYING_LIFT := 0.14    # a tipped-over body lies this high once flat (its front, not its spine, on the ground)
 var _death_slide := 0.0
 var bad_moves := 0  # fix 2026-10-13: NaN steps dropped before they reached the physics engine
 var _frame := 0
@@ -449,27 +461,49 @@ func _lie_down(delta: float) -> void:
 			for car: Node in get_tree().get_nodes_in_group("cars"):
 				if car is PhysicsBody3D:
 					add_collision_exception_with(car)
-		# V7: fall away from the blow. The Death animation tips the body forward, so it turns to face the way
-		# it was knocked (away from you when nothing knocked it) and slides back a little as it drops.
+		# V7: knocked away from the blow. V35: it keeps facing the blow (or you, when nothing knocked it) and
+		# either goes over backwards, sliding back a little, or collapses forward toward you.
 		var away := brain.knockback
+		var hard := away.is_finite() and away.length() >= HARD_HIT
 		if away.length_squared() < 0.01 and player != null:
 			away = global_position - player.global_position
 		away.y = 0.0
 		if away.is_finite() and away.length_squared() > 1e-4:
 			death_dir = away.normalized()
 			_death_slide = clampf(brain.knockback.length() * 0.3, 0.6, 2.2) if brain.knockback.is_finite() else 0.6
+		death_style = death_style_for(brain.id, hard)
+		if death_style == "forward":
+			_death_slide = 0.0  # it drops where it stands
+		if settle_deaths:
+			_fall = 1.0
+			_death_slide = 0.0
+			rotation.y = atan2(death_dir.x, death_dir.z)
 		brain.knockback = Vector3.ZERO
 		if get_parent() != null:  # a pool spreading under the body for as long as it lies there
 			ImpactFx.stain(get_parent(), global_position + Vector3.UP * 0.05, Vector3.UP, 1.5, ZombieBrain.CORPSE_TIME, 4.0)
-	_fall = minf(1.0, _fall + delta * 2.5)  # the Death animation does the falling
+	_fall = minf(1.0, _fall + delta * (1.0 / FORWARD_FALL_TIME if death_style == "forward" else 2.5))
 	var slide := death_dir * _death_slide * maxf(0.0, 1.0 - _fall * 1.4)
 	velocity = Vector3(slide.x, 0.0 if is_on_floor() else velocity.y - _gravity * delta, slide.z)
-	if death_dir != Vector3.ZERO and _fall < 0.6:
-		rotation.y = lerp_angle(rotation.y, atan2(-death_dir.x, -death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
+	if death_dir != Vector3.ZERO and _fall < 0.6:  # V35: face the blow (its front, -Z, against death_dir)
+		rotation.y = lerp_angle(rotation.y, atan2(death_dir.x, death_dir.z), clampf(14.0 * delta, 0.0, 1.0))
 	var nudge := nudge_for(player, global_position) if _fall >= 1.0 else Vector3.ZERO
 	velocity.x += nudge.x
 	velocity.z += nudge.z
 	move_and_slide()
+
+
+## V35: how a zombie dies: "back" for every hard hit and BACK_FALL_SHARE of every 5 by id, else "forward".
+static func death_style_for(id: int, hard_hit: bool) -> String:
+	if forced_death_style != "":
+		return forced_death_style
+	return "back" if hard_hit or posmod(id, 5) < BACK_FALL_SHARE else "forward"
+
+
+## V35: how far over (radians about its feet, toward its front) a "forward" fall is at `fall` 0-1: slow to start,
+## then it drops, flat (90 degrees) at the end.
+static func forward_tilt(fall: float) -> float:
+	var t := clampf(fall, 0.0, 1.0)
+	return PI / 2.0 * t * t
 
 
 ## S5: how hard walking over a body shuffles it: a small share of your speed while your feet are on it,
@@ -533,8 +567,12 @@ func _animate(delta: float) -> void:
 	var climb_wave := sin(PI * brain.climb_fraction())
 	_model.rotation.x = deg_to_rad(float(brain.stats.get("climb_tilt_deg", 35.0))) * climb_wave if climbing else 0.0
 	_model.position.y = -float(brain.stats.get("climb_dip", 0.22)) * climb_wave if climbing else 0.0
+	if brain.is_dead() and death_style == "forward":
+		var tip := forward_tilt(_fall)  # V35: over forwards, toward you, about its feet
+		_model.rotation.x = tip
+		_model.position.y = LYING_LIFT * sin(tip)
 	if brain.is_dead():
-		want = "Death"
+		want = "HitReact" if death_style == "forward" and _anim.has_animation("HitReact") else "Death"
 	elif brain.screaming > 0.0 and _anim.has_animation("Scream"):
 		want = "Scream"
 	elif brain.stats.has("crawl_anim_speed"):
@@ -553,11 +591,13 @@ func _animate(delta: float) -> void:
 	elif moving > 0.1:
 		want = "Walk"
 		speed_scale = clampf(moving / (WALK_ANIM_SPEED * _model.scale.x / MODEL_SCALE), 0.5, 1.6)
-	var once := want == "Death" or want == "Scream"  # these play through once, then hold
+	var once := want == "Death" or want == "Scream" or brain.is_dead()  # these play through once, then hold
 	if _anim.current_animation != want and not (once and _anim.assigned_animation == want and _anim.is_playing()) \
-			and not (want == "Death" and _anim.assigned_animation == "Death"):
+			and not (brain.is_dead() and _anim.assigned_animation == want):
 		_anim.play(want, 0.2)
 	_anim.speed_scale = speed_scale
+	if brain.is_dead() and settle_deaths and _anim.current_animation != "":
+		_anim.seek(_anim.current_animation_length, true)  # already down (screenshots)
 
 
 ## Moans now and then (more often while chasing), a grunt when it starts an attack or gets hit,

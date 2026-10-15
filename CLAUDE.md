@@ -27,6 +27,8 @@ V25 screenshot flag: `--objectives` shows the first-night objectives panel midwa
 
 V23 screenshot flag: `--mod-screen[=pistol|rifle]` puts that gun and every part in your pockets and opens its inventory modding panel; e.g. `tools/shot.sh mods --mod-screen=rifle --time=12`.
 
+V35 screenshot flag: with `--dead-zombies` bodies are shown already fallen; `--death-style=back|forward` forces how they went down (`ZombieBody.death_style_for`).
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

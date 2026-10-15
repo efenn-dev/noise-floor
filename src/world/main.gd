@@ -1412,6 +1412,8 @@ func _build_zombies(args: Dictionary) -> void:
 			var z := sim.horde.spawn(args.get("zombie-type", "shambler"), Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
 			z.facing = (player.position - z.pos).normalized()
 			if args.has("dead-zombies"):  # S4: a corpse to look at (with --advance so the sim registers it)
+				ZombieBody.settle_deaths = true  # V35: shown already fallen
+				ZombieBody.forced_death_style = str(args.get("death-style", ""))
 				z.take_hit(1000.0, Vector3.ZERO, 0.0)
 	zombie_view = ZombieView.new()
 	add_child(zombie_view)
