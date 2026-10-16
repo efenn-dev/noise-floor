@@ -138,7 +138,7 @@ func validate() -> PackedStringArray:
 		var w: Variant = items[id].get("weight")
 		if not (w is float or w is int) or float(w) < 0.0:
 			errors.append("item '%s' needs a weight in kg (0 or more)" % id)
-		for key: String in ["food", "water", "bag"]:
+		for key: String in ["food", "water", "bag", "heal"]:  # F6: heal (a med kit)
 			if items[id].has(key) and float(items[id][key]) <= 0.0:
 				errors.append("item '%s' needs a positive '%s'" % [id, key])
 	for id: String in buildables:

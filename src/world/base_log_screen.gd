@@ -3,7 +3,8 @@ extends CanvasLayer
 ## M15: L (or "Base log" in the pause menu). The base log, newest first, with the game time of each event:
 ## what your turrets, traps, sensors and walls went through while you were away. The sim keeps it
 ## (BaseLog); this only shows it. F6: at the top, what your machines made today and yesterday next to what you eat
-## and drink in a day (SimWorld.supplies_lines).
+## and drink in a day (SimWorld.supplies_lines); F6 part 2: on the right, every machine you built and what it's doing,
+## stuck ones first (SimWorld.machine_lines).
 
 const GOLD := Color(0.95, 0.8, 0.55)
 
@@ -12,6 +13,7 @@ var _root: Control
 var _list: Label
 var _radio: Label
 var _made: Label  # F6
+var _machines: Label  # F6 part 2: every machine and what it's doing, stuck ones first
 
 
 func setup(p_sim: SimWorld) -> void:
@@ -56,6 +58,8 @@ func refresh() -> void:
 	var lines := sim.base_log.lines()
 	_list.text = "\n".join(lines) if not lines.is_empty() else "Nothing has happened at your base yet."
 	_made.text = "\n".join(sim.supplies_lines())  # F6
+	var machines := sim.machine_lines()
+	_machines.text = "\n".join(machines) if not machines.is_empty() else "You haven't built any machines yet."
 	_radio.text = ("You carry a radio: events more than %d m away show on your screen as they happen." % int(sim.data.defense["radio"]["far"])) \
 			if sim.carries_radio() else "No radio in your pockets: far events only show up here (there's one in the starting crate)."
 
@@ -90,10 +94,34 @@ func _build() -> void:
 	_made.add_theme_color_override("font_color", Color(0.75, 0.95, 0.75))
 	_made.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_made)
+	var row := HBoxContainer.new()  # F6: events on the left, your machines on the right
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 40)
+	column.add_child(row)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_stretch_ratio = 1.6
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	column.add_child(scroll)
+	row.add_child(scroll)
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 6)
+	row.add_child(right)
+	var mtitle := Label.new()
+	mtitle.text = "Your machines (stuck ones first)"
+	mtitle.add_theme_font_size_override("font_size", 20)
+	mtitle.add_theme_color_override("font_color", GOLD)
+	right.add_child(mtitle)
+	var mscroll := ScrollContainer.new()
+	mscroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right.add_child(mscroll)
+	_machines = Label.new()
+	_machines.add_theme_font_size_override("font_size", 17)
+	_machines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_machines.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mscroll.add_child(_machines)
 	_list = Label.new()
 	_list.add_theme_font_size_override("font_size", 18)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL

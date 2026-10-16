@@ -1553,10 +1553,10 @@ func repair_gear(uid: int) -> String:
 
 # --- Eating, drinking, first aid, sleep -----------------------------------------
 
-## True if `item` can be used from the inventory screen (food, drink or a bandage).
+## True if `item` can be used from the inventory screen (food, drink, a bandage or, since F6, a med kit).
 func can_use(item: String) -> bool:
 	return (data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0
-			or data.item_value(item, "bandage") > 0.0
+			or data.item_value(item, "bandage") > 0.0 or data.item_value(item, "heal") > 0.0
 			or str(data.items.get(item, {}).get("throwable", "")) != "")
 
 
@@ -1566,6 +1566,8 @@ func use_item(item: String) -> String:
 		return "You don't have that"
 	if data.item_value(item, "bandage") > 0.0:
 		return use_bandage()
+	if data.item_value(item, "heal") > 0.0:
+		return use_medkit(item)
 	if str(data.items[item].get("throwable", "")) != "":
 		return ready_throwable(item)
 	var food := data.item_value(item, "food")
@@ -1590,6 +1592,8 @@ func drink_best() -> String:
 
 func use_bandage() -> String:
 	if not player.bleeding:
+		if player.health < player.max_health - 0.5 and inventory.count("medkit") > 0:
+			return use_medkit("medkit")  # F6: H when hurt but not bleeding uses a med kit
 		return "Not bleeding"
 	if not inventory.remove("bandage", 1):
 		return "No bandages"
@@ -1598,6 +1602,19 @@ func use_bandage() -> String:
 	player.health = minf(player.max_health, player.health + heal)
 	_practice("first_aid", "bandage")
 	return "Bandaged" + ((" (+%d health)" % roundi(heal)) if heal > 0.0 else "")
+
+
+## F6: uses a med kit (an item with "heal"): that much health back and any bleeding stopped. Returns the message.
+func use_medkit(item: String) -> String:
+	if player.health >= player.max_health - 0.5 and not player.bleeding:
+		return "You're not hurt"
+	if not inventory.remove(item, 1):
+		return "No med kits"
+	var heal := data.item_value(item, "heal") + skills.bonus("bandage_heal")
+	player.health = minf(player.max_health, player.health + heal)
+	player.bleeding = false
+	_practice("first_aid", "bandage")
+	return "Used a %s (+%d health)" % [data.item_name(item).to_lower(), roundi(heal)]
 
 
 ## Sleep in the bed `key`: it becomes your respawn point. Returns "" or why not.
@@ -1630,7 +1647,7 @@ func _consume_best(key: String, none: String) -> String:
 
 
 func _is_supply(item: String) -> bool:
-	for key: String in ["food", "water", "bandage", "bag"]:
+	for key: String in ["food", "water", "bandage", "bag", "heal"]:
 		if data.item_value(item, key) > 0.0:
 			return true
 	return false
@@ -2783,13 +2800,68 @@ func _made_since(mark: Dictionary) -> Dictionary:
 
 
 ## F6: the base log screen's supplies lines: what your machines made today and yesterday (the most first, up to
-## eight things), and what you eat and drink in a day, so you can see whether the base keeps you.
+## eight things), what you eat and drink in a day, and (part 2) how many days of food and water yesterday's
+## making comes to, so you can see whether the base keeps you.
 func supplies_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	out.append("Your machines made today: " + _made_words(made_today()))
 	out.append("Yesterday: " + _made_words(made_yesterday))
 	var need := needs_per_day()
 	out.append("You eat about %.1f cans of food and drink about %.1f clean waters a day." % [need["cans"], need["waters"]])
+	var days := days_made(made_yesterday)
+	out.append("Yesterday's making comes to %s and %s." % [_days_words(days["food"], "food"), _days_words(days["water"], "water")])
+	return out
+
+
+## F6: how many days of eating and drinking `made` comes to: {food: days, water: days} (what it holds counted at
+## each item's food and water value against needs_per_day()).
+func days_made(made: Dictionary) -> Dictionary:
+	var food := 0.0
+	var water := 0.0
+	for item: String in made:
+		food += data.item_value(item, "food") * int(made[item])
+		water += data.item_value(item, "water") * int(made[item])
+	var need := needs_per_day()
+	return {"food": food / maxf(float(need["food"]), 0.001), "water": water / maxf(float(need["water"]), 0.001)}
+
+
+## "about 3 days of food", "less than a day of water", "no food".
+static func _days_words(days: float, what: String) -> String:
+	if days <= 0.0:
+		return "no " + what
+	if days < 0.95:
+		return "less than a day of " + what
+	return "about %d day%s of %s" % [roundi(days), "" if roundi(days) == 1 else "s", what]
+
+
+## F6: every machine you built, as {key, name, place, status, trouble}: its status in words ("working 40%", "needs
+## Rainwater", "no power", "output full", ...), trouble = it's stuck. Stuck ones first, then by place.
+func machine_report() -> Array:
+	var out := []
+	for cell: Vector2i in factory.machines:
+		var key := "o:%d:%d" % [cell.x, cell.y]
+		if not build.pieces.has(key) or build.pieces[key].get("town", false):
+			continue
+		var m: Factory.Machine = factory.machines[cell]
+		var status := m.status()
+		if status == "needs input":
+			var missing := PackedStringArray()
+			for item: String in m.recipe["in"]:
+				if int(m.input.get(item, 0)) < int(m.recipe["in"][item]):
+					missing.append(data.item_name(item))
+			status = "needs " + ", ".join(missing) if not missing.is_empty() else status
+		out.append({"key": key, "name": data.buildables[m.id]["name"], "place": base_log.direction(build.piece_center(key)),
+				"status": status, "trouble": not status.begins_with("working")})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a["trouble"] and not b["trouble"] if a["trouble"] != b["trouble"] else (a["place"] + a["name"] < b["place"] + b["name"]))
+	return out
+
+
+## F6: the machine report in lines for the base log screen ("Smelter (north): needs Scrap metal").
+func machine_lines() -> PackedStringArray:
+	var out := PackedStringArray()
+	for r: Dictionary in machine_report():
+		out.append("%s%s: %s" % [r["name"], (" (%s)" % r["place"]) if r["place"] != "middle" else "", r["status"]])
 	return out
 
 

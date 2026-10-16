@@ -139,7 +139,7 @@
 		"watts": 30,
 		"size": [1.7, 1.4, 1.7],
 		"recipe": "press_nails",
-		"recipes": ["press_nails", "repair_kit", "press_casings", "press_rounds", "press_bolts", "press_wall_panel"],
+		"recipes": ["press_nails", "repair_kit", "press_casings", "press_rounds", "press_bolts", "press_wall_panel", "press_powder", "press_shells"],
 		"cost": { "plank": 10, "metal_plate": 10 }
 	},
 	"rain_collector": {
@@ -189,7 +189,7 @@
 		"watts": 30,
 		"size": [1.6, 1.5, 1.6],
 		"recipe": "can_food",
-		"recipes": ["can_food", "pack_bandages"],
+		"recipes": ["can_food", "pack_bandages", "pack_medkit"],
 		"cost": { "plank": 6, "metal_plate": 8 }
 	},
 	"bed": {

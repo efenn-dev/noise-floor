@@ -83,10 +83,10 @@ func validate(entry: String) -> String:
 	return "Not a piece, an item or a weapon slot"
 
 
-## Items a key can use: anything you eat, drink or bandage with.
+## Items a key can use: anything you eat, drink or bandage with (F6: or heal with, a med kit).
 func usable(item: String) -> bool:
 	return (data.item_value(item, "food") > 0.0 or data.item_value(item, "water") > 0.0
-			or data.item_value(item, "bandage") > 0.0
+			or data.item_value(item, "bandage") > 0.0 or data.item_value(item, "heal") > 0.0
 			or str(data.items.get(item, {}).get("throwable", "")) != "")
 
 
