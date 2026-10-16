@@ -16,7 +16,7 @@
    - **F2 the Hub and milestones** (done): deliver parts to the Hub to unlock new machines and tiers; the last goal is a radio tower that calls in a rescue.
    - **F3 build feel** (done): drag to lay a row of foundations, walls or belts; belts on bare ground (walk-over) that fill crates; splitters and mergers (Logistics milestone); in/out tabs on every router.
 4. **W3b downtown** (done: grocery, pharmacy, hardware store, police station with an armory of gun lockers, gas station with pumps and a fuel-tanker node), **W3c more streets of houses** (done: West and East Street, about two dozen houses), **W3d the countryside** (done: two farms with barns and cornfields round their wells, the hunting cabin, searchable wrecks on the highway and in the junkyard), each with its resource nodes from F1.
-5. **W3e population and balance:** zombies and loot per area, far zombies thinking less often, and a map (an item or a screen) so the bigger world is easy to find your way round.
+5. **W3e population and balance** (done: far zombies think every fourth tick, loot grows with distance (data/areas.json), eight roadside wanderers, the map on M): zombies and loot per area, far zombies thinking less often, and a map (an item or a screen) so the bigger world is easy to find your way round.
 
 ## Update, night of 2026-10-13: Sprint 4, "The first 30 minutes" (Emmitt's call)
 

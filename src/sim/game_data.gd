@@ -32,6 +32,7 @@ var projects: Dictionary = {}    # M17a: big projects (the water tower): phases,
 var loot: Dictionary = {}        # container type -> rolls/items, plus optional gear ids for clothing sources
 var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/difficulty.json
 var resources: Dictionary = {}   # F1: resource node kinds, purities and the nodes on the map: data/resources.json
+var areas: Dictionary = {}       # W3e: each WorldMap area's map name, loot multiplier and map colour: data/areas.json
 var milestones: Dictionary = {}  # F2: the Hub's tiers and milestones, and the rescue broadcast: data/milestones.json
 var hit_zones: Dictionary = {}   # V33: damage per hit zone (torso, arm, leg), the leg line and the limp: data/hit_zones.json
 var load_errors: PackedStringArray = []
@@ -57,6 +58,8 @@ static func load_default() -> GameData:
 	data.difficulty = _read_json(DIR + "difficulty.json", data)
 	data.resources = _read_json(DIR + "resources.json", data)
 	data.resources.erase("_about")
+	data.areas = _read_json(DIR + "areas.json", data)
+	data.areas.erase("_about")
 	data.milestones = _read_json(DIR + "milestones.json", data)
 	data.milestones.erase("_about")
 	data.hit_zones = _read_json(DIR + "hit_zones.json", data)
@@ -218,6 +221,10 @@ func validate() -> PackedStringArray:
 		for item: String in ms.get("cost", {}):
 			if not items.has(item):
 				errors.append("milestone '%s' costs unknown item '%s'" % [id, item])
+	for area: String in WorldMap.AREAS:  # W3e: every area has a name and a loot multiplier
+		var a: Dictionary = areas.get(area, {})
+		if str(a.get("name", "")) == "" or float(a.get("loot", 0.0)) < 1.0:
+			errors.append("area '%s' needs a name and a loot multiplier of at least 1 in areas.json" % area)
 	for kind: String in resources.get("kinds", {}):  # F1
 		var ex := str(resources["kinds"][kind].get("extractor", ""))
 		if not buildables.has(ex) or str(buildables[ex].get("needs_node", "")) != kind:

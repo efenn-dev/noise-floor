@@ -325,7 +325,8 @@ func test_horde_removes_corpses_and_is_deterministic() -> void:
 	h.zombies[1].take_hit(1000, Vector3.ZERO, 0)
 	eq(h.alive_count(), 5, "one down")
 	var ctx := {"player_pos": Vector3(0, 0, 500), "player_dead": false, "night": false, "player_lit": false, "pieces": {}}
-	for i in roundi((ZombieBrain.CORPSE_TIME + 0.1) / TICK):
+	# W3e: a corpse this far away thinks every Horde.THINK_EVERY ticks, so it may go up to that many ticks later
+	for i in roundi((ZombieBrain.CORPSE_TIME + 0.1) / TICK) + Horde.THINK_EVERY:
 		h.tick(TICK, ctx)
 	check(not h.zombies.has(1), "corpse cleared after %.0f s" % ZombieBrain.CORPSE_TIME)
 

@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — W3e Population, balance and the map (the bigger world, part 5)
+
+Emmitt: "merge it and start W3e". Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **The map** (press **M**): the whole world, north up: every area by name (Town, West and East Street, Downtown, the Industrial park, the Junkyard, the two farms, the woods and the Hunting cabin, the Highway), every road (asphalt, dirt drives, the highway), the resource spots coloured by kind (scrap, water, fuel, timber), your base, the Hub and radio mast if you've built them, and you: a yellow arrow pointing the way you face. M, Tab or Esc closes it. On the controls screen (F1) and the hint line.
+- **The further out, the better the loot:** a search rolls more the further the place is from where you start (data/areas.json): town as before, West and East Street 1.1x, downtown 1.2x, the park 1.25x, the farms and the highway 1.3x, the woods 1.4x, the hunting cabin 1.5x.
+- **Zombies on the roads between places:** a new game puts eight wanderers beside the roads out in the open (at least 120 m from the start, spread out, one a runner), so a trip across the map isn't empty.
+- **Far zombies cost much less:** a zombie more than 60 m from you that's idle, wandering or dead thinks every fourth tick (with the time saved up, so its timers keep pace); it still listens as before, and once a noise draws it, it thinks every tick. And a far zombie strolling about now rests like an idle one (its stroll waits until you come within 35 m or a noise draws it): without that, the eight roadside wanderers made a soak day 16% slower; with it, a soak day is about a third *faster* than before W3e.
+- Flag: `--map`.
+
+**Try it:** `play.bat`, then press M.
+
+**Tests:** 19,959 green (new `test_population.gd`: a far idle zombie skips about three thinks in four and still wakes on a noise, then thinks every tick; areas.json checks out, the cabin counts as the cabin (not the woods round it), a crate at the cabin holds more than one in town; the roadside zombies are seeded, eight, away from the start, beside (not on) the roads, out between the places, spread out, one runner; the map opens, finds your base, keeps the world's shape with north up, and M closes it). `test_zombie_world.gd`: a far zombie strolling about rests too; `test_zombie_brain.gd` allows a far corpse its few ticks. One-day soak OK: 134 s per game-day against 207 s for main on the same machine (56 of 58 zombies resting at the end), 535 MB.
+
+**Known gaps:** no fog of war (the map shows everything from the start); older saves don't get the roadside wanderers (they're for new games); zombie numbers per area are unchanged apart from those.
+
+**Next:** the world plan (W3) is done. Next by DIRECTION.md: a playtest of the bigger world (Emmitt and his son), then what it turns up.
+
 ## 2026-10-15 — W3d The countryside: farms, the hunting cabin, highway loot (the bigger world, part 4)
 
 Emmitt: "merge both and start W3d". Code and checks by Claude Opus 5.5, using the farm props Codex made for W3a.

@@ -60,6 +60,7 @@ const SHOT_DELAY_FRAMES := 30
 const SPAWN := Vector3(0, 0, 6)
 const DEFAULT_ZOMBIES := 8
 const STASH_CELL := Vector2i(1, 3)  # just east of the spawn point
+const ROADSIDE_ZOMBIES := 8  # W3e: wandering the roads between the places (a new game)
 ## The area the zombie navmesh covers. W3a: the whole bigger map (WorldMap.EXTENT), in NavBaker tiles.
 const NAV_BOUNDS := AABB(Vector3(-360, -1, -460), Vector3(720, 8, 760))
 const GROUND_SIZE := Vector2(840, 880)  # W3a: x -420..420, z -520..360 (centred at GROUND_Z), past the map's edge
@@ -121,6 +122,7 @@ var node_view: NodeView  # F1: resource nodes (their models and yellow spots)
 var park_pieces := 0  # M17a: warehouse pieces the park plan laid this run (0 when the save holds them)
 var downtown_pieces := 0  # W3b: shop pieces the downtown plan laid this run (0 when the save holds them)
 var base_log_screen: BaseLogScreen  # M15: L (or the pause menu)
+var map_screen: MapScreen  # W3e: M
 var help_screen: HelpScreen  # P3: F1 (or Controls on the title screen and in the pause menu)
 var build_menu: BuildMenu  # S3: B; click a piece to build it, 1-9/0 puts it on the hotbar
 var hotbar_view: HotbarView  # S3: the ten slots along the bottom of the HUD
@@ -282,6 +284,9 @@ func _ready() -> void:
 	base_log_screen = BaseLogScreen.new()
 	add_child(base_log_screen)
 	base_log_screen.setup(sim)
+	map_screen = MapScreen.new()
+	add_child(map_screen)
+	map_screen.setup(sim)
 	help_screen = HelpScreen.new()
 	add_child(help_screen)
 	help_screen.setup()
@@ -428,6 +433,8 @@ func _ready() -> void:
 	if args.has("base-log"):
 		_fill_demo_log()
 		base_log_screen.open()  # M15: --base-log, for screenshots
+	if args.has("map"):
+		map_screen.open()  # W3e: --map, for screenshots
 	if args.has("tower"):
 		_setup_tower(args["tower"])  # M17a: --tower[=N], N phases done and the next one's materials in your pockets
 	if args.has("project-screen"):
@@ -524,7 +531,7 @@ func _open_sensor(key: String) -> void:
 
 
 func _m15_screen_open() -> bool:
-	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open() \
+	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open() or map_screen.is_open() \
 			or project_screen.is_open() or (hub_screen != null and hub_screen.is_open())  # P3: help; M17a: project; F2: Hub
 
 
@@ -927,6 +934,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # they close themselves on E, Tab or Esc (the base log on L too)
 	if event.is_action_pressed("base_log") and not sim.player.dead:
 		base_log_screen.open()  # M15: L
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("map") and not sim.player.dead:
+		sim.player_pos = player.global_position
+		map_screen.open()  # W3e: M
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("swap_hands") and not sim.player.dead and InputSetup.captured():
@@ -1681,6 +1693,7 @@ func _build_zombies(args: Dictionary) -> void:
 			sim.spawn_downtown_zombies(downtown)  # W3b: in the shops and on Market Street
 			sim.spawn_house_zombies(suburbs)  # W3c: one in about a third of West and East Street's houses
 			_spawn_rural_zombies()  # W3d: in a farmhouse or the cabin, the barns, the fields
+			sim.spawn_park_zombies({"zombies": WorldMap.roadside_zombies(sim.seed_value, ROADSIDE_ZOMBIES)})  # W3e: on the roads between
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):
@@ -2018,7 +2031,7 @@ func key_hint_text() -> String:
 			parts.append_array(["LMB swing", "RMB block", "V inspect"])
 			if not sim.gear.gun().is_empty():
 				parts.append("Q gun")
-		parts.append_array(["WASD move", "E use", "B build", "1-0 hotbar", "Tab gear", "K skills", "L log", "F light"])
+		parts.append_array(["WASD move", "E use", "B build", "1-0 hotbar", "Tab gear", "M map", "K skills", "L log", "F light"])
 	return fit_key_hint(parts)
 
 

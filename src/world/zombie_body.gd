@@ -18,6 +18,8 @@ const LOS_EVERY := 3   # physics frames between line-of-sight checks
 ## so it changes nothing it would notice; downtown's zombies cost a soak day 60% more before this. W3c: 35 m (it
 ## was 50), so the new streets' house zombies just out of sight rest too; their bone zones stay on within
 ## ZombieHitboxes.RANGE, holding the resting pose, so a long shot still hits what it aims at.
+## W3e: a far zombie strolling about (WANDER) rests too: its stroll waits until you come near or a noise draws it
+## (eight roadside wanderers cost a soak day 16% before this).
 const REST_BEYOND := 35.0
 const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
@@ -362,7 +364,7 @@ func _physics_process(delta: float) -> void:
 		_end_climb_collision()
 	if (_frame + brain.id) % 10 == 0:
 		_far = player != null and global_position.distance_to(player.global_position) > REST_BEYOND
-	_rest(_far and not brain.is_dead() and brain.state == ZombieBrain.State.IDLE and brain.move_speed() == 0.0
+	_rest(_far and not brain.is_dead() and (brain.state == ZombieBrain.State.IDLE or brain.state == ZombieBrain.State.WANDER)
 			and brain.knockback == Vector3.ZERO and brain.hp >= _last_hp and brain.screaming <= 0.0)
 	if resting:
 		_frame += 1
