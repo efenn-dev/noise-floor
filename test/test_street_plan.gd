@@ -265,6 +265,7 @@ func test_real_game_street() -> void:
 	for id: String in main.sim.loot.containers:
 		trash += 1 if main.sim.loot.containers[id]["table"] == "trash" else 0
 	var dumpsters := (main.downtown["props"] as Array).filter(func(pr: Dictionary) -> bool: return pr["table"] == "trash").size()  # W3b
+	dumpsters += (main.suburbs["items"] as Array).filter(func(it: Dictionary) -> bool: return it["kind"] == "trash_can").size()  # W3c
 	eq(trash, StreetPlan.generate(main.sim.seed_value, main.town)["items"].filter(
 			func(it: Dictionary) -> bool: return it["kind"] == "trash_can").size() + dumpsters, "the game registers the trash cans (and downtown's dumpsters)")
 	var can_body: StaticBody3D = sv.bodies[main.street["items"].find(

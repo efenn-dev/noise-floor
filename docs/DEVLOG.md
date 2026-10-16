@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — W3c More streets of houses (the bigger world, part 3)
+
+Emmitt: "start on W3c" (his son had no complaints after testing downtown). Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **West Street and East Street** now have houses down both sides: about two dozen more, roughly double the town. They're the town's own houses (the same three floor plans, brick or siding, furnished, with fridges, kitchen and bathroom cupboards and a bed), so everything that works in town works there: doors, windows, searching, sleeping, indoors for warmth and fog. A lot stands empty now and then, and East Street leaves room for the junkyard lane.
+- About **one house in three has a zombie inside**, waiting by the kitchen like the town's.
+- A **mailbox** by every front path, a **trash can** behind every house (searchable), and a tree behind about half.
+- **Older saves** get the new streets the first time they load, built round anything the player already built there: a house that would land on your walls is simply left out (and stays out).
+- Saves: version 24. Flag: `--at=east` (East Street; `--at=west` already showed West Street).
+
+**Try it:** `play.bat --at=west` or `play.bat --at=east`, or walk: West Street is the next road west of Main Street, East Street the next one east.
+
+**Tests:** 19,480 green (new `test_suburbs.gd`: seeded; houses inside their areas and off every road, the town, the park, downtown, the junkyard, the resource nodes and each other for eight seeds; every house closed with its front door 8 m back facing its road; the scenery off roads and houses; laying furnishes every house with a bed, registers the trash cans and spawns a zombie in one house in three, inside; a version-23 save with a foundation and wall on West Street keeps them, the house that would have stood there is left out, and the skip survives saving and loading; the session log names street houses; walking into a West Street house through its front door). Three older tests count the new streets' furniture and trash cans too. One-day soak OK: 189 s per game-day against 175 s for main on the same machine (about 8% for twice the houses and eight more zombies; without the new zombies it's 172 s, so the houses themselves cost nothing), 521 MB. Far idle zombies now rest from 35 m (was 50: still beyond every zombie's 30 m sight), keeping their hit zones in range; the soak's hourly line now says how many are resting (about 70%).
+
+**Known gaps:** no street lamps or fences on the new streets yet (Main Street has them); the houses are the town's three floor plans, so they repeat; the new streets' zombies stand still until they hear you.
+
+**Next:** W3d the countryside (farms and barns, the hunting cabin in the woods, highway loot), then W3e population and balance plus a map.
+
 ## 2026-10-15 — W3b Downtown (the bigger world, part 2)
 
 Emmitt: "it needs a much bigger world" (town + countryside). Code and checks by Claude Opus 5.5, using the shop props Codex made for W3a. Stacked on F3 (#82), which is stacked on F2 (#81).
