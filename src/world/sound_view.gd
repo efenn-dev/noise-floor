@@ -20,6 +20,7 @@ const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
 		"block": ["bash"],  # V15: a guarded hit reuses the existing solid thud
 		"zombie_bash": ["bash"], "wreck": ["bash"], "door": ["door"], "horn": ["horn"],
+		"gather_scrap_heap": ["bash"], "gather_timber": ["bash"],  # P5: pulling scrap, chopping planks
 		# M14: guns (the sim's shot loudness sets the volume) and the reload click
 		"gunshot_pistol": ["shot_pistol"], "gunshot_rifle": ["shot_rifle"],
 		"gunshot_shotgun": ["shot_shotgun"], "gunshot_crossbow": ["shot_crossbow"],

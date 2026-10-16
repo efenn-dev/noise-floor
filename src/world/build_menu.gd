@@ -24,7 +24,7 @@ const GROUP_NOTES := {
 	"Base": "Lay foundations first (key 1): walls, doors and machines stand on them.",
 	"Factory": "Machines stand on a foundation and most need power. They take items IN at the back (blue arrow) and put them OUT at the front (orange). Belts snap to them.",
 	"Hub": "F2: build a Hub at your base and press E on it: milestones unlock the advanced machines. Locked pieces say which milestone opens them.",
-	"Extractors": "F1: built on a resource node's yellow spot (no foundation): scrap heaps, farm wells, fuel tankers, timber stands. Loud: an outpost draws zombies.",
+	"Extractors": "Built on a resource node's yellow spot (no foundation): scrap heaps, farm wells, fuel tankers, timber stands. Before you have one, E on the node gathers by hand. Loud: an outpost draws zombies.",
 	"Power": "A generator (E loads gas cans) or a solar panel, plus a power pole within reach of what it feeds.",
 	"Defense": "Turrets need ammo (E, a belt or a hopper). Sensors pick an action with E.",
 }
