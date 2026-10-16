@@ -149,6 +149,10 @@ class MapDraw:
 			draw_circle(at, 3.5, MapScreen.NODE_COLORS.get(n["kind"], Color.WHITE))
 		if screen.base_at.is_finite():
 			_house(MapScreen.to_map(r, Vector2(screen.base_at.x, screen.base_at.z)), Color(0.4, 0.9, 1.0))
+		for key: String in sim.carts.carts:  # F5: supply carts, a little square on the road
+			var cp: Vector3 = sim.carts.cart_at(key)["pos"]
+			var at := MapScreen.to_map(r, Vector2(cp.x, cp.z))
+			draw_rect(Rect2(at - Vector2(3.5, 3.5), Vector2(7, 7)), Color(0.95, 0.75, 0.2))
 		for key: String in [sim.hub_key(), sim.mast_key()]:
 			if key != "":
 				var c := sim.build.piece_center(key)

@@ -37,6 +37,7 @@ const COLORS := {
 	"tripwire": Color(0.55, 0.5, 0.35),
 	"fence": Color(0.5, 0.52, 0.5),
 	"repair_station": Color(0.45, 0.45, 0.3),
+	"cart_stop": Color(0.35, 0.3, 0.25),  # F5
 	# M16
 	"stove": Color(0.2, 0.2, 0.2),
 	"heater": Color(0.85, 0.85, 0.8),
@@ -194,6 +195,9 @@ func _on_added(key: String) -> void:
 		"hopper":  # a funnel lip on top and a chute at the front, toward the turret it feeds
 			_add_part(body, Vector3(size.x + 0.1, 0.12, size.z + 0.1), Vector3(0, size.y / 2.0, 0), Color(0.3, 0.24, 0.14))
 			_add_part(body, Vector3(0.3, 0.3, 0.3), Vector3(0, size.y / 2.0 - 0.25, -size.z / 2.0 - 0.15), Color(0.35, 0.35, 0.35))
+		"cart_stop":  # F5: a post with a yellow sign at eye height (seen from every side) and a dark band like a cart
+			_add_part(body, Vector3(0.75, 0.45, 0.5), Vector3(0, 0.25, 0), Color(0.95, 0.75, 0.2))
+			_add_part(body, Vector3(0.77, 0.1, 0.52), Vector3(0, 0.2, 0), Color(0.12, 0.12, 0.12))
 		"sensor":  # a small box on a pole; its Lamp goes red while it's on
 			var eye := _add_part(body, Vector3(0.36, 0.26, 0.3), Vector3(0, size.y / 2.0 + 0.1, 0), Color(0.15, 0.15, 0.16))
 			var slamp := _add_part(body, Vector3(0.1, 0.1, 0.04), Vector3(0, size.y / 2.0 + 0.1, -0.17), Color(0.2, 0.2, 0.2))

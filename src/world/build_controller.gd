@@ -27,7 +27,7 @@ const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "
 		# F3: belt routing
 		"splitter", "merger",
 		# F5: quieting a base
-		"soundproof_wall", "dusk_timer"]
+		"soundproof_wall", "dusk_timer", "cart_stop"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 

@@ -14,7 +14,8 @@ extends RefCounted
 ##   quiet: every machine and generator on the sensor's power network is switched off while it's on.
 ##   floodlights: every floodlight within radius is on while it's on (they only light, and draw power, at night).
 ##   decoy: when it comes on, every charged, powered noisemaker within radius blares (a one-off at its loudness
-##     every pulse for `blare` seconds, then `recharge` seconds before it can go again).
+##     every pulse for `blare` seconds, then `recharge` seconds before it can go again). F5: a decoy has a cost: each
+##     blare shakes the noisemaker by `wear` hp, so after a few it falls apart unless you repair it (R) or build another.
 ##   lock_doors: every door within radius is shut when it comes on and stays shut (E can't open it) while it's on.
 ##   F5 machines_off: every machine on the sensor's power network is switched off while it's on (generators keep
 ##     running for lights, fences and turrets, and fall silent if nothing else draws on them).
@@ -119,7 +120,7 @@ func in_light(at: Vector3) -> bool:
 ## One tick. `bells`: where tripwires rang this tick.
 func tick(dt: float, horde: Horde, night: bool, bells: Array) -> void:
 	_night = night
-	for key: String in noisemakers:
+	for key: String in noisemakers.keys():  # F5: a worn-out one can fall apart (and leave the list) mid-loop
 		_tick_noisemaker(key, dt)
 	for at: Vector3 in bells:
 		for key: String in sensors:
@@ -224,9 +225,25 @@ func _tick_noisemaker(key: String, dt: float) -> void:
 		n["blare"] = maxf(0.0, n["blare"] - dt)
 		if n["blare"] <= 0.0:
 			n["recharge"] = float(cfg()["noisemaker"]["recharge"])
+			_wear_noisemaker(key)  # F5
+			if not noisemakers.has(key):
+				return  # it fell apart
 	elif n["recharge"] > 0.0 and power.is_powered(key):
 		n["recharge"] = maxf(0.0, n["recharge"] - dt)
 	power.wants[key] = n["blare"] > 0.0 or n["recharge"] > 0.0
+
+
+## F5: a blare done shakes the noisemaker `wear` hp; one that falls apart says so (and stops being one).
+func _wear_noisemaker(key: String) -> void:
+	var wear := int(cfg()["noisemaker"].get("wear", 0))
+	if wear <= 0 or not build.pieces.has(key):
+		return
+	var who := base_log.thing_name(key) if base_log != null else "Noisemaker"
+	var at := build.piece_center(key)
+	if build.damage(key, wear):
+		_say("%s shook itself apart: build another, or repair the next one before it goes" % who, at)
+	elif int(build.pieces[key]["hp"]) <= wear:
+		_say("%s is nearly shaken apart: one more blare will finish it (R repairs it)" % who, at)
 
 
 ## Applies what the sensors that are on want: quiet mode, floodlights, locked doors.

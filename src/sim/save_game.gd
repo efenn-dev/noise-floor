@@ -198,6 +198,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"generators": sim.power.generators,
 		"stoves": sim.climate.to_dict(),
 		"projects": sim.projects.to_dict(),
+		"carts": sim.carts.to_dict(),  # F5: the home stop and each cart's trip and load
 		"projects_done": sim.projects.done.duplicate(),
 		"milestones": sim.milestones.to_dict(),
 		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
@@ -327,6 +328,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 					"load": 0.0, "muffled": bool(g["muffled"]), "boxed": bool(g.get("boxed", false))}
 	sim.climate.from_dict(d.get("stoves", {}))  # M16: none before 11
 	sim.projects.load_dict(d.get("projects", {}), d.get("projects_done", []))  # M17a: phase 0 before 12
+	sim.carts.from_dict(d.get("carts", {}))  # F5: none before
+	sim._carts_seen = sim.carts.delivered
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2
 	if version < 22:
 		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build

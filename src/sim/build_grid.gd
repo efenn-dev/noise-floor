@@ -21,9 +21,9 @@ const EDGE_KINDS := ["wall", "door", "barricade", "window", "tripwire", "fence"]
 ## M15: edge pieces that stand on bare ground (no foundation needed), and never block sound or sight.
 const GROUND_EDGES := ["tripwire", "fence"]
 ## M15: objects that stand on bare ground, like power poles and spike strips.
-const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast",
+const GROUND_OBJECTS := ["pole", "trap", "sensor", "floodlight", "noisemaker", "bear_trap", "hub", "radio_mast", "cart_stop",
 		"belt", "splitter", "merger"]  # F3: belts run on bare ground too (out to an outpost)
-const ON_GROUND_OR_FOUNDATION := ["belt", "splitter", "merger", "hub", "radio_mast"]  # F3: sit on a foundation if there is one
+const ON_GROUND_OR_FOUNDATION := ["belt", "splitter", "merger", "hub", "radio_mast", "cart_stop"]  # F3: sit on a foundation if there is one
 
 const GRID := 2.0
 const WALL_HALF := 0.1   # half a wall's thickness: a wall's face is this far inside the cell
@@ -76,7 +76,8 @@ func is_object(id: String) -> bool:
 	return _kind(id) in ["machine", "belt", "bed", "storage", "generator", "solar", "pole", "trap", "turret", "prop", "workbench",
 			"hopper", "sensor", "floodlight", "noisemaker", "bear_trap", "repair_station",
 			"stove", "heater",  # M16
-			"hub", "radio_mast", "splitter", "merger"]  # F2, F3
+			"hub", "radio_mast", "splitter", "merger",  # F2, F3
+			"cart_stop"]  # F5
 
 
 func kind_of(id: String) -> String:

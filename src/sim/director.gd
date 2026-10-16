@@ -13,6 +13,9 @@ extends RefCounted
 ## way it comes from ("north", "south-east"...).
 ## F4 (the loop closes): a wave is bigger the louder your base is right now: its size is multiplied by
 ## loud_multiplier() (1 + heat gain / loud_wave_gain, at most loud_wave_max), so a bigger factory draws bigger hordes.
+## F5: a wave walks toward the sound that's loudest OUTSIDE (its level listen_distance out through its leakiest side,
+## the same measure the heat uses), not the loudest on paper: wall in or box in the base and a loud outpost out in the
+## open draws the hordes instead. The wave event names it ("key", "target").
 const ROAD_MIN := 110.0
 const ROAD_MAX := 180.0
 const WANDER_MIN := 70.0
@@ -108,7 +111,7 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
 	return {"size": size, "edge": WorldMap.direction_name(lure["pos"], start), "kind": kind, "route": route,
-			"types": type_counts, "start": start, "loud": loud}
+			"types": type_counts, "start": start, "loud": loud, "key": lure["key"], "target": lure["pos"]}
 
 
 ## F4: how much bigger a wave is because of how loud your base is right now (the heat gain): 1 when quiet.
@@ -249,11 +252,20 @@ func wave_kind(night: bool) -> String:
 	return ""
 
 
+## F5: the continuous sound that's loudest to the world outside: its level listen_distance out through its leakiest
+## side (walls counted once and cached, as in gain_now). Ties keep the first.
 func _loudest(noise: NoiseField) -> Dictionary:
+	var dist := float(cfg["listen_distance"])
 	var best: Dictionary = noise.continuous[0]
+	var best_level := -INF
 	for s: Dictionary in noise.continuous:
-		if s["loudness"] > best["loudness"]:
+		var at: Vector3 = s["pos"]
+		if not _walls_cache.has(at):
+			_walls_cache[at] = noise.outdoor_walls(at, dist)
+		var level := NoiseField.heard_level(s["loudness"], dist, _walls_cache[at])
+		if level > best_level:
 			best = s
+			best_level = level
 	return best
 
 

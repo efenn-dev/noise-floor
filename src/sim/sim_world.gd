@@ -32,6 +32,8 @@ var defense: Defense
 var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
+var carts: Carts  # F5: supply carts between cart stops
+var _carts_seen := 0  # carts.delivered already counted in this session's stats
 var milestones: Milestones  # F2: the Hub
 ## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
 var rescue_state := ""
@@ -153,6 +155,8 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	defense.power = power
 	defense.base_log = base_log
 	projects = Projects.new(data)
+	carts = Carts.new(data, build)  # F5
+	carts.crates_near = cart_crates
 	build.projects = projects  # M17a: the water tap can't be built until the tower runs
 	factory.storage_at = _storage_at_cell  # F3: belts can fill crates
 	factory.sink_at = _sink_at_cell  # F4: and feed the Hub
@@ -232,11 +236,16 @@ func step() -> void:
 	climate.tick(TICK, clock.seconds_per_hour())
 	_tick_projects()
 	factory.tick(TICK)
+	carts.tick(TICK)  # F5
+	if carts.delivered != _carts_seen:
+		stats.cart_items += maxi(0, carts.delivered - _carts_seen)
+		_carts_seen = carts.delivered
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
+	noise.continuous.append_array(carts.noise_sources())  # F5: supply carts on the road
 	_tick_rescue()  # F2
 	_note_noise()
 	_tick_first_night()
@@ -308,10 +317,11 @@ func step() -> void:
 		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
 		var loud_note := " Your base is loud: it's a big one." if float(wave.get("loud", 1.0)) >= 1.5 else ""  # F4
-		add_message("%s from the %s...%s" % [what, wave["edge"], loud_note])
+		var target := wave_target_words(wave)  # F5: where it's heading
+		add_message("%s from the %s%s...%s" % [what, wave["edge"], (", heading for " + target) if target != "" else "", loud_note])
 		var label: String = {"wanderers": "Wanderers", "group": "A group", "horde": "A horde"}[wave["kind"]]
-		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
-				wave.get("start", player_pos))
+		base_log.add("%s coming from the %s: %d zombies%s" % [label, wave["edge"], wave["size"],
+				(", heading for " + target) if target != "" else ""], wave.get("start", player_pos))
 	_radio()
 	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
 	var defend_msg := guidance.tick_defend(clock, build, factory)  # F4: "Defend your base"
@@ -2735,6 +2745,34 @@ func _sink_at_cell(cell: Vector2i, item: String) -> bool:
 	return true
 
 
+## F5: the storage crates (their Inventories) within `reach` of `at`, nearest first: what a cart stop serves.
+func cart_crates(at: Vector3, reach: float) -> Array:
+	var found := []
+	for key: String in storages:
+		if build.pieces.has(key):
+			var d := _flat_dist(build.piece_center(key), at)
+			if d <= reach:
+				found.append([d, key])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	return found.map(func(e: Array) -> Inventory: return storages[e[1]])
+
+
+## F5: E on a cart stop: make it the home stop.
+func make_cart_home(key: String) -> String:
+	return carts.make_home(key)
+
+
+## F5: what a wave is heading for, in words: "your salvager (Junkyard)" ("" if it isn't one of your pieces).
+func wave_target_words(wave: Dictionary) -> String:
+	var key := str(wave.get("key", ""))
+	if key == "" or not build.pieces.has(key):
+		return ""
+	var noun := String(data.buildables[build.pieces[key]["id"]]["name"]).to_lower()
+	var area := WorldMap.area_at(build.piece_center(key))
+	var place := str((data.areas.get(area, {}) as Dictionary).get("name", "")) if area != "" else ""
+	return "your %s%s" % [noun, (" (%s)" % place) if place != "" else ""]
+
+
 ## F5: the hearing threshold of an ordinary zombie (a shambler) at night or by day, with the difficulty: what the
 ## build ghost's rings and the look-at line measure against.
 func hearing_threshold(night: bool) -> float:
@@ -2927,6 +2965,10 @@ func _on_piece_added(key: String) -> void:
 ## Removing one hands back whatever it was holding, on top of the build refund.
 ## If zombies wrecked it, the contents are lost.
 func _on_piece_removed(key: String, piece: Dictionary) -> void:
+	if build.kind_of(piece["id"]) == "cart_stop":  # F5: what its cart carried comes back to you
+		var cargo := carts.removed(key)
+		if not piece.get("destroyed", false):
+			inventory.give_all(cargo)
 	var cans := power.take_refund(key) + climate.take_refund(key)  # M16: and a stove's waiting planks
 	if cans > 0 and not piece.get("destroyed", false):
 		inventory.add(data.buildables[piece["id"]]["fuel"], cans)  # unburnt fuel comes back

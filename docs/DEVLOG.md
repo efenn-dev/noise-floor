@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — F5 Loudness as a puzzle, part 2: hordes go where it's loudest outside, supply carts, decoys that wear out
+
+Emmitt: "start F5 part 2". The rest of F5: outposts worth using, and decoys with a cost. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **Hordes go for what they hear from outside:** a wave used to walk toward whichever machine had the biggest loudness number, walls or not. Now it goes for the sound that's loudest out in the open (the same measure the heat uses: 50 m out through its leakiest side). So walls, soundproof walls and sound boxes decide where the dead go: box in your home base and a loud salvager out at the junkyard draws the hordes there instead. The warning says where: "A horde is coming from the north, heading for your salvager (Junkyard)...", and the base log too.
+- **Supply carts:** a new **cart stop** (Extractors group: 4 planks, 6 nails, 4 scrap). The first one you build is the home stop; put it by a crate at your base (by the Hub, so its parts count for milestones). Every other stop is a pickup with its own little cart: it loads up to 40 items from the crates within 4 m of its stop, drives the roads home, unloads into the crates by the home stop, and drives back. It hums as it drives (zombies hear it pass) and has headlamps at night. E on a stop makes that one home. Looking at a stop says what its cart is doing; the map shows carts as yellow squares; the session log counts what they brought home. So an outpost is: extractor -> crate -> cart stop, and the output turns up at home by itself.
+- **Decoys cost something:** a noisemaker shakes itself apart a little with every blare (25 hp of 100): four blares and it falls apart unless you repair it (R). It warns in the base log on its last blare, and looking at it says how many it has left.
+- Flag: `--demo-carts` (a home stop and a pickup 30 m up the road with a crate of scrap).
+
+**Try it:** `play.bat --demo-carts --advance=3` shows a cart on its way home. In a game: build an extractor at the junkyard facing a crate, a cart stop beside the crate, and a cart stop by a crate at home (build the home one first).
+
+**Tests:** 20,368 green (new `test_outposts.gd`: walled in at home, the open outpost becomes the target; the warning names "your smelter"; a cart loads up to its cap, drives the roads (over 70 m for 80 m apart), hums while moving, unloads at home, comes back and takes the rest; waits silently when there's nothing, notices new items, counts in the session log; pulling a pickup down gives back its cargo; pulling home down turns carts round; E makes another stop home and the old home becomes a pickup; home, carts, cargo and position save and load; a noisemaker loses 25 hp a blare, warns, and falls apart after four; the cart view draws a cart where the sim says, with a crate only when loaded; the cart stop is in the data and menus). Soak one game-day: SOAK OK, 142 and 158 s in two runs (main under the same conditions: 149 s; nothing new runs in the soak).
+
+**Known gaps:** carts drive through parked cars and zombies (they're ghosts on the road; nothing attacks them); a cart stop only serves crates, not an extractor directly; carts carry anything in the crates, there's no filter.
+
+**Next:** per DIRECTION.md, F6 (compact and deep: recipes that chain into what survival needs), then PT (Emmitt's first loud night).
+
 ## 2026-10-16 — F5 Loudness as a puzzle, part 1: see how far it's heard, muffle it, box it in, rest it at night
 
 Emmitt: "start F5". The roadmap: a player should look at a noisy base and see three ways to quiet it. Part 1 makes the noise visible and gives three of the ways. Code and checks by Claude Opus 5.5.
