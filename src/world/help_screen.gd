@@ -71,7 +71,7 @@ const GUIDE := [
 	"2. Press 1 and click the ground to lay foundations. Everything you build stands on them.",
 	"3. Press B, click Smelter, then click a foundation to place it (R turns it). Esc stops building.",
 	"4. Machines need power: build a Generator and a Power pole beside the smelter (B, Power). E on the generator loads gas cans; the crate has some, G siphons more from cars.",
-	"5. E on the smelter loads scrap metal from your pockets or the crate; it makes metal plates. E again takes them. A Press turns plates into nails.",
+	"5. E on the smelter loads scrap metal from your pockets or the crate; it makes metal plates. E again takes them. A Press turns plates into nails. Machines take items IN at the back (blue arrow) and put them OUT at the front (orange): a belt into the back feeds one, and a green tick shows it's connected.",
 	"6. Running machines are loud, and loud draws zombies. N shows how far. Walls block sound; U on a machine fits a muffler.",
 ]
 const MOUSE_NAMES := {MOUSE_BUTTON_LEFT: "Left click", MOUSE_BUTTON_RIGHT: "Right click",

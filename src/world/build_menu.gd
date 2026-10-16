@@ -22,7 +22,7 @@ const GROUPS := [
 ## S4: one line under each group's title saying how its pieces work (Playtest #1).
 const GROUP_NOTES := {
 	"Base": "Lay foundations first (key 1): walls, doors and machines stand on them.",
-	"Factory": "Machines stand on a foundation and most need power. E on a machine loads it and takes what it made.",
+	"Factory": "Machines stand on a foundation and most need power. They take items IN at the back (blue arrow) and put them OUT at the front (orange). Belts snap to them.",
 	"Hub": "F2: build a Hub at your base and press E on it: milestones unlock the advanced machines. Locked pieces say which milestone opens them.",
 	"Extractors": "F1: built on a resource node's yellow spot (no foundation): scrap heaps, farm wells, fuel tankers, timber stands. Loud: an outpost draws zombies.",
 	"Power": "A generator (E loads gas cans) or a solar panel, plus a power pole within reach of what it feeds.",

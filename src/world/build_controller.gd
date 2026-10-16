@@ -7,7 +7,10 @@ extends Node3D
 ## face the next way (default: facing away from you). Left-click builds, right-click removes the piece you're
 ## looking at (full refund). F3: hold left-click and drag to build a straight row. F5: for anything that makes noise,
 ## rings on the ground round the ghost show how far zombies will hear it: blue at night, orange by day, dented by
-## the walls around it (SimWorld.heard_preview), and the HUD says it in metres.
+## the walls around it (SimWorld.heard_preview), and the HUD says it in metres. P4: belts snap like Satisfactory's
+## (Factory.snap_belt_facing: into a machine's IN, on from its OUT, on from a belt ending here) unless you've turned
+## this one yourself with R, the build line says what the belt will feed (a tick or an X), and a machine's ghost
+## shows its IN (blue, back) and OUT (orange, front) arrows.
 
 const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
@@ -50,6 +53,9 @@ var last_message := ""
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ghost_nose: MeshInstance3D  # marks the front of belts and machines
+var _ghost_ports: Node3D  # P4: a machine ghost's IN and OUT arrows
+var _manual_turn := false  # P4: R pressed on this cell: don't snap the belt
+var snapped := false  # P4: the belt ghost was turned to join what's next to it
 var _rings: MeshInstance3D  # F5: the heard-radius rings
 var _rings_mesh: ImmediateMesh
 var _rings_shown: Dictionary = {}  # the preview the rings were last drawn from
@@ -84,6 +90,9 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_exclude: Array[RID]) -> void:
 	_ghost_nose.mesh = nose
 	_ghost_nose.material_override = _ghost_mat
 	_ghost.add_child(_ghost_nose)
+	_ghost_ports = Node3D.new()  # P4
+	_ghost_ports.visible = false
+	_ghost.add_child(_ghost_ports)
 	_rings_mesh = ImmediateMesh.new()
 	_rings = MeshInstance3D.new()
 	_rings.mesh = _rings_mesh
@@ -134,6 +143,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("build_rotate"):
 		turns = (turns + 1) % 4
+		_manual_turn = true  # P4: you chose the way: no snapping on this cell
 	elif InputSetup.captured():
 		if event.is_action_pressed("build_place"):
 			start_drag()
@@ -300,7 +310,9 @@ func update_aim() -> void:
 		point += normal * 0.05  # hit a side: build on the near side of it
 	var id := piece()
 	var cell := BuildGrid.world_to_cell(point)
-	var side := (_facing_side(forward) + turns) % 4
+	if cell != aim_cell:
+		_manual_turn = false  # P4: a new cell snaps again
+	var side := snap_side(id, cell, (_facing_side(forward) + turns) % 4)
 	if cell != aim_cell or side != aim_side:
 		last_message = ""  # moved on: drop the old "can't build" message
 	aim_cell = cell
@@ -337,8 +349,47 @@ func _show_ghost(id: String) -> void:
 	var size: Vector3 = sim.data.buildables[id]["size"]
 	_ghost_nose.visible = sim.build.is_object(id)
 	_ghost_nose.position = Vector3(0, size.y / 2.0, -size.z / 2.0)
+	_show_ghost_ports(id, size)
 	_ghost.visible = true
 	_show_heard(id)
+
+
+## P4: the way a piece goes on `cell`: a belt you haven't turned yourself (R) snaps to join what's next to it
+## (Factory.snap_belt_facing) and sets `snapped`; anything else keeps `side`.
+func snap_side(id: String, cell: Vector2i, side: int) -> int:
+	snapped = false
+	if id != "belt" or _manual_turn:
+		return side
+	var snap := sim.factory.snap_belt_facing(cell)
+	if snap < 0:
+		return side
+	snapped = true
+	return snap
+
+
+## P4: a machine's ghost shows its IN arrow at the back and its OUT arrow at the front (ghost space: front is -Z).
+func _show_ghost_ports(id: String, size: Vector3) -> void:
+	var machine := sim.build.kind_of(id) == "machine"
+	_ghost_ports.visible = machine
+	if not machine:
+		return
+	if _ghost_ports.get_child_count() == 0:
+		var g := BuildGrid.GRID
+		_ghost_ports.add_child(PortView.arrow(Vector3(0, 0, g / 2.0 + 0.15), Vector3(0, 0, -1), BuildView.INPUT_COLOR, "IN"))
+		_ghost_ports.add_child(PortView.arrow(Vector3(0, 0, -g / 2.0 - 0.15), Vector3(0, 0, -1), BuildView.OUTPUT_COLOR, "OUT"))
+	_ghost_ports.position = Vector3(0, -size.y / 2.0 + 0.04, 0)
+
+
+## P4: the build line for a belt or a machine: what this belt will feed, or which way a machine takes and gives.
+func port_text() -> String:
+	var id := piece()
+	if id == "belt" and aim_valid:
+		var link := sim.belt_target(aim_cell, aim_side)
+		var mark := "✓ " if link["ok"] else ("X " if link["bad"] else "")
+		return "This belt %s%s%s" % [mark, sim.belt_link_words(link), "  (snapped; R turns it yourself)" if snapped else ""]
+	if sim.build.kind_of(id) == "machine":
+		return "Takes items IN at the back (blue arrow), puts them OUT at the front (orange arrow). R turns it."
+	return ""
 
 
 ## F5: works out how far zombies would hear piece `id` where the ghost stands and draws the rings: one line round
@@ -389,6 +440,9 @@ func status_text() -> String:
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)
+	var ports := port_text()  # P4
+	if ports != "":
+		lines.append(ports)
 	if not heard.is_empty():  # F5
 		lines.append("Loudness %d: %s (blue ring: night, orange: day)" % [roundi(float(heard["loudness"])),
 				Interactor.heard_words(SimWorld.heard_far(heard["night"]), SimWorld.heard_far(heard["day"]))])
