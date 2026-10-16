@@ -94,6 +94,8 @@ var house_cells: Dictionary = {}
 ## W3c: suburb houses that weren't laid because an older save already had something built where they'd stand
 ## (saved, so they stay away).
 var suburbs_skipped: Array = []
+## W3d: the same for the countryside's buildings (the farmhouses, barns and the hunting cabin).
+var rural_skipped: Array = []
 var player_lit := false
 var player_facing := Vector3(0, 0, -1)  # S4: where you look (flat), for the jumpscare rules
 var scares: Scares  # S4: jumpscare stings (SoundView plays scares.fired)
@@ -1131,6 +1133,36 @@ func place_suburbs(plan: Dictionary, lay_pieces: bool, taken: Dictionary = {}) -
 		place_props(part)
 	place_street({"items": part["items"]})
 	return part
+
+
+## W3d: the farms and the hunting cabin (RuralPlan.generate), like place_suburbs: with `lay_pieces` it lays each
+## building (house pieces, beds and furniture through place_town and place_props, the barns' walls with them),
+## leaving out any that would land on `taken` keys or what's already built (rural_skipped); then it registers the
+## fixtures that can be searched (barn crates, the tractors, the cabin's gun locker). Returns the plan less the
+## skipped buildings.
+func place_rural(plan: Dictionary, lay_pieces: bool, taken: Dictionary = {}) -> Dictionary:
+	if lay_pieces:
+		rural_skipped = []
+		for b: String in RuralPlan.buildings(plan):
+			for key: String in RuralPlan.building_keys(plan, b):
+				if taken.has(key) or build.pieces.has(key):
+					rural_skipped.append(b)
+					break
+	var part := RuralPlan.without(plan, rural_skipped)
+	if lay_pieces:
+		place_town(part)
+		place_props(part)
+	for f: Dictionary in part["fixtures"]:
+		if str(f["table"]) != "":
+			loot.add(f["id"], f["table"], downtown_prop_pos(f))
+	return part
+
+
+## W3d: the countryside's wrecks (CountryPlan "wrecks", the same every game): each trunk can be searched.
+func place_country(country: Dictionary) -> void:
+	for w: Dictionary in country.get("wrecks", []):
+		if w.has("id"):
+			loot.add(w["id"], w["table"], w["pos"] + Vector3(0, 1.0, 0))
 
 
 ## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
@@ -2782,6 +2814,8 @@ func know_houses(plan: Dictionary) -> void:
 		var label := "house %s (%s side)" % [parts[1], "east" if parts[2] == "e" else "west"] if parts.size() == 3 else str(h["name"])
 		if parts.size() == 3 and parts[0] != "house":
 			label = "%s Street house %s (%s side)" % [parts[0].capitalize(), parts[1], "east" if parts[2] == "e" else "west"]
+		if parts.size() < 3 or not parts[2] in ["e", "w"]:
+			label = str(h["name"]).replace("_", " ")  # W3d: "farmhouse west", "hunting cabin"
 		for c: Vector2i in h["cells"]:
 			house_cells[c] = label
 

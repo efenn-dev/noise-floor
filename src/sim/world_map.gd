@@ -38,7 +38,13 @@ const ROADS := [
 	{"id": "junkyard_lane", "kind": "dirt", "width": 5.0, "drawn": true,  # F1: out to the junkyard's scrap heaps
 			"points": [Vector2(60, -40), Vector2(140, -40)]},
 	{"id": "county_west", "kind": "asphalt", "width": 6.0, "drawn": true,
-			"points": [Vector2(-170, 60), Vector2(-360, 60)]},
+			"points": [Vector2(-170, 60), Vector2(-256, 60), Vector2(-360, 60)]},
+	# W3d: the farms' dirt drives (RuralPlan): off County Road West to the west farm, and on south from the
+	# corner of West Street and Market Street to the south farm.
+	{"id": "west_farm_drive", "kind": "dirt", "width": 5.0, "drawn": true,
+			"points": [Vector2(-256, 60), Vector2(-256, 125)]},
+	{"id": "south_farm_drive", "kind": "dirt", "width": 5.0, "drawn": true,
+			"points": [Vector2(-60, 60), Vector2(-60, 170)]},
 	{"id": "farm_lane", "kind": "dirt", "width": 5.0, "drawn": true,
 			"points": [Vector2(-170, 60), Vector2(-170, 300)]},
 	{"id": "woods_track", "kind": "dirt", "width": 4.0, "drawn": true,

@@ -246,6 +246,10 @@ static func town_material(style: String) -> StandardMaterial3D:
 			return Surfaces.material("brick", 3.0, Color(0.62, 0.48, 0.42))
 		"corrugated":  # M17a: corrugated-metal warehouses (the scrap-wall texture in steel grey)
 			return Surfaces.material("scrap_wall", 2.0, Color(0.62, 0.66, 0.7))
+		"barn":  # W3d: the farms' barns, painted barn red (the siding texture)
+			return Surfaces.material("siding", 2.5, Color(0.66, 0.2, 0.15))
+		"cabin":  # W3d: the hunting cabin's dark, weathered wood
+			return Surfaces.material("siding", 2.0, Color(0.42, 0.32, 0.24))
 	return Surfaces.material("concrete_floor", 2.0, Color(0.62, 0.5, 0.4))  # a warm, worn floor
 
 

@@ -2,7 +2,27 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
-## 2026-10-16 — W3c More streets of houses (the bigger world, part 3)
+## 2026-10-15 — W3d The countryside: farms, the hunting cabin, highway loot (the bigger world, part 4)
+
+Emmitt: "merge both and start W3d". Code and checks by Claude Opus 5.5, using the farm props Codex made for W3a.
+
+**Built:**
+- **Two farms**, each round the farm well that was already there (an F1 resource node): a **farmhouse** (one of the town's houses, furnished, fridge and cupboards, a bed), a **red barn** with a pitched roof and a big open doorway (a tractor and three crates to search, round hay bales), a **cornfield** behind a wooden fence with a gate (you and the zombies walk through the corn: good for hiding), hay bales and a water trough in the yard. Each farm has a dirt drive: the west farm off County Road West, the south farm straight on south from where West Street meets Market Street.
+- **The hunting cabin** in its clearing in the north-west woods: one dark-wood room with a bed, a hunter's cupboard and a **gun locker**, a good place to find a rifle (about a third of games).
+- **Highway loot:** every wrecked car on the highway (and in the junkyard) now has a trunk to search: travellers' things on the highway (food, water, bandages, bags, gas, sometimes a gun), car junk in the junkyard.
+- **Zombies:** one in a farmhouse or the cabin (two of the three), one in each barn, two in each cornfield (a runner on the south farm), one by the cabin.
+- **Older saves** get all of it built round anything the player already built there (a building that would land on your walls is left out and stays out), like W3c's streets.
+- Saves: version 25. Flags: `--at=farm` (the west farm's drive), `--at=cabin`.
+
+**Try it:** `play.bat --at=farm` or `play.bat --at=cabin`.
+
+**Tests:** 19,610 green (new `test_rural.gd`: seeded; every building in its area and off every road, the town, the park, downtown, the new streets, the resource nodes and each other; the fields fenced round with a gate, full of corn, clear of their wells; barns open with a back door, houses and the cabin closed with doors, the cabin's facing the track; laying registers the tractors, barn crates and gun locker, the barns and cabin count as indoors, zombies spawn where they should; the cabin's locker finds guns; every wreck searchable with highway loot on the highway; a version-24 save with a wall where the west farmhouse goes keeps it and the farmhouse is left out, also after save and load; walking into a barn through its doorway and into the cabin through its door). Three older tests count the countryside too (the cabin's locker beats warehouse crates for guns, like the armory's). One-day soak OK: 193 s per game-day against 188 s for main on the same machine (about 3%), 530 MB.
+
+**Known gaps:** the farmhouses are the town's three floor plans; no animals; the barns' crates are the storage-crate model; the corn doesn't change with the seasons.
+
+**Next:** W3e population and balance: zombies and loot per area, far zombies thinking less often, and a map so the bigger world is easy to find your way round.
+
+## 2026-10-15 — W3c More streets of houses (the bigger world, part 3)
 
 Emmitt: "start on W3c" (his son had no complaints after testing downtown). Code and checks by Claude Opus 5.5.
 

@@ -11,7 +11,8 @@ const WRECK_BOXES := {"sedan": Vector3(1.9, 1.5, 4.4), "pickup": Vector3(2.0, 1.
 const WALL_HEIGHT := 6.0
 ## How each kind is solid: "trunk" (a thin cylinder), "box" (its model's box), or not at all (bushes).
 const COLLIDE := {"tree": "trunk", "pine_tree": "trunk", "pine_tree_small": "trunk", "rock": "box",
-		"guardrail": "box", "concrete_barrier": "box", "road_sign": "box", "farm_fence": "box"}
+		"guardrail": "box", "concrete_barrier": "box", "road_sign": "box", "farm_fence": "box",
+		"hay_bale_round": "box", "hay_bale_square": "box", "water_trough": "box"}  # W3d: the farmyards (corn you walk through)
 ## The props' materials (Codex's tools/art/world_props.py), textured by name like the guns; others keep their colour.
 const PROP_LOOKS := {
 	"Prop Metal": {"texture": "gun_metal", "tile_m": 0.3, "metallic": 0.5, "roughness": 0.55},
@@ -30,10 +31,11 @@ var _tree_mesh: Mesh  # our own copy, so the season can recolour its leaves
 var _leaf_materials: Dictionary = {}  # surface index -> original material
 
 
-func setup(p_plan: Dictionary) -> void:
+## W3d: `edge_wall` false for a second CountryView that only scatters (the farms' corn, fences and hay).
+func setup(p_plan: Dictionary, edge_wall: bool = true) -> void:
 	plan = p_plan
 	var by_kind := {}
-	for t: Dictionary in plan["trees"]:
+	for t: Dictionary in plan.get("trees", []):
 		var kind := str(t.get("kind", "tree"))
 		if not by_kind.has(kind):
 			by_kind[kind] = []
@@ -44,8 +46,9 @@ func setup(p_plan: Dictionary) -> void:
 		(by_kind[p["kind"]] as Array).append(p)
 	for kind: String in by_kind:
 		_scatter(kind, by_kind[kind])
-	_add_wrecks(plan["wrecks"])
-	_add_edge_wall()
+	_add_wrecks(plan.get("wrecks", []))
+	if edge_wall:
+		_add_edge_wall()
 
 
 ## The box round every mesh under `root`, in root's space.
@@ -140,6 +143,8 @@ func _add_wrecks(list: Array) -> void:
 		body.collision_mask = 0
 		body.position = w["pos"]
 		body.rotation.y = float(w["yaw"])
+		if w.has("id"):
+			body.set_meta("container_id", w["id"])  # W3d: E searches its trunk
 		if ResourceLoader.exists(WRECK_MODELS.get(type, "")):
 			var model := (load(WRECK_MODELS[type]) as PackedScene).instantiate() as Node3D
 			model.rotation.y = PI  # the car models face -Z like everything else; a wreck's way doesn't matter

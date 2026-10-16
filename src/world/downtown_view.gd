@@ -25,7 +25,7 @@ var plan: Dictionary
 var roof_meshes: Array = []  # retinted by apply_season (snow in winter)
 var props: Dictionary = {}   # prop id -> StaticBody3D (tests)
 var signs: Array = []        # Label3D per shop (tests, screenshots)
-var _models: Dictionary = {} # model id -> PackedScene, loaded once
+static var _models: Dictionary = {}  # model id -> PackedScene, loaded once (W3d: shared with RuralView)
 
 
 func setup(p_sim: SimWorld, p_plan: Dictionary) -> void:
@@ -94,9 +94,15 @@ func _shop(s: Dictionary, roof_mat: Material, ceiling_mat: Material) -> void:
 	signs.append(label)
 
 
-## A prop: its model standing on the floor and turned to its facing, a box collider round it, and
-## "container_id" if it has a loot table.
 func _prop(p: Dictionary) -> StaticBody3D:
+	var body := make_prop(p)
+	add_child(body)
+	return body
+
+
+## A prop: its model standing on the floor and turned to its facing, a box collider round it, and
+## "container_id" if it has a loot table. W3d: static, so RuralView makes the barns' and the cabin's the same way.
+static func make_prop(p: Dictionary) -> StaticBody3D:
 	var size: Vector3 = p["size"]
 	var f: Vector2 = p["facing"]
 	var body := StaticBody3D.new()
@@ -122,13 +128,12 @@ func _prop(p: Dictionary) -> StaticBody3D:
 		mesh.mesh = bm
 		mesh.position.y = size.y / 2.0
 		body.add_child(mesh)
-	add_child(body)
 	return body
 
 
 ## The model for `id` (assets/models/<id>.glb from tools/art/world_props.py) standing on its feet, its "Prop"
 ## materials textured like the countryside's; null if it hasn't been made.
-func _model(id: String) -> Node3D:
+static func _model(id: String) -> Node3D:
 	var path := "res://assets/models/%s.glb" % id
 	if not _models.has(id):
 		_models[id] = load(path) if ResourceLoader.exists(path) else null

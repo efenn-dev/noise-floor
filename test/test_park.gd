@@ -211,7 +211,7 @@ func test_industrial_loot_and_police_chance() -> void:
 	var finds: Dictionary = data.guns["finds"]
 	for kind: String in ["gun", "part", "ammo"]:
 		for other: String in finds:
-			if other != "industrial" and other != "gun_locker":  # W3b: the police station's gun lockers are richer still
+			if not other in ["industrial", "gun_locker", "hunting_cabin"]:  # W3b/W3d: the armory's and the cabin's gun lockers are richer still
 				check(float(finds["industrial"][kind]) > float(finds[other][kind]),
 						"more %s in warehouse crates than in %s" % [kind, other])
 	check(float(data.gear["containers"]["industrial"]) >= float(data.gear["containers"]["factory_crate"]), "gear as often as the factory's crates")

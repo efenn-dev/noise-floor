@@ -60,10 +60,14 @@ extends RefCounted
 ## 24 = W3c West and East Street's houses: their pieces are saved like the town's, and "suburbs_skipped" names the
 ## houses left out because the save had something built there. A save from before 24 gets them laid fresh (see
 ## holds_suburbs; main.gd lays them round the save's own pieces and spawns their zombies after applying it).
-const VERSION := 24
+## 25 = W3d the farms and the hunting cabin: their pieces are saved like the town's, and "rural_skipped" names the
+## buildings left out because the save had something built there (as for 24). A save from before 25 gets them laid
+## fresh round its own pieces (holds_rural) and their zombies.
+const VERSION := 25
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_DOWNTOWN := 23
 const FIRST_WITH_SUBURBS := 24
+const FIRST_WITH_RURAL := 25
 const FIRST_WITH_TOWN_FLAG := 10
 const FIRST_WITH_GEAR := 6
 const FIRST_WITH_PROPS := 7
@@ -77,6 +81,11 @@ static func holds_town(d: Dictionary) -> bool:
 ## M17a: true if the save already holds the industrial park's warehouse pieces (and its zombies).
 static func holds_park(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_PARK
+
+
+## W3d: true if the save already holds the farms and the hunting cabin (and their zombies).
+static func holds_rural(d: Dictionary) -> bool:
+	return int(d.get("version", 0)) >= FIRST_WITH_RURAL
 
 
 ## W3c: true if the save already holds West and East Street's houses (and their zombies).
@@ -184,6 +193,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"base_log": sim.base_log.to_dict(),
 		"crates": crates,
 		"suburbs_skipped": sim.suburbs_skipped.duplicate(),  # W3c
+		"rural_skipped": sim.rural_skipped.duplicate(),  # W3d
 		"crate_gear": crate_gear,
 		"generators": sim.power.generators,
 		"stoves": sim.climate.to_dict(),
@@ -300,6 +310,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.base_log.load_list(d.get("base_log", []))
 	if holds_suburbs(d):  # W3c (an older save keeps what place_suburbs worked out while laying them)
 		sim.suburbs_skipped = Array(d.get("suburbs_skipped", []))
+	if holds_rural(d):  # W3d, likewise
+		sim.rural_skipped = Array(d.get("rural_skipped", []))
 	for key: String in d["crates"]:
 		if sim.storages.has(key):
 			sim.storages[key].give_all(_ints(d["crates"][key]))

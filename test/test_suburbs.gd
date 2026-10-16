@@ -131,7 +131,7 @@ func test_houses_steer_round_what_an_older_save_built() -> void:
 	check(not w.build.pieces["f:-36:-26"].get("town", false), "and still theirs")
 	eq(w.suburbs_skipped, [hit], "loading an older save doesn't forget the skip")
 	var again := SaveGame.to_dict(w)
-	eq(int(again["version"]), 24, "saved as version 24")
+	check(int(again["version"]) >= 24, "saved as version 24 or later")
 	eq(again["suburbs_skipped"], [hit], "with the skip")
 	var b := SimWorld.new(8.0, null, int(d["seed"]))
 	b.suburbs_skipped = Array(again["suburbs_skipped"])
