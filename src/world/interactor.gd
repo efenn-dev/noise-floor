@@ -467,6 +467,7 @@ func status_text() -> String:
 		lines.append("%s · makes %s · %s · loudness %d%s" % [sim.data.buildables[m.id]["name"], m.recipe["name"],
 				m.status(), roundi(m_loud), _muffle_tag(m.muffled, m.boxed)])
 		lines.append("in: %s   out: %s   %s" % [_list(m.input, "empty"), _list(m.output, "empty"), _heard_line(target_key, m_loud)])
+		lines.append(sim.machine_port_words(target_cell))  # P4: what feeds its IN and takes from its OUT
 		if m.chained > 0.0:  # F6: fed straight from the machine behind it
 			lines.append("Fed straight from the machine behind it: %d%% faster" % roundi(Factory.CHAIN_BONUS * 100.0))
 		if m.watts > 0.0:
@@ -480,7 +481,9 @@ func status_text() -> String:
 		hint += _muffle_hint(m.muffled, m.boxed)
 		lines.append(hint)
 	elif f.belts.has(target_cell):
-		lines.append("Belt · %d items" % f.belts[target_cell].items.size())
+		var link := sim.belt_target(target_cell)  # P4: where its end goes
+		lines.append("Belt · %d items · %s%s" % [f.belts[target_cell].items.size(),
+				"✓ " if link["ok"] else ("X " if link["bad"] else ""), sim.belt_link_words(link)])
 		lines.append("[E] pick up the items")
 	var piece2: Dictionary = sim.build.pieces[target_key]
 	var b2: Dictionary = sim.data.buildables[piece2["id"]]

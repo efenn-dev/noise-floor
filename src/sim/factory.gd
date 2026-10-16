@@ -497,6 +497,65 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 	return false
 
 
+## P4 (Emmitt: "the conveyor belts were hard to tell if they snapped into a machine like in Satisfactory"): the cell a
+## machine takes its input from (behind it: its IN) and the one it pushes output into (in front: its OUT).
+static func input_cell(m: Machine) -> Vector2i:
+	return m.cell - DIRS[m.facing]
+
+
+static func output_cell(m: Machine) -> Vector2i:
+	return m.cell + DIRS[m.facing]
+
+
+## P4: what the front end of the belt at `cell` hands its items to: {kind, cell}, kind one of
+## "machine" (a machine's IN: it goes in), "machine_side" (a machine's side or front: it doesn't),
+## "belt" (the next belt of the line), "belt_backwards" (a belt pointing back at this one: stuck),
+## "router" / "router_side" (a splitter or merger side that takes it / doesn't), "turret", "bin" (a hopper or
+## repair station: any side) or "open" (nothing the factory knows: SimWorld adds crates and the Hub).
+func belt_link(cell: Vector2i) -> Dictionary:
+	if not belts.has(cell):
+		return {"kind": "open", "cell": cell}
+	return link_from(cell, belts[cell].facing)
+
+
+## P4: the same for a belt that isn't built yet: one at `cell` facing `facing` (the build ghost asks this).
+func link_from(cell: Vector2i, facing: int) -> Dictionary:
+	var to: Vector2i = cell + DIRS[facing]
+	if machines.has(to):
+		return {"kind": "machine" if input_cell(machines[to]) == cell else "machine_side", "cell": to}
+	if belts.has(to):
+		return {"kind": "belt_backwards" if to + DIRS[belts[to].facing] == cell else "belt", "cell": to}
+	if routers.has(to):
+		var r: Router = routers[to]
+		var side := DIRS.find(cell - to)
+		var takes := side == (r.facing + 2) % 4 if r.kind == "splitter" else side != r.facing
+		return {"kind": "router" if takes else "router_side", "cell": to}
+	if turrets.has(to):
+		return {"kind": "turret", "cell": to}
+	if bins.has(to):
+		return {"kind": "bin", "cell": to}
+	return {"kind": "open", "cell": to}
+
+
+## P4: which way a belt placed at `cell` should face to join what's next to it, the way Satisfactory belts snap:
+## into a machine whose IN is this cell; else on from a machine whose OUT is this cell (carrying its output away);
+## else on from a belt that ends here (continuing the line). -1 if nothing to join.
+func snap_belt_facing(cell: Vector2i) -> int:
+	for d in 4:
+		var m: Machine = machines.get(cell + DIRS[d])
+		if m != null and input_cell(m) == cell:
+			return d
+	for d in 4:
+		var m: Machine = machines.get(cell + DIRS[d])
+		if m != null and output_cell(m) == cell:
+			return m.facing
+	for d in 4:
+		var b: Belt = belts.get(cell + DIRS[d])
+		if b != null and cell + DIRS[d] + DIRS[b.facing] == cell:
+			return (d + 2) % 4  # the belt behind points here: carry on the same way
+	return -1
+
+
 static func _sorted(dict: Dictionary) -> Array:
 	var keys := dict.keys()
 	keys.sort()

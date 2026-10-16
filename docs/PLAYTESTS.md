@@ -16,6 +16,9 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-16 — Emmitt, verbal (relayed in the session), build 6c486b6 (F6 part 2)
+- Confusing: "one of the reasons I didn't like building in the game was because the conveyor belts were hard to tell if they snapped into a machine like in satisfactory. I just built a machine with conveyor belts around all sides and still didn't know how it worked." Machines take input only at the back and give output at the front, and nothing showed which side was which or whether a belt connected. Fixed in P4: IN/OUT arrows on every machine and its ghost, belts that snap, a green tick or red X at every belt end, look-at lines that say what feeds what.
+
 ## 2026-10-13 (late) — Emmitt, about 20 minutes, build 2761b62 (everything through #51)
 - Broken: walking over dead bodies pushes them around ("make them much more grounded"). Fixed in S5.
 - Broken: got into the car and couldn't drive. The log showed the pickup going NaN every tick. Fixed in S5 (grounded bodies, fresh wheels, Jolt Physics).

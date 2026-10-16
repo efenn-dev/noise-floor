@@ -2799,6 +2799,85 @@ func _made_since(mark: Dictionary) -> Dictionary:
 	return out
 
 
+## P4: what a belt at `cell` facing `facing` would hand its items to (Factory.link_from), with crates and the Hub
+## filled in: {kind, cell, ok}. ok: true = it connects (a machine's IN, a crate, a turret, the Hub...), false = it points
+## somewhere that won't take it (a machine's side, a belt coming back), null-ish = leads nowhere (kind "open")
+## or just carries on along the line (kind "belt").
+func belt_target(cell: Vector2i, facing: int = -1) -> Dictionary:
+	var link := factory.belt_link(cell) if facing < 0 else factory.link_from(cell, facing)
+	if link["kind"] == "open":
+		var key := "o:%d:%d" % [link["cell"].x, link["cell"].y]
+		if storages.has(key):
+			link["kind"] = "crate"
+		elif build.pieces.has(key) and build.kind_of(build.pieces[key]["id"]) == "hub":
+			link["kind"] = "hub"
+	link["ok"] = link["kind"] in ["machine", "router", "turret", "bin", "crate", "hub"]
+	link["bad"] = link["kind"] in ["machine_side", "belt_backwards", "router_side"]
+	return link
+
+
+## P4: a belt's end in words: "feeds the Smelter's IN", "points at the Smelter's side: ...", "leads nowhere yet".
+func belt_link_words(link: Dictionary) -> String:
+	var to: Vector2i = link["cell"]
+	var what := ""
+	if factory.machines.has(to):
+		what = data.buildables[factory.machines[to].id]["name"]
+	elif build.pieces.has("o:%d:%d" % [to.x, to.y]):
+		what = data.buildables[build.pieces["o:%d:%d" % [to.x, to.y]]["id"]]["name"]
+	match link["kind"]:
+		"machine":
+			return "feeds the %s's IN" % what
+		"machine_side":
+			return "points at the %s's side: machines only take items in at the back (blue IN)" % what
+		"belt":
+			return "carries on to the next belt"
+		"belt_backwards":
+			return "runs into a belt coming the other way: turn one round (R)"
+		"router":
+			return "feeds the %s" % what.to_lower()
+		"router_side":
+			return "points at a side of the %s that doesn't take items" % what.to_lower()
+		"turret":
+			return "loads the %s" % what.to_lower()
+		"bin":
+			return "fills the %s" % what.to_lower()
+		"crate":
+			return "fills the storage crate"
+		"hub":
+			return "hands parts to the Hub"
+	return "leads nowhere yet"
+
+
+## P4: a machine's two ports in words for its look-at line: what feeds its IN (behind it) and what takes from its
+## OUT (in front): "IN (back, blue): fed by a belt   OUT (front, orange): onto a belt".
+func machine_port_words(cell: Vector2i) -> String:
+	var m: Factory.Machine = factory.machines.get(cell)
+	if m == null:
+		return ""
+	var at_in := Factory.input_cell(m)
+	var at_out := Factory.output_cell(m)
+	var fed := "nothing feeds it yet (E loads it by hand)"
+	if factory.belts.has(at_in) and factory.belt_link(at_in)["kind"] == "machine":
+		fed = "fed by a belt"
+	elif factory.machines.has(at_in) and Factory.output_cell(factory.machines[at_in]) == cell:
+		fed = "fed straight from the %s" % data.buildables[factory.machines[at_in].id]["name"]
+	elif factory.routers.has(at_in):
+		fed = "next to a %s" % data.buildables[build.pieces.get("o:%d:%d" % [at_in.x, at_in.y], {"id": "splitter"})["id"]]["name"].to_lower()
+	var goes := "nothing takes it: it waits inside (E takes it)"
+	if factory.belts.has(at_out):
+		goes = "onto a belt" if at_out + Factory.DIRS[factory.belts[at_out].facing] != cell \
+				else "BLOCKED: the belt there runs back into it (turn it round, R)"
+	elif factory.machines.has(at_out):
+		var next: Factory.Machine = factory.machines[at_out]
+		goes = ("straight into the %s" % data.buildables[next.id]["name"]) if Factory.input_cell(next) == cell \
+				else "into the side of the %s, which won't take it" % data.buildables[next.id]["name"]
+	elif storages.has("o:%d:%d" % [at_out.x, at_out.y]):
+		goes = "into a storage crate"
+	elif factory.turrets.has(at_out) or factory.bins.has(at_out) or factory.routers.has(at_out):
+		goes = "into the %s" % data.buildables[build.pieces["o:%d:%d" % [at_out.x, at_out.y]]["id"]]["name"].to_lower()
+	return "IN (back, blue): %s   OUT (front, orange): %s" % [fed, goes]
+
+
 ## F6: the base log screen's supplies lines: what your machines made today and yesterday (the most first, up to
 ## eight things), what you eat and drink in a day, and (part 2) how many days of food and water yesterday's
 ## making comes to, so you can see whether the base keeps you.

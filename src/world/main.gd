@@ -1617,6 +1617,9 @@ func _build_building(args: Dictionary) -> void:
 	add_child(builder)
 	builder.setup(sim, player.camera, [player.get_rid()])
 	add_child(CartView.new(sim))  # F5: supply carts
+	var ports := PortView.new()  # P4: machines' IN/OUT arrows, belt ends' ticks and crosses
+	add_child(ports)
+	ports.setup(sim)
 	factory_view = FactoryView.new()
 	add_child(factory_view)
 	factory_view.setup(sim, build_view)

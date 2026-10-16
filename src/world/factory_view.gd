@@ -104,18 +104,28 @@ func _draw_items() -> void:
 	var alpha := sim.alpha()
 	var used := 0
 	var grid := sim.build
-	var belt_h: float = sim.data.buildables["belt"]["size"].y
 	for cell: Vector2i in sim.factory.belts:
 		var belt: Factory.Belt = sim.factory.belts[cell]
 		var d: Vector2i = Factory.DIRS[belt.facing]
 		var dir := Vector3(d.x, 0, d.y)
-		# F3: on top of the belt, on a foundation or out on the ground
-		var center := grid.center_for("belt", cell, belt.facing) + Vector3(0, belt_h / 2.0 + ITEM_SIZE / 2.0, 0)
+		# F3: on top of the belt, on a foundation or out on the ground; P4: on its rubber deck
+		var center := grid.center_for("belt", cell, belt.facing) + Vector3(0, PortView.DECK_TOP + ITEM_SIZE / 2.0, 0)
+		# P4: a belt plugged into a machine's IN carries its items on across the chute into the opening, and one
+		# fed from a machine's OUT brings them out of its opening: stretch the run to the machines' faces.
+		var ext_end := 0.0
+		var ext_start := 0.0
+		var ahead: Factory.Machine = sim.factory.machines.get(cell + d)
+		if ahead != null and Factory.input_cell(ahead) == cell:
+			ext_end = BuildGrid.GRID / 2.0 - PortView.port_depths(ahead.id).y
+		var behind: Factory.Machine = sim.factory.machines.get(cell - d)
+		if behind != null and Factory.output_cell(behind) == cell:
+			ext_start = BuildGrid.GRID / 2.0 - PortView.port_depths(behind.id).x
+		var run := BuildGrid.GRID + ext_start + ext_end
 		for entry: Dictionary in belt.items:
 			var t := lerpf(entry["prev"], entry["pos"], alpha)
 			var mesh := _get_mesh(used)
 			used += 1
-			mesh.position = center + dir * (t - 0.5) * BuildGrid.GRID
+			mesh.position = center + dir * (-BuildGrid.GRID / 2.0 - ext_start + t * run)
 			mesh.material_override = _material(entry["item"])
 			mesh.visible = true
 	for i in range(used, _pool.size()):
