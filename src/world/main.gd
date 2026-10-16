@@ -53,6 +53,7 @@ extends Node3D
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
 ##   --objectives                    show the first-night objectives midway through (for screenshots)
+##   --defend[=N]                    F4: show the "Defend your base" goals with the first N done (1+: a nail turret ahead)
 ##   --inside[=N]                    start inside house N (0-11, default 0), looking at its fridge
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
 
@@ -301,6 +302,21 @@ func _ready() -> void:
 		_apply_save(save)
 	if args.has("objectives") and not args.has("no-hints"):
 		sim.guidance.debug_midway()
+		objectives_panel.force_visible = true
+	if args.has("defend"):  # F4: the "Defend your base" goals, the first N done (for screenshots)
+		var done := int(str(args["defend"])) if str(args["defend"]) != "" else 0
+		sim.guidance.active = true
+		sim.guidance.completed = true
+		sim.guidance.defend_active = true
+		sim.guidance.defend_ammo_made = done >= 2
+		sim.guidance.defend_fed = done >= 3
+		if done >= 1:
+			var ahead := player.global_position - player.global_basis.z * 4.0
+			var cell := BuildGrid.world_to_cell(ahead)
+			var stock := Inventory.new()
+			stock.give_all({"plank": 50, "nails": 80, "metal_plate": 50})
+			sim.build.place("foundation", cell, BuildGrid.Side.NORTH, stock)
+			sim.build.place("nail_turret", cell, BuildGrid.Side.SOUTH, stock)
 		objectives_panel.force_visible = true
 	objectives_panel.suppressed = args.has("no-hints") or GameSession.skip_hints
 	objectives_panel.refresh()

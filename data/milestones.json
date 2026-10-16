@@ -39,7 +39,7 @@
 			"name": "Sentry", "tier": 2,
 			"blurb": "Turrets that shoot nails, fed by hand, belt or hopper, with sensors and lights.",
 			"cost": { "metal_plate": 25, "nails": 40 },
-			"unlocks": ["nail_turret", "hopper", "motion_sensor", "floodlight"]
+			"unlocks": ["hopper", "motion_sensor", "floodlight"]
 		},
 		"logistics": {
 			"name": "Logistics", "tier": 2,

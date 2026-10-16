@@ -59,9 +59,15 @@ func refresh() -> void:
 		visible = false
 		return
 	var g := sim.guidance
-	visible = not suppressed and g.active and not g.completed and (Settings.show_objectives or force_visible)
+	var first_night := g.active and not g.completed
+	var defend := not first_night and g.defend_active and not g.defend_done  # F4: the second chapter
+	visible = not suppressed and (first_night or defend) and (Settings.show_objectives or force_visible)
 	if not visible:
 		return
+	if defend:
+		_show_defend(g)
+		return
+	_title.text = "FIRST NIGHT  ·  O hide"
 	var current := g.step(sim.build, sim.player_pos)
 	var labels := ["Find food and water", "Find a bed (sleep when tired)",
 			"Before dark (21:00): get inside a closed shelter with a bed", "Survive the night"]
@@ -79,6 +85,24 @@ func refresh() -> void:
 		_detail.text = "Night is 21:00 to dawn. Keep yourself and the shelter standing."
 	else:
 		_detail.text = "O hides objectives · change this in Settings"
+
+
+## F4: "Defend your base": a turret, its ammo from a machine, fed by belt, a night held.
+func _show_defend(g: Guidance) -> void:
+	_title.text = "DEFEND YOUR BASE  ·  O hide"
+	var current := g.defend_step(sim.build)
+	var labels := ["Build a nail turret", "Make its ammo with a Press", "Feed the turret by belt (or a hopper)",
+			"Hold a night: let the turret fight"]
+	for i in _lines.size():
+		var done := i < current
+		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
+		_lines[i].add_theme_color_override("font_color", DONE if done else (Color.WHITE if i == current else DIM))
+	_detail.text = [
+		"B, Defense group: a nail turret (10 metal plates, 20 nails). E on it loads nails from your pockets.",
+		"A Press on a foundation, with power (generator, pole, gas). E loads it with metal plates; it makes nails. R switches what it makes: bolts, rifle rounds.",
+		"Lay a belt from the Press's front to the turret (hold the button and drag). An ammo hopper in front of a turret feeds it too.",
+		"Keep it loaded through the night. The louder your base, the bigger the horde that comes.",
+	][mini(current, 3)]
 
 
 func text() -> String:

@@ -108,7 +108,7 @@ func test_waves_by_road_start_out_of_sight_on_a_road() -> void:
 			sim.step()
 			if not sim.messages.is_empty() and wave.is_empty():
 				wave = {"text": sim.messages.back()["text"]}
-		eq(sim.horde.zombies.size() - before, 8, "seed %d: a horde of 8 at night" % seed_value)
+		eq(sim.horde.zombies.size() - before, roundi(8 * sim.director.loud_multiplier()), "seed %d: a horde of 8 at night (F4: times how loud the base is)" % seed_value)
 		check(wave.get("text", "").begins_with("A horde is coming from the "), "seed %d: the HUD says where from (%s)" % [seed_value, wave.get("text", "")])
 		seen[wave.get("text", "")] = true
 		for z: ZombieBrain in sim.horde.zombies.values():

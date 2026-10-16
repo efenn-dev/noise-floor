@@ -26,6 +26,7 @@ var factory: Factory
 var power: PowerGrid
 var gear: Gear
 var base_log: BaseLog
+var stats: RunStats  # F4: turret shots and kills for the session log (SimWorld sets it)
 ## Shots in the last moment, for drawing tracers: {from: Vector3, to: Vector3, age: float}
 var recent_shots: Array = []
 ## M15: bear traps that have snapped and wait for a reset: piece key -> true.
@@ -246,6 +247,10 @@ func _turrets(dt: float, horde: Horde, noise: NoiseField) -> void:
 		t.shots += 1
 		t.cooldown = st["interval"]
 		var killed := z.take_hit(st["damage"], muzzle, 1.0)
+		if killed:
+			t.kills += 1
+		if stats != null:
+			stats.note_turret(killed)
 		noise.emit(muzzle, st["loudness"], "turret")
 		recent_shots.append({"from": muzzle, "to": z.pos + Vector3(0, 1.3, 0), "age": 0.0})
 		var worn := t.parts.has("muzzle") and gear != null and gear._wear(t.parts["muzzle"], st["muzzle_wear"])

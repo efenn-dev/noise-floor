@@ -207,11 +207,11 @@ func test_director_sends_waves_by_heat_and_time_of_day() -> void:
 	var night := _smelter_sim(23.0)
 	night.director.heat = 20.0
 	_run(night, 30.1)
-	eq(night.horde.zombies.size(), 4, "night, heat ~62 at the check: a group of 4")
+	eq(night.horde.zombies.size(), roundi(4 * night.director.loud_multiplier()), "night, heat ~62 at the check: a group of 4 (F4: times how loud the smelter is)")
 	var horde := _smelter_sim(23.0)
 	horde.director.heat = 60.0
 	_run(horde, 30.1)
-	eq(horde.horde.zombies.size(), 8, "night, heat ~102 at the check: a horde of 8")
+	eq(horde.horde.zombies.size(), roundi(8 * horde.director.loud_multiplier()), "night, heat ~102 at the check: a horde of 8 (F4: times how loud the smelter is)")
 	check(horde.director.heat < 70.0, "sending 8 spent 40 heat (%.1f)" % horde.director.heat)
 	var quiet := SimWorld.new(23.0)
 	quiet.director.first_night_warning_sent = true

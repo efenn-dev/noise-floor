@@ -17,6 +17,26 @@ var night_failed := false
 var night_deaths := 0
 var survived_night := false
 
+## F4 (the loop closes): "Defend your base", the second chapter. It starts once the first night's goals are done (or,
+## in a game from before the guidance, from day 2) and leads from a turret to a factory that feeds it: build a turret,
+## make its ammo with a machine (a Press makes nails, bolts and rifle rounds), feed a turret by belt or hopper, and
+## hold a night (a turret kills a zombie in the dark and a turret still stands at dawn). Saved.
+const DEFEND_STEPS := 4
+const DEFEND_HOWTO := [
+	"New goal: defend your base. Build a nail turret (B, Defense). O shows the goals.",
+	"Turret built. Now make its ammo with a Press: load it with metal plates (it makes nails; R switches what it makes).",
+	"Ammo made. Now feed the turret by belt from the Press's front, or put an ammo hopper in front of it.",
+	"Fed by belt. Now hold a night: keep it loaded and let it fight. A louder base draws a bigger horde.",
+]
+const DEFEND_DONE := "Your base defends itself. The bigger your factory, the louder it is: expect bigger hordes."
+var defend_active := false
+var defend_done := false
+var defend_ammo_made := false
+var defend_fed := false
+var defend_held := false
+var defend_night_kills := -1  # turret kills when tonight began; -1 when it isn't watching a night
+var defend_told := -1  # the last goal it said how to do (so a goal met between ticks still gets its message)
+
 ## The most recent acquired piece that was better when found. It is checked again before wearing.
 var better_gear_uid := -1
 var better_gear_seconds := 0.0
@@ -92,6 +112,69 @@ func step(build: BuildGrid, player_pos: Vector3 = Vector3.INF) -> int:
 func update_completion(build: BuildGrid, player_pos: Vector3 = Vector3.INF) -> void:
 	if active and survived_night and shelter_complete(build, player_pos) and ate and drank and bed_found:
 		completed = true
+
+
+## F4: the "Defend your base" chapter. Call every tick; returns a message when it starts or a goal is met ("" else).
+func tick_defend(clock: GameClock, build: BuildGrid, factory: Factory) -> String:
+	if defend_done:
+		return ""
+	if not defend_active:
+		if (active and completed) or (not active and clock.day >= 2):
+			defend_active = true
+			defend_told = defend_step(build)
+			return DEFEND_HOWTO[defend_told]
+		return ""
+	if not defend_ammo_made:
+		defend_ammo_made = _turret_ammo_made(factory)
+	if not defend_fed:
+		for t: Factory.Turret in factory.turrets.values():
+			defend_fed = defend_fed or t.fed > 0
+	var kills := 0
+	for t: Factory.Turret in factory.turrets.values():
+		kills += t.kills
+	if clock.is_night():
+		if defend_night_kills < 0:
+			defend_night_kills = kills
+	elif defend_night_kills >= 0:
+		if kills > defend_night_kills and build.first_of_kind("turret") != "":
+			defend_held = true
+		defend_night_kills = -1
+	var now := defend_step(build)
+	if now >= DEFEND_STEPS:
+		defend_done = true
+		return DEFEND_DONE
+	if now > defend_told:
+		defend_told = now
+		return DEFEND_HOWTO[now]
+	return ""
+
+
+## F4: which "Defend your base" goal is next (DEFEND_STEPS when they're all done).
+func defend_step(build: BuildGrid) -> int:
+	if build.first_of_kind("turret") == "" and not (defend_ammo_made and defend_fed and defend_held):
+		return 0
+	if not defend_ammo_made:
+		return 1
+	if not defend_fed:
+		return 2
+	if not defend_held:
+		return 3
+	return DEFEND_STEPS
+
+
+## F4: has any machine made something a turret fires (nails, bolts, rifle rounds)?
+static func _turret_ammo_made(factory: Factory) -> bool:
+	var ammo := {}
+	for id: String in factory.data.buildables:
+		var b: Dictionary = factory.data.buildables[id]
+		if b.get("kind", "") == "turret":
+			ammo[b["ammo"]] = true
+	for m: Factory.Machine in factory.machines.values():
+		if m.crafted > 0 and not m.recipe.is_empty():
+			for item: String in (m.recipe.get("out", {}) as Dictionary):
+				if ammo.has(item):
+					return true
+	return false
 
 
 ## [foundation, bed, wall count around that bed, closed door, enclosed] for the build-it-yourself detail row.
@@ -243,7 +326,9 @@ func to_dict() -> Dictionary:
 			"bed_found": bed_found, "saw_night": saw_night, "night_failed": night_failed,
 			"night_deaths": night_deaths,
 			"survived_night": survived_night, "better_gear_uid": better_gear_uid,
-			"better_gear_seconds": better_gear_seconds}
+			"better_gear_seconds": better_gear_seconds,
+			"defend": {"active": defend_active, "done": defend_done, "ammo_made": defend_ammo_made, "fed": defend_fed,
+					"held": defend_held, "night_kills": defend_night_kills, "told": defend_told}}  # F4
 
 
 func load_dict(d: Dictionary) -> void:
@@ -259,6 +344,14 @@ func load_dict(d: Dictionary) -> void:
 	survived_night = bool(d.get("survived_night", false))
 	better_gear_uid = int(d.get("better_gear_uid", -1))
 	better_gear_seconds = float(d.get("better_gear_seconds", 0.0))
+	var dd: Dictionary = d.get("defend", {})  # F4 (an older save starts the chapter fresh, from day 2)
+	defend_active = bool(dd.get("active", false))
+	defend_done = bool(dd.get("done", false))
+	defend_ammo_made = bool(dd.get("ammo_made", false))
+	defend_fed = bool(dd.get("fed", false))
+	defend_held = bool(dd.get("held", false))
+	defend_night_kills = int(dd.get("night_kills", -1))
+	defend_told = int(dd.get("told", -1))
 
 
 ## Screenshot helper: show the first two goals complete and the shelter partly built.

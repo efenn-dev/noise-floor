@@ -275,6 +275,7 @@ func step() -> void:
 			if structure_damage > 0 and build.damage(target, structure_damage):
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
+	defense.stats = stats  # F4: the session's (main.gd may swap the stats object in after setup)
 	defense.tick(TICK, horde, noise)
 	automation.tick(TICK, horde, night, defense.bells)
 	base_log.tick(TICK)
@@ -292,12 +293,21 @@ func step() -> void:
 	if not wave.is_empty():
 		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
-		add_message("%s from the %s..." % [what, wave["edge"]])
+		var loud_note := " Your base is loud: it's a big one." if float(wave.get("loud", 1.0)) >= 1.5 else ""  # F4
+		add_message("%s from the %s...%s" % [what, wave["edge"], loud_note])
 		var label: String = {"wanderers": "Wanderers", "group": "A group", "horde": "A horde"}[wave["kind"]]
 		base_log.add("%s coming from the %s: %d zombies" % [label, wave["edge"], wave["size"]],
 				wave.get("start", player_pos))
 	_radio()
 	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
+	var defend_msg := guidance.tick_defend(clock, build, factory)  # F4: "Defend your base"
+	if defend_msg != "":
+		add_message(defend_msg, 10.0)
+	if not stats.turret_fed:
+		for t: Factory.Turret in factory.turrets.values():
+			if t.fed > 0:
+				stats.turret_fed = true
+				break
 	for m: Dictionary in messages:
 		m["time_left"] -= TICK
 	messages = messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)

@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-15 — F4 The loop closes, part 1: turrets, ammo from the factory, louder bases, bigger hordes
+
+Emmitt: "merge 83 and start F4". The roadmap (#83) asks for a loop where the factory feeds the defense its own noise provokes; his son's session logs show why: three sessions on 10-15 (95 minutes), 77 zombies killed, 37 pieces of gear found, 12 waves survived, and built nothing; 14 perk points earned, none spent. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **A louder base draws bigger hordes:** every wave is multiplied by how loud your base is right now (1x when quiet, 2x at a loud unwalled generator-and-machines setup, at most 2.5x). The message says so when it's a big one.
+- **The factory makes every turret's ammo:** the Press already made nails and bolts; now it makes **rifle rounds** too (10 casings + 1 scrap: R on the Press switches to it), so a rifle turret can be fed by belt.
+- **The nail turret is there from the start** (it no longer waits for the Hub's Sentry milestone): it's the heart of the loop. Sentry still unlocks the hopper, motion sensor and floodlight.
+- **"Defend your base"**, the second chapter of goals (shown on the left like the first night's, O hides it), starts once the first night's goals are done (or from day 2 in an older game, like his son's): build a nail turret, make its ammo with a Press, feed the turret by belt (or a hopper), hold a night (the turret kills a zombie in the dark and a turret still stands at dawn). Each goal says how in plain words, and a message says what's next when one is met.
+- **The session log** now says how many times the turrets fired, what they killed, and whether a belt, hopper or machine ever fed one (the roadmap's measure for F4).
+- Flag: `--defend[=N]` (those goals with N done; 1+ puts a nail turret ahead).
+
+**Try it:** `play.bat`, keep playing his save: from day 2 the left panel says "DEFEND YOUR BASE". Or `play.bat --defend=1`.
+
+**Tests:** 20,085 green (new `test_loop.gd`: the loudness multiplier and a horde from a loud base bigger than from a quiet one; the Press makes every turret's ammo, rifle rounds from casings; a belt feeding a turret counts and your hands don't; a turret's kill counts in it and in the session log, which says a belt fed one; the nail turret needs no milestone and the hopper still does; "Defend your base" starts after the first night's goals (or from day 2 in an older game), moves on with each goal, survives saving, finishes at dawn after a turret kill in the dark; the objectives panel shows it). Four older tests now expect waves times how loud their machine is, and the Press's recipe cycle includes rifle rounds. One-day soak OK: 154 s per game-day against 155 s for main on the same machine.
+
+**Known gaps (F4 part 2):** lights, fences and the repair station already draw power and the repair station panels, but none of it is tuned against loot yet; the Hub and the radio tower don't pull parts on a schedule yet; perks still need a better nudge (his son never spends them).
+
+**Next:** F4 part 2 (the schedule and tuning), then F5 loudness as a puzzle.
+
 ## 2026-10-15 — W3e Population, balance and the map (the bigger world, part 5)
 
 Emmitt: "merge it and start W3e". Code and checks by Claude Opus 5.5.

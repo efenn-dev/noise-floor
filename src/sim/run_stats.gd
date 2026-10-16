@@ -61,6 +61,10 @@ var away: Array = []
 var away_total := 0
 ## P3: house names you walked into, in order.
 var houses: Array = []
+## F4: what your turrets did, and whether one was ever fed by a belt, a hopper or a machine.
+var turret_shots := 0
+var turret_kills := 0
+var turret_fed := false
 
 
 func add_real_time(seconds: float) -> void:
@@ -100,6 +104,14 @@ func note_death(cause: String, when: String) -> void:
 
 
 ## V18: E opening a storage crate (the first hint asks for it), plus legacy/direct deposits.
+## F4: a turret fired (and maybe killed).
+func note_turret(killed: bool) -> void:
+	if muted:
+		return
+	turret_shots += 1
+	turret_kills += 1 if killed else 0
+
+
 func note_crate() -> void:
 	if muted:
 		return
@@ -295,6 +307,10 @@ func summary_lines() -> PackedStringArray:
 		killed.append("%d %s%s" % [n, _words(type), "" if n == 1 else "s"])
 	out.append("Mufflers fitted: %d. Zombies killed: %d%s." % [mufflers, kills,
 			(" (" + ", ".join(killed) + ")") if not killed.is_empty() else ""])
+	out.append(("Turrets fired %d time%s and killed %d zombie%s; %s." % [turret_shots, "" if turret_shots == 1 else "s",
+			turret_kills, "" if turret_kills == 1 else "s",
+			"a belt, hopper or machine fed one" if turret_fed else "none was fed by a belt or hopper"])
+			if turret_shots > 0 or turret_fed else "No turret fired.")  # F4
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))
 	out.append(_loud_line("Loudest machine or engine", loudest_continuous))
 	out.append_array(_p3_lines())

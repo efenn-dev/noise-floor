@@ -59,8 +59,8 @@ func test_milestones_lock_and_unlock_pieces() -> void:
 	var heap: Dictionary = sim.resource_nodes.filter(func(n: Dictionary) -> bool: return n["kind"] == "scrap_heap")[0]
 	check(sim.build.can_place("salvager", heap["cell"], BuildGrid.Side.NORTH, _rich()).begins_with("Unlock it at the Hub: Salvage rig"),
 			"a new game: the salvager says which milestone opens it")
-	check(sim.build.can_place("nail_turret", Vector2i(30, 30), BuildGrid.Side.NORTH, _rich()).begins_with("Unlock it at the Hub"),
-			"so does a turret")
+	check(sim.build.can_place("crossbow_turret", Vector2i(30, 30), BuildGrid.Side.NORTH, _rich()).begins_with("Unlock it at the Hub"),
+			"so does a crossbow turret (F4: the nail turret is there from the start)")
 	eq(sim.build.can_place("hub", Vector2i(30, 30), BuildGrid.Side.NORTH, _rich()), "", "the Hub itself is free")
 	sim.milestones.deliver("salvage_rig", _rich())
 	eq(sim.build.can_place("salvager", heap["cell"], BuildGrid.Side.NORTH, _rich()), "", "done: the salvager can go on its spot")
