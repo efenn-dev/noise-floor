@@ -29,6 +29,7 @@ ITEM_IDS = (
     "ammo_casing", "ammo_standard", "ammo_subsonic", "ammo_ap", "bolt", "shells",
     "gunpowder", "wall_panel", "radio", "hard_hat", "cap", "hi_vis_vest", "jacket",
     "work_gloves", "work_pants", "cargo_pants", "work_boots", "sneakers", "headlamp",
+    "cotton",  # F6: grown in a planter, packed into bandages by the canner
 )
 
 # finish() boxes are Godot order: width X, height Y, depth Z.
@@ -51,7 +52,7 @@ BOXES = {
     "jacket": (.50, .10, .54), "work_gloves": (.46, .09, .32),
     "work_pants": (.44, .10, .56), "cargo_pants": (.44, .10, .56),
     "work_boots": (.48, .28, .40), "sneakers": (.52, .20, .40),
-    "headlamp": (.36, .12, .30),
+    "headlamp": (.36, .12, .30), "cotton": (.30, .15, .26),
 }
 
 DEFAULTS = {
@@ -288,6 +289,16 @@ def build_seeds():
     for i in range(10):
         sphere(f"Seed_{i}", (-.12 + .025*i, -.105 + .014*(i%3), .012),
                (.010,.005,.004), food, 10, 5)
+
+
+def build_cotton():
+    """F6: three white cotton bolls, each a cluster of fluffy lobes on a short brown stalk."""
+    cloth = mat("Item Cloth", (.86,.84,.78))
+    stalk = mat("Item Wood", (.30,.18,.07))
+    for i, (x, y) in enumerate(((-.075, -.035), (.06, -.045), (-.005, .06))):
+        tube_between(f"Stalk_{i}", (x - .05, y + .02, .01), (x, y, .045), .008, stalk, 8)
+        for j, (dx, dy, dz) in enumerate(((0, 0, .075), (.03, .02, .06), (-.03, .02, .06), (0, -.032, .06))):
+            sphere(f"Boll_{i}_{j}", (x + dx, y + dy, dz), (.034, .034, .03), cloth, 12, 6)
 
 
 def build_vegetable():

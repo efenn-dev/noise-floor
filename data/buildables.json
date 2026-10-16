@@ -178,6 +178,7 @@
 		"loudness": 5,
 		"size": [1.8, 0.6, 1.8],
 		"recipe": "grow_vegetables",
+		"recipes": ["grow_vegetables", "grow_cotton"],
 		"cost": { "plank": 8 }
 	},
 	"canner": {
@@ -188,6 +189,7 @@
 		"watts": 30,
 		"size": [1.6, 1.5, 1.6],
 		"recipe": "can_food",
+		"recipes": ["can_food", "pack_bandages"],
 		"cost": { "plank": 6, "metal_plate": 8 }
 	},
 	"bed": {

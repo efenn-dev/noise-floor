@@ -9,6 +9,7 @@
 	"chips": { "name": "Chips", "color": "#e0c040", "weight": 0.1, "food": 15 },
 	"canned_food": { "name": "Canned food", "color": "#b0b0a0", "weight": 0.4, "food": 40 },
 	"seeds": { "name": "Seeds", "color": "#706040", "weight": 0.01 },
+	"cotton": { "name": "Cotton", "color": "#ece8dc", "weight": 0.05 },
 	"vegetable": { "name": "Vegetable", "color": "#60b040", "weight": 0.2, "food": 12, "water": 4, "spoil_days": 5 },
 	"rotten_food": { "name": "Rotten food", "color": "#6a5a30", "weight": 0.2 },
 	"bandage": { "name": "Bandage", "color": "#f0f0f0", "weight": 0.05, "bandage": true },

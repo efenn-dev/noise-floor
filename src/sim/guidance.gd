@@ -37,6 +37,26 @@ var defend_held := false
 var defend_night_kills := -1  # turret kills when tonight began; -1 when it isn't watching a night
 var defend_told := -1  # the last goal it said how to do (so a goal met between ticks still gets its message)
 
+## F6 (compact and deep): "Live off your base", the third chapter. It starts when "Defend your base" is done, or from
+## FEED_START_DAY in any game (so a player still on the defence gets it too), and walks a food and water chain: collect
+## water with a machine (rain collector or well pump), clean it (purifier or water tap), grow food (planter), can it
+## (canner). A goal is met the first time a machine makes that; goals met early count. Saved.
+const FEED_STEPS := 4
+const FEED_START_DAY := 5
+const FEED_RECIPES := [["collect_rain", "pump_water"], ["purify_water", "tap_water"], ["grow_vegetables", "grow_cotton"],
+		["can_food", "pack_bandages"]]
+const FEED_HOWTO := [
+	"New goal: live off your base. Collect water with a machine: a rain collector (B, Factory) or a water pump on a farm well.",
+	"Water collected. Now clean it: a purifier (it needs power) turns dirty water into clean water.",
+	"Clean water made. Now grow food: a planter with seeds and dirty water. Every harvest gives a seed back.",
+	"Food growing. Now can it: a canner turns two vegetables and a metal plate into canned food that keeps.",
+]
+const FEED_DONE := "Your base feeds you. L shows what it made today. R on a planter grows cotton; R on the canner packs it into bandages."
+var feed_active := false
+var feed_done := false
+var feed_met: Array = [false, false, false, false]
+var feed_told := -1
+
 ## The most recent acquired piece that was better when found. It is checked again before wearing.
 var better_gear_uid := -1
 var better_gear_seconds := 0.0
@@ -147,6 +167,38 @@ func tick_defend(clock: GameClock, build: BuildGrid, factory: Factory) -> String
 		defend_told = now
 		return DEFEND_HOWTO[now]
 	return ""
+
+
+## F6: the "Live off your base" chapter. Call every tick; returns a message when it starts or a goal is met ("" else).
+func tick_feed(clock: GameClock, factory: Factory) -> String:
+	if feed_done:
+		return ""
+	if not feed_active:
+		if not (defend_done or clock.day >= FEED_START_DAY):
+			return ""
+		feed_active = true
+		feed_told = -1
+	for m: Factory.Machine in factory.machines.values():
+		if m.crafted > 0:
+			for i in FEED_STEPS:
+				if m.recipe_id in FEED_RECIPES[i]:
+					feed_met[i] = true
+	var now := feed_step()
+	if now >= FEED_STEPS:
+		feed_done = true
+		return FEED_DONE
+	if now > feed_told:
+		feed_told = now
+		return FEED_HOWTO[now]
+	return ""
+
+
+## F6: which "Live off your base" goal is next: the first not met yet (FEED_STEPS when they're all done).
+func feed_step() -> int:
+	for i in FEED_STEPS:
+		if not bool(feed_met[i]):
+			return i
+	return FEED_STEPS
 
 
 ## F4: which "Defend your base" goal is next (DEFEND_STEPS when they're all done).
@@ -328,7 +380,8 @@ func to_dict() -> Dictionary:
 			"survived_night": survived_night, "better_gear_uid": better_gear_uid,
 			"better_gear_seconds": better_gear_seconds,
 			"defend": {"active": defend_active, "done": defend_done, "ammo_made": defend_ammo_made, "fed": defend_fed,
-					"held": defend_held, "night_kills": defend_night_kills, "told": defend_told}}  # F4
+					"held": defend_held, "night_kills": defend_night_kills, "told": defend_told},  # F4
+			"feed": {"active": feed_active, "done": feed_done, "met": feed_met, "told": feed_told}}  # F6
 
 
 func load_dict(d: Dictionary) -> void:
@@ -352,6 +405,14 @@ func load_dict(d: Dictionary) -> void:
 	defend_held = bool(dd.get("held", false))
 	defend_night_kills = int(dd.get("night_kills", -1))
 	defend_told = int(dd.get("told", -1))
+	var fd: Dictionary = d.get("feed", {})  # F6 (an older save starts the chapter fresh)
+	feed_active = bool(fd.get("active", false))
+	feed_done = bool(fd.get("done", false))
+	feed_met = [false, false, false, false]
+	var met: Array = fd.get("met", [])
+	for i in mini(met.size(), FEED_STEPS):
+		feed_met[i] = bool(met[i])
+	feed_told = int(fd.get("told", -1))
 
 
 ## Screenshot helper: show the first two goals complete and the shelter partly built.

@@ -15,6 +15,10 @@ const ROUTER_CAP := 2   # F3: items a splitter or merger holds while its outputs
 const STORAGE_FROM_BELT_CAP := 500  # F3: a crate fed by a belt stops taking at this many items
 ## A planter's crop: Farming adds planter_extra of these per harvest grown (M12).
 const CROP := "vegetable"
+## F6 (compact and deep): a machine fed straight from the machine behind it (no belt between) works this much faster,
+## for CHAIN_HOLD seconds after each hand-over, so a tight layout beats a sprawling one.
+const CHAIN_BONUS := 0.15
+const CHAIN_HOLD := 10.0
 
 
 class Machine:
@@ -36,13 +40,14 @@ class Machine:
 	var powered := true    # set by PowerGrid each tick; an unpowered machine does nothing
 	var frozen := false    # M16: a planter in winter: its timer pauses (set by Factory.tick)
 	var node_rate := 1.0   # F1: an extractor works its resource node this many times its recipe's speed (purity)
+	var chained := 0.0     # F6: seconds left of the chain bonus (fed straight from the machine behind it)
 
 	## Would draw power this tick: working, or able to start.
 	func wants_power() -> bool:
 		return crafting or _can_start()
 
 	func craft_time() -> float:
-		return recipe["time"] * time_scale / maxf(node_rate, 0.01)
+		return recipe["time"] * time_scale / maxf(node_rate, 0.01) / (1.0 + CHAIN_BONUS if chained > 0.0 else 1.0)
 
 	func accepts(item: String) -> bool:
 		return recipe["in"].has(item) and input.get(item, 0) < INPUT_CAP
@@ -57,11 +62,12 @@ class Machine:
 		if crafting:
 			return "working %d%%" % int(100.0 * progress / craft_time())
 		for item: String in recipe["out"]:
-			if output.get(item, 0) + recipe["out"][item] > OUTPUT_CAP:
+			if not recipe["in"].has(item) and output.get(item, 0) + recipe["out"][item] > OUTPUT_CAP:
 				return "output full"
 		return "needs input"
 
 	func tick(dt: float) -> void:
+		chained = maxf(0.0, chained - dt)
 		if not powered:
 			return
 		if not crafting:
@@ -70,7 +76,10 @@ class Machine:
 			progress += dt
 			if progress >= craft_time() - 1e-6:
 				for item: String in recipe["out"]:
-					output[item] = output.get(item, 0) + recipe["out"][item]
+					if recipe["in"].has(item):  # F6: what its own recipe uses goes straight back in (a planter's seed)
+						input[item] = mini(input.get(item, 0) + recipe["out"][item], INPUT_CAP)
+					else:
+						output[item] = output.get(item, 0) + recipe["out"][item]
 				crafting = false
 				progress = 0.0
 				crafted += 1
@@ -91,7 +100,7 @@ class Machine:
 			if input.get(item, 0) < recipe["in"][item]:
 				return false
 		for item: String in recipe["out"]:
-			if output.get(item, 0) + recipe["out"][item] > OUTPUT_CAP:
+			if not recipe["in"].has(item) and output.get(item, 0) + recipe["out"][item] > OUTPUT_CAP:
 				return false
 		return true
 
@@ -151,6 +160,8 @@ var turrets: Dictionary = {}   # Vector2i -> Turret
 var belts: Dictionary = {}     # Vector2i -> Belt
 var bins: Dictionary = {}      # Vector2i -> Bin (M15: hoppers and repair stations)
 var routers: Dictionary = {}   # Vector2i -> Router (F3: splitters and mergers)
+## F6: everything machines have made, ever: item -> count (SimWorld turns it into "made yesterday / today").
+var made: Dictionary = {}
 ## F3: the storage crate at a cell, if any (SimWorld sets it): a belt ending at a crate puts its items in.
 var storage_at: Callable
 ## F4: (cell, item) -> whether something standing there took the item from a belt (SimWorld sets it: the Hub
@@ -215,6 +226,14 @@ func add_machine(id: String, cell: Vector2i, facing: int) -> Machine:
 	m.watts = data.buildables[id]["watts"]
 	machines[cell] = m
 	return m
+
+
+## F6: the crop a planter grows with its recipe: the first thing it makes that isn't seeds.
+static func crop_of(m: Machine) -> String:
+	for item: String in m.recipe["out"]:
+		if item != "seeds":
+			return item
+	return CROP
 
 
 func set_recipe(m: Machine, recipe_id: String) -> void:
@@ -309,8 +328,14 @@ func tick(dt: float) -> void:
 		m.frozen = season <= 0.0
 		if not m.frozen:
 			m.tick(craft_dt * season)
+		if m.crafted > crafted:  # F6: what got made, for "what your base made" (not what went back in, like seeds)
+			for item: String in m.recipe["out"]:
+				if not m.recipe["in"].has(item):
+					made[item] = int(made.get(item, 0)) + int(m.recipe["out"][item]) * (m.crafted - crafted)
 		if extra > 0 and m.id == "planter" and m.crafted > crafted:
-			m.output[CROP] = m.output.get(CROP, 0) + extra * (m.crafted - crafted)
+			var crop := crop_of(m)  # F6: Farming's extra goes to whatever it grows (vegetables or cotton)
+			m.output[crop] = m.output.get(crop, 0) + extra * (m.crafted - crafted)
+			made[crop] = int(made.get(crop, 0)) + extra * (m.crafted - crafted)
 		for item: String in _sorted(m.output):
 			if _give(cell + DIRS[m.facing], cell, item):
 				m.output[item] -= 1
@@ -459,6 +484,8 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 		if to - DIRS[m.facing] != from or not m.accepts(item):
 			return false  # machines only take input at their back
 		m.input[item] = m.input.get(item, 0) + 1
+		if machines.has(from):
+			m.chained = CHAIN_HOLD  # F6: straight from the machine behind: the chain bonus
 		return true
 	if sink_at.is_valid() and sink_at.call(to, item):  # F4: the Hub, from a belt on any side
 		return true

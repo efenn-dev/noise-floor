@@ -186,6 +186,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"machines": machines,
 		"belts": belts,
 		"routers": routers,
+		"made": {"total": sim.factory.made, "mark": sim.made_mark, "yesterday": sim.made_yesterday},  # F6
 		"turrets": turrets,
 		"bins": bins,
 		"automation": sim.automation.to_dict(),
@@ -284,6 +285,10 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			belt.items = []
 			for e: Dictionary in bd["items"]:
 				belt.items.append({"item": e["item"], "pos": float(e["pos"]), "prev": float(e["prev"])})
+	var made: Dictionary = d.get("made", {})  # F6: none before (counting starts on load)
+	sim.factory.made = _count_dict(made.get("total", {}))
+	sim.made_mark = _count_dict(made.get("mark", {}))
+	sim.made_yesterday = _count_dict(made.get("yesterday", {}))
 	for rd: Dictionary in d.get("routers", []):  # F3
 		var r: Factory.Router = sim.factory.routers.get(_to_v2(rd["cell"]))
 		if r != null:
@@ -501,3 +506,12 @@ static func _to_v2(a: Array) -> Vector2i:
 
 static func _to_v3(a: Array) -> Vector3:
 	return Vector3(float(a[0]), float(a[1]), float(a[2]))
+
+
+## F6: {item: count} back from JSON (numbers come back as floats).
+static func _count_dict(d: Dictionary) -> Dictionary:
+	var out := {}
+	for item: String in d:
+		out[item] = int(d[item])
+	return out
+

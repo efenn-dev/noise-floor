@@ -56,6 +56,7 @@ extends Node3D
 ##   --hints                         show the first-game hints anyway (for screenshots)
 ##   --objectives                    show the first-night objectives midway through (for screenshots)
 ##   --defend[=N]                    F4: show the "Defend your base" goals with the first N done (1+: a nail turret ahead)
+##   --feed[=N]                      F6: show the "Live off your base" goals with the first N done
 ##   --perk-pick                     F4: the dawn perk pick (three cards), with at least three perk points
 ##   --inside[=N]                    start inside house N (0-11, default 0), looking at its fridge
 ## With no flags at all you get the title screen first (Continue / New game / Settings / Quit).
@@ -312,6 +313,15 @@ func _ready() -> void:
 		_apply_save(save)
 	if args.has("objectives") and not args.has("no-hints"):
 		sim.guidance.debug_midway()
+		objectives_panel.force_visible = true
+	if args.has("feed"):  # F6: the "Live off your base" goals, the first N done (for screenshots)
+		var met := int(str(args["feed"])) if str(args["feed"]) != "" else 0
+		sim.guidance.active = true
+		sim.guidance.completed = true
+		sim.guidance.feed_active = true
+		for i in Guidance.FEED_STEPS:
+			sim.guidance.feed_met[i] = i < met
+		sim.guidance.feed_told = met
 		objectives_panel.force_visible = true
 	if args.has("defend"):  # F4: the "Defend your base" goals, the first N done (for screenshots)
 		var done := int(str(args["defend"])) if str(args["defend"]) != "" else 0
