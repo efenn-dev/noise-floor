@@ -200,7 +200,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"projects": sim.projects.to_dict(),
 		"projects_done": sim.projects.done.duplicate(),
 		"milestones": sim.milestones.to_dict(),
-		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day},
+		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
 		"heat": sim.director.heat,
@@ -332,6 +332,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	var rescue: Dictionary = d.get("rescue", {})
 	sim.rescue_state = str(rescue.get("state", ""))
 	sim.rescue_day = int(rescue.get("day", -1))
+	sim.broadcast_hours = float(rescue.get("hours", 0.0))  # F4
+	sim.rescue_due = float(rescue.get("due", -1.0))
 	for zd: Dictionary in d["zombies"]:
 		var z := sim.horde.restore(int(zd["id"]), zd["type"], _to_v3(zd["pos"]))
 		z.home = _to_v3(zd["home"])

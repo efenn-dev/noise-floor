@@ -119,6 +119,28 @@ func spend(perk: String) -> String:
 	return why
 
 
+## F4: up to three perks for the dawn pick (PerkPickScreen), one from each tree: of that tree's perks below the
+## top rank, one with the fewest ranks so far, chosen by `seed` (the day) so the offer changes from day to day.
+func offer(seed: int) -> Array:
+	var out := []
+	var trees: Array = data.skills["trees"].keys()
+	for i in trees.size():
+		var lowest := []
+		var low_rank := max_rank()
+		for perk: String in data.skills["trees"][trees[i]]["perks"]:
+			var r := rank(perk)
+			if r >= max_rank():
+				continue
+			if r < low_rank:
+				lowest = [perk]
+				low_rank = r
+			elif r == low_rank:
+				lowest.append(perk)
+		if not lowest.is_empty():
+			out.append(lowest[posmod(seed + i, lowest.size())])
+	return out
+
+
 ## Points spent in a tree ("ghost"), for synergies.
 func tree_points(tree: String) -> int:
 	var n := 0

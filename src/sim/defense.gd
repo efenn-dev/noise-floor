@@ -14,9 +14,11 @@ extends RefCounted
 ##   M15 tripwire bell (an edge): a zombie walking across it rings it (a one-off at its loudness) and sets off
 ##     every sensor within trigger_radius (Automation reads `bells`).
 ##   M15 electric fence (an edge, needs power): a zombie touching it is stunned and takes `damage`; a
-##     browned-out or unconnected fence does nothing.
+##     browned-out or unconnected fence does nothing. F4: it draws its watts all night, and by day only while
+##     a zombie is within `arm` of it (so a fenced base doesn't burn gas all day).
 ##   M15 repair station (needs power): every `interval` seconds it spends one wall panel to give hp_per_panel
-##     back to the most damaged wall, door, barricade or fence within its range.
+##     back to the most damaged wall, door, barricade or fence within its range. F4: it draws its watts only
+##     while it has panels and something to fix (it looks once an interval).
 ## Numbers: data/buildables.json (pieces) and data/defense.json.
 
 var data: GameData
@@ -35,6 +37,8 @@ var sprung: Dictionary = {}
 var bells: Array = []
 ## M15: total hp given back by repair stations (for tests).
 var repaired := 0
+## F4: whether it's night (SimWorld sets it each tick): fences stay armed all night.
+var night := false
 
 const SHOT_DRAW_TIME := 0.15
 const BELL_COOLDOWN := 2.0
@@ -44,6 +48,7 @@ var _by_kind: Dictionary = {}  # kind -> [piece keys], rebuilt when the grid cha
 var _dirty := true
 var _last_cell: Dictionary = {}  # zombie id -> cell last tick (tripwires)
 var _bell_cd: Dictionary = {}    # tripwire key -> seconds before it can ring again
+var _work: Dictionary = {}       # F4: repair station key -> the piece it found to fix ("" never stays here)
 
 
 func _init(p_data: GameData, p_build: BuildGrid, p_factory: Factory) -> void:
@@ -186,24 +191,29 @@ func _fences(horde: Horde) -> void:
 	if fences.is_empty():
 		return
 	var reach := float(data.defense["fence"]["reach"])
+	var arm := float(data.defense["fence"]["arm"])
 	for key: String in fences:
-		if power != null and not power.is_powered(key):
-			continue  # no power, no shock
+		var powered := power == null or power.is_powered(key)
+		var armed := night  # F4: whether it wants power next tick
 		var piece: Dictionary = build.pieces[key]
 		var c: Vector2i = piece["cell"]
 		var a := Vector2(c.x, c.y) * BuildGrid.GRID
 		var b := a + (Vector2(BuildGrid.GRID, 0) if piece["side"] == BuildGrid.Side.NORTH else Vector2(0, BuildGrid.GRID))
 		for id: int in horde.zombies:
 			var z: ZombieBrain = horde.zombies[id]
-			if z.is_dead() or z.stunned > 0.0:
+			if z.is_dead():
 				continue
 			var p := Vector2(z.pos.x, z.pos.z)
-			if p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) > reach:
-				continue
+			var d := p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
+			armed = armed or d <= arm
+			if d > reach or not powered or z.stunned > 0.0:
+				continue  # no power, no shock
 			z.stunned = float(data.defense["fence"]["stun"])
 			z.hurt(data.buildables[piece["id"]]["damage"])
 			if base_log != null:
 				base_log.add_once("zap:" + key, 30.0, "%s is shocking zombies" % base_log.thing_name(key), build.piece_center(key), false)
+		if power != null:
+			power.wants[key] = armed
 
 
 ## A turret's numbers with its parts: {range, loudness, damage, interval, muzzle_wear}.
@@ -271,20 +281,34 @@ func _repairs(dt: float) -> void:
 		var bin: Factory.Bin = factory.bins.get(piece["cell"])
 		if bin == null:
 			continue
+		var b: Dictionary = data.buildables[piece["id"]]
+		bin.timer = minf(bin.timer + dt, b["interval"])  # an empty station waits ready: a new panel is used at once
+		if bin.count <= 0:
+			_work.erase(key)
+			if power != null:
+				power.wants[key] = false
+			continue
+		if bin.timer >= b["interval"] - 1e-6 and not _work.has(key):
+			var found := most_damaged(build.piece_center(key), b["range"], cfg["repairs"])  # once an interval
+			if found != "":
+				_work[key] = found
+			else:
+				bin.timer = 0.0  # nothing to fix: look again after another interval
+		var target: String = _work.get(key, "")
 		if power != null:
-			power.wants[key] = bin.count > 0
+			power.wants[key] = target != ""  # F4: it draws power only with work to do
 			if not power.is_powered(key):
 				continue
-		var b: Dictionary = data.buildables[piece["id"]]
-		bin.timer = minf(bin.timer + dt, b["interval"])
-		if bin.count <= 0 or bin.timer < b["interval"] - 1e-6:
-			continue
-		var target := most_damaged(build.piece_center(key), b["range"], cfg["repairs"])
 		if target == "":
 			continue
+		_work.erase(key)
+		if not build.pieces.has(target) or build.is_broken(target):
+			continue  # gone since: look again next tick
 		var t: Dictionary = build.pieces[target]
 		var max_hp: int = data.buildables[t["id"]]["hp"]
 		var gain := mini(int(cfg["hp_per_panel"]), max_hp - int(t["hp"]))
+		if gain <= 0:
+			continue  # already mended (another station got there first)
 		t["hp"] = int(t["hp"]) + gain
 		repaired += gain
 		bin.take_one()

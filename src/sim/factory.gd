@@ -152,6 +152,9 @@ var bins: Dictionary = {}      # Vector2i -> Bin (M15: hoppers and repair statio
 var routers: Dictionary = {}   # Vector2i -> Router (F3: splitters and mergers)
 ## F3: the storage crate at a cell, if any (SimWorld sets it): a belt ending at a crate puts its items in.
 var storage_at: Callable
+## F4: (cell, item) -> whether something standing there took the item from a belt (SimWorld sets it: the Hub
+## takes the parts its open milestones still need).
+var sink_at: Callable
 
 
 ## M15: a piece that holds a stack of one item: a hopper (any turret ammo; feeds the turret in front of it)
@@ -455,6 +458,8 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 		if to - DIRS[m.facing] != from or not m.accepts(item):
 			return false  # machines only take input at their back
 		m.input[item] = m.input.get(item, 0) + 1
+		return true
+	if sink_at.is_valid() and sink_at.call(to, item):  # F4: the Hub, from a belt on any side
 		return true
 	if storage_at.is_valid():  # F3: a storage crate takes from a belt on any side
 		var crate: Variant = storage_at.call(to)

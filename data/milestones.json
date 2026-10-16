@@ -1,9 +1,10 @@
 {
-	"_about": "F2 the Hub's milestones (Satisfactory-style): hand in each milestone's parts at the Hub (from your pockets or a storage crate within deliver_range of it) and it unlocks its pieces. A tier opens once every milestone of the tier before is done; tier 1 is open from the start. Pieces no milestone unlocks can always be built. The final milestone unlocks the radio mast: start its rescue broadcast between broadcast_from and midnight, keep the mast standing and yourself alive until rescue_hour, and help comes.",
+	"_about": "F2 the Hub's milestones (Satisfactory-style): hand in each milestone's parts at the Hub (from your pockets or a storage crate within deliver_range of it; since F4 a belt ending at the Hub hands them in too) and it unlocks its pieces. A tier opens once every milestone of the tier before is done; tier 1 is open from the start. Pieces no milestone unlocks can always be built. The final milestone unlocks the radio mast: start its rescue broadcast after broadcast_from; since F4 the mast draws its watts while it broadcasts, and only powered hours count. Once it has sent broadcast_hours of signal, help comes at the next rescue_hour, if the mast still stands.",
 	"deliver_range": 8.0,
 	"broadcast_from": 18.0,
 	"rescue_hour": 6.0,
 	"broadcast_loudness": 100.0,
+	"broadcast_hours": 8.0,
 	"tiers": {
 		"1": "Scavenger",
 		"2": "Settler",
@@ -55,7 +56,7 @@
 		},
 		"rescue_signal": {
 			"name": "Rescue signal", "tier": 4, "final": true,
-			"blurb": "A radio mast to call for rescue. Broadcast one night, keep it standing, and help comes at dawn. Every zombie for miles will hear it.",
+			"blurb": "A radio mast to call for rescue. Keep it powered through a night of broadcasting and standing till dawn, and help comes. Every zombie for miles will hear it.",
 			"cost": { "metal_plate": 120, "nails": 120, "wall_panel": 10, "gas_can": 6, "radio": 1 },
 			"unlocks": ["radio_mast"]
 		}

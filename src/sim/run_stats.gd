@@ -65,6 +65,8 @@ var houses: Array = []
 var turret_shots := 0
 var turret_kills := 0
 var turret_fed := false
+## F4 part 2: parts belts handed the Hub.
+var hub_belt := 0
 
 
 func add_real_time(seconds: float) -> void:
@@ -311,6 +313,8 @@ func summary_lines() -> PackedStringArray:
 			turret_kills, "" if turret_kills == 1 else "s",
 			"a belt, hopper or machine fed one" if turret_fed else "none was fed by a belt or hopper"])
 			if turret_shots > 0 or turret_fed else "No turret fired.")  # F4
+	if hub_belt > 0:
+		out.append("Belts handed the Hub %d part%s." % [hub_belt, "" if hub_belt == 1 else "s"])  # F4 part 2
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))
 	out.append(_loud_line("Loudest machine or engine", loudest_continuous))
 	out.append_array(_p3_lines())

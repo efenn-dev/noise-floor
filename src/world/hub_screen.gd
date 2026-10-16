@@ -182,7 +182,7 @@ func _build() -> void:
 	_hand_in.pressed.connect(hand_in)
 	detail.add_child(_hand_in)
 	var foot := Label.new()
-	foot.text = "E or Esc: close    Parts come from your pockets and any storage crate within %d m of the Hub." % int(sim.data.milestones.get("deliver_range", 8.0))
+	foot.text = "E or Esc: close    Parts come from your pockets and any storage crate within %d m of the Hub. A belt ending at the Hub hands in parts by itself." % int(sim.data.milestones.get("deliver_range", 8.0))
 	foot.add_theme_font_size_override("font_size", 16)
 	foot.modulate = Color(1, 1, 1, 0.65)
 	outer.add_child(foot)

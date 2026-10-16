@@ -101,6 +101,20 @@ func deliver(id: String, stock: Variant) -> Dictionary:
 	return moved
 
 
+## F4: one `item` from a belt ending at the Hub: it goes to the first open milestone (tier by tier) that still
+## needs it. Returns that milestone's id ("" if none needs it: the belt keeps it).
+func take(item: String) -> String:
+	for id: String in all():
+		if available(id) and int(missing(id).get(item, 0)) > 0:
+			if not delivered.has(id):
+				delivered[id] = {}
+			delivered[id][item] = int(delivered[id].get(item, 0)) + 1
+			if missing(id).is_empty():
+				done.append(id)
+			return id
+	return ""
+
+
 ## Whether `buildable` may be built (no milestone unlocks it, or that one is done).
 func unlocked(buildable: String) -> bool:
 	return not _unlock_of.has(buildable) or done.has(_unlock_of[buildable])

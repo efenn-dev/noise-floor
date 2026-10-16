@@ -35,7 +35,15 @@ var projects: Projects
 var milestones: Milestones  # F2: the Hub
 ## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
 var rescue_state := ""
-var rescue_day := -1  # the day the broadcast started (rescue comes the next morning), then the day rescued
+var rescue_day := -1  # the day the broadcast started, then the day rescued
+## F4: game hours of signal the mast has sent (it only sends while powered), and the absolute game hour
+## (day * 24 + hour) the rescue arrives once that reaches broadcast_hours (-1 = not heard yet).
+var broadcast_hours := 0.0
+var rescue_due := -1.0
+var _signal_on := true  # the mast had power last tick (to say when it drops and comes back)
+## F4: the last game day the dawn perk pick was offered (not saved: a loaded game with points offers it again).
+var perk_offer_day := 0
+const PERK_OFFER_SAFE := 25.0  # no living zombie this close (metres) when the pick opens
 ## M15: what happened at your base (the last 50 events with game time). L opens it.
 var base_log: BaseLog
 ## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
@@ -146,6 +154,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	projects = Projects.new(data)
 	build.projects = projects  # M17a: the water tap can't be built until the tower runs
 	factory.storage_at = _storage_at_cell  # F3: belts can fill crates
+	factory.sink_at = _sink_at_cell  # F4: and feed the Hub
 	milestones = Milestones.new(data)
 	# Tests' worlds start with every milestone but the rescue done (like power.free, but on by default), so the
 	# many tests that build turrets or extractors don't need to; a real new game clears this (main.gd).
@@ -276,6 +285,7 @@ func step() -> void:
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
 	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
 	defense.stats = stats  # F4: the session's (main.gd may swap the stats object in after setup)
+	defense.night = night  # F4: fences stay armed all night
 	defense.tick(TICK, horde, noise)
 	automation.tick(TICK, horde, night, defense.bells)
 	base_log.tick(TICK)
@@ -2685,32 +2695,101 @@ func hub_deliver(id: String) -> String:
 	var parts := []
 	for item: String in moved:
 		parts.append("%d %s" % [moved[item], data.item_name(item)])
-	var ms_name: String = milestones.cfg(id)["name"]
 	if finished:
-		var unlocks: Array = milestones.cfg(id).get("unlocks", []).map(func(b: String) -> String: return data.buildables[b]["name"])
-		stats.note("finished the %s milestone" % ms_name.to_lower())
-		base_log.add("Hub milestone done: %s (unlocked %s)" % [ms_name, ", ".join(unlocks)], build.piece_center(hub_key()))
-		return "%s done! Unlocked: %s" % [ms_name, ", ".join(unlocks)]
-	return "Handed in %s for %s" % [", ".join(parts), ms_name]
+		return _milestone_finished(id)
+	return "Handed in %s for %s" % [", ".join(parts), milestones.cfg(id)["name"]]
 
 
-## F2: E on the radio mast: start the rescue broadcast (from broadcast_from till midnight). Returns a message.
+## F2/F4: notes a milestone just finished (by hand or by belt) in the session log and base log; returns the message.
+func _milestone_finished(id: String) -> String:
+	var ms_name: String = milestones.cfg(id)["name"]
+	var unlocks: Array = milestones.cfg(id).get("unlocks", []).map(func(b: String) -> String: return data.buildables[b]["name"])
+	stats.note("finished the %s milestone" % ms_name.to_lower())
+	base_log.add("Hub milestone done: %s (unlocked %s)" % [ms_name, ", ".join(unlocks)], build.piece_center(hub_key()))
+	return "%s done! Unlocked: %s" % [ms_name, ", ".join(unlocks)]
+
+
+## F4: a belt ending at the Hub hands it one item for the first open milestone that still needs it (Milestones.take);
+## anything no milestone wants stays on the belt. A milestone the belt finishes is announced as one handed in.
+func _sink_at_cell(cell: Vector2i, item: String) -> bool:
+	var key := "o:%d:%d" % [cell.x, cell.y]
+	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "hub":
+		return false
+	var id := milestones.take(item)
+	if id == "":
+		return false
+	stats.hub_belt += 1
+	if milestones.is_done(id):
+		add_message(_milestone_finished(id), 8.0)
+	return true
+
+
+## F4: whether to offer the perk pick now (PerkPickScreen): unspent points, daytime, not offered yet today, and safe
+## (alive, awake, on foot, no living zombie within PERK_OFFER_SAFE). main.gd opens it and sets perk_offer_day.
+func perk_offer_ready() -> bool:
+	if skills.perk_points <= 0 or perk_offer_day == clock.day or clock.is_night():
+		return false
+	return not player.dead and not player.asleep and vehicles.driving == "" and not zombie_within(PERK_OFFER_SAFE)
+
+
+## F4: is a living zombie within `r` m of you (flat distance)?
+func zombie_within(r: float) -> bool:
+	for id: int in horde.zombies:
+		var z: ZombieBrain = horde.zombies[id]
+		if not z.is_dead() and _flat_dist(z.pos, player_pos) < r:
+			return true
+	return false
+
+
+## F2: E on the radio mast: start the rescue broadcast (after broadcast_from). F4: the mast needs power to send,
+## so it won't start on a network that can't carry it. Returns a message.
 func start_broadcast(key: String) -> String:
 	if not build.pieces.has(key) or build.kind_of(build.pieces[key]["id"]) != "radio_mast":
 		return ""
 	if rescue_state == "rescued":
 		return "You were rescued. The radio is quiet."
 	if rescue_state == "broadcasting":
-		return "Broadcasting. Keep the mast standing until morning."
+		return broadcast_status()
 	var from := float(data.milestones.get("broadcast_from", 18.0))
 	if clock.time_of_day < from:
-		return "Start the broadcast at dusk (after %d:00): rescue comes at dawn" % int(from)
+		return "Start the broadcast at dusk (after %d:00)" % int(from)
+	if not mast_can_power(key):
+		return "The mast needs %d W of power: run a power pole to it from a generator with gas" % int(data.buildables[build.pieces[key]["id"]]["watts"])
 	rescue_state = "broadcasting"
 	rescue_day = clock.day
+	broadcast_hours = 0.0
+	rescue_due = -1.0
+	_signal_on = true
 	director.heat = float(data.noise["director"]["max_heat"])  # every zombie for miles hears it
 	stats.note("started the rescue broadcast")
-	base_log.add("Rescue broadcast started. Hold the mast until dawn.", build.piece_center(key))
-	return "Broadcasting! Keep the mast standing until %d:00." % int(data.milestones.get("rescue_hour", 6.0))
+	base_log.add("Rescue broadcast started. Keep the mast powered and standing.", build.piece_center(key))
+	return "Broadcasting! Keep the mast powered and standing for %d hours of signal." % int(_hours_needed())
+
+
+## F4: whether the mast's network has room for its watts now (always, with power.free).
+func mast_can_power(key: String) -> bool:
+	if power.free:
+		return true
+	var net := power.network_of(key)
+	if net.is_empty():
+		return false
+	var w := float(data.buildables[build.pieces[key]["id"]]["watts"])
+	var own := w if power.wants.get(key, true) and power.is_powered(key) else 0.0  # already counted in demand
+	return float(net["supply"]) - float(net["demand"]) + own + 1e-6 >= w
+
+
+func _hours_needed() -> float:
+	return float(data.milestones.get("broadcast_hours", 8.0))
+
+
+## F4: the broadcast in a few words, for the mast's look-at line and E: signal so far, no power, or help coming.
+func broadcast_status() -> String:
+	if rescue_state != "broadcasting":
+		return ""
+	if rescue_due >= 0.0:
+		return "They heard you! Rescue comes at %d:00: keep the mast standing" % int(data.milestones.get("rescue_hour", 6.0))
+	var text := "Signal %.1f of %d hours" % [broadcast_hours, int(_hours_needed())]
+	return text + (": NO POWER, signal down" if not _signal_on else ": keep it powered and standing")
 
 
 ## F2: the radio mast's piece key ("" if none stands).
@@ -2719,18 +2798,43 @@ func mast_key() -> String:
 
 
 func _tick_rescue() -> void:
-	if rescue_state != "broadcasting":
-		return
 	var mast := mast_key()
+	if rescue_state != "broadcasting":
+		if mast != "":
+			power.wants[mast] = false  # F4: an idle mast draws nothing
+		return
 	if mast == "":
 		rescue_state = ""
 		rescue_day = -1
+		broadcast_hours = 0.0
+		rescue_due = -1.0
 		add_message("The radio mast fell. The broadcast is lost: rebuild it and try again.", 8.0)
 		base_log.add("The radio mast fell: the rescue broadcast was lost", player_pos)
 		return
-	noise.continuous.append({"pos": build.piece_center(mast), "loudness": float(data.milestones.get("broadcast_loudness", 100.0)),
-			"key": mast, "kind": "radio_mast"})
-	if clock.day > rescue_day and clock.time_of_day >= float(data.milestones.get("rescue_hour", 6.0)):
+	power.wants[mast] = true  # F4: it draws its watts (from the next power tick) while it broadcasts
+	var on := power.is_powered(mast)
+	if on != _signal_on:
+		_signal_on = on
+		var said := "The radio mast has power again: broadcasting." if on \
+				else "The radio mast lost power: the signal is down. Get the generator running."
+		if rescue_due < 0.0:
+			add_message(said, 6.0)
+			base_log.add(said, build.piece_center(mast))
+	var now := clock.day * GameClock.HOURS_PER_DAY + clock.time_of_day
+	if on:  # no power, no signal: silent, and the hours wait
+		noise.continuous.append({"pos": build.piece_center(mast), "kind": "radio_mast", "key": mast,
+				"loudness": float(data.milestones.get("broadcast_loudness", 100.0))})
+	if on and rescue_due < 0.0:
+		broadcast_hours += TICK / clock.seconds_per_hour()
+		if broadcast_hours + 1e-6 >= _hours_needed():
+			broadcast_hours = _hours_needed()
+			var hour := float(data.milestones.get("rescue_hour", 6.0))
+			rescue_due = floorf(now / GameClock.HOURS_PER_DAY) * GameClock.HOURS_PER_DAY + hour
+			if rescue_due <= now:
+				rescue_due += GameClock.HOURS_PER_DAY
+			add_message("They heard you! Rescue comes at %d:00. Keep the mast standing." % int(hour), 8.0)
+			base_log.add("The rescuers answered: they come at %d:00" % int(hour), build.piece_center(mast))
+	if rescue_due >= 0.0 and now + 1e-6 >= rescue_due:
 		rescue_state = "rescued"
 		rescue_day = clock.day
 		stats.note("was rescued")

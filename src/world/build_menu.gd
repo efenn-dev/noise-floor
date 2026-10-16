@@ -43,7 +43,7 @@ const BLURBS := {
 	"merger": "Joins belts: takes items at its back, left and right and sends them out the front. Unlocked by Logistics.",
 	"smelter": "Scrap metal into metal plates. Loud. Needs power.",
 	"hub": "Your base's command post (one per game). E: milestones. Hand in parts to unlock new machines, ending with the rescue.",
-	"radio_mast": "Calls for rescue. Start the broadcast at dusk and keep the mast standing until dawn. Every zombie for miles hears it.",
+	"radio_mast": "Calls for rescue. Start the broadcast at dusk, keep it powered for 8 hours of signal and standing until help comes at dawn. Every zombie for miles hears it.",
 	"salvager": "Grinds a scrap heap into scrap metal, nonstop. Very loud. Needs power. Build it on a scrap heap's yellow spot.",
 	"water_pump": "Pumps dirty water from a farm well. Needs power. Build it on a well's yellow spot.",
 	"fuel_pump": "Draws gas cans out of a crashed fuel tanker. Needs power. Build it on a tanker's yellow spot.",
