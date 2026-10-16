@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — F6 Compact and deep, part 2: see every machine, days of food and water, shotgun ammo by machine, med kits
+
+Emmitt: "start F6 part 2". The rest of F6: make a compact base easy to read and close the last survival gaps. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **Every machine at a glance:** the base log (L) now has a right-hand column, "Your machines (stuck ones first)": each machine you built, where it is and what it's doing: "Purifier (south-east): needs Rainwater", "Press: output full", "Smelter: no power", "Rain collector: working 50%". In a chain you can see which link stopped.
+- **Days of food and water:** a fourth line under "what your machines made": "Yesterday's making comes to about 3 days of food and less than a day of water." A plain answer to "does my base keep me alive?"
+- **Shotgun ammo by machine:** the Press now makes gunpowder (8 casings + 1 scrap) and shotgun shells (6 casings + 1 gunpowder), so shotgun ammo can come down a belt like the rest (the workbench recipes stay).
+- **Med kits:** R on the canner now also packs med kits (2 bandages + 1 clean water). A med kit gives 40 health back and stops bleeding: use it from your pockets or a hotbar key, and H uses one when you're hurt but not bleeding. It has its own model (a white case with a red cross).
+
+**Try it:** `play.bat --demo-factory --demo-farm`, wait a bit, then L: the machines column shows what each one is doing.
+
+**Tests:** 20,470 green (new `test_deep.gd`: the stuck purifier comes first and says it needs Rainwater, the working rain collector after it, no power is said; three days of cans come to "about 3 days of food", a little to "less than a day"; the Press makes gunpowder and six shells; the canner packs a med kit, it's usable from pockets and hotbar, not when you're well, heals 40 and stops bleeding, and H uses one when hurt but not bleeding). The Press's recipe cycle test now includes the two new recipes. Soak one game-day: SOAK OK, 147 s; the stress test: 4.14 ms a tick (main this morning: 4.16).
+
+**Known gaps:** cotton and med kits have no inventory picture yet (coloured squares); the machine column lists machines only, not generators or turrets.
+
+**Next:** F6 is done. Per DIRECTION.md: PT, Emmitt's first loud night on main (build a loud base on day 1 and survive the wave it draws), the gate before R1 (a private test with friends).
+
 ## 2026-10-16 — F6 Compact and deep, part 1: farming that lasts, bandages, tight layouts pay, "what your base made", a third goals chapter
 
 Emmitt: "start F6". The roadmap: recipes chain into what survival needs and loot runs out of, sized for a backyard factory of about twenty machines. The audit: water, warmth, gas, ammo, panels and repair kits already had a machine; food didn't last (a planter ate a seed every harvest, 24 a day, and seeds only came from loot) and bandages were loot only. Code and checks by Claude Opus 5.5.

@@ -13,6 +13,7 @@
 	"vegetable": { "name": "Vegetable", "color": "#60b040", "weight": 0.2, "food": 12, "water": 4, "spoil_days": 5 },
 	"rotten_food": { "name": "Rotten food", "color": "#6a5a30", "weight": 0.2 },
 	"bandage": { "name": "Bandage", "color": "#f0f0f0", "weight": 0.05, "bandage": true },
+	"medkit": { "name": "Med kit", "color": "#d83a30", "weight": 0.3, "heal": 40 },
 	"school_bag": { "name": "School bag", "color": "#4060c0", "weight": 0.5, "bag": 8 },
 	"hiking_pack": { "name": "Hiking pack", "color": "#c06020", "weight": 1.0, "bag": 18 },
 	"military_rucksack": { "name": "Military rucksack", "color": "#506040", "weight": 1.5, "bag": 25 },

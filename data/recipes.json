@@ -57,6 +57,24 @@
 		"in": { "cotton": 2, "clean_water": 1 },
 		"out": { "bandage": 2 }
 	},
+	"pack_medkit": {
+		"name": "Med kit",
+		"time": 8.0,
+		"in": { "bandage": 2, "clean_water": 1 },
+		"out": { "medkit": 1 }
+	},
+	"press_powder": {
+		"name": "Gunpowder",
+		"time": 3.0,
+		"in": { "ammo_casing": 8, "scrap_metal": 1 },
+		"out": { "gunpowder": 2 }
+	},
+	"press_shells": {
+		"name": "Shotgun shells",
+		"time": 3.0,
+		"in": { "ammo_casing": 6, "gunpowder": 1 },
+		"out": { "shells": 6 }
+	},
 	"repair_kit": {
 		"name": "Repair kit",
 		"time": 6.0,

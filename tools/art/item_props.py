@@ -30,6 +30,7 @@ ITEM_IDS = (
     "gunpowder", "wall_panel", "radio", "hard_hat", "cap", "hi_vis_vest", "jacket",
     "work_gloves", "work_pants", "cargo_pants", "work_boots", "sneakers", "headlamp",
     "cotton",  # F6: grown in a planter, packed into bandages by the canner
+    "medkit",  # F6 part 2: the canner packs two bandages and clean water into one
 )
 
 # finish() boxes are Godot order: width X, height Y, depth Z.
@@ -52,7 +53,7 @@ BOXES = {
     "jacket": (.50, .10, .54), "work_gloves": (.46, .09, .32),
     "work_pants": (.44, .10, .56), "cargo_pants": (.44, .10, .56),
     "work_boots": (.48, .28, .40), "sneakers": (.52, .20, .40),
-    "headlamp": (.36, .12, .30), "cotton": (.30, .15, .26),
+    "headlamp": (.36, .12, .30), "cotton": (.30, .15, .26), "medkit": (.30, .12, .24),
 }
 
 DEFAULTS = {
@@ -289,6 +290,18 @@ def build_seeds():
     for i in range(10):
         sphere(f"Seed_{i}", (-.12 + .025*i, -.105 + .014*(i%3), .012),
                (.010,.005,.004), food, 10, 5)
+
+
+def build_medkit():
+    """F6 part 2: a small white first-aid case with a red cross on the lid and a dark handle."""
+    shell = mat("Item Paper", (.88,.88,.86))  # not "Item Plastic": the game textures that dark
+    cross = mat("Item Red Paint", (.72,.06,.05))
+    handle = mat("Item Rubber")
+    box("Case", (.28,.20,.10), (0,0,.05), shell, .012)
+    box("Cross_Long", (.13,.04,.006), (0,0,.102), cross, .002)
+    box("Cross_Short", (.04,.13,.006), (0,0,.102), cross, .002)
+    box("Handle", (.10,.018,.02), (0,-.11,.07), handle, .006)
+    box("Latch", (.03,.006,.025), (0,.101,.06), handle, .002)
 
 
 def build_cotton():
