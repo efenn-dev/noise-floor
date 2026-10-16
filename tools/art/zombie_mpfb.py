@@ -479,11 +479,12 @@ def make_work_boot(name, foot, mat, bone):
     return pieces
 
 
-def make_hat_dome(name, centre, radii, mat, bone, brim=False):
+def make_hat_dome(name, centre, radii, mat, bone, brim=None):
+    """A half-ellipsoid opening downward at centre.z; brim = (x, y) radii of a flat elliptical brim there."""
     vertices = []
     faces = []
-    rings = 5
-    sides = 18
+    rings = 7
+    sides = 24
     for ring in range(rings):
         phi = (math.pi * 0.5) * ring / (rings - 1)
         z = centre.z + radii.z * math.cos(phi)
@@ -506,10 +507,55 @@ def make_hat_dome(name, centre, radii, mat, bone, brim=False):
     weighted_primitive(obj, mat, bone)
     pieces = [obj]
     if brim:
-        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=max(radii.x, radii.y) * 1.12,
-                                            depth=0.018, location=(centre.x, centre.y, centre.z))
-        pieces.append(weighted_primitive(bpy.context.object, mat, bone))
+        bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=1.0, depth=0.016,
+                                            location=(centre.x, centre.y, centre.z))
+        rim = bpy.context.object
+        rim.name = f"{name} Brim"
+        rim.scale = (brim[0], brim[1], 1.0)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        pieces.append(weighted_primitive(rim, mat, bone))
     return pieces
+
+
+def head_fit(body, hair_parts, band_z, margin):
+    """V36: centre and radii of a dome that sits on this body's head from band_z up.
+
+    The bodies' heads differ (MakeHuman macros, the heavy body's width), so a hat is sized from the
+    head's own vertices plus the hair already on it, then grown until every one of them is inside
+    by `margin`; fixed sizes made sombreros on the smaller heads with the scalp poking through.
+    """
+    points = [body.matrix_world @ vertex.co for vertex in body.data.vertices
+              if vertex_weight_map(body, vertex).get("Head", 0.0) > 0.5
+              and (body.matrix_world @ vertex.co).z > band_z]
+    for part in hair_parts:
+        points.extend(co for co in (part.matrix_world @ vertex.co for vertex in part.data.vertices)
+                      if co.z > band_z)
+    assert points, "no head above the hat band"
+    lo = Vector((min(p.x for p in points), min(p.y for p in points), band_z))
+    hi = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
+    centre = Vector(((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5, band_z))
+    radii = Vector(((hi.x - lo.x) * 0.5 + margin, (hi.y - lo.y) * 0.5 + margin, hi.z - band_z + margin))
+    # Ellipsoid "distance" with the margin taken off, so a fit leaves that much clearance everywhere.
+    def worst():
+        def reach(p):
+            return (((p.x - centre.x) / (radii.x - margin)) ** 2 + ((p.y - centre.y) / (radii.y - margin)) ** 2
+                    + ((p.z - centre.z) / (radii.z - margin)) ** 2)
+        return max(points, key=reach), max(reach(p) for p in points)
+    for _step in range(120):
+        point, value = worst()
+        if value <= 1.0:
+            break
+        across = ((point.x - centre.x) / radii.x) ** 2
+        along = ((point.y - centre.y) / radii.y) ** 2
+        if (point.z - centre.z) / radii.z > 0.5:
+            radii.z *= 1.02  # the crown pokes out: a taller dome
+        elif across > along:
+            radii.x *= 1.015  # a side pokes out: a wider one
+        else:
+            radii.y *= 1.015  # the brow or the back pokes out: a longer one
+    assert worst()[1] <= 1.0, f"hat never fitted the head: {radii}"
+    print("HAT_FIT", f"head {hi.x - lo.x:.3f} x {hi.y - lo.y:.3f}", f"radii {radii.x:.3f} {radii.y:.3f} {radii.z:.3f}")
+    return centre, radii
 
 
 def body_bounds(body):
@@ -636,16 +682,23 @@ def add_clothing_and_details(body, armature, spec, mats):
             return torso and not open_front
         parts.append(make_shell(body, "Open Vest", mats["vest"], 0.016, vest_region))
 
+    # V36: hats are fitted to this body's head (head_fit), not one size for all five bodies.
+    hair_parts = [part for part in parts if part.name.startswith(("Scalp Hair", "Hair Clump"))]
     if spec.get("extra") == "hardhat":
-        parts.extend(make_hat_dome("Hard Hat Dome", Vector((0.0, 0.005, top - 0.075)),
-                                   Vector((0.145, 0.158, 0.082)), mats["hardhat"], "Head", brim=True))
+        centre, radii = head_fit(body, hair_parts, top - 0.075 * hair_scale, 0.012)
+        parts.extend(make_hat_dome("Hard Hat Dome", centre, radii, mats["hardhat"], "Head",
+                                   brim=(radii.x + 0.024, radii.y + 0.030)))
+        # The moulded ridge front to back: a thin ellipsoid that shows only along the top.
+        parts.append(ico_part("Hard Hat Ridge", tuple(centre),
+                              (0.016, radii.y * 0.92, radii.z + 0.010), mats["hardhat"], "Head", 2))
     elif spec.get("extra") == "cap":
-        face_y = min(vertex.co.y for vertex in body.data.vertices if vertex.co.z > top - 0.28)
-        parts.extend(make_hat_dome("Cap Crown", Vector((0.0, 0.000, top - 0.058)),
-                                   Vector((0.135, 0.145, 0.062)), mats["cap"], "Head", brim=False))
-        parts.append(box_part("Cap Bill", (0.0, face_y - 0.045, top - 0.072),
-                              (0.14, 0.09, 0.014), mats["cap"], "Head", bevel=0.006,
-                              rotation=(math.radians(-7.0), 0.0, 0.0)))
+        centre, radii = head_fit(body, hair_parts, top - 0.070 * hair_scale, 0.007)
+        parts.extend(make_hat_dome("Cap Crown", centre, radii, mats["cap"], "Head"))
+        bill_depth = 0.075 * hair_scale
+        # The bill starts inside the crown's front and dips a little, as a worn cap's does.
+        parts.append(box_part("Cap Bill", (centre.x, centre.y - radii.y - bill_depth * 0.5 + 0.014, centre.z + 0.004),
+                              (radii.x * 1.85, bill_depth, 0.012), mats["cap"], "Head", bevel=0.005,
+                              rotation=(math.radians(6.0), 0.0, 0.0)))
     return parts
 
 
