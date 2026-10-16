@@ -257,6 +257,18 @@
 		"size": [1.9, 12.0, 1.9],
 		"cost": { "metal_plate": 40, "nails": 40 }
 	},
+	"cart_stop": {
+		"name": "Cart stop",
+		"kind": "cart_stop",
+		"hp": 80,
+		"range": 4,
+		"loudness": 50,
+		"interval": 10,
+		"cap": 40,
+		"speed": 5,
+		"size": [0.4, 2.0, 0.4],
+		"cost": { "plank": 4, "nails": 6, "scrap_metal": 4 }
+	},
 	"splitter": {
 		"name": "Splitter",
 		"kind": "splitter",

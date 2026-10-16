@@ -253,6 +253,9 @@ func interact() -> String:
 		"noisemaker":
 			last_message = sim.fire_noisemaker(target_key)
 			return last_message
+		"cart_stop":  # F5
+			last_message = sim.make_cart_home(target_key)
+			return last_message
 		"bear_trap":
 			last_message = sim.reset_trap(target_key)
 			return last_message
@@ -403,6 +406,13 @@ func status_text() -> String:
 				"BLARING %d s" % ceili(nm["blare"]) if nm["blare"] > 0.0 else ("recharging %d s" % ceili(nm["recharge"])
 				if nm["recharge"] > 0.0 else "ready")])
 		lines.append("[E] set it off now · a sensor's decoy action sets off every one within %d m" % int(sim.data.defense["actions"]["decoy"]["radius"]))
+		var wear := int(sim.data.defense["noisemaker"].get("wear", 0))
+		if wear > 0:  # F5: decoys cost something
+			var left := ceili(float(sim.build.pieces[target_key]["hp"]) / float(wear))
+			lines.append("Each blare shakes it apart a little: %d blare%s left (R repairs it)" % [left, "" if left == 1 else "s"])
+	elif kind == "cart_stop":  # F5
+		lines.append("Cart stop · " + sim.carts.status(target_key))
+		lines.append("[E] make this the home stop" if target_key != sim.carts.home else "Pickups: a cart stop by an outpost's crates")
 	elif kind == "bear_trap":
 		var sprung := sim.defense.sprung.has(target_key)
 		lines.append("Bear trap · %s" % ("SPRUNG" if sprung else "set: pins the first zombie that steps in"))

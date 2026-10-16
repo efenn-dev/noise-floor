@@ -12,7 +12,9 @@ const KINDS := ["foundation", "wall", "door", "barricade", "window", "belt", "ma
 		# F2: the Hub and the rescue
 		"hub", "radio_mast",
 		# F3: belt routing
-		"splitter", "merger"]
+		"splitter", "merger",
+		# F5: supply carts
+		"cart_stop"]
 
 var items: Dictionary = {}       # id -> {name}
 var buildables: Dictionary = {}  # id -> {name, kind, size: Vector3, cost: {item: int}}
@@ -103,7 +105,9 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"ammo_cap": int(b.get("ammo_cap", 0)),
 			"sense": str(b.get("sense", "")),  # M15: a sensor's kind ("motion" or "noise"; F5: "night", the dusk timer)
 			"action": str(b.get("action", "")),  # F5: a sensor's action when built ("" = the first in action_order)
-			"sound": int(b.get("sound", 1)),  # F5: how many walls' worth of sound an edge piece stops (a soundproof wall: 2)
+			"sound": int(b.get("sound", 1)),
+			"cap": int(b.get("cap", 0)),          # F5: a cart stop's cart: how many items it carries
+			"speed": float(b.get("speed", 0.0)),  # F5: and how fast it drives (m/s)  # F5: how many walls' worth of sound an edge piece stops (a soundproof wall: 2)
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
 			"against_wall": bool(b.get("against_wall", false)),
 			"needs_project": str(b.get("needs_project", "")),  # M17a: can't be built until that project is done  # W1c: stands at the back of its cell, not the middle

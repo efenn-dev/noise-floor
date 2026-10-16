@@ -14,7 +14,8 @@ extends Node3D
 const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum_purifier",
 		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car",
 		# M17a: work on the water tower (hammering borrows the press, the pump the generator's engine)
-		"tower_hammer": "hum_press", "tower_pump": "engine_generator"}
+		"tower_hammer": "hum_press", "tower_pump": "engine_generator",
+		"cart": "engine_car"}  # F5: a supply cart on the road
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
 		"block": ["bash"],  # V15: a guarded hit reuses the existing solid thud

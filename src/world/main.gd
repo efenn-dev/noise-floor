@@ -11,6 +11,7 @@ extends Node3D
 ##                         (F4: it needs power); after 18:00 it starts broadcasting
 ##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
 ##   --demo-logistics      F3: a loaded belt line on bare ground ahead, through a splitter into three crates
+##   --demo-carts          F5: a home cart stop ahead-left and a pickup 30 m up the road with a crate of scrap
 ##   --zoop=N              F3: with --build, hold a drag preview: a run of N pieces ending where you aim
 ##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber; W3b downtown, police, gas; W3c east; W3d farm, cabin)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
@@ -1605,6 +1606,7 @@ func _build_building(args: Dictionary) -> void:
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(sim, player.camera, [player.get_rid()])
+	add_child(CartView.new(sim))  # F5: supply carts
 	factory_view = FactoryView.new()
 	add_child(factory_view)
 	factory_view.setup(sim, build_view)
@@ -1636,6 +1638,8 @@ func _build_building(args: Dictionary) -> void:
 		_place_demo_stove()
 	if args.has("demo-logistics"):
 		_place_demo_logistics()
+	if args.has("demo-carts"):
+		_place_demo_carts()
 	if args.has("build"):
 		builder.set_active(true)
 		builder.select_id(args["build"])
@@ -1667,6 +1671,21 @@ func _place_demo_logistics() -> void:
 		sim.build.place("belt", at + d, out[1], stock)
 		sim.build.place("foundation", at + d * 2, n, stock)
 		sim.build.place("storage", at + d * 2, n, stock)
+
+
+## F5 --demo-carts: a home cart stop and crate just ahead-left, and a pickup stop 30 m up the road with a crate of
+## scrap, so its cart sets off home at once (use --advance to catch it on the road). Built from a stock.
+func _place_demo_carts() -> void:
+	var stock := Inventory.new()
+	stock.give_all({"plank": 200, "scrap_metal": 200, "nails": 200, "metal_plate": 200})
+	var c0 := BuildGrid.world_to_cell(player.global_position) + Vector2i(-2, -2)
+	for c: Vector2i in [c0, c0 + Vector2i(0, -15)]:
+		sim.build.place("cart_stop", c, BuildGrid.Side.NORTH, stock)
+		sim.build.place("foundation", c + Vector2i(-1, 0), BuildGrid.Side.NORTH, stock)
+		sim.build.place("storage", c + Vector2i(-1, 0), BuildGrid.Side.NORTH, stock)
+	var crate: Variant = sim.storages.get(sim.build.key_for("storage", c0 + Vector2i(-1, -15)))
+	if crate != null:
+		(crate as Inventory).add("scrap_metal", 30)
 
 
 ## M16 --demo-stove: a stove loaded with 10 planks (burning) in the free floor cell of the house you stand in
