@@ -2,6 +2,23 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P5 Gathering by hand: the first rung before the machines
+
+Emmitt: "how should we make users gather materials for things like the smelter?" The answer, the Satisfactory way: a ladder. You start with the crate and loot; you gather raw materials by hand at the world's resource nodes (slow, and you stand there making noise); then you build the node's machine and bring its output home by belt or cart. The middle rung was missing: a resource node could only be worked by its machine, which needs a milestone and power. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **E on a resource node gathers by hand:** a scrap heap (the junkyard) gives scrap metal every 4 s, a timber stand (the woods) planks every 5 s, a farm well rainwater every 3 s, a fuel tanker a gas can every 30 s; a rich node is twice as quick, a poor one half. It keeps going while you stay close; E again, walking away, full pockets or getting in a car stops it. Each one clanks or chops loud enough for zombies to hear (the well and tanker are quiet), and it trains Scavenging. Looking at a node says both ways: "[E] pull scrap from the heap by hand: a scrap metal every 4 s (loud)" and "Or build a Salvager on the yellow spot", and while you gather it shows how far along you are.
+- **The game says what you're short of and where to get it:** instead of "Not enough materials", the build line says "Not enough: 6 Scrap metal (search cars, garages and trash, pull town furniture down (B, then right-click), or pull it from a scrap heap at the junkyard (E))". Every raw material knows where it comes from (planks, scrap, nails, plates, gas, wall panels, rainwater, seeds).
+- The controls screen's first step and the build menu's Extractors note mention gathering by hand; the session log counts what you gathered.
+
+**Try it:** `play.bat --at=junkyard`, look at a scrap heap and press E. Then pick a smelter in the build menu with empty pockets: the line says what's missing and where it comes from.
+
+**Tests:** 20,567 green (new `test_gather.gd`: too far says get closer; E starts it, a scrap metal per round with a clank, it repeats, the session log counts it, E stops it; walking away and full pockets stop it; a rich heap is quicker; every node kind can be worked by hand and a timber stand gives planks; the missing-materials words name counts and sources; the node's look-at line says E gathers and shows progress). Soak one game-day: SOAK OK, 121 s.
+
+**Known gaps:** car wrecks can't be stripped for scrap yet (next on the ladder if scrap is still short); hand gathering never runs a node dry.
+
+**Next:** PT, Emmitt's first loud night.
+
 ## 2026-10-16 — P4 Belts you can read: IN and OUT on every machine, belts that snap, ticks and crosses
 
 Emmitt's playtest: "the conveyor belts were hard to tell if they snapped into a machine like in satisfactory. I just built a machine with conveyor belts around all sides and still didn't know how it worked." The rule was strict and invisible: a machine takes items in only at its back and puts them out only at its front, and a belt pointing anywhere else silently did nothing. Code and checks by Claude Opus 5.5.

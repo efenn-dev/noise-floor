@@ -447,6 +447,8 @@ func status_text() -> String:
 		lines.append("Loudness %d: %s (blue ring: night, orange: day)" % [roundi(float(heard["loudness"])),
 				Interactor.heard_words(SimWorld.heard_far(heard["night"]), SimWorld.heard_far(heard["day"]))])
 	var msg := last_message if last_message != "" else aim_reason
+	if msg == "Not enough materials" and aim_valid:  # P5: say what's missing and where it comes from
+		msg = "Not enough: " + sim.missing_words(piece(), _stock())
 	if msg != "":
 		lines.append(msg)
 	return "\n".join(lines)

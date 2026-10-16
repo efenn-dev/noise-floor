@@ -33,6 +33,11 @@ var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
 var carts: Carts  # F5: supply carts between cart stops
+## P5 (Emmitt: "how should we make users gather materials for things like the smelter?"): gathering by hand at a
+## resource node (E): the node being worked ("" = none) and seconds into this round.
+var gathering := ""
+var gather_progress := 0.0
+const GATHER_REACH := 4.0  # stay this close to the node (its spot or its pile) or the gathering stops
 ## F6: what machines made yesterday (item -> count), and Factory.made as it stood when today began.
 var made_yesterday: Dictionary = {}
 var made_mark: Dictionary = {}
@@ -245,6 +250,7 @@ func step() -> void:
 		_carts_seen = carts.delivered
 	vehicles.tick(TICK)
 	_tick_hotwire()
+	_tick_gather()  # P5
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
@@ -2766,6 +2772,82 @@ func _sink_at_cell(cell: Vector2i, item: String) -> bool:
 	if milestones.is_done(id):
 		add_message(_milestone_finished(id), 8.0)
 	return true
+
+
+## P5: the resource node record with this id ({} if none).
+func resource_node(id: String) -> Dictionary:
+	for n: Dictionary in resource_nodes:
+		if n["id"] == id:
+			return n
+	return {}
+
+
+## P5: what a node gives by hand (resources.json kinds.<kind>.hand: item, count, seconds, loudness, verb), {} if nothing.
+func hand_gather(node: Dictionary) -> Dictionary:
+	return (data.resources.get("kinds", {}).get(node.get("kind", ""), {}) as Dictionary).get("hand", {})
+
+
+## P5: seconds one round of hand gathering takes at `node` (its purity speeds it up or slows it down).
+func gather_seconds(node: Dictionary) -> float:
+	return float(hand_gather(node).get("seconds", 5.0)) / maxf(float(node.get("rate", 1.0)), 0.1)
+
+
+## P5: E on a resource node: start gathering there by hand (E again stops). It goes on round after round while you
+## stay within GATHER_REACH. Returns the message.
+func gather_start(id: String) -> String:
+	if gathering == id:
+		gathering = ""
+		return "Stopped gathering"
+	var n := resource_node(id)
+	var hand := hand_gather(n)
+	if n.is_empty() or hand.is_empty():
+		return ""
+	if _node_dist(n) > GATHER_REACH:
+		return "Get closer to the %s" % String(n["name"]).to_lower()
+	gathering = id
+	gather_progress = 0.0
+	return "You %s by hand: %s every %.0f s while you stay here (E stops)" % [hand["verb"], data.item_name(hand["item"]).to_lower(),
+			gather_seconds(n)]
+
+
+func _node_dist(n: Dictionary) -> float:
+	return minf(_flat_dist(player_pos, n["pos"]), _flat_dist(player_pos, n["prop_pos"]))
+
+
+func _tick_gather() -> void:
+	if gathering == "":
+		return
+	var n := resource_node(gathering)
+	if n.is_empty() or player.dead or player.asleep or vehicles.driving != "" or _node_dist(n) > GATHER_REACH:
+		gathering = ""
+		add_message("Stopped gathering", 2.0)
+		return
+	gather_progress += TICK
+	if gather_progress < gather_seconds(n):
+		return
+	gather_progress = 0.0
+	var hand := hand_gather(n)
+	if carry_ratio() >= 1.0:
+		gathering = ""
+		add_message("Your pockets are full: stopped gathering", 4.0)
+		return
+	inventory.add(hand["item"], int(hand["count"]))
+	stats.gathered += int(hand["count"])
+	noise.emit(n["prop_pos"], float(hand["loudness"]), "gather_" + String(n["kind"]))
+	_practice("scavenging", "search")
+	add_message("+%d %s" % [int(hand["count"]), data.item_name(hand["item"])], 1.5)
+
+
+## P5: what you're short of to build `id` with `stock`, and where each comes from: "6 Scrap metal (search cars ...)".
+func missing_words(id: String, stock: Variant) -> String:
+	var parts := PackedStringArray()
+	var cost: Dictionary = data.buildables[id]["cost"]
+	for item: String in cost:
+		var short := int(cost[item]) - int(stock.count(item))
+		if short > 0:
+			var where := str(data.items.get(item, {}).get("where", ""))
+			parts.append("%d %s%s" % [short, data.item_name(item), (" (" + where + ")") if where != "" else ""])
+	return "; ".join(parts)
 
 
 ## F5: the storage crates (their Inventories) within `reach` of `at`, nearest first: what a cart stop serves.

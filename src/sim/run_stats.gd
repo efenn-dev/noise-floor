@@ -69,6 +69,8 @@ var turret_fed := false
 var hub_belt := 0
 ## F5: items supply carts brought home.
 var cart_items := 0
+## P5: items gathered by hand at resource nodes.
+var gathered := 0
 
 
 func add_real_time(seconds: float) -> void:
@@ -317,6 +319,8 @@ func summary_lines() -> PackedStringArray:
 			if turret_shots > 0 or turret_fed else "No turret fired.")  # F4
 	if hub_belt > 0:
 		out.append("Belts handed the Hub %d part%s." % [hub_belt, "" if hub_belt == 1 else "s"])  # F4 part 2
+	if gathered > 0:
+		out.append("Gathered by hand: %d item%s." % [gathered, "" if gathered == 1 else "s"])  # P5
 	if cart_items > 0:
 		out.append("Supply carts brought home %d item%s." % [cart_items, "" if cart_items == 1 else "s"])  # F5
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))

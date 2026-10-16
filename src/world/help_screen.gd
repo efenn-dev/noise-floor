@@ -67,7 +67,7 @@ const ROWS := [
 ## S4: the six steps of a first factory, shown under the controls (Playtest #1: building and machines
 ## were not clear). test_help_screen.gd checks they're on screen.
 const GUIDE := [
-	"1. The crate beside you holds your starting kit: press E on it to open it.",
+	"1. The crate beside you holds your starting kit: press E on it to open it. More scrap metal and planks: search cars and houses, pull town furniture down (B, right-click), or press E at a scrap heap (junkyard) or timber stand (woods) to gather by hand.",
 	"2. Press 1 and click the ground to lay foundations. Everything you build stands on them.",
 	"3. Press B, click Smelter, then click a foundation to place it (R turns it). Esc stops building.",
 	"4. Machines need power: build a Generator and a Power pole beside the smelter (B, Power). E on the generator loads gas cans; the crate has some, G siphons more from cars.",
