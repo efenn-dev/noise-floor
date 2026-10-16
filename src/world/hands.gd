@@ -16,8 +16,11 @@ const LOOKS := {
 		# jacket's cuff now, so the sleeve meets the glove.
 		"Arm Skin": {"texture": "cloth_cotton", "tile_m": 0.1, "tint": Color(0.26, 0.23, 0.19), "metallic": 0.0, "roughness": 0.95},
 	},
-	"untextured": [],
+	# V37: the bought arms (tools/art/fp_arm_fps06.py) bring their own textured glove and jacket sleeve.
+	"untextured": ["FP Glove", "FP Sleeve"],
 }
+## Materials drawn from both sides: a pose can turn a sleeve's open end or a glove's cuff toward you.
+const DOUBLE_SIDED := ["Arm Sleeve", "Arm Skin", "FP Sleeve", "FP Glove"]
 ## Where each hand goes on each weapon: [position, rotation in degrees] in the weapon model's own space.
 ## Melee models: grip at the origin, pointing up +Y (tools/art/melee_common.py). Gun grips are Codex's
 ## measured anchors (pistol grip (0, -0.024, 0.071), rifle grip (-0.02, -0.009, 0.18)).
@@ -187,7 +190,7 @@ const FINGERS := {
 ## Bends per pose; "*" is every finger but the thumb unless the finger is listed. "Grip" is the rest pose.
 const POSE_BENDS := {
 	"Grip": {},
-	"Fist": {"*": [88.0, 100.0, 62.0], "Thumb": [40.0, 50.0, 38.0]},
+	"Fist": {"*": [100.0, 110.0, 70.0], "Thumb": [24.0, 28.0, 12.0]},  # V37: tuned on the bought arms (tools/art/hand_poses.gd)
 	"Open": {"*": [14.0, 18.0, 10.0], "Thumb": [16.0, 8.0, 4.0]},
 	"Flat": {"*": [2.0, 2.0, 2.0], "Thumb": [8.0, 2.0, 0.0]},
 	"Pinch": {"Index": [38.0, 48.0, 30.0], "Middle": [46.0, 58.0, 36.0], "Ring": [54.0, 66.0, 40.0],
@@ -267,6 +270,8 @@ static func _prepare_rig(node: Node3D, side: String) -> void:
 	for lib_name: StringName in player.get_animation_library_list():
 		player.remove_animation_library(lib_name)
 	player.add_animation_library("", _pose_libraries[side])
+	if _sleeve_material(node) == null:
+		return  # V37: an arm with its own sleeve on to the shoulder (the bought arms) needs no extension
 	var attach := BoneAttachment3D.new()
 	attach.name = "SleeveExtension"
 	attach.bone_name = "Forearm"
@@ -365,11 +370,17 @@ static func apply_materials(node: Node3D) -> void:
 			continue
 		for i in mesh.mesh.get_surface_count():
 			var source := mesh.mesh.surface_get_material(i) as StandardMaterial3D
-			if source == null or not LOOKS["materials"].has(source.resource_name):
+			if source == null:
+				continue
+			if not LOOKS["materials"].has(source.resource_name):
+				if source.resource_name in DOUBLE_SIDED and source.cull_mode != BaseMaterial3D.CULL_DISABLED:
+					var own := source.duplicate() as StandardMaterial3D  # V37: the model's own textures, both sides
+					own.cull_mode = BaseMaterial3D.CULL_DISABLED
+					mesh.set_surface_override_material(i, own)
 				continue
 			var m: Dictionary = LOOKS["materials"][source.resource_name]
 			var mat := Shooter._gun_material(source, String(m["texture"]), float(m["tile_m"]), m.get("tint", Color.WHITE), m)
-			if source.resource_name in ["Arm Sleeve", "Arm Skin"] and mat.cull_mode != BaseMaterial3D.CULL_DISABLED:
+			if source.resource_name in DOUBLE_SIDED and mat.cull_mode != BaseMaterial3D.CULL_DISABLED:
 				mat = mat.duplicate() as StandardMaterial3D
 				mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # V16: when a pose turns the open end of the sleeve toward you, you see cloth, not a hole
 			mesh.set_surface_override_material(i, mat)
