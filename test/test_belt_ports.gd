@@ -115,11 +115,26 @@ func test_the_markers() -> void:
 	view.setup(sim)
 	view.rebuild()
 	var names := view.get_children().map(func(c: Node) -> String: return String(c.name))
-	check(names.any(func(n: String) -> bool: return n.begins_with("Port_IN")), "an IN arrow")
-	check(names.any(func(n: String) -> bool: return n.begins_with("Port_OUT")), "an OUT arrow")
+	check(names.any(func(n: String) -> bool: return n.begins_with("Chute_IN")), "the belt into its IN plugs in with a chute and a port frame")
+	check(not names.any(func(n: String) -> bool: return n.begins_with("Port_IN")), "so no loose IN arrow")
+	check(names.any(func(n: String) -> bool: return n.begins_with("Port_OUT")), "nothing at its front: an OUT arrow")
 	eq(names.filter(func(n: String) -> bool: return n.begins_with("Tick")).size(), 1, "a green tick where the belt feeds its IN")
 	eq(names.filter(func(n: String) -> bool: return n.begins_with("Cross")).size(), 1, "a red X where the other points at its side")
+	_belt(sim, Vector2i(11, 10), E)
+	view.rebuild()
+	names = view.get_children().map(func(c: Node) -> String: return String(c.name))
+	check(names.any(func(n: String) -> bool: return n.begins_with("Chute_OUT")), "a belt carrying its output away: a chute at its front")
 	view.free()
+
+
+func test_chutes_reach_the_machine_faces() -> void:
+	var press := PortView.port_depths("press")
+	check(press.x > 0.5 and press.x < 0.8 and press.y > 0.5 and press.y < 0.8, "the Press model is about 1.35 m deep (%s)" % press)
+	check(PortView.port_depths("smelter").x > press.x, "the smelter is deeper")
+	var chute := PortView.chute(Vector3(0, 0, 1.0), Vector3(0, 0, 0.68), 0.2, "IN")
+	near(chute.position.z, 0.84, "a chute sits between the belt's end and the machine's face", 0.001)
+	check(chute.get_child_count() >= 6, "deck, rails and a port frame")
+	chute.free()
 
 
 func test_the_build_line_says_what_the_belt_will_feed() -> void:

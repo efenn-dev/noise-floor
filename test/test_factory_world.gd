@@ -57,14 +57,14 @@ func test_interact_and_items_drawn() -> void:
 	await tree.process_frame
 	eq(fview.items_shown, 1, "one plate drawn on the belt")
 	var drawn := func() -> MeshInstance3D: return fview._pool[0]  # the first pooled item mesh
-	var belt_top: float = sim.build.center_for("belt", Vector2i(0, 1), BuildGrid.Side.SOUTH).y + sim.data.buildables["belt"]["size"].y / 2.0
+	var belt_top: float = sim.build.center_for("belt", Vector2i(0, 1), BuildGrid.Side.SOUTH).y + PortView.DECK_TOP  # P4: its rubber deck
 	check(is_equal_approx((drawn.call() as MeshInstance3D).position.y, belt_top + FactoryView.ITEM_SIZE / 2.0), "it sits on the belt")
 	sim.build.place("belt", Vector2i(5, 1), BuildGrid.Side.SOUTH, sim.inventory)  # F3: out on the bare ground
 	sim.factory.belts[Vector2i(5, 1)].accept("nails")
 	sim.factory.belts[Vector2i(0, 1)].items.clear()
 	await tree.process_frame
 	await tree.process_frame
-	var ground_top: float = sim.data.buildables["belt"]["size"].y
+	var ground_top: float = sim.data.buildables["belt"]["size"].y / 2.0 + PortView.DECK_TOP  # P4: the deck of a belt on the ground
 	check(is_equal_approx((drawn.call() as MeshInstance3D).position.y, ground_top + FactoryView.ITEM_SIZE / 2.0),
 			"on a belt out on the ground it sits on that belt, not up at floor height")
 	_scene.queue_free()
