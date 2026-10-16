@@ -42,6 +42,7 @@ const KEYS := {
 	"quick_equip": [KEY_Y],  # V25: wear the most recently looted upgrade without opening Tab
 	"objectives": [KEY_O],  # V25: show or hide the first-night objectives
 	"base_log": [KEY_L],  # M15: the base log screen
+	"map": [KEY_M],  # W3e: the map screen
 	"swap_hands": [KEY_Q],  # M14: melee weapon or gun in your hands (R reloads, via "refuel", when on foot)
 	"inspect": [KEY_V],  # V13: turn the held gun or melee weapon over in your hands
 	"help": [KEY_F1],  # P3: the controls screen (HelpScreen describes every action here)

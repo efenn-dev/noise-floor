@@ -11,6 +11,11 @@ extends RefCounted
 const BREAKABLE_KINDS := ["wall", "door", "window", "barricade", "fence", "machine", "generator", "turret", "sensor",
 		"noisemaker", "floodlight"]
 const NEVER_BREAK_IDS := ["water_tap"]
+## W3e: far zombies think less often. One further than FAR_THINK from the player that is idle, wandering or dead
+## thinks every THINK_EVERY ticks (a fifth of a second), with that many ticks' time at once, so its timers keep
+## pace. It still listens on its usual ticks, and a noise that draws it makes it think every tick again.
+const FAR_THINK := 60.0
+const THINK_EVERY := 4
 
 var data: GameData
 var seed_value: int
@@ -18,6 +23,7 @@ var difficulty: Difficulty
 var zombies: Dictionary = {}  # id -> ZombieBrain
 var _next_id := 1
 var _ticks := 0
+var lazy_skips := 0  # W3e: thinks skipped for far zombies (tests, the stress report)
 
 
 func _init(p_data: GameData, p_seed: int = 1, p_difficulty: Difficulty = null) -> void:
@@ -87,13 +93,20 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 			var heard := noise.loudest_heard(z.pos, z.hearing(ctx["night"]))
 			if not heard.is_empty():  # Q4: a sound from something it may not break is walked to, not wrecked
 				z.hear(heard["pos"], heard["key"] if breakable(ctx["pieces"], heard["key"]) else "")
+		var player_pos: Vector3 = ctx["player_pos"]
+		var far := Vector2(z.pos.x - player_pos.x, z.pos.z - player_pos.z).length() > FAR_THINK
+		var lazy := far and (z.is_dead() or z.state == ZombieBrain.State.IDLE or z.state == ZombieBrain.State.WANDER)
+		if lazy and (_ticks + id) % THINK_EVERY != 0:
+			lazy_skips += 1
+			continue
+		var step := dt * THINK_EVERY if lazy else dt
 		var eye := z.pos + Vector3.UP * z.eye_height()
 		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, ctx["player_pos"], z.los_clear,
 				ctx["night"], ctx["player_lit"], z.stats)
 		if _spared_for(z, ctx["pieces"], z.blocked_by) \
 				or (z.state == ZombieBrain.State.BREAK and _spared_for(z, ctx["pieces"], z.break_key)):
 			z.leave_furniture()  # M16, Q4: zombies only break what's on BREAKABLE_KINDS
-		for e: Dictionary in z.think(dt, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
+		for e: Dictionary in z.think(step, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
 			e["zombie"] = id
 			events.append(e)
 		if z.is_dead() and z.dead_time >= (ZombieBrain.SEARCHED_CORPSE_TIME if z.searched else ZombieBrain.CORPSE_TIME):

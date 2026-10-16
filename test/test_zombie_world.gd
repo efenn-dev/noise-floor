@@ -85,6 +85,12 @@ func test_far_idle_zombies_rest_and_wake() -> void:
 	var held := body.global_position
 	await _run(0.5)
 	check(body.global_position.distance_to(held) < 0.001, "and it doesn't move (%s -> %s, resting %s)" % [held, body.global_position, body.resting])
+	z.state = ZombieBrain.State.WANDER  # W3e: strolling about out there rests too
+	z.target_pos = z.pos + Vector3(6, 0, 0)
+	z._timer = 999.0
+	await _run(0.5)
+	check(body.resting, "a far zombie strolling about rests too")
+	check(body.global_position.distance_to(held) < 0.001, "its stroll waits")
 	sim.noise.emit(z.pos + Vector3(0, 0, 4), 80.0, "test")  # a noise beside it
 	await _run(0.5)
 	check(z.state != ZombieBrain.State.IDLE, "a noise draws it")

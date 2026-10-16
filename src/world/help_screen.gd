@@ -57,6 +57,7 @@ const ROWS := [
 	["Screens", ["skills"], "", "skills and perks"],
 	["Screens", ["objectives"], "", "show or hide the first-night objectives"],
 	["Screens", ["base_log"], "", "base log: what happened at your base"],
+	["Screens", ["map"], "", "the map: roads, places, resource spots, your base and you"],
 	["Screens", ["noise_overlay"], "", "see how far your noise carries"],
 	["Screens", ["help"], "", "this help"],
 	["Game", ["quicksave"], "", "save the game"],

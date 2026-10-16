@@ -232,6 +232,59 @@ static func spawn_points(at: Vector3, min_d: float, max_d: float) -> Array:
 	return out
 
 
+## W3e: zombies wandering the roads between the places, so a trip across the map isn't empty: `count` spots
+## beside the roads (2.5-4.5 m off the edge), out in the open (no area but the woods or the highway), at least
+## ROADSIDE_FROM_START from where a new game starts and ROADSIDE_APART from each other; one is a runner. Seeded.
+## [{type, pos, facing}] for SimWorld.spawn_park_zombies.
+const ROADSIDE_FROM_START := 120.0
+const ROADSIDE_APART := 40.0
+
+
+static func roadside_zombies(seed_value: int, count: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "roadside"])
+	var spots: Array = []
+	for pt: Dictionary in spawn_points(Vector3.ZERO, ROADSIDE_FROM_START, INF):
+		var at: Vector3 = pt["pos"]
+		if area_at(at) in ["", "woods", "highway"] and EXTENT.grow(-20.0).has_point(Vector2(at.x, at.z)):
+			spots.append(at)
+	var out: Array = []
+	var tries := 0
+	while out.size() < count and tries < 400 and not spots.is_empty():
+		tries += 1
+		var at: Vector3 = spots[rng.randi_range(0, spots.size() - 1)]
+		var near: Dictionary = nearest(Vector2(at.x, at.z))
+		var g := graph()
+		var road: Vector2 = (g["nodes"][near["b"]] as Vector2) - (g["nodes"][near["a"]] as Vector2)
+		var side := Vector2(-road.y, road.x).normalized() * (1.0 if rng.randf() < 0.5 else -1.0)
+		var off := side * (_width_at(Vector2(at.x, at.z)) / 2.0 + rng.randf_range(2.5, 4.5))
+		var p := Vector3(at.x + off.x, 0.0, at.z + off.y)
+		var crowded := false
+		for o: Dictionary in out:
+			crowded = crowded or (o["pos"] as Vector3).distance_to(p) < ROADSIDE_APART
+		if crowded or on_road(Vector2(p.x, p.z), 1.0) or Vector2(p.x, p.z).length() < ROADSIDE_FROM_START \
+				or not area_at(p) in ["", "woods", "highway"]:
+			continue
+		out.append({"type": "shambler", "pos": p, "facing": Vector3(-side.x, 0, -side.y)})
+	if not out.is_empty():
+		out[rng.randi_range(0, out.size() - 1)]["type"] = "runner"
+	return out
+
+
+## The width of the road nearest to `at` (m).
+static func _width_at(at: Vector2) -> float:
+	var best := INF
+	var width := 6.0
+	for road: Dictionary in ROADS:
+		var pts: Array = road["points"]
+		for i in pts.size() - 1:
+			var d := at.distance_to(Geometry2D.get_closest_point_to_segment(at, pts[i], pts[i + 1]))
+			if d < best:
+				best = d
+				width = float(road["width"])
+	return width
+
+
 ## The compass word for the way from `from` to `to` ("north", "south-east", ...), for messages.
 static func direction_name(from: Vector3, to: Vector3) -> String:
 	var d := Vector2(to.x - from.x, to.z - from.z)
@@ -244,7 +297,11 @@ static func direction_name(from: Vector3, to: Vector3) -> String:
 
 ## The area `at` is in ("" for open country).
 static func area_at(at: Vector3) -> String:
-	for id: String in AREAS:
-		if (AREAS[id] as Rect2).has_point(Vector2(at.x, at.z)):
-			return id
-	return ""
+	var best := ""
+	var best_size := INF
+	for id: String in AREAS:  # W3e: the smallest area holding the spot (the cabin's clearing is in the woods)
+		var r: Rect2 = AREAS[id]
+		if r.has_point(Vector2(at.x, at.z)) and r.get_area() < best_size:
+			best = id
+			best_size = r.get_area()
+	return best

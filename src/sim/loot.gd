@@ -115,6 +115,7 @@ func reveal(id: String) -> Dictionary:
 	rng.seed = hash([seed_value, id])
 	var table: Dictionary = data.loot[c["table"]]
 	var abundance := difficulty.multiplier("loot_abundance") if difficulty != null else 1.0
+	abundance *= area_loot(data, c["pos"])  # W3e: the further out, the better
 	var items := roll(table, rng, abundance)
 	var lucky := skills != null and rng.randf() < skills.bonus("lucky_find")
 	if lucky:  # one more pick from the same table
@@ -129,6 +130,12 @@ func reveal(id: String) -> Dictionary:
 	active = ""
 	progress = 0.0
 	return done
+
+
+## W3e: how much more loot a search at `pos` finds, by the area it's in (data/areas.json "loot"; 1 outside them).
+static func area_loot(p_data: GameData, pos: Vector3) -> float:
+	var area := WorldMap.area_at(pos)
+	return float((p_data.areas.get(area, {}) as Dictionary).get("loot", 1.0)) if area != "" else 1.0
 
 
 ## Seconds a search takes: search_time, 5% less per Scavenging level and 10% per Quick Fingers rank,
