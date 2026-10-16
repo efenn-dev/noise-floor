@@ -14,8 +14,11 @@ but only if this PC has no Noise Floor saves yet. They live in
 %APPDATA%\Godot\app_userdata\Noise Floor, not in this folder, so deleting or replacing this
 folder never loses them.
 
-Updating: when there's a new NoiseFloor.zip, extract it and replace the old NoiseFloor folder.
-The saves stay where they are.
+Updating: automatic. Each time you start the game, the launcher checks the family drive
+(the folders listed in update_from.txt) and brings in a newer version if there is one. That
+takes a few seconds. If the drive can't be reached, it just plays the version it has.
+To update by hand instead: extract the new NoiseFloor.zip and replace the old NoiseFloor folder.
+The saves stay where they are either way.
 
 If the game runs slowly: Esc > Settings > Graphics > Low.
 

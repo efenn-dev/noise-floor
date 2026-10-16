@@ -3,7 +3,8 @@
 # family's other computer): build/NoiseFloor/ gets the game files at a git ref (git archive: tracked files only,
 # main by default), already imported so the first start is quick, the pinned Godot, "Play Noise Floor.bat"
 # (tools/portable/play.bat) and a README, plus a copy of this PC's saved games (save.json and the save slots;
-# the launcher brings them across only on a PC with none). Then zips it to build/NoiseFloor.zip.
+# the launcher brings them across only on a PC with none), plus update.ps1 and update_from.txt (the launcher
+# updates itself from the family drive). Then zips it to build/NoiseFloor.zip and writes build/version.txt.
 # Usage: tools/make_portable.sh [git-ref]   (e.g. origin/main after a merge; GODOT_DIR overrides Godot's folder)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,6 +24,8 @@ user_dir="${APPDATA:-}/Godot/app_userdata/Noise Floor"
 # Windows line endings for the launcher (cmd needs them) and the README (for Notepad).
 sed 's/\r$//; s/$/\r/' tools/portable/play.bat > "$out/Play Noise Floor.bat"
 sed 's/\r$//; s/$/\r/' tools/portable/README.txt > "$out/README.txt"
+sed 's/\r$//; s/$/\r/' tools/portable/update_from.txt > "$out/update_from.txt"  # where the launcher looks for updates
+sed 's/\r$//; s/$/\r/' tools/portable/update.ps1 > "$out/update.ps1"
 python - "$out" build/NoiseFloor.zip <<'PY'
 import sys, zipfile
 from pathlib import Path
@@ -32,4 +35,5 @@ with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         if f.is_file():
             z.write(f, Path("NoiseFloor") / f.relative_to(src))
 PY
+cp "$out/game/version.txt" build/version.txt  # published next to the zip: the launcher compares it with its own
 echo "make_portable: $(du -sh build/NoiseFloor.zip | cut -f1) build/NoiseFloor.zip ($(cat "$out/game/version.txt"))"
