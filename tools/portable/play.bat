@@ -1,9 +1,15 @@
 @echo off
 rem Noise Floor, portable copy: double-click to play. Made by tools/make_portable.sh (no git or GitHub needed).
+rem First it looks on the family drive for a newer version and brings it in (update.ps1, folders in
+rem update_from.txt); with the drive out of reach it just plays the version it has.
 rem The first time on a PC it brings the saved games that came with it across (only if that PC has none yet).
 cd /d "%~dp0"
 set "GODOT=%~dp0godot\Godot_v4.7-stable_win64.exe"
 set "SAVES=%APPDATA%\Godot\app_userdata\Noise Floor"
+if exist "update.ps1" if exist "update_from.txt" (
+	echo Checking the family drive for a new version...
+	powershell -NoProfile -ExecutionPolicy Bypass -File "update.ps1" -Here "%~dp0."
+)
 if not exist "%GODOT%" (
 	echo Can't find the game's Godot at %GODOT%
 	echo Keep the godot folder next to this file.
