@@ -1,0 +1,185 @@
+{
+	"automation": {
+		"floodlights": {},
+		"locked": [],
+		"noisemakers": {},
+		"sensors": {}
+	},
+	"bags": [],
+	"base_log": [],
+	"belts": [],
+	"bins": [],
+	"clock": {
+		"day": 1,
+		"time": 12.0
+	},
+	"crate_gear": {},
+	"crates": {},
+	"difficulty": "normal",
+	"first_night": {
+		"deaths": 0,
+		"ids": [],
+		"morning": false,
+		"sheltered": false,
+		"warning": false,
+		"wave": false
+	},
+	"gear": {
+		"equipped": {
+			"weapon": {
+				"base": "pipe",
+				"condition": 1.0,
+				"name": "Pipe",
+				"rarity": "white",
+				"set": "",
+				"stats": {},
+				"tier": "civilian",
+				"uid": 1
+			}
+		},
+		"next_uid": 2,
+		"pieces": []
+	},
+	"generators": {},
+	"guidance": {
+		"active": false,
+		"ate": false,
+		"bed_found": false,
+		"better_gear_seconds": 0.0,
+		"better_gear_uid": -1,
+		"completed": false,
+		"drank": false,
+		"night_deaths": 0,
+		"night_failed": false,
+		"saw_night": false,
+		"start_day": 1,
+		"survived_night": false
+	},
+	"hands": "melee",
+	"heat": 0.0,
+	"hotbar": {
+		"build": [
+			"build:foundation",
+			"build:wall",
+			"build:door",
+			"build:storage",
+			"build:smelter",
+			"build:belt",
+			"build:press",
+			"build:generator",
+			"build:bed",
+			""
+		],
+		"hands": [
+			"slot:weapon",
+			"slot:primary",
+			"slot:sidearm",
+			"item:bandage",
+			"",
+			"",
+			"",
+			"",
+			"",
+			""
+		]
+	},
+	"infamy": 0.0,
+	"inventory": {},
+	"loot_contents": {},
+	"machines": [],
+	"milestones": {
+		"delivered": {},
+		"done": [
+			"salvage_rig",
+			"lumber_yard",
+			"fuel_line",
+			"kitchen",
+			"sentry",
+			"logistics",
+			"heavy_defense"
+		]
+	},
+	"next_bag": 1,
+	"next_zombie": 1,
+	"perk_points": 0,
+	"perks": {},
+	"pieces": [
+		{
+			"cell": [
+				-36,
+				-26
+			],
+			"hp": 400,
+			"id": "foundation",
+			"key": "f:-36:-26",
+			"open": false,
+			"shards": false,
+			"side": 0,
+			"swing": 1,
+			"town": false,
+			"wear": 0.0
+		},
+		{
+			"cell": [
+				-36,
+				-26
+			],
+			"hp": 200,
+			"id": "wall",
+			"key": "w:-36:-26:n",
+			"open": false,
+			"shards": false,
+			"side": 0,
+			"swing": 1,
+			"town": false,
+			"wear": 0.0
+		}
+	],
+	"player": {
+		"bleeding": false,
+		"dead": false,
+		"deaths": 0,
+		"energy": 100.0,
+		"food": 100.0,
+		"health": 100.0,
+		"respawn_timer": 0.0,
+		"stamina": 100.0,
+		"warmth": 100.0,
+		"water": 100.0
+	},
+	"player_pos": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"projects": {},
+	"projects_done": [],
+	"rescue": {
+		"day": -1,
+		"state": ""
+	},
+	"rng_state": "2287554260636503708",
+	"routers": [],
+	"searched": [],
+	"seed": 6,
+	"skills": {
+		"building": 6.0
+	},
+	"spawn_point": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"sprung": [],
+	"stats": {
+		"deaths": 0,
+		"kills": 0
+	},
+	"stoves": {},
+	"ticks": 0,
+	"turrets": [],
+	"unlocked": [],
+	"vehicles": {},
+	"version": 23,
+	"zombies": []
+}

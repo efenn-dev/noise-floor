@@ -206,7 +206,7 @@ func test_downtown_zombies_spawn_inside_and_are_saved() -> void:
 		check(DowntownPlan.is_clear(p, Vector2(z.pos.x, z.pos.z), 0.3), "not inside a shelf")
 	eq(brutes, 1, "a brute in the police station")
 	var d := SaveGame.to_dict(w)
-	eq(int(d["version"]), 23, "saved as version 23")
+	check(int(d["version"]) >= 23, "saved as version 23 or later")
 	check(SaveGame.holds_downtown(d), "which holds downtown")
 	var b := SimWorld.new(8.0)
 	b.place_downtown(p, false)

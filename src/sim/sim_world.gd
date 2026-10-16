@@ -91,6 +91,9 @@ var vault_landing := Vector3.INF
 var clearing_glass: Dictionary = {}
 ## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
 var house_cells: Dictionary = {}
+## W3c: suburb houses that weren't laid because an older save already had something built where they'd stand
+## (saved, so they stay away).
+var suburbs_skipped: Array = []
 var player_lit := false
 var player_facing := Vector3(0, 0, -1)  # S4: where you look (flat), for the jumpscare rules
 var scares: Scares  # S4: jumpscare stings (SoundView plays scares.fired)
@@ -990,7 +993,7 @@ func place_props(plan: Dictionary) -> int:
 	var was_muted := stats.muted
 	stats.muted = true
 	var n := 0
-	for p: Dictionary in plan["props"] + plan["factory"].get("props", []):
+	for p: Dictionary in plan["props"] + (plan.get("factory", {}) as Dictionary).get("props", []):  # W3c: suburbs have no hall
 		var key := build.key_for(p["id"], p["cell"])
 		if build.pieces.has(key) or not build.pieces.has("f:%d:%d" % [p["cell"].x, p["cell"].y]):
 			continue
@@ -1107,6 +1110,27 @@ static func downtown_prop_pos(pr: Dictionary) -> Vector3:
 ## street). Only for a new game, or a save from before downtown; a save brings its own back.
 func spawn_downtown_zombies(plan: Dictionary) -> Array:
 	return spawn_park_zombies(plan)
+
+
+## W3c: West and East Street's houses (SuburbPlan.generate). With `lay_pieces` (a new game, or a save from before
+## them) it lays each house like place_town and place_props, but leaves a house out if any key it would take is
+## in `taken` (an older save's own pieces, restored after this) or already built, and keeps the names of those in
+## suburbs_skipped. Without (a save that holds them) nothing is laid. Either way it registers the trash cans
+## behind the houses, and returns the plan less the skipped houses: what's there to draw and search.
+func place_suburbs(plan: Dictionary, lay_pieces: bool, taken: Dictionary = {}) -> Dictionary:
+	if lay_pieces:
+		suburbs_skipped = []
+		for h: Dictionary in plan["houses"]:
+			for key: String in SuburbPlan.house_keys(plan, h["name"]):
+				if taken.has(key) or build.pieces.has(key):
+					suburbs_skipped.append(h["name"])
+					break
+	var part := SuburbPlan.without(plan, suburbs_skipped)
+	if lay_pieces:
+		place_town(part)
+		place_props(part)
+	place_street({"items": part["items"]})
+	return part
 
 
 ## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
@@ -2754,8 +2778,10 @@ func spend_perk(perk: String) -> String:
 func know_houses(plan: Dictionary) -> void:
 	house_cells.clear()
 	for h: Dictionary in plan.get("houses", []):
-		var parts: PackedStringArray = str(h["name"]).split("_")  # house_3_e
+		var parts: PackedStringArray = str(h["name"]).split("_")  # house_3_e; W3c west_3_e (a West Street house)
 		var label := "house %s (%s side)" % [parts[1], "east" if parts[2] == "e" else "west"] if parts.size() == 3 else str(h["name"])
+		if parts.size() == 3 and parts[0] != "house":
+			label = "%s Street house %s (%s side)" % [parts[0].capitalize(), parts[1], "east" if parts[2] == "e" else "west"]
 		for c: Vector2i in h["cells"]:
 			house_cells[c] = label
 

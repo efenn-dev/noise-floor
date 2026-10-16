@@ -871,8 +871,11 @@ func _hour_line() -> void:
 	if _hours_seen == 1:
 		_mem_hour1 = mem
 	_hours_seen += 1
-	print("soak: day %d %s %s  hp %.0f food %.0f water %.0f energy %.0f warmth %.0f  zombies %d  heat %.0f infamy %.1f  pieces %d  deaths %d  mem %.1f MB  worst physics %.1f ms  nav bakes %d (first %.0f ms)%s%s" % [
-			sim.clock.day, sim.clock.season_name(), sim.clock.clock_text(), p.health, p.food, p.water, p.energy, p.warmth, sim.horde.alive_count(),
+	var resting := 0  # W3b/W3c: zombie bodies resting (idle, far from you: see ZombieBody.REST_BEYOND)
+	for zb: ZombieBody in main.zombie_view.get("_bodies").values():
+		resting += 1 if zb.resting else 0
+	print("soak: day %d %s %s  hp %.0f food %.0f water %.0f energy %.0f warmth %.0f  zombies %d (%d resting)  heat %.0f infamy %.1f  pieces %d  deaths %d  mem %.1f MB  worst physics %.1f ms  nav bakes %d (first %.0f ms)%s%s" % [
+			sim.clock.day, sim.clock.season_name(), sim.clock.clock_text(), p.health, p.food, p.water, p.energy, p.warmth, sim.horde.alive_count(), resting,
 			sim.director.heat, sim.director.infamy, sim.build.pieces.size(), sim.tally["deaths"], mem, _worst_phys_ms, main.nav.bakes,
 			main.first_bake_ms, "  DEAD" if p.dead else "", "  asleep" if p.asleep else ""])
 	_worst_phys_ms = 0.0

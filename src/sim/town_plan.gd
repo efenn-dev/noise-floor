@@ -102,9 +102,9 @@ static func generate(seed_value: int, _data: GameData = null) -> Dictionary:
 ## W1b: which houses have a zombie standing inside, and where. Its own random stream, so the houses
 ## themselves don't change. HOUSE_ZOMBIES of the houses past lot 0; each stands next to the fridge or the
 ## kitchen cabinet (in the same room, no wall between), so searching the kitchen is close enough to wake it.
-static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
+static func _house_zombies(seed_value: int, town: Dictionary, count: int = HOUSE_ZOMBIES, salt: String = "house_zombies") -> Array:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed_value, "house_zombies"])
+	rng.seed = hash([seed_value, salt])
 	var pick: Array = []
 	for i in town["houses"].size():
 		if not town["houses"][i]["name"].begins_with("house_0_"):
@@ -114,7 +114,7 @@ static func _house_zombies(seed_value: int, town: Dictionary) -> Array:
 		var t: int = pick[i]
 		pick[i] = pick[j]
 		pick[j] = t
-	pick = pick.slice(0, HOUSE_ZOMBIES)
+	pick = pick.slice(0, count)
 	pick.sort()
 	var edges := {}
 	for p: Dictionary in town["pieces"]:
@@ -208,15 +208,16 @@ static func lot_z(i: int) -> float:
 	return FIRST_LOT_Z - i * LOT_SPACING
 
 
+## W3c: `road_cell` is the road's middle in cells (0 = Main Street; SuburbPlan's West and East Streets).
 static func _add_house(out: Dictionary, house_name: String, plan_id: String, mirror: bool, east: bool,
-		z_mid: float, style: String) -> void:
+		z_mid: float, style: String, road_cell: int = 0) -> void:
 	var plan: Dictionary = PLANS[plan_id]
 	var depth: int = plan["size"][0]
 	var length: int = plan["size"][1]
 	var v0 := floori(z_mid / BuildGrid.GRID) - floori(length / 2.0)
 	var place := func(u: int, v: int) -> Vector2i:
 		var vv := (length - 1 - v) if mirror else v
-		return Vector2i(EAST_FIRST_CELL + u if east else -EAST_FIRST_CELL - 1 - u, v0 + vv)
+		return Vector2i(road_cell + EAST_FIRST_CELL + u if east else road_cell - EAST_FIRST_CELL - 1 - u, v0 + vv)
 	var missing := {}
 	for m: Array in plan["missing"]:
 		missing[Vector2i(m[0], m[1])] = true

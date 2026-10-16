@@ -14,10 +14,11 @@ const REACH_RADIUS := 0.22
 const REACH_OFFSET := Vector3(0.0, 1.25, -0.32)
 const LOS_EVERY := 3   # physics frames between line-of-sight checks
 ## W3b: a zombie standing idle (and unhurt) further than this from the player rests: its animation stops and it
-## skips its physics move and its sight ray until it's woken or you come near. Beyond every zombie's sight (30 m)
-## and its bone zones' range, so it changes nothing it would notice; downtown's zombies cost a soak day 60% more
-## before this.
-const REST_BEYOND := 50.0
+## skips its physics move and its sight ray until it's woken or you come near. Beyond every zombie's sight (30 m),
+## so it changes nothing it would notice; downtown's zombies cost a soak day 60% more before this. W3c: 35 m (it
+## was 50), so the new streets' house zombies just out of sight rest too; their bone zones stay on within
+## ZombieHitboxes.RANGE, holding the resting pose, so a long shot still hits what it aims at.
+const REST_BEYOND := 35.0
 const REPATH_DIST := 0.75
 const MODEL := preload("res://assets/models/zombie.glb")  # rigged + animated by tools/art/zombie.py
 ## A2: five bodies from the same script (`zombie.py -- --variant=NAME`), with the same bones and animations;
@@ -366,6 +367,8 @@ func _physics_process(delta: float) -> void:
 	if resting:
 		_frame += 1
 		brain.los_clear = false
+		if (_frame + brain.id) % 10 == 0:
+			_set_hitboxes(player != null and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
 		return
 	_animate(delta)
 	_speak(delta)
@@ -426,13 +429,12 @@ func _physics_process(delta: float) -> void:
 
 
 ## W3b: starts or ends resting (see REST_BEYOND): the animation player stops advancing (manual mode keeps the
-## pose and the clip it was on) and the bone zones go off.
+## pose and the clip it was on).
 func _rest(on: bool) -> void:
 	if on == resting:
 		return
 	resting = on
 	if on:
-		_set_hitboxes(false)
 		velocity = Vector3.ZERO
 	if _anim != null:
 		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL if on else _anim_mode

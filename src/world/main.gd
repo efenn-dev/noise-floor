@@ -11,7 +11,7 @@ extends Node3D
 ##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
 ##   --demo-logistics      F3: a loaded belt line on bare ground ahead, through a splitter into three crates
 ##   --zoop=N              F3: with --build, hold a drag preview: a run of N pieces ending where you aim
-##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber; W3b downtown, police, gas)
+##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber; W3b downtown, police, gas; W3c east)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
@@ -72,6 +72,7 @@ const AT_PLACES := {
 	"woods": [Vector3(-120, 0, -192), 60.0, 0.0],     # on the woods track, looking north-west into the trees
 	"farms": [Vector3(-170, 0, 100), 0.0, 0.0],       # the farm lane by the county road
 	"west": [Vector3(-60, 0, 0), 0.0, 0.0],           # West Street, looking north
+	"east": [Vector3(60, 0, 10), 0.0, 0.0],           # W3c: East Street, looking north
 	"junkyard": [Vector3(150, 0, -46), 15.0, -12.0],  # F1: the junkyard's scrap heaps, from the lane
 	"timber": [Vector3(-114, 0, -170), 75.0, -14.0],  # F1: a timber stand in the woods, from the track
 	"downtown": [Vector3(20, 0, 58), 12.0, -4.0],     # W3b: on Market Street, the grocery ahead and to the right
@@ -104,6 +105,9 @@ var park: Dictionary = {}  # M17a: ParkPlan.generate(seed): warehouses, crates, 
 var park_view: ParkView
 var downtown: Dictionary = {}  # W3b: DowntownPlan.generate(seed): shops, props, zombies, wrecks, the canopy
 var downtown_view: DowntownView
+var suburbs: Dictionary = {}  # W3c: SuburbPlan (West and East Street) less any houses an older save had built over
+var suburb_view: TownView     # W3c: their roofs
+var suburb_street_view: StreetView  # W3c: their mailboxes, trash cans and trees
 var road_view: RoadView  # W3a: the bigger map's new roads
 var country_view: CountryView  # W3a: woods, field trees, highway wrecks, the map's edge
 var country: Dictionary = {}
@@ -227,6 +231,7 @@ func _ready() -> void:
 	_build_town(not (_loaded and SaveGame.holds_town(save)), not (_loaded and SaveGame.holds_factory(save)), not _loaded)
 	_build_park(not (_loaded and SaveGame.holds_park(save)))  # M17a: a pre-park save gets the park laid fresh
 	_build_downtown(not (_loaded and SaveGame.holds_downtown(save)))  # W3b: likewise downtown
+	_build_suburbs(_loaded and SaveGame.holds_suburbs(save), save)  # W3c: and West and East Street
 	_build_country()  # W3a: the bigger map round the town (nothing in it is saved: the same land every game)
 	_build_player(args)
 	_build_building(args)
@@ -698,6 +703,10 @@ func apply_season(season: String) -> void:
 		_ground_mesh.material_override = SeasonLook.ground_material(season)
 	if street_view != null:
 		street_view.apply_season(season)
+	if suburb_view != null:
+		suburb_view.apply_season(season)
+	if suburb_street_view != null:
+		suburb_street_view.apply_season(season)
 	if town_view != null:
 		town_view.apply_season(season)
 	if park_view != null:
@@ -717,6 +726,8 @@ func indoor_fog_target() -> float:
 		return 1.0  # M17a: inside a warehouse
 	if downtown_view != null and downtown_view.is_under_roof(cam.global_position):
 		return 1.0  # W3b: inside a shop
+	if suburb_view != null and suburb_view.is_under_roof(cam.global_position):
+		return 1.0  # W3c: in a West or East Street house
 	return 1.0 if town_view.is_under_roof(cam.global_position) else 0.0
 
 
@@ -1105,6 +1116,8 @@ func _apply_save(save: Dictionary) -> void:
 		sim.spawn_park_zombies(park)  # M17a: the park is new to this save, and so are its zombies
 	if not SaveGame.holds_downtown(save):
 		sim.spawn_downtown_zombies(downtown)  # W3b: likewise downtown
+	if not SaveGame.holds_suburbs(save):
+		sim.spawn_house_zombies(suburbs)  # W3c: and West and East Street's
 	player.position = sim.player_pos
 	for car: CarBody in cars.values():
 		car.place_from_sim()  # parked where you left it
@@ -1299,6 +1312,35 @@ func _build_park(lay_pieces: bool = true) -> void:
 		cars[w["id"]] = car
 
 
+## W3c: the houses down both sides of West and East Street (SuburbPlan), made like the town's: laid as pieces
+## (round an older save's own pieces: SimWorld.place_suburbs leaves out any house that would land on them) unless
+## the save holds them, their fridges and cabinets (as in _build_town), roofs (a second TownView), and the
+## mailboxes, trash cans and trees (a second StreetView, no road markings).
+func _build_suburbs(held: bool, save: Dictionary) -> void:
+	var full := SuburbPlan.generate(sim.seed_value)
+	var taken := {}
+	if held:
+		sim.suburbs_skipped = Array(save.get("suburbs_skipped", []))
+	elif _loaded:
+		for p: Dictionary in save.get("pieces", []):
+			taken[str(p.get("key", ""))] = true
+	suburbs = sim.place_suburbs(full, not held, taken)
+	for c: Dictionary in suburbs["containers"]:
+		var fridge: bool = c["table"] == "fridge"
+		var box := _add_container(c["id"], c["table"], SimWorld.town_container_pos(c), Vector3(0.7, 1.6, 0.7),
+				Color(0.85, 0.85, 0.8) if fridge else Color(0.55, 0.42, 0.3))
+		var out := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)][c["side"]] as Vector2
+		_dress(box, "fridge" if fridge else "cabinet", atan2(out.x, out.y))
+	suburb_view = TownView.new()
+	add_child(suburb_view)
+	suburb_view.setup(suburbs, sim.build)
+	suburb_street_view = StreetView.new()
+	add_child(suburb_street_view)
+	suburb_street_view.setup(sim, {"items": suburbs["items"],
+			"markings": {"dashes": [], "dash_size": Vector3(0.15, 0.02, 1.0), "kerbs": [], "kerb_height": 0.1}})
+	sim.know_houses({"houses": town["houses"] + suburbs["houses"]})  # P3: the session log names them too
+
+
 ## W3b: downtown along Market Street (DowntownPlan): the shops (pieces laid unless the save holds them), their
 ## shelves, counters, lockers, pumps and dumpsters (containers), roofs, signs and the canopy (DowntownView), and
 ## the wrecks on the street (CarBodies).
@@ -1443,7 +1485,7 @@ func _build_building(args: Dictionary) -> void:
 		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
-	for p: Dictionary in town["pieces"] + town["factory"]["pieces"] + park.get("pieces", []) + downtown.get("pieces", []):
+	for p: Dictionary in town["pieces"] + town["factory"]["pieces"] + park.get("pieces", []) + downtown.get("pieces", []) + suburbs.get("pieces", []):
 		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster, factory, floor; M17a park_brick, corrugated
 	build_view.setup(sim.build)
 	builder = BuildController.new()
@@ -1583,6 +1625,7 @@ func _build_zombies(args: Dictionary) -> void:
 			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe
 			sim.spawn_park_zombies(park)  # M17a: shamblers and runners in and between the warehouses
 			sim.spawn_downtown_zombies(downtown)  # W3b: in the shops and on Market Street
+			sim.spawn_house_zombies(suburbs)  # W3c: one in about a third of West and East Street's houses
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):

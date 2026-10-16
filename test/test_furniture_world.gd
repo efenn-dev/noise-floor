@@ -117,9 +117,9 @@ func test_old_save_gets_furnished_once() -> void:
 	var props := 0
 	for k: String in s.build.pieces:
 		props += 1 if s.build.kind_of(s.build.pieces[k]["id"]) == "prop" else 0
-	var expected: int = main.town["props"].size() + main.town["factory"]["props"].size()
-	eq(props, expected, "every house and the hall furnished")
-	eq(main.town_pieces, expected, "the furniture was all the town laid")
+	var expected: int = main.town["props"].size() + main.town["factory"]["props"].size() + main.suburbs["props"].size()  # W3c
+	eq(props, expected, "every house (West and East Street's too) and the hall furnished")
+	eq(main.town_pieces, main.town["props"].size() + main.town["factory"]["props"].size(), "the furniture was all the town laid (the new streets come furnished)")
 	var count := s.build.pieces.size()
 	eq(main.save_game(), "", "save")
 	main.queue_free()
