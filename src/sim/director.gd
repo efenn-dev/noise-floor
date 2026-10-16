@@ -11,6 +11,8 @@ extends RefCounted
 ## noise (WorldMap.spawn_points), out of sight but close enough to arrive in a minute or two however big the
 ## map is, and follows WorldMap.route(); wanderers start WANDER_MIN..WANDER_MAX away. Its "edge" is the compass
 ## way it comes from ("north", "south-east"...).
+## F4 (the loop closes): a wave is bigger the louder your base is right now: its size is multiplied by
+## loud_multiplier() (1 + heat gain / loud_wave_gain, at most loud_wave_max), so a bigger factory draws bigger hordes.
 const ROAD_MIN := 110.0
 const ROAD_MAX := 180.0
 const WANDER_MIN := 70.0
@@ -81,6 +83,8 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		return {}
 	var count_rule := "night_wave_size" if night and kind != "wanderers" else "zombie_count"
 	var wanted := difficulty.count(count_rule, int(cfg[kind]), 1) if difficulty != null else int(cfg[kind])
+	var loud := loud_multiplier()
+	wanted = roundi(wanted * loud)
 	var size := mini(wanted, int(cfg["max_alive"]) - horde.alive_count())
 	if size <= 0:
 		return {}
@@ -104,7 +108,12 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))
 	heat = maxf(0.0, heat - size * float(cfg["heat_per_zombie"]))
 	return {"size": size, "edge": WorldMap.direction_name(lure["pos"], start), "kind": kind, "route": route,
-			"types": type_counts, "start": start}
+			"types": type_counts, "start": start, "loud": loud}
+
+
+## F4: how much bigger a wave is because of how loud your base is right now (the heat gain): 1 when quiet.
+func loud_multiplier() -> float:
+	return clampf(1.0 + gain / float(cfg.get("loud_wave_gain", 5.0)), 1.0, float(cfg.get("loud_wave_max", 2.5)))
 
 
 ## W3a: where a wave starts: a point on the roads ROAD_MIN..ROAD_MAX (wanderers WANDER_MIN..WANDER_MAX) metres

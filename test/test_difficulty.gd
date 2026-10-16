@@ -106,8 +106,8 @@ func test_every_multiplier_reaches_its_rule() -> void:
 		sim.director.heat = float(sim.director.cfg["group_at"])
 		sim.director._check = 0.0
 		var wave := sim.director.tick(0.0, sim.noise, true, sim.horde)
-		eq(int(wave["size"]), sim.difficulty.count("night_wave_size", int(sim.director.cfg["group"]), 1),
-				id + " actual night heat wave")
+		eq(int(wave["size"]), roundi(sim.difficulty.count("night_wave_size", int(sim.director.cfg["group"]), 1) * float(wave["loud"])),
+				id + " actual night heat wave (F4: times how loud the machine is)")
 
 		sim.skills.xp["strength"] = 50.0
 		sim.player.damage(1000.0, "test")

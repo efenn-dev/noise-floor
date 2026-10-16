@@ -137,6 +137,8 @@ class Turret:
 	var cooldown := 0.0
 	var target := -1  # zombie id it's aiming at, -1 if none
 	var shots := 0
+	var kills := 0  # F4: zombies it has killed
+	var fed := 0    # F4: rounds a belt, a hopper or a machine has handed it (not your hands)
 
 	func accepts(item: String) -> bool:
 		return item == ammo_item and ammo < cap
@@ -317,6 +319,7 @@ func tick(dt: float) -> void:
 			var t: Turret = turrets.get(cell + DIRS[bin.facing])
 			if t != null and t.accepts(bin.item):
 				t.ammo += 1
+				t.fed += 1
 				bin.take_one()
 
 
@@ -439,6 +442,7 @@ func _give(to: Vector2i, from: Vector2i, item: String) -> bool:
 		if not t.accepts(item):
 			return false
 		t.ammo += 1  # turrets take ammo from a belt on any side
+		t.fed += 1
 		return true
 	if bins.has(to):
 		var bin: Bin = bins[to]

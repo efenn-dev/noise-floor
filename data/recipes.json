@@ -57,6 +57,12 @@
 		"in": { "metal_plate": 1 },
 		"out": { "ammo_casing": 10 }
 	},
+	"press_rounds": {
+		"name": "Rifle rounds",
+		"time": 4.0,
+		"in": { "ammo_casing": 10, "scrap_metal": 1 },
+		"out": { "ammo_standard": 10 }
+	},
 	"press_bolts": {
 		"name": "Crossbow bolts",
 		"station": "workbench",

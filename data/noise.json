@@ -43,7 +43,7 @@
 		"group": 4,
 		"horde": 8,
 		"heat_per_zombie": 5,
-		"lure_time": 120
+		"lure_time": 120, "loud_wave_gain": 5.0, "loud_wave_max": 2.5
 	},
 	"infamy": {
 		"one_off_floor": 40,

@@ -250,6 +250,8 @@ func test_press_makes_repair_kits() -> void:
 	eq(m.recipe_id, "press_casings", "on to ammo casings (M14)")
 	eq(m.input.get("nails", 0), 0, "the nails it held came back to you")
 	sim.cycle_recipe(Vector2i(0, 0))
+	eq(m.recipe_id, "press_rounds", "on to rifle rounds (F4)")
+	sim.cycle_recipe(Vector2i(0, 0))
 	eq(m.recipe_id, "press_bolts", "on to crossbow bolts (M15)")
 	sim.cycle_recipe(Vector2i(0, 0))
 	eq(m.recipe_id, "press_wall_panel", "and wall panels (M15)")
