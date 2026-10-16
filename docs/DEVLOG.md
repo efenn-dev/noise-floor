@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — F5 Loudness as a puzzle, part 1: see how far it's heard, muffle it, box it in, rest it at night
+
+Emmitt: "start F5". The roadmap: a player should look at a noisy base and see three ways to quiet it. Part 1 makes the noise visible and gives three of the ways. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **See it before you build it:** placing anything that makes noise now shows how far zombies will hear it there. On the build line: "Loudness 60: zombies hear it 200 m off at night, 100 m by day". On the ground: a blue ring (night) and an orange ring (day). On the right: a small top-down **heard map** of both rings to scale, north up, so the walls around show as dents (in the middle of town the sound escapes along the streets and the houses stop the rest). It's the zombies' own rule: the leakiest direction, walls included, a cold winter night carries further, and the difficulty's hearing counts. Looking at a built machine or generator says how far it's heard too.
+- **Muffle it, then box it in:** U fits a muffler (-15) as before; U again now fits a **sound box** over it (-12 more, 2 wall panels, 5% slower), on machines and generators. A smelter goes 60 -> 45 -> 33: heard 200 m -> 35 m -> 9 m by night in the open. The look-at line says what U does next.
+- **Wall it in properly:** a new **soundproof wall** (Base group: 4 planks, 6 nails, 2 metal plates) stops twice the sound of a plain wall. Boxing a generator in with them is the strongest fix.
+- **Rest it at night:** a new **dusk timer** (Power group, cheap, no milestone) stands by a power pole and switches off the machines on that power line from dusk to dawn, when zombies hear furthest; the generator keeps running for lights, fences and turrets and goes quiet if nothing else needs it. It's a sensor ("Machines off" is also a new action any sensor can pick), and the base log says "night, machines off" and "morning, machines back on".
+- **Build menu fix:** pieces with a long cost (the Hub, the salvager, the rain collector, both new pieces) had no picture: the button squeezed it out. Every row now keeps a 26 px picture.
+
+**Try it:** `play.bat`, press B, pick the Smelter and look at the ground: the line and the heard map show it. Put walls round a spot and watch the rings dent. For the timer: B > Power > Dusk timer next to your generator's pole.
+
+**Tests:** 20,276 green (new `test_loudness.gd`: open-air radius is the formula turned round, capped at 400 m, 0 when too quiet; a wall dents the ring east, a soundproof wall twice, one for sight; a quiet sound stops at the wall; the preview is louder at night, further on a winter night, cached until the grid changes; loudness of new and built pieces with the muffler, sound box and Dampened Gears; the sound box costs, slows, saves, loads and comes back when the machine is pulled down; a boxed generator is quieter and saves; the dusk timer switches the smelter off at night (not the generator), silences it, logs it, and lets it go at dawn; the ghost shows rings for a smelter and none for a wall; the heard words; the heard map draws north up; the new pieces in the data and menus). One older test now expects U again to ask for a sound box. Soak one game-day: SOAK OK, 147 s (main under the same conditions: 151 s).
+
+**Known gaps (part 2):** outposts worth using (output brought home by belt or cart), decoys with a cost. The ground rings are 100-200 m out for a loud machine, so in first person you mostly see them once a machine is quiet: the heard map is the picture to look at.
+
+**Next:** F5 part 2.
+
 ## 2026-10-16 — F4 The loop closes, part 2: belts into the Hub, a rescue night on power, power that follows the threat, a perk pick
 
 Emmitt: "start F4 part 2". The roadmap's last F4 pieces: the Hub and radio tower pulling parts out of the factory on a schedule, and power and panels tuned against loot; plus the perk nudge his son needs (14 points earned, none spent). Code and checks by Claude Opus 5.5.

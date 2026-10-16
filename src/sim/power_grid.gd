@@ -20,7 +20,7 @@ var factory: Factory
 ## Debug/tests: every machine is powered.
 var free := false
 ## Generators: piece key -> {cans: int, fuel: float (seconds of full load left in the open can),
-##   running: bool, load: float 0..1, muffled: bool}
+##   running: bool, load: float 0..1, muffled: bool, boxed: bool (F5: a sound box over the muffler)}
 var generators: Dictionary = {}
 ## Networks after the last tick: [{keys: Array, supply: float, demand: float, brownout: bool}]
 var networks: Array = []
@@ -178,13 +178,14 @@ func tick(dt: float, daylight: float) -> void:
 ## Running generators, as noise sources: {pos, loudness, key, kind}.
 func noise_sources() -> Array:
 	var out := []
-	var cut := float(data.noise["muffler"]["cut"])
 	var quiet := skills.bonus("machine_quiet") if skills != null else 0.0  # Dampened Gears (once, not per generator)
 	for key: String in generators:
 		var g: Dictionary = generators[key]
 		if g["running"]:
 			var id: String = build.pieces[key]["id"]
-			out.append({"pos": build.piece_center(key), "loudness": maxf(0.0, data.buildables[id]["loudness"] - (cut if g["muffled"] else 0.0) - quiet),
+			var cut := (float(data.noise["muffler"]["cut"]) if g["muffled"] else 0.0) \
+					+ (float(data.noise["sound_box"]["cut"]) if g.get("boxed", false) else 0.0)  # F5: the sound box
+			out.append({"pos": build.piece_center(key), "loudness": maxf(0.0, data.buildables[id]["loudness"] - cut - quiet),
 					"key": key, "kind": id})
 	return out
 
@@ -198,7 +199,7 @@ func take_refund(key: String) -> int:
 
 func _on_added(key: String) -> void:
 	if build.kind_of(build.pieces[key]["id"]) == "generator":
-		generators[key] = {"cans": 0, "fuel": 0.0, "running": false, "load": 0.0, "muffled": false}
+		generators[key] = {"cans": 0, "fuel": 0.0, "running": false, "load": 0.0, "muffled": false, "boxed": false}
 	_dirty = true
 
 

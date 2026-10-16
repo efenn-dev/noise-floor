@@ -68,6 +68,8 @@ func refresh() -> void:
 	var b: Dictionary = sim.data.buildables[sim.build.pieces[sensor_key]["id"]]
 	var watches := "sees zombies within %d m (walls and closed doors block it)" % int(b["range"]) if b["sense"] == "motion" \
 			else "hears sounds of %d or more within %d m (not your machines' hum)" % [int(sim.data.defense["sensors"]["noise_threshold"]), int(b["range"])]
+	if b["sense"] == "night":  # F5: the dusk timer
+		watches = "on from dusk to dawn"
 	_head.text = "%s · %s" % [b["name"], watches]
 	_state.text = _state_text()
 	for c in _actions.get_children():

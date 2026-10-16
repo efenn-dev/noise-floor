@@ -413,12 +413,13 @@ func status_text() -> String:
 	elif kind == "generator":
 		var g: Dictionary = sim.power.generators[target_key]
 		var net := sim.power.network_of(target_key)
-		var loud: float = sim.data.buildables["generator"]["loudness"] - (float(sim.data.noise["muffler"]["cut"]) if g["muffled"] else 0.0)
+		var loud := sim.loudness_of("generator", target_key)
+		var boxed := bool(g.get("boxed", false))
 		lines.append("Generator · %s · %d gas cans + %ds in the tank · loudness %d%s" % [
 				"running at %d%%" % roundi(g["load"] * 100.0) if g["running"] else "idle", g["cans"], roundi(g["fuel"]),
-				roundi(loud), " (muffled)" if g["muffled"] else ""])
-		lines.append(_network_line(net))
-		lines.append("[E] load gas cans%s" % ("" if g["muffled"] else "   [U] fit muffler (%s)" % _list(sim.data.noise["muffler"]["cost"])))
+				roundi(loud), _muffle_tag(g["muffled"], boxed)])
+		lines.append(_network_line(net) + "   " + _heard_line(target_key, loud))
+		lines.append("[E] load gas cans" + _muffle_hint(g["muffled"], boxed))
 	elif kind == "stove":  # M16
 		var st: Dictionary = sim.climate.stoves[target_key]
 		lines.append("Stove · %s · %d plank%s waiting · heats %d m · loudness %d" % [
@@ -452,9 +453,10 @@ func status_text() -> String:
 		lines.append("[E] sleep here (you'll respawn here)")
 	elif f.machines.has(target_cell):
 		var m: Factory.Machine = f.machines[target_cell]
+		var m_loud := sim.noise.machine_loudness(m)
 		lines.append("%s · makes %s · %s · loudness %d%s" % [sim.data.buildables[m.id]["name"], m.recipe["name"],
-				m.status(), roundi(sim.noise.machine_loudness(m)), " (muffled)" if m.muffled else ""])
-		lines.append("in: %s   out: %s" % [_list(m.input, "empty"), _list(m.output, "empty")])
+				m.status(), roundi(m_loud), _muffle_tag(m.muffled, m.boxed)])
+		lines.append("in: %s   out: %s   %s" % [_list(m.input, "empty"), _list(m.output, "empty"), _heard_line(target_key, m_loud)])
 		if m.watts > 0.0:
 			lines.append("needs %d W · %s" % [roundi(m.watts), _network_line(sim.power.network_of(target_key))])
 		var names := PackedStringArray()
@@ -463,8 +465,7 @@ func status_text() -> String:
 		var hint := "[E] take output, load %s" % ", ".join(names)
 		if sim.data.buildables[m.id]["recipes"].size() > 1:
 			hint += "   [R] make something else"
-		if not m.muffled:
-			hint += "   [U] fit muffler (%s)" % _list(sim.data.noise["muffler"]["cost"])
+		hint += _muffle_hint(m.muffled, m.boxed)
 		lines.append(hint)
 	elif f.belts.has(target_cell):
 		lines.append("Belt · %d items" % f.belts[target_cell].items.size())
@@ -519,6 +520,34 @@ func keys() -> PackedStringArray:
 func _append_repair(lines: PackedStringArray, piece: Dictionary, b: Dictionary) -> void:
 	if piece["hp"] < b["hp"]:
 		lines.append("[T] repair (%s)" % _list(sim.repair_cost(target_key)))
+
+
+## F5: " (muffled)" / " (muffled, boxed in)" after a loudness.
+func _muffle_tag(muffled: bool, boxed: bool) -> String:
+	return " (muffled, boxed in)" if boxed else (" (muffled)" if muffled else "")
+
+
+## F5: what U does next on a machine or generator: fit a muffler, then a sound box over it.
+func _muffle_hint(muffled: bool, boxed: bool) -> String:
+	if boxed:
+		return ""
+	var tier: Dictionary = sim.data.noise["sound_box"] if muffled else sim.data.noise["muffler"]
+	return "   [U] fit %s (%s)" % ["sound box" if muffled else "muffler", _list(tier["cost"])]
+
+
+## F5: "heard 120 m at night, 60 m by day": how far zombies hear it through its leakiest side, walls included.
+func _heard_line(key: String, loudness: float) -> String:
+	var pv := sim.heard_preview(sim.build.piece_center(key), loudness)
+	return heard_words(SimWorld.heard_far(pv["night"]), SimWorld.heard_far(pv["day"]))
+
+
+## F5: the words for a pair of heard distances (shared with the build ghost's line).
+static func heard_words(night: float, day: float) -> String:
+	if night >= NoiseField.HEARD_MAX - 1.0 and day >= NoiseField.HEARD_MAX - 1.0:
+		return "zombies hear it across the map, day and night"
+	if night >= NoiseField.HEARD_MAX - 1.0:
+		return "zombies hear it across the map at night, %d m by day" % roundi(day)
+	return "zombies hear it %d m off at night, %d m by day" % [roundi(night), roundi(day)]
 
 
 func _network_line(net: Dictionary) -> String:

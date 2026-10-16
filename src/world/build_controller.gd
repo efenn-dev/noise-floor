@@ -5,7 +5,9 @@ extends Node3D
 ## menu (B) or a hotbar key (1-9, 0), and Esc turns it off; the mouse wheel steps through PIECES (the order
 ## the build menu lists them in). R turns the piece: walls move to the next edge, belts and machines turn to
 ## face the next way (default: facing away from you). Left-click builds, right-click removes the piece you're
-## looking at (full refund). F3: hold left-click and drag to build a straight row.
+## looking at (full refund). F3: hold left-click and drag to build a straight row. F5: for anything that makes noise,
+## rings on the ground round the ghost show how far zombies will hear it: blue at night, orange by day, dented by
+## the walls around it (SimWorld.heard_preview), and the HUD says it in metres.
 
 const REACH := 8.0
 const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "press", "rain_collector",
@@ -23,7 +25,9 @@ const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "
 		# M17a: unlocked by the water tower
 		"water_tap",
 		# F3: belt routing
-		"splitter", "merger"]
+		"splitter", "merger",
+		# F5: quieting a base
+		"soundproof_wall", "dusk_timer"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
 
@@ -46,6 +50,13 @@ var last_message := ""
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ghost_nose: MeshInstance3D  # marks the front of belts and machines
+var _rings: MeshInstance3D  # F5: the heard-radius rings
+var _rings_mesh: ImmediateMesh
+var _rings_shown: Dictionary = {}  # the preview the rings were last drawn from
+## F5: the heard-radius preview for the piece being placed ({} for a quiet piece): see SimWorld.heard_preview.
+var heard: Dictionary = {}
+const NIGHT_RING := Color(0.45, 0.6, 1.0, 0.9)
+const DAY_RING := Color(1.0, 0.6, 0.2, 0.9)
 ## F3 (building like Satisfactory): hold the place button and drag to lay a straight run ("zoop") of up to
 ## ZOOP_MAX pieces: foundations, walls along their edge, belts facing the way you drag. Release to build.
 const ZOOP_MAX := 32
@@ -73,6 +84,17 @@ func setup(p_sim: SimWorld, p_camera: Camera3D, p_exclude: Array[RID]) -> void:
 	_ghost_nose.mesh = nose
 	_ghost_nose.material_override = _ghost_mat
 	_ghost.add_child(_ghost_nose)
+	_rings_mesh = ImmediateMesh.new()
+	_rings = MeshInstance3D.new()
+	_rings.mesh = _rings_mesh
+	_rings.top_level = true
+	var rings_mat := StandardMaterial3D.new()
+	rings_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rings_mat.vertex_color_use_as_albedo = true
+	rings_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_rings.material_override = rings_mat
+	_rings.visible = false
+	add_child(_rings)
 
 
 func piece() -> String:
@@ -85,11 +107,13 @@ func set_active(on: bool) -> void:
 	last_message = ""
 	if not on:
 		_ghost.visible = false
+		_rings.visible = false
 
 
 func select(index: int) -> void:
 	piece_index = clampi(index, 0, PIECES.size() - 1)
 	last_message = ""
+	heard = {}  # F5: worked out again for the new piece when the ghost shows
 
 
 ## S3: picks a piece by id (the hotbar and the build menu). Unknown ids are ignored.
@@ -122,6 +146,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(_delta: float) -> void:
 	if active:
 		update_aim()
+		_rings.visible = _ghost.visible and not heard.is_empty()  # F5
 
 
 func try_place() -> String:
@@ -313,6 +338,37 @@ func _show_ghost(id: String) -> void:
 	_ghost_nose.visible = sim.build.is_object(id)
 	_ghost_nose.position = Vector3(0, size.y / 2.0, -size.z / 2.0)
 	_ghost.visible = true
+	_show_heard(id)
+
+
+## F5: works out how far zombies would hear piece `id` where the ghost stands and draws the rings: one line round
+## for the night and one for the day, each point as far out as the walls that way let the sound go.
+func _show_heard(id: String) -> void:
+	if float(sim.data.buildables[id]["loudness"]) <= 0.0:
+		heard = {}
+		_rings.visible = false
+		return
+	var center := sim.build.center_for(id, aim_cell, aim_side)
+	heard = sim.heard_preview(center, sim.loudness_of(id))
+	if is_same(heard, _rings_shown):
+		return
+	_rings_shown = heard
+	var y := center.y - float(sim.data.buildables[id]["size"].y) / 2.0 + 0.08
+	_rings_mesh.clear_surfaces()
+	_rings_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for ring: Array in [[heard["night"], NIGHT_RING], [heard["day"], DAY_RING]]:
+		var radii: PackedFloat32Array = ring[0]
+		var n := radii.size()
+		for i in n:
+			var a0 := TAU * i / n
+			var a1 := TAU * (i + 1) / n
+			var r0 := maxf(radii[i], 0.5)
+			var r1 := maxf(radii[(i + 1) % n], 0.5)
+			_rings_mesh.surface_set_color(ring[1])
+			_rings_mesh.surface_add_vertex(Vector3(center.x + cos(a0) * r0, y, center.z + sin(a0) * r0))
+			_rings_mesh.surface_set_color(ring[1])
+			_rings_mesh.surface_add_vertex(Vector3(center.x + cos(a1) * r1, y, center.z + sin(a1) * r1))
+	_rings_mesh.surface_end()
 
 
 ## The cell edge straight ahead of where the player looks (north is -Z).
@@ -333,6 +389,9 @@ func status_text() -> String:
 	if aim_remove_key != "":
 		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)
+	if not heard.is_empty():  # F5
+		lines.append("Loudness %d: %s (blue ring: night, orange: day)" % [roundi(float(heard["loudness"])),
+				Interactor.heard_words(SimWorld.heard_far(heard["night"]), SimWorld.heard_far(heard["day"]))])
 	var msg := last_message if last_message != "" else aim_reason
 	if msg != "":
 		lines.append(msg)

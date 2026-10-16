@@ -7,6 +7,17 @@
 		"cut": 15,
 		"slowdown": 0.1
 	},
+	"sound_box": {
+		"_about": "F5: the second muffler tier: U again on a muffled machine or generator boxes it in. cut adds to the muffler's.",
+		"name": "Sound box",
+		"cost": {
+			"metal_plate": 6,
+			"nails": 10,
+			"wall_panel": 2
+		},
+		"cut": 12,
+		"slowdown": 0.05
+	},
 	"sounds": {
 		"footstep_walk": 22,
 		"footstep_sprint": 40,

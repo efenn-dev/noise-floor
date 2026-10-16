@@ -11,9 +11,10 @@
 		"quiet": { "name": "Quiet mode", "hold": 30, "about": "Switches off every machine and generator on this sensor's power network until it clears, plus 30 s" },
 		"floodlights": { "name": "Floodlights", "hold": 30, "radius": 20, "about": "Turns on every floodlight within 20 m (they only light at night; zombies see you further in the light)" },
 		"decoy": { "name": "Decoy", "hold": 0, "radius": 60, "about": "Sets off every charged noisemaker within 60 m, so the dead go there instead" },
-		"lock_doors": { "name": "Lock doors", "hold": 10, "radius": 12, "about": "Closes every door within 12 m and keeps them shut while it's triggered" }
+		"lock_doors": { "name": "Lock doors", "hold": 10, "radius": 12, "about": "Closes every door within 12 m and keeps them shut while it's triggered" },
+		"machines_off": { "name": "Machines off", "hold": 0, "about": "Switches off every machine on this sensor's power network while it's on; generators keep running for lights, fences and turrets" }
 	},
-	"action_order": ["quiet", "floodlights", "decoy", "lock_doors"],
+	"action_order": ["quiet", "floodlights", "decoy", "lock_doors", "machines_off"],
 	"floodlight": { "light_radius": 10 },
 	"noisemaker": { "blare": 20, "recharge": 60, "pulse": 0.5 },
 	"bear_trap": { "pin": 15 },

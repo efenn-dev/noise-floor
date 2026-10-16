@@ -30,6 +30,7 @@ class Machine:
 	var crafting := false
 	var crafted := 0     # crafts finished, ever
 	var muffled := false
+	var boxed := false     # F5: a sound box over the muffler (the second tier)
 	var time_scale := 1.0  # a muffler slows the machine down
 	var watts := 0.0       # power it draws while working (0 = needs no power)
 	var powered := true    # set by PowerGrid each tick; an unpowered machine does nothing

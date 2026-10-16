@@ -164,6 +164,7 @@ var _fog_started := false
 var _title_camera: Camera3D  # set while the title screen shows its dusk view
 var _hud: Label
 var _build_label: Label
+var heard_map: HeardMap  # F5
 var _materials_hud: Label
 var view_feel: ViewFeel  # V3: bob, sway, shake, hit marker, red edge, impact puffs
 var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
@@ -1893,6 +1894,9 @@ func _build_hud() -> void:
 	_build_label = _outlined_label(20)
 	_build_label.position = Vector2(16, 52)
 	layer.add_child(_build_label)
+	heard_map = HeardMap.new()  # F5: the shape of how far the piece you're placing is heard
+	layer.add_child(heard_map)
+	heard_map.setup(builder)
 	_materials_hud = _outlined_label(18)
 	_materials_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
 	_materials_hud.grow_horizontal = Control.GROW_DIRECTION_BEGIN
