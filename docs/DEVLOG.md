@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P6 Doors you can swap: taking pieces down says so, and a door goes in the doorway you look at
+
+Emmitt's son pulled down a house's front door, built his own, "used it and it disappeared", then couldn't build a new one. He got frustrated. In the game scene, two things went wrong:
+- Right-click in build mode takes a piece down without a word, so clicking a door in build mode just made it vanish (its materials went quietly back into a crate).
+- A wall, door or window goes on the far edge of the cell you aim at. Looking at an empty doorway, the look ray went through it and hit the floor or wall inside, so the ghost sat on a wall inside the house and said "Already built". Only aiming at the lawn just outside worked.
+
+**Built:**
+- **Taking something down says what came down and where its materials went:** "Took down the Door: 6 Plank, 8 Nails back in the crate" (or "in your pockets"; a town door gives 2 planks).
+- **A door goes in the doorway you look through:** with a wall, door or window picked, looking through a gap in a wall line (walls on both sides, low enough to walk through) aims at that gap (`BuildController.gap_on_ray`, `is_wall_gap`). The end of a wall line and open ground keep the old aim.
+- The build line no longer errors the frame after a removal (the piece's body is still in the physics world until it's freed; `update_aim` now ignores it).
+- **His logs come to us:** the portable launcher (`update.ps1`) copies the PC's session logs to `logs\<computer name>\` in the family folder at each start (new or changed logs only; a drive it can't write to is skipped). The first start after this update brings in the new launcher; from the start after that, his logs appear in R:/Reserve/Noise Floor/logs/.
+
+**Try it:** `play.bat`, walk to a house, B, pick Door, look at its front door, right-click (the message says what came back), keep looking at the empty doorway (green ghost in it) and left-click. Esc, then E opens it.
+
+**Tests:** 20,592 green (new `test_door_swap_world.gd`, real game scene: take the town door down, see the message, the ghost sits in the empty doorway, a new door goes in, E opens it and it's still there, take it down for its full cost and build again; the end of a wall line isn't a gap). Soak 1 day OK, 143 s.
+
+**Known gaps:** what "used it and it disappeared" was exactly is a best guess (build mode right-click) until his logs arrive. Right-click still takes a piece down with no undo.
+
+**Next:** the FPS arms (Davlet pack, bought), then PT.
+
 ## 2026-10-16 — P5 Gathering by hand: the first rung before the machines
 
 Emmitt: "how should we make users gather materials for things like the smelter?" The answer, the Satisfactory way: a ladder. You start with the crate and loot; you gather raw materials by hand at the world's resource nodes (slow, and you stand there making noise); then you build the node's machine and bring its output home by belt or cart. The middle rung was missing: a resource node could only be worked by its machine, which needs a milestone and power. Code and checks by Claude Opus 5.5.

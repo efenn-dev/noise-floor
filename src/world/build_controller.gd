@@ -283,11 +283,24 @@ func try_remove() -> String:
 	if aim_remove_key == "":
 		last_message = "Look at something you built"
 	else:
-		var refund := sim.stock_at(sim.build.piece_center(aim_remove_key))
+		var key := aim_remove_key
+		var piece: Dictionary = sim.build.pieces[key]
+		var back := {} if sim.build.is_broken(key) else sim.build.refund_for(piece)
+		var refund := sim.stock_at(sim.build.piece_center(key))
 		refund.refund_to_storage = true  # refunds go back in the crate, not your back
-		last_message = sim.build.remove(aim_remove_key, refund)
+		last_message = sim.build.remove(key, refund)
+		if last_message == "":
+			sim.add_message(removed_words(String(sim.data.buildables[piece["id"]]["name"]), back, not refund.crates.is_empty()), 5.0)
 		update_aim()
 	return last_message
+
+
+## P6 (playtest: a door "disappeared"): right-click in build mode takes a piece down without a word, so say
+## what came down and where its materials went.
+func removed_words(name: String, back: Dictionary, to_crate: bool) -> String:
+	if back.is_empty():
+		return "Took down the %s" % name
+	return "Took down the %s: %s back %s" % [name, _cost_text(back), "in the crate" if to_crate else "in your pockets"]
 
 
 ## Raycasts from the camera and works out the snapped cell/edge, whether it's buildable, and the ghost.
@@ -302,7 +315,8 @@ func update_aim() -> void:
 		_ghost.visible = false
 		return
 	var collider: Object = hit["collider"]
-	if collider != null and collider.has_meta("piece_key"):
+	# A piece taken down this frame is still in the physics world until it's freed: not something to remove.
+	if collider != null and collider.has_meta("piece_key") and sim.build.pieces.has(collider.get_meta("piece_key")):
 		aim_remove_key = collider.get_meta("piece_key")
 	var point: Vector3 = hit["position"]
 	var normal: Vector3 = hit["normal"]
@@ -310,9 +324,12 @@ func update_aim() -> void:
 		point += normal * 0.05  # hit a side: build on the near side of it
 	var id := piece()
 	var cell := BuildGrid.world_to_cell(point)
+	var gap := gap_on_ray(id, from, point)  # P6: a door goes in the doorway you look through
+	if not gap.is_empty():
+		cell = gap[0]
 	if cell != aim_cell:
 		_manual_turn = false  # P4: a new cell snaps again
-	var side := snap_side(id, cell, (_facing_side(forward) + turns) % 4)
+	var side: int = gap[1] if not gap.is_empty() else snap_side(id, cell, (_facing_side(forward) + turns) % 4)
 	if cell != aim_cell or side != aim_side:
 		last_message = ""  # moved on: drop the old "can't build" message
 	aim_cell = cell
@@ -324,6 +341,43 @@ func update_aim() -> void:
 	_show_ghost(id)
 	if dragging:
 		_show_run()  # F3
+
+
+## P6 (playtest: a door taken out of a house wouldn't go back): a wall, door or window goes on the far edge of
+## the cell you aim at, so looking through an empty doorway aimed past it, at a wall inside ("Already built").
+## Looking through a gap in a wall line (walls on both sides of it, low enough to walk through) with one of
+## those picked aims at the gap instead. Returns [cell, side], or [] to keep the usual aim.
+func gap_on_ray(id: String, from: Vector3, to: Vector3) -> Array:
+	if not sim.build.is_edge(id) or sim.build.kind_of(id) in BuildGrid.GROUND_EDGES:
+		return []
+	var top: float = (sim.data.buildables[id]["size"] as Vector3).y
+	var steps := ceili(from.distance_to(to) / 0.1)
+	var last := BuildGrid.world_to_cell(from)
+	for i in range(1, steps + 1):
+		var p := from.lerp(to, float(i) / steps)
+		var c := BuildGrid.world_to_cell(p)
+		if c == last:
+			continue
+		var d := c - last
+		if absi(d.x) + absi(d.y) == 1 and p.y > 0.0 and p.y < top:
+			var side: int = BuildGrid.Side.EAST if d.x > 0 else BuildGrid.Side.WEST if d.x < 0 					else BuildGrid.Side.SOUTH if d.y > 0 else BuildGrid.Side.NORTH
+			if is_wall_gap(last, side):
+				return [last, side]
+		last = c
+	return []
+
+
+## An empty edge with a wall, door or window on both sides of it along the same line.
+func is_wall_gap(cell: Vector2i, side: int) -> bool:
+	var edge := BuildGrid.canonical_edge(cell, side)
+	if sim.build.pieces.has(BuildGrid.key_for_wall_edge(edge[0], edge[1])):
+		return false
+	var along := Vector2i(0, 1) if edge[1] == BuildGrid.Side.WEST else Vector2i(1, 0)
+	for n: Vector2i in [edge[0] - along, edge[0] + along]:
+		var key := BuildGrid.key_for_wall_edge(n, edge[1])
+		if not sim.build.pieces.has(key) or not sim.build.kind_of(sim.build.pieces[key]["id"]) in ["wall", "door", "window"]:
+			return false
+	return true
 
 
 ## True if a town building, car, the player, a zombie or anything else on the WORLD layer overlaps the piece.
