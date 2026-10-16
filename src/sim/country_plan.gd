@@ -5,7 +5,8 @@ extends RefCounted
 ## the open fields, a belt of trees along the map's edge (the world ends in forest, not a cliff), and jams of
 ## wrecked cars on the highway. Everything keeps clear of the roads, the old town and park, and the areas the
 ## next phases fill (downtown, the new streets, the farms, the hunting cabin).
-## generate(seed) -> {"trees": [{pos, scale, yaw, kind}], "props": [{kind, pos, yaw, scale}], "wrecks": [{type, pos, yaw}]}
+## generate(seed) -> {"trees": [{pos, scale, yaw, kind}], "props": [{kind, pos, yaw, scale}], "wrecks": [{type, pos, yaw, id, table}]}
+## W3d: each wreck has a searchable trunk: "highway_wreck" loot on the highway, "car_trunk" in the junkyard.
 ## A tree's kind is "tree" (the town's leafy tree), "pine_tree" or "pine_tree_small"; props are rocks and bushes
 ## in the woods and fields, guardrails down both sides of the highway (open where Market Street joins it),
 ## concrete barriers across every road where it leaves the map, and a road sign at each junction.
@@ -61,7 +62,11 @@ static func generate(seed_value: int, keep_out: Array = []) -> Dictionary:
 		_try(trees, p, rng, true)
 	var props := _props(rng, trees)
 	var wrecks := _wrecks(rng)
+	var on_highway := wrecks.size()
 	_junkyard(rng, props, wrecks)
+	for i in wrecks.size():  # W3d: every wreck's trunk can be searched (SimWorld.place_country)
+		wrecks[i]["id"] = "country_wreck_%d" % i
+		wrecks[i]["table"] = "highway_wreck" if i < on_highway else "car_trunk"
 	return {"trees": trees, "props": props, "wrecks": wrecks}
 
 

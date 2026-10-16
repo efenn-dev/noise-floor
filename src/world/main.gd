@@ -11,7 +11,7 @@ extends Node3D
 ##   --demo-outpost        F1: an extractor on the first node of each kind (salvager, water pump, fuel pump, sawmill), power free
 ##   --demo-logistics      F3: a loaded belt line on bare ground ahead, through a splitter into three crates
 ##   --zoop=N              F3: with --build, hold a drag preview: a run of N pieces ending where you aim
-##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber; W3b downtown, police, gas; W3c east)
+##   --at=PLACE            W3a: stand at a named spot on the bigger map (AT_PLACES: market, south, highway, woods, farms, west, junkyard, timber; W3b downtown, police, gas; W3c east; W3d farm, cabin)
 ##                        (0,0 = north, level; +yaw turns left, +pitch looks up)
 ##   --flashlight          start with the flashlight on
 ##   --graphics=Q          V1: low, medium or high for this run only (not saved), for screenshots
@@ -73,6 +73,8 @@ const AT_PLACES := {
 	"farms": [Vector3(-170, 0, 100), 0.0, 0.0],       # the farm lane by the county road
 	"west": [Vector3(-60, 0, 0), 0.0, 0.0],           # West Street, looking north
 	"east": [Vector3(60, 0, 10), 0.0, 0.0],           # W3c: East Street, looking north
+	"farm": [Vector3(-256, 0, 84), 180.0, -4.0],      # W3d: the west farm's drive: farmhouse right, barn left
+	"cabin": [Vector3(-207, 0, -310), 90.0, -4.0],    # W3d: by the hunting cabin, looking west at its door
 	"junkyard": [Vector3(150, 0, -46), 15.0, -12.0],  # F1: the junkyard's scrap heaps, from the lane
 	"timber": [Vector3(-114, 0, -170), 75.0, -14.0],  # F1: a timber stand in the woods, from the track
 	"downtown": [Vector3(20, 0, 58), 12.0, -4.0],     # W3b: on Market Street, the grocery ahead and to the right
@@ -108,6 +110,10 @@ var downtown_view: DowntownView
 var suburbs: Dictionary = {}  # W3c: SuburbPlan (West and East Street) less any houses an older save had built over
 var suburb_view: TownView     # W3c: their roofs
 var suburb_street_view: StreetView  # W3c: their mailboxes, trash cans and trees
+var rural: Dictionary = {}  # W3d: RuralPlan (the farms and the hunting cabin) less any buildings an older save had built over
+var rural_town_view: TownView  # W3d: the farmhouses' and cabin's roofs
+var rural_view: RuralView  # W3d: the barns' roofs and the fixtures
+var rural_scatter: CountryView  # W3d: corn, field fences, yard hay
 var road_view: RoadView  # W3a: the bigger map's new roads
 var country_view: CountryView  # W3a: woods, field trees, highway wrecks, the map's edge
 var country: Dictionary = {}
@@ -232,6 +238,7 @@ func _ready() -> void:
 	_build_park(not (_loaded and SaveGame.holds_park(save)))  # M17a: a pre-park save gets the park laid fresh
 	_build_downtown(not (_loaded and SaveGame.holds_downtown(save)))  # W3b: likewise downtown
 	_build_suburbs(_loaded and SaveGame.holds_suburbs(save), save)  # W3c: and West and East Street
+	_build_rural(_loaded and SaveGame.holds_rural(save), save)  # W3d: and the farms and the hunting cabin
 	_build_country()  # W3a: the bigger map round the town (nothing in it is saved: the same land every game)
 	_build_player(args)
 	_build_building(args)
@@ -707,6 +714,9 @@ func apply_season(season: String) -> void:
 		suburb_view.apply_season(season)
 	if suburb_street_view != null:
 		suburb_street_view.apply_season(season)
+	if rural_town_view != null:
+		rural_town_view.apply_season(season)
+		rural_view.apply_season(season)
 	if town_view != null:
 		town_view.apply_season(season)
 	if park_view != null:
@@ -728,6 +738,8 @@ func indoor_fog_target() -> float:
 		return 1.0  # W3b: inside a shop
 	if suburb_view != null and suburb_view.is_under_roof(cam.global_position):
 		return 1.0  # W3c: in a West or East Street house
+	if rural_view != null and (rural_view.is_under_roof(cam.global_position) or rural_town_view.is_under_roof(cam.global_position)):
+		return 1.0  # W3d: in a barn, a farmhouse or the cabin
 	return 1.0 if town_view.is_under_roof(cam.global_position) else 0.0
 
 
@@ -1118,6 +1130,8 @@ func _apply_save(save: Dictionary) -> void:
 		sim.spawn_downtown_zombies(downtown)  # W3b: likewise downtown
 	if not SaveGame.holds_suburbs(save):
 		sim.spawn_house_zombies(suburbs)  # W3c: and West and East Street's
+	if not SaveGame.holds_rural(save):
+		_spawn_rural_zombies()  # W3d: and the countryside's
 	player.position = sim.player_pos
 	for car: CarBody in cars.values():
 		car.place_from_sim()  # parked where you left it
@@ -1283,6 +1297,7 @@ func _build_country() -> void:
 		keep_out.append(Vector2(n["pos"].x, n["pos"].z))
 		keep_out.append(Vector2(n["prop_pos"].x, n["prop_pos"].z))
 	country = CountryPlan.generate(sim.seed_value, keep_out)
+	sim.place_country(country)  # W3d: the wrecks' trunks can be searched
 	country_view = CountryView.new()
 	country_view.name = "CountryView"
 	add_child(country_view)
@@ -1339,6 +1354,45 @@ func _build_suburbs(held: bool, save: Dictionary) -> void:
 	suburb_street_view.setup(sim, {"items": suburbs["items"],
 			"markings": {"dashes": [], "dash_size": Vector3(0.15, 0.02, 1.0), "kerbs": [], "kerb_height": 0.1}})
 	sim.know_houses({"houses": town["houses"] + suburbs["houses"]})  # P3: the session log names them too
+
+
+## W3d: the two farms and the hunting cabin (RuralPlan), like _build_suburbs: laid round an older save's own pieces
+## unless the save holds them, the farmhouses' fridges and cupboards and the cabin's cupboard (as in _build_town),
+## their roofs (a TownView), the barns' roofs and the fixtures (RuralView), and the corn, field fences and yard hay
+## (a second CountryView, no edge wall).
+func _build_rural(held: bool, save: Dictionary) -> void:
+	var full := RuralPlan.generate(sim.seed_value)
+	var taken := {}
+	if held:
+		sim.rural_skipped = Array(save.get("rural_skipped", []))
+	elif _loaded:
+		for p: Dictionary in save.get("pieces", []):
+			taken[str(p.get("key", ""))] = true
+	rural = sim.place_rural(full, not held, taken)
+	for c: Dictionary in rural["containers"]:
+		var fridge: bool = c["table"] == "fridge"
+		var box := _add_container(c["id"], c["table"], SimWorld.town_container_pos(c), Vector3(0.7, 1.6, 0.7),
+				Color(0.85, 0.85, 0.8) if fridge else Color(0.55, 0.42, 0.3))
+		var out := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)][c["side"]] as Vector2
+		_dress(box, "fridge" if fridge else "cabinet", atan2(out.x, out.y))
+	rural_town_view = TownView.new()
+	add_child(rural_town_view)
+	rural_town_view.setup(rural, sim.build)
+	rural_view = RuralView.new()
+	add_child(rural_view)
+	rural_view.setup(sim, rural)
+	rural_scatter = CountryView.new()
+	rural_scatter.name = "RuralScatter"
+	add_child(rural_scatter)
+	rural_scatter.setup({"props": rural["outdoor"]}, false)
+	sim.know_houses({"houses": town["houses"] + suburbs["houses"] + rural["houses"]})
+
+
+## W3d: a zombie in one of the farmhouses or the cabin (house-style), one in each barn, two in each field, one by
+## the cabin.
+func _spawn_rural_zombies() -> void:
+	sim.spawn_house_zombies(rural)
+	sim.spawn_park_zombies({"zombies": rural["yard_zombies"]})
 
 
 ## W3b: downtown along Market Street (DowntownPlan): the shops (pieces laid unless the save holds them), their
@@ -1485,7 +1539,7 @@ func _build_building(args: Dictionary) -> void:
 		sim.inventory.give_all({"clean_water": 1, "chips": 1, "bandage": 1})
 	build_view = BuildView.new()
 	add_child(build_view)
-	for p: Dictionary in town["pieces"] + town["factory"]["pieces"] + park.get("pieces", []) + downtown.get("pieces", []) + suburbs.get("pieces", []):
+	for p: Dictionary in town["pieces"] + town["factory"]["pieces"] + park.get("pieces", []) + downtown.get("pieces", []) + suburbs.get("pieces", []) + rural.get("pieces", []):
 		build_view.styles[TownPlan.piece_key(p)] = p["style"]  # brick, siding, plaster, factory, floor; M17a park_brick, corrugated
 	build_view.setup(sim.build)
 	builder = BuildController.new()
@@ -1626,6 +1680,7 @@ func _build_zombies(args: Dictionary) -> void:
 			sim.spawn_park_zombies(park)  # M17a: shamblers and runners in and between the warehouses
 			sim.spawn_downtown_zombies(downtown)  # W3b: in the shops and on Market Street
 			sim.spawn_house_zombies(suburbs)  # W3c: one in about a third of West and East Street's houses
+			_spawn_rural_zombies()  # W3d: in a farmhouse or the cabin, the barns, the fields
 	if args.has("zombie"):
 		var v := String(args["zombie"]).split(",")
 		for i in range(0, v.size() - 1, 2):

@@ -69,7 +69,7 @@
 			"bonuses": {"2": {"search_speed": 0.15}, "3": {"carry_kg": 10}, "4": {"quiet_all": 3}},
 			"sources": ["factory_crate"]}
 	},
-	"containers": {"kitchen": 0.05, "bathroom": 0.05, "factory_crate": 0.25, "car_trunk": 0.15, "industrial": 0.25, "hardware": 0.2, "police_desk": 0.1, "gun_locker": 0.05},
+	"containers": {"kitchen": 0.05, "bathroom": 0.05, "factory_crate": 0.25, "car_trunk": 0.15, "industrial": 0.25, "hardware": 0.2, "police_desk": 0.1, "gun_locker": 0.05, "barn": 0.15, "highway_wreck": 0.2},
 	"police_by_source": {"industrial": 3.0, "police_desk": 4.0, "gun_locker": 4.0},
 	"zombie_drop": {"default": 0.10, "runner": 0.20},
 	"zombie_uniques": {"old_pete": "petes_fire_axe"},
