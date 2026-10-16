@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — F4 The loop closes, part 2: belts into the Hub, a rescue night on power, power that follows the threat, a perk pick
+
+Emmitt: "start F4 part 2". The roadmap's last F4 pieces: the Hub and radio tower pulling parts out of the factory on a schedule, and power and panels tuned against loot; plus the perk nudge his son needs (14 points earned, none spent). Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **Belts feed the Hub:** run a belt into the Hub and it hands in parts by itself, to the first open milestone (lowest tier first) that still needs them. Anything no milestone wants stays on the belt, so the line backs up instead of losing parts. A milestone finished by belt is announced as one handed in by hand. The session log says how many parts belts handed the Hub.
+- **The rescue night runs on power:** the radio mast now needs 60 W while it broadcasts: put a generator with gas beside it (or a power pole from one). It won't start without the power for it. Only powered hours count: it needs 8 hours of signal, and if the generator runs dry the signal drops (silent, a message and the base log say so) and the hours wait. Once the 8 hours are in, the rescuers answer and come at the next 6:00, if the mast still stands. So the rescue night needs the factory's gas, at max heat, while the loudest horde of the game comes. Looking at the mast shows the signal hours.
+- **Power that follows the threat:** electric fences draw power all night, and by day only while a zombie is within 6 m (before, a fenced base burned gas all day for nothing). The repair station draws power only while it has panels and something to fix.
+- **Tuned against loot:** new `tools/balance.sh` loads the real game and adds up what the whole world's loot holds (30 gas cans in containers + 14 in car tanks, 537 nails, 26 wall panels) against what a defended base burns (about 5 cans a night for 2 floodlights, 6 fences and a repair station; 5 nails per shambler; 4 panels per wall rebuilt). With the new power rules gas, nails and panels each run out from loot around night 2-4 for a base that fights, which is the roadmap's target; the old rules burned the world's gas in two days on fences alone. Report: `docs/perf/balance-2026-10-16-f4.md`.
+- **The dawn perk pick:** once a day, in daylight with no zombie within 25 m and perk points to spend, a "A new day. Pick a perk!" screen shows three big cards, one from each tree (the lowest-rank perks first, changing day to day). Click one to take it; with points left it shows three more; "Later" or Esc closes it till tomorrow. A zombie coming within 12 m closes it. K still opens the full skills screen.
+- Flag: `--perk-pick` (the pick with three points). `--mast` now puts a fuelled generator beside the mast.
+
+**Try it:** `play.bat`: load his save; if he has perk points, the cards come up the first daylight moment it's safe. For the Hub: run a belt from a crate or machine into the Hub's side.
+
+**Tests:** 20,159 green (new `test_loop_schedule.gd`: a belt hands the Hub a plank for the first open milestone and keeps a part nobody needs; a belt finishes a milestone and unlocks its machines; the broadcast won't start without power, starts with a generator next door, draws its watts and is heard; no power: hours wait, silent, you're told; enough hours: rescue at the next 6:00 even if power goes after; signal hours save and load; a fallen mast loses them; an idle mast draws nothing; a fence wants power by night or with a zombie near, not otherwise; a repair station with panels and nothing to fix wants none and mends a damaged wall; the perk offer is one per tree, lowest rank first, changes by day, skips a maxed tree; the pick waits for points, daylight, once a day and no zombie near; the screen spends points and closes when they're gone). Two older rescue tests now give the mast power and a night of signal. Soak one game-day: SOAK OK, 137 s (main under the same conditions: 142 s).
+
+**Known gaps:** the Hub takes parts from a belt but not from a hopper; the perk pick has no picture per perk (text cards); `tools/balance.sh` works the night's draw out from the data rather than playing a night, so it's a budget, not a measurement of a real siege.
+
+**Next:** his next session log against the F4 measure (builds > 0, waves sent > 0, a belt-fed turret, the base standing at dawn), then F5 loudness as a puzzle.
+
 ## 2026-10-15 — F4 The loop closes, part 1: turrets, ammo from the factory, louder bases, bigger hordes
 
 Emmitt: "merge 83 and start F4". The roadmap (#83) asks for a loop where the factory feeds the defense its own noise provokes; his son's session logs show why: three sessions on 10-15 (95 minutes), 77 zombies killed, 37 pieces of gear found, 12 waves survived, and built nothing; 14 perk points earned, none spent. Code and checks by Claude Opus 5.5.

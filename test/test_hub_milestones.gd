@@ -107,6 +107,9 @@ func test_the_rescue_broadcast() -> void:
 		if src.get("kind", "") == "radio_mast" and float(src["loudness"]) >= 100.0:
 			loud = true
 	check(loud, "and every zombie for miles hears it")
+	sim.broadcast_hours = float(sim.data.milestones["broadcast_hours"]) - 1e-6  # F4: a night of powered signal
+	sim.step()
+	check(sim.rescue_due >= 0.0, "enough signal: they heard you")
 	sim.clock.day += 1
 	sim.clock.time_of_day = 6.1
 	sim.step()
@@ -116,6 +119,7 @@ func test_the_rescue_broadcast() -> void:
 
 func test_a_fallen_mast_loses_the_broadcast() -> void:
 	var sim := _sim(20.0)
+	sim.power.free = true  # F4: the mast needs power to broadcast
 	sim.milestones.grant_all_but_final()
 	sim.milestones.deliver(sim.milestones.final_id(), _rich())
 	sim.build.place("radio_mast", Vector2i(-6, 6), BuildGrid.Side.NORTH, _rich())

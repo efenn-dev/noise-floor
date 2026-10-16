@@ -18,7 +18,7 @@
 	"noisemaker": { "blare": 20, "recharge": 60, "pulse": 0.5 },
 	"bear_trap": { "pin": 15 },
 	"tripwire": { "trigger_radius": 20 },
-	"fence": { "stun": 3, "reach": 0.7 },
+	"fence": { "stun": 3, "reach": 0.7, "arm": 6 },
 	"repair_station": { "item": "wall_panel", "cap": 20, "hp_per_panel": 50, "repairs": ["wall", "door", "barricade", "fence"] },
 	"log": { "size": 50, "attack_every": 30, "attack_radius": 8 },
 	"radio": { "item": "radio", "far": 40, "seconds": 6 }

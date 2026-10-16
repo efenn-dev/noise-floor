@@ -442,12 +442,11 @@ func status_text() -> String:
 		lines.append("[E] use it")
 	elif kind == "hub":  # F2
 		lines.append("Hub · %d of %d milestones done" % [sim.milestones.done.size(), sim.milestones.all().size()])
-		lines.append("[E] milestones: hand in parts to unlock machines")
+		lines.append("[E] milestones: hand in parts to unlock machines (a belt into it hands them in too)")
 	elif kind == "radio_mast":  # F2
-		var state := {"": "[E] start the rescue broadcast (at dusk)", "broadcasting": "BROADCASTING: hold it until dawn",
-				"rescued": "Rescued. The radio is quiet."}
+		var state := {"": "[E] start the rescue broadcast (at dusk; it needs power)", "rescued": "Rescued. The radio is quiet."}
 		lines.append("Radio mast")
-		lines.append(state.get(sim.rescue_state, ""))
+		lines.append("BROADCASTING · " + sim.broadcast_status() if sim.rescue_state == "broadcasting" else state.get(sim.rescue_state, ""))
 	elif kind == "bed":
 		lines.append("Bed · energy %d" % roundi(sim.player.energy))
 		lines.append("[E] sleep here (you'll respawn here)")
