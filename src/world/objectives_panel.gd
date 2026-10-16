@@ -60,9 +60,13 @@ func refresh() -> void:
 		return
 	var g := sim.guidance
 	var first_night := g.active and not g.completed
-	var defend := not first_night and g.defend_active and not g.defend_done  # F4: the second chapter
-	visible = not suppressed and (first_night or defend) and (Settings.show_objectives or force_visible)
+	var feed := not first_night and g.feed_active and not g.feed_done  # F6: the third chapter (shown over the second)
+	var defend := not first_night and not feed and g.defend_active and not g.defend_done  # F4: the second chapter
+	visible = not suppressed and (first_night or defend or feed) and (Settings.show_objectives or force_visible)
 	if not visible:
+		return
+	if feed:
+		_show_feed(g)
 		return
 	if defend:
 		_show_defend(g)
@@ -102,6 +106,23 @@ func _show_defend(g: Guidance) -> void:
 		"A Press on a foundation, with power (generator, pole, gas). E loads it with metal plates; it makes nails. R switches what it makes: bolts, rifle rounds.",
 		"Lay a belt from the Press's front to the turret (hold the button and drag). An ammo hopper in front of a turret feeds it too.",
 		"Keep it loaded through the night. The louder your base, the bigger the horde that comes.",
+	][mini(current, 3)]
+
+
+## F6: "Live off your base": water by machine, cleaned, food grown, food canned.
+func _show_feed(g: Guidance) -> void:
+	_title.text = "LIVE OFF YOUR BASE  ·  O hide"
+	var current := g.feed_step()
+	var labels := ["Collect water with a machine", "Clean it in a purifier", "Grow food in a planter", "Can it in a canner"]
+	for i in _lines.size():
+		var done := bool(g.feed_met[i]) if i < g.feed_met.size() else false
+		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
+		_lines[i].add_theme_color_override("font_color", DONE if done else (Color.WHITE if i == current else DIM))
+	_detail.text = [
+		"B, Factory: a rain collector fills with rain on its own (no power). A water pump on a farm well is faster.",
+		"A purifier on a foundation, with power. Feed it the dirty water (E, or a belt into its back).",
+		"A planter: E loads seeds and dirty water. Every harvest gives a seed back, so one seed lasts for ever.",
+		"A canner with power: two vegetables and a metal plate make two cans that never spoil. L shows what your base made.",
 	][mini(current, 3)]
 
 

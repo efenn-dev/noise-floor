@@ -2,6 +2,26 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — F6 Compact and deep, part 1: farming that lasts, bandages, tight layouts pay, "what your base made", a third goals chapter
+
+Emmitt: "start F6". The roadmap: recipes chain into what survival needs and loot runs out of, sized for a backyard factory of about twenty machines. The audit: water, warmth, gas, ammo, panels and repair kits already had a machine; food didn't last (a planter ate a seed every harvest, 24 a day, and seeds only came from loot) and bandages were loot only. Code and checks by Claude Opus 5.5.
+
+**Built:**
+- **Farming that lasts:** whatever a machine makes that its own recipe uses goes straight back into it, so a planter keeps its seed: one seed now grows for ever. Returned seeds don't count as "made".
+- **Cotton and bandages:** R on a planter switches it to cotton (2 a harvest, the seed kept); R on the canner switches it to bandages (2 cotton + 1 clean water make 2). A dropped cotton has its own little model.
+- **Tight layouts pay:** a machine fed straight from the machine behind it (its front against the next one's back, no belt) works 15% faster while the parts keep coming; the look-at line says so. A smelter pushing plates straight into a Press is now better than a belt between them.
+- **What your base made:** the base log (L) now opens with what your machines made today and yesterday ("Clean water 12, Canned food 4, Bandages 2...") and what you eat and drink in a day (about 1.3 cans of food and 2.5 clean waters on Normal), so you can see whether the base keeps you.
+- **"Live off your base"**, a third goals chapter (shown like the others on the left, O hides it): collect water with a machine, clean it in a purifier, grow food in a planter, can it in a canner. It starts when "Defend your base" is done, or from day 5 in any game, so his son gets it even if the defence goals are still open. Goals met early count.
+- Flag: `--feed[=N]` (those goals with N done).
+
+**Try it:** `play.bat --demo-farm`, then L after a minute: the machines' output shows at the top. `play.bat --feed=1` shows the new goals.
+
+**Tests:** 20,423 green (new `test_compact.gd`: a planter grows on one seed, the seed never comes out, returned seeds aren't counted as made; R switches the planter to cotton and the canner to bandages, which are real bandages; a press fed straight from a smelter is 15% faster and a belt-fed one isn't; made today and yesterday roll over at a new day, save and load, and the base log's lines say them; what you eat per day matches the data; "Live off your base" starts on day 5, moves through its goals, counts one met early without skipping, saves, finishes; the panel shows it over the defence goals). The item-model test now covers cotton (`tools/art/item_props.py -- cotton`, built with Blender here). Soak one game-day: SOAK OK, 151 and 152 s (main: 140 and 125 s; the branch runs had more fights, 22-28 kills against 15). The stress test settles it: 4.16 ms a tick on both (factory.tick +0.01 ms).
+
+**Known gaps:** cotton has no inventory picture yet (it shows as a coloured square; a Codex icon later); "what your base made" counts what was made, not what was eaten or used up; tiers and machine counts are unchanged (the audit found nothing that only makes sense at Satisfactory scale worth cutting yet).
+
+**Next:** F6 part 2 if the son's logs show he's farming (otherwise PT: Emmitt's first loud night, the gate before anything goes to friends).
+
 ## 2026-10-16 — F5 Loudness as a puzzle, part 2: hordes go where it's loudest outside, supply carts, decoys that wear out
 
 Emmitt: "start F5 part 2". The rest of F5: outposts worth using, and decoys with a cost. Code and checks by Claude Opus 5.5.

@@ -33,6 +33,9 @@ var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
 var carts: Carts  # F5: supply carts between cart stops
+## F6: what machines made yesterday (item -> count), and Factory.made as it stood when today began.
+var made_yesterday: Dictionary = {}
+var made_mark: Dictionary = {}
 var _carts_seen := 0  # carts.delivered already counted in this session's stats
 var milestones: Milestones  # F2: the Hub
 ## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
@@ -327,6 +330,9 @@ func step() -> void:
 	var defend_msg := guidance.tick_defend(clock, build, factory)  # F4: "Defend your base"
 	if defend_msg != "":
 		add_message(defend_msg, 10.0)
+	var feed_msg := guidance.tick_feed(clock, factory)  # F6: "Live off your base"
+	if feed_msg != "":
+		add_message(feed_msg, 10.0)
 	if not stats.turret_fed:
 		for t: Factory.Turret in factory.turrets.values():
 			if t.fed > 0:
@@ -2762,6 +2768,51 @@ func make_cart_home(key: String) -> String:
 	return carts.make_home(key)
 
 
+## F6: what your machines have made since today began: item -> count.
+func made_today() -> Dictionary:
+	return _made_since(made_mark)
+
+
+func _made_since(mark: Dictionary) -> Dictionary:
+	var out := {}
+	for item: String in factory.made:
+		var n := int(factory.made[item]) - int(mark.get(item, 0))
+		if n > 0:
+			out[item] = n
+	return out
+
+
+## F6: the base log screen's supplies lines: what your machines made today and yesterday (the most first, up to
+## eight things), and what you eat and drink in a day, so you can see whether the base keeps you.
+func supplies_lines() -> PackedStringArray:
+	var out := PackedStringArray()
+	out.append("Your machines made today: " + _made_words(made_today()))
+	out.append("Yesterday: " + _made_words(made_yesterday))
+	var need := needs_per_day()
+	out.append("You eat about %.1f cans of food and drink about %.1f clean waters a day." % [need["cans"], need["waters"]])
+	return out
+
+
+func _made_words(made: Dictionary) -> String:
+	if made.is_empty():
+		return "nothing yet"
+	var items := made.keys()
+	items.sort_custom(func(a: String, b: String) -> bool: return made[a] > made[b] or (made[a] == made[b] and a < b))
+	var parts := PackedStringArray()
+	for item: String in items.slice(0, 8):
+		parts.append("%s %d" % [data.item_name(item), made[item]])
+	return ", ".join(parts) + (" and more" if items.size() > 8 else "")
+
+
+## F6: what you eat and drink in a game day: food and water points, and that in cans of food and clean waters.
+func needs_per_day() -> Dictionary:
+	var day := clock.seconds_per_day
+	var food := player._drain("food_drain") * day
+	var water := player._drain("water_drain") * day
+	return {"food": food, "water": water, "cans": food / maxf(data.item_value("canned_food", "food"), 1.0),
+			"waters": water / maxf(data.item_value("clean_water", "water"), 1.0)}
+
+
 ## F5: what a wave is heading for, in words: "your salvager (Junkyard)" ("" if it isn't one of your pieces).
 func wave_target_words(wave: Dictionary) -> String:
 	var key := str(wave.get("key", ""))
@@ -3057,6 +3108,8 @@ func _on_piece_built(key: String) -> void:
 
 ## Each new day: fresh food rots, and about three weeks in the town's gas goes stale.
 func _new_day() -> void:
+	made_yesterday = _made_since(made_mark)  # F6
+	made_mark = factory.made.duplicate()
 	for piece: Dictionary in gear.wear_day():
 		add_message("Your %s is worn out: its bonuses stop until you repair it" % piece["name"], 5.0)
 	var rotted := _spoil(inventory)

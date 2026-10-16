@@ -37,13 +37,25 @@
 		"name": "Vegetables",
 		"time": 60.0,
 		"in": { "seeds": 1, "dirty_water": 1 },
-		"out": { "vegetable": 3 }
+		"out": { "vegetable": 3, "seeds": 1 }
+	},
+	"grow_cotton": {
+		"name": "Cotton",
+		"time": 60.0,
+		"in": { "seeds": 1, "dirty_water": 1 },
+		"out": { "cotton": 2, "seeds": 1 }
 	},
 	"can_food": {
 		"name": "Canned food",
 		"time": 5.0,
 		"in": { "vegetable": 2, "metal_plate": 1 },
 		"out": { "canned_food": 2 }
+	},
+	"pack_bandages": {
+		"name": "Bandages",
+		"time": 5.0,
+		"in": { "cotton": 2, "clean_water": 1 },
+		"out": { "bandage": 2 }
 	},
 	"repair_kit": {
 		"name": "Repair kit",

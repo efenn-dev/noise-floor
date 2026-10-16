@@ -467,6 +467,8 @@ func status_text() -> String:
 		lines.append("%s · makes %s · %s · loudness %d%s" % [sim.data.buildables[m.id]["name"], m.recipe["name"],
 				m.status(), roundi(m_loud), _muffle_tag(m.muffled, m.boxed)])
 		lines.append("in: %s   out: %s   %s" % [_list(m.input, "empty"), _list(m.output, "empty"), _heard_line(target_key, m_loud)])
+		if m.chained > 0.0:  # F6: fed straight from the machine behind it
+			lines.append("Fed straight from the machine behind it: %d%% faster" % roundi(Factory.CHAIN_BONUS * 100.0))
 		if m.watts > 0.0:
 			lines.append("needs %d W · %s" % [roundi(m.watts), _network_line(sim.power.network_of(target_key))])
 		var names := PackedStringArray()
