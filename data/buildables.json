@@ -13,6 +13,14 @@
 		"size": [2.0, 2.5, 0.2],
 		"cost": { "plank": 3, "nails": 4 }
 	},
+	"soundproof_wall": {
+		"name": "Soundproof wall",
+		"kind": "wall",
+		"hp": 240,
+		"sound": 2,
+		"size": [2.0, 2.5, 0.2],
+		"cost": { "plank": 4, "nails": 6, "metal_plate": 2 }
+	},
 	"door": {
 		"name": "Door",
 		"kind": "door",
@@ -385,6 +393,15 @@
 		"range": 12,
 		"size": [0.3, 1.6, 0.3],
 		"cost": { "plank": 2, "nails": 4, "metal_plate": 2 }
+	},
+	"dusk_timer": {
+		"name": "Dusk timer",
+		"kind": "sensor",
+		"sense": "night",
+		"action": "machines_off",
+		"hp": 60,
+		"size": [0.3, 1.6, 0.3],
+		"cost": { "plank": 1, "nails": 2, "scrap_metal": 1 }
 	},
 	"noise_sensor": {
 		"name": "Noise sensor",

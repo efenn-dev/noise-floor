@@ -4,7 +4,8 @@ extends SceneTree
 ## hotbar and the build menu. Deterministic; re-run after a model or BuildView change. Needs a window with a
 ## real renderer (Emmitt's PC, or Xvfb + the Compatibility renderer in the cloud):
 ##     bash tools/godot.sh --path . --script res://tools/art/piece_icons.gd
-## Then run tools/test.sh once so Godot writes the .import files, and commit both.
+## Then run tools/test.sh once so Godot writes the .import files, and commit both. F5: `-- --only=a,b` renders just
+## those pieces (new ones), leaving every other picture as it is.
 
 const ICON := 160
 const OUT := "res://assets/icons/piece_%s.png"
@@ -18,8 +19,12 @@ func _run() -> void:
 	await process_frame
 	var data := GameData.load_default()
 	var made := 0
+	var only: Array = []
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			only = arg.get_slice("=", 1).split(",")
 	for id: String in BuildController.PIECES:
-		if not data.buildables.has(id):
+		if not data.buildables.has(id) or (not only.is_empty() and not only.has(id)):
 			continue
 		var sub := SubViewport.new()
 		sub.size = Vector2i(ICON, ICON)

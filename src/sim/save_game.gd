@@ -121,7 +121,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for cell: Vector2i in sim.factory.machines:
 		var m: Factory.Machine = sim.factory.machines[cell]
 		machines.append({"cell": _v2(cell), "input": m.input, "output": m.output, "progress": m.progress,
-				"crafting": m.crafting, "crafted": m.crafted, "muffled": m.muffled, "time_scale": m.time_scale,
+				"crafting": m.crafting, "crafted": m.crafted, "muffled": m.muffled, "boxed": m.boxed, "time_scale": m.time_scale,
 				"recipe": m.recipe_id})
 	var belts := []
 	for cell: Vector2i in sim.factory.belts:
@@ -273,6 +273,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		m.crafting = bool(md["crafting"])
 		m.crafted = int(md["crafted"])
 		m.muffled = bool(md["muffled"])
+		m.boxed = bool(md.get("boxed", false))  # F5
 		m.time_scale = float(md["time_scale"])
 		if sim.data.recipes.has(md.get("recipe", "")):
 			sim.factory.set_recipe(m, md["recipe"])
@@ -323,7 +324,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 		if sim.power.generators.has(key):
 			var g: Dictionary = d["generators"][key]
 			sim.power.generators[key] = {"cans": int(g["cans"]), "fuel": float(g["fuel"]), "running": false,
-					"load": 0.0, "muffled": bool(g["muffled"])}
+					"load": 0.0, "muffled": bool(g["muffled"]), "boxed": bool(g.get("boxed", false))}
 	sim.climate.from_dict(d.get("stoves", {}))  # M16: none before 11
 	sim.projects.load_dict(d.get("projects", {}), d.get("projects_done", []))  # M17a: phase 0 before 12
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2

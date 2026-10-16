@@ -43,6 +43,7 @@ var rescue_due := -1.0
 var _signal_on := true  # the mast had power last tick (to say when it drops and comes back)
 ## F4: the last game day the dawn perk pick was offered (not saved: a loaded game with points offers it again).
 var perk_offer_day := 0
+var _heard_cache: Dictionary = {}  # F5: heard_preview results, cleared when the build grid changes
 const PERK_OFFER_SAFE := 25.0  # no living zombie this close (metres) when the pick opens
 ## M15: what happened at your base (the last 50 events with game time). L opens it.
 var base_log: BaseLog
@@ -180,6 +181,9 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
 	build.piece_removed.connect(_on_piece_removed)
+	build.piece_added.connect(func(_k: String) -> void: _heard_cache.clear())  # F5: walls change what's heard
+	build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: _heard_cache.clear())
+	build.piece_changed.connect(func(_k: String) -> void: _heard_cache.clear())
 	build.piece_built.connect(_on_piece_built)
 
 
@@ -1930,28 +1934,35 @@ func _finish_search(found: Dictionary) -> void:
 	container_searched.emit(id)
 
 
-## Fits a muffler to the machine at `cell`: -15 loudness, 10% slower. Returns "" or why not.
+## Fits a muffler to the machine or generator at `cell`: -15 loudness, 10% slower. F5: U again on a muffled one fits
+## a sound box over it (sound_box in noise.json: -12 more, 5% slower again). Returns "" or why not.
 func fit_muffler(cell: Vector2i) -> String:
 	var gen_key := "o:%d:%d" % [cell.x, cell.y]
 	if power.generators.has(gen_key):
-		if power.generators[gen_key]["muffled"]:
-			return "Already muffled"
-		if not inventory.take_all(data.noise["muffler"]["cost"]):
+		var g: Dictionary = power.generators[gen_key]
+		if g["muffled"] and g.get("boxed", false):
+			return "Already muffled and boxed in"
+		var tier: Dictionary = data.noise["sound_box"] if g["muffled"] else data.noise["muffler"]
+		if not inventory.take_all(tier["cost"]):
 			return "Not enough materials"
-		power.generators[gen_key]["muffled"] = true
+		if g["muffled"]:
+			g["boxed"] = true
+		g["muffled"] = true
 		_practice("mechanics", "muffler")
 		stats.note_muffler()
 		return ""
 	var m: Factory.Machine = factory.machines.get(cell)
 	if m == null:
 		return "No machine there"
-	if m.muffled:
-		return "Already muffled"
-	var muffler: Dictionary = data.noise["muffler"]
+	if m.muffled and m.boxed:
+		return "Already muffled and boxed in"
+	var muffler: Dictionary = data.noise["sound_box"] if m.muffled else data.noise["muffler"]
 	if not inventory.take_all(muffler["cost"]):
 		return "Not enough materials"
+	if m.muffled:
+		m.boxed = true
 	m.muffled = true
-	m.time_scale = 1.0 + float(muffler["slowdown"])
+	m.time_scale += float(muffler["slowdown"])
 	_practice("mechanics", "muffler")
 	stats.note_muffler()
 	return ""
@@ -2724,6 +2735,56 @@ func _sink_at_cell(cell: Vector2i, item: String) -> bool:
 	return true
 
 
+## F5: the hearing threshold of an ordinary zombie (a shambler) at night or by day, with the difficulty: what the
+## build ghost's rings and the look-at line measure against.
+func hearing_threshold(night: bool) -> float:
+	var z: Dictionary = data.zombies["shambler"]
+	return difficulty.hearing(z, night) if difficulty != null else float(z["hearing_night"] if night else z["hearing_day"])
+
+
+## F5: how loud a piece is as built: a machine or generator less its muffler, sound box and Dampened Gears; anything
+## else (a turret's shot, a noisemaker, a tripwire's bell) its data loudness. `key` "" = a new one of `id`.
+func loudness_of(id: String, key: String = "") -> float:
+	var kind := build.kind_of(id)
+	var base := float(data.buildables[id]["loudness"])
+	if kind == "machine" or kind == "generator":
+		var muffled := false
+		var boxed := false
+		if key != "" and build.pieces.has(key):
+			var m: Factory.Machine = factory.machines.get(build.pieces[key]["cell"])
+			if m != null:
+				return noise.machine_loudness(m)
+			if power.generators.has(key):
+				muffled = bool(power.generators[key]["muffled"])
+				boxed = bool(power.generators[key].get("boxed", false))
+		return maxf(0.0, base - noise.muffle_cut(muffled, boxed) - noise.machine_quiet())
+	return base
+
+
+## F5: how far zombies hear a piece of `loudness` standing at `pos`, each way round (NoiseField.heard_radii):
+## {"night": radii (with the season's cold-night carry), "day": radii, "loudness": loudness}. Cached until the
+## build grid changes (the ghost asks again every frame while it stands on one cell).
+func heard_preview(pos: Vector3, loudness: float) -> Dictionary:
+	var bonus := float(clock.season_cfg().get("hearing_night", 0.0))
+	var cache_key := "%d:%d:%.1f:%.1f" % [floori(pos.x * 4.0), floori(pos.z * 4.0), loudness, bonus]
+	if _heard_cache.has(cache_key):
+		return _heard_cache[cache_key]
+	if _heard_cache.size() > 64:
+		_heard_cache.clear()
+	var out := {"loudness": loudness, "night": noise.heard_radii(pos, loudness, hearing_threshold(true), bonus),
+			"day": noise.heard_radii(pos, loudness, hearing_threshold(false))}
+	_heard_cache[cache_key] = out
+	return out
+
+
+## F5: the furthest a preview's radii reach (its leakiest side), for the words on screen.
+static func heard_far(radii: PackedFloat32Array) -> float:
+	var far := 0.0
+	for r: float in radii:
+		far = maxf(far, r)
+	return far
+
+
 ## F4: whether to offer the perk pick now (PerkPickScreen): unspent points, daytime, not offered yet today, and safe
 ## (alive, awake, on foot, no living zombie within PERK_OFFER_SAFE). main.gd opens it and sets perk_offer_day.
 func perk_offer_ready() -> bool:
@@ -2891,11 +2952,14 @@ func _on_piece_removed(key: String, piece: Dictionary) -> void:
 			"splitter", "merger"]:  # F3
 		var m: Factory.Machine = factory.machines.get(piece["cell"])
 		var muffled := m != null and m.muffled
+		var boxed := m != null and m.boxed
 		var held := factory.remove_at(piece["cell"])
 		if not piece.get("destroyed", false):
 			inventory.give_all(held)
 			if muffled:
 				inventory.give_all(data.noise["muffler"]["cost"])
+			if boxed:
+				inventory.give_all(data.noise["sound_box"]["cost"])  # F5
 
 
 ## Practising a skill (`times` over, e.g. seconds of sprinting); says so when it levels up ("Strength 2")

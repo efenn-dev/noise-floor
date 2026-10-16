@@ -72,7 +72,7 @@ func test_muffler_cuts_noise_and_slows() -> void:
 	var sim := _smelter_sim()
 	var nails := sim.inventory.count("nails")
 	eq(sim.fit_muffler(Vector2i(0, 0)), "", "fit a muffler")
-	eq(sim.fit_muffler(Vector2i(0, 0)), "Already muffled", "only one")
+	eq(sim.fit_muffler(Vector2i(0, 0)), "Not enough materials", "F5: U again wants a sound box (wall panels)")
 	eq(sim.inventory.count("nails"), nails - 8, "costs 8 nails")
 	_run(sim, 0.2)
 	near(sim.noise.continuous[0]["loudness"], 45.0, "60 - 15 = 45")

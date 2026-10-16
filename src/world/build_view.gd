@@ -90,7 +90,7 @@ const MODELS := {
 	"bathtub": "res://assets/models/bathtub.glb",
 	"toilet": "res://assets/models/toilet.glb",
 }
-const SURFACES := {"foundation": "concrete_floor", "wall": "scrap_wall"}  # piece id -> texture name (see Surfaces)
+const SURFACES := {"foundation": "concrete_floor", "wall": "scrap_wall", "soundproof_wall": "concrete_floor"}  # piece id -> texture name (see Surfaces)
 
 
 
@@ -201,6 +201,13 @@ func _on_added(key: String) -> void:
 			eye.name = "Eye"
 			if id == "noise_sensor":
 				_add_part(body, Vector3(0.12, 0.12, 0.2), Vector3(0, size.y / 2.0 + 0.3, 0), Color(0.3, 0.3, 0.3))  # a mic
+			elif id == "dusk_timer":  # F5: a yellow clock box round the post (seen from any side), hands on two faces
+				_add_part(body, Vector3(0.4, 0.4, 0.4), Vector3(0, 0.05, 0), Color(0.95, 0.8, 0.3))
+				for face: Vector3 in [Vector3(0, 0, -1), Vector3(1, 0, 0)]:
+					var rim := face * 0.21
+					_add_part(body, Vector3(0.03, 0.15, 0.03), rim + Vector3(0, 0.11, 0), Color(0.1, 0.1, 0.1))
+					_add_part(body, (Vector3(0.03, 0.03, 0.11) if face.x != 0.0 else Vector3(0.11, 0.03, 0.03)),
+							rim + Vector3(0, 0.05, 0) + Vector3(-face.z, 0, face.x) * -0.05, Color(0.1, 0.1, 0.1))
 		"noisemaker":  # a box with a horn on top
 			var horn := _add_part(body, Vector3(0.36, 0.36, 0.6), Vector3(0, size.y / 2.0 + 0.2, -0.1), Color(0.75, 0.7, 0.3))
 			horn.name = "Horn"

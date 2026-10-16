@@ -2,6 +2,8 @@ class_name NoiseField
 extends RefCounted
 ## Every sound in the world this tick, and how loud each one is wherever a zombie stands.
 ##   heard level = loudness - 20 * log10(max(distance, 1)) - 10 * (walls in between)
+## F5: a soundproof wall counts as two walls for sound (BuildGrid.edge_sound); heard_radii() turns the formula
+## round for the build ghost's rings: how far each way a sound carries before it's too quiet to hear.
 ## Continuous sounds: machines while they work and generators while they run (a muffler takes 15 off). One-off sounds: footsteps,
 ## pipe hits, zombies bashing and wrecking things. One-offs stay audible for HEAR_WINDOW so every
 ## zombie (they listen every HEAR_WINDOW) gets one chance to hear each.
@@ -9,6 +11,8 @@ extends RefCounted
 ## town's houses are made of the same pieces, so they muffle too.
 
 const HEAR_WINDOW := 0.5
+const RADII := 32         # F5: directions heard_radii() looks in
+const HEARD_MAX := 400.0  # F5: rays stop here (the map is 720 m across: past this a sound is heard everywhere)
 const DRAW_TIME := 1.5  # one-offs stay in `recent` this long so the overlay can show them
 
 var data: GameData
@@ -76,7 +80,12 @@ func refresh(factory: Factory, dt: float, power: PowerGrid = null, vehicles: Veh
 func machine_loudness(m: Factory.Machine, quiet: float = -1.0) -> float:
 	var base: float = data.buildables[m.id]["loudness"]
 	var q := quiet if quiet >= 0.0 else machine_quiet()
-	return maxf(0.0, base - (float(data.noise["muffler"]["cut"]) if m.muffled else 0.0) - q)
+	return maxf(0.0, base - muffle_cut(m.muffled, m.boxed) - q)
+
+
+## F5: how much a muffler, and a sound box over it, take off a machine's or generator's loudness.
+func muffle_cut(muffled: bool, boxed: bool) -> float:
+	return (float(data.noise["muffler"]["cut"]) if muffled else 0.0) + (float(data.noise["sound_box"]["cut"]) if boxed else 0.0)
 
 
 ## How much quieter Dampened Gears makes machines and generators (M12; skills set by SimWorld).
@@ -122,8 +131,71 @@ func outdoor_walls(pos: Vector3, distance: float) -> int:
 	return best
 
 
+## F5: how far a sound of `loudness` (plus `bonus`, the season's night carry) at `pos` carries before it drops under
+## `threshold`, in each of RADII directions (direction i is the angle TAU * i / RADII from +X, as in outdoor_walls),
+## walls on the way included. Each ray stops at HEARD_MAX. Returns the radii in metres.
+func heard_radii(pos: Vector3, loudness: float, threshold: float, bonus: float = 0.0) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var spare := loudness + bonus - threshold  # dB to lose before it's too quiet
+	var open := pow(10.0, spare / 20.0)
+	for i in RADII:
+		var a := TAU * i / RADII
+		var walls := 0
+		var last := 0.0  # where the last wall it got through stands
+		var r := open
+		for c: Vector2 in sound_crossings(pos, pos + Vector3(cos(a), 0.0, sin(a)) * minf(open, HEARD_MAX)):
+			r = pow(10.0, (spare - 10.0 * walls) / 20.0)
+			if r < c.x:
+				break  # too quiet before it reaches this wall
+			walls += int(c.y)
+			last = c.x
+			r = pow(10.0, (spare - 10.0 * walls) / 20.0)
+		out.append(minf(HEARD_MAX, maxf(last, r) if spare > 0.0 else 0.0))
+	return out
+
+
+## F5: the walls a sound crosses on the straight line from a to b, nearest first: Vector2(distance from a in metres,
+## walls' worth of sound it stops). The same grid walk as walls_between.
+func sound_crossings(a: Vector3, b: Vector3) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var g := BuildGrid.GRID
+	var x0 := a.x / g
+	var z0 := a.z / g
+	var dx := b.x / g - x0
+	var dz := b.z / g - z0
+	var length := Vector2(b.x - a.x, b.z - a.z).length()
+	var cx := floori(x0)
+	var cz := floori(z0)
+	var steps := absi(floori(b.x / g) - cx) + absi(floori(b.z / g) - cz)
+	var step_x := 1 if dx > 0.0 else -1
+	var step_z := 1 if dz > 0.0 else -1
+	var t_max_x := INF if dx == 0.0 else ((cx + 1 - x0) / dx if dx > 0.0 else (x0 - cx) / -dx)
+	var t_max_z := INF if dz == 0.0 else ((cz + 1 - z0) / dz if dz > 0.0 else (z0 - cz) / -dz)
+	var t_dx := INF if dx == 0.0 else absf(1.0 / dx)
+	var t_dz := INF if dz == 0.0 else absf(1.0 / dz)
+	for i in steps:
+		var key := ""
+		var t := 0.0
+		if t_max_x < t_max_z:
+			key = "w:%d:%d:w" % [cx + (1 if step_x > 0 else 0), cz]
+			t = t_max_x
+			cx += step_x
+			t_max_x += t_dx
+		else:
+			key = "w:%d:%d:n" % [cx, cz + (1 if step_z > 0 else 0)]
+			t = t_max_z
+			cz += step_z
+			t_max_z += t_dz
+		if build.pieces.has(key):
+			var w := build.edge_sound(key)
+			if w > 0:
+				out.append(Vector2(t * length, w))
+	return out
+
+
 ## Built walls crossed by the straight line from a to b (walks the grid cell by cell). Closed doors
-## count; open doors don't. Barricades count for sound but not for sight (`for_sight`).
+## count; open doors don't. Barricades count for sound but not for sight (`for_sight`). F5: for sound, a soundproof
+## wall counts twice (BuildGrid.edge_sound).
 func walls_between(a: Vector3, b: Vector3, for_sight: bool = false) -> int:
 	var g := BuildGrid.GRID
 	var x0 := a.x / g
@@ -143,14 +215,21 @@ func walls_between(a: Vector3, b: Vector3, for_sight: bool = false) -> int:
 	for i in steps:
 		if t_max_x < t_max_z:
 			var line_x := cx + (1 if step_x > 0 else 0)  # crossing the west edge of cell (line_x, cz)
-			if build.edge_blocks("w:%d:%d:w" % [line_x, cz], for_sight):
-				count += 1
+			count += _wall_count("w:%d:%d:w" % [line_x, cz], for_sight)
 			cx += step_x
 			t_max_x += t_dx
 		else:
 			var line_z := cz + (1 if step_z > 0 else 0)  # crossing the north edge of cell (cx, line_z)
-			if build.edge_blocks("w:%d:%d:n" % [cx, line_z], for_sight):
-				count += 1
+			count += _wall_count("w:%d:%d:n" % [cx, line_z], for_sight)
 			cz += step_z
 			t_max_z += t_dz
 	return count
+
+
+## One edge's part in walls_between: for sight 1 if it blocks the view, for sound its walls' worth (F5).
+func _wall_count(key: String, for_sight: bool) -> int:
+	if not build.pieces.has(key):
+		return 0
+	if for_sight:
+		return 1 if build.edge_blocks(key, true) else 0
+	return build.edge_sound(key)

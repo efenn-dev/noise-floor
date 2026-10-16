@@ -9,12 +9,13 @@ signal message(text: String)
 signal picked(id: String)
 
 const GOLD := Color(0.95, 0.8, 0.55)
+static var _small: Dictionary = {}  # F5: small_icon's cache
 const GROUPS := [
-	["Base", ["foundation", "wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
+	["Base", ["foundation", "wall", "soundproof_wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
 	["Hub", ["hub", "radio_mast"]],
 	["Factory", ["belt", "splitter", "merger", "smelter", "press", "rain_collector", "purifier", "planter", "canner", "water_tap"]],
 	["Extractors", ["salvager", "water_pump", "fuel_pump", "sawmill"]],
-	["Power", ["generator", "solar_panel", "power_pole"]],
+	["Power", ["generator", "solar_panel", "power_pole", "dusk_timer"]],
 	["Defense", ["spikes", "nail_turret", "crossbow_turret", "rifle_turret", "hopper", "motion_sensor", "noise_sensor",
 			"floodlight", "noisemaker", "bear_trap", "tripwire", "electric_fence", "repair_station"]],
 ]
@@ -31,6 +32,8 @@ const GROUP_NOTES := {
 const BLURBS := {
 	"foundation": "A 2 m floor square. Walls and machines stand on it.",
 	"wall": "Blocks zombies, sight and most sound. Needs a foundation on one side.",
+	"soundproof_wall": "A double wall lined with metal plates: stops twice the sound of a plain wall. Box a generator in with them.",
+	"dusk_timer": "Switches off the machines on its power line from dusk to dawn, when zombies hear furthest. Stand it by a pole.",
 	"door": "A wall you can open. E opens and closes it; it swings away from you.",
 	"barricade": "Low boards: blocks sound and zombies, turrets shoot over it. Boards up a broken window.",
 	"bed": "Sleep here (E). Heals you fast and becomes where you respawn.",
@@ -275,9 +278,9 @@ func _build() -> void:
 			b.add_theme_font_size_override("font_size", 15)
 			var pic := InventoryScreen.icon_for("piece_" + id)  # S4: tools/art/piece_icons.gd
 			if pic != null:
-				b.icon = pic
-				b.expand_icon = true
-				b.add_theme_constant_override("icon_max_width", 26)
+				# F5: a fixed 26 px picture, not an expanding one: an expanding icon was squeezed out of rows with a
+				# long cost (the Hub, the Salvager, the rain collector had none).
+				b.icon = small_icon(pic, 26)
 			b.mouse_entered.connect(highlight.bind(id))
 			b.pressed.connect(pick.bind(id))
 			box.add_child(b)
@@ -294,3 +297,16 @@ func _build() -> void:
 	hint.modulate = Color(1, 1, 1, 0.65)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
+
+
+## F5: `pic` scaled down to `px` square (cached), for a button icon that keeps its size whatever the text.
+static func small_icon(pic: Texture2D, px: int) -> Texture2D:
+	var key := "%s@%d" % [pic.resource_path, px]
+	if not _small.has(key):
+		var img := pic.get_image()
+		if img.is_compressed():
+			img.decompress()
+		img.resize(px, px, Image.INTERPOLATE_LANCZOS)
+		_small[key] = ImageTexture.create_from_image(img)
+	return _small[key]
+

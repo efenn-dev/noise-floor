@@ -105,6 +105,12 @@ func edge_blocks(key: String, for_sight: bool = false) -> bool:
 	return true
 
 
+## F5: how many walls' worth of sound an edge stops: 0 if sound passes (open door, tripwire, broken window, nothing
+## there), else its buildable's "sound" (1 for an ordinary wall, door, barricade or window; 2 for a soundproof wall).
+func edge_sound(key: String) -> int:
+	return int(data.buildables[pieces[key]["id"]]["sound"]) if edge_blocks(key) else 0
+
+
 ## V17: whether an edge is a physical walking barrier. Unlike sound/sight, a window frame always blocks ordinary
 ## movement after its glass breaks; player and zombie vaults explicitly pass that one collider.
 func edge_blocks_walk(key: String) -> bool:

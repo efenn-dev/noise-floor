@@ -101,7 +101,9 @@ func load_from(raw_items: Dictionary, raw_buildables: Dictionary, raw_kit: Dicti
 			"interval": float(b.get("interval", 0.0)),    # turret: seconds between shots
 			"ammo": b.get("ammo", ""),
 			"ammo_cap": int(b.get("ammo_cap", 0)),
-			"sense": str(b.get("sense", "")),  # M15: a sensor's kind ("motion" or "noise")
+			"sense": str(b.get("sense", "")),  # M15: a sensor's kind ("motion" or "noise"; F5: "night", the dusk timer)
+			"action": str(b.get("action", "")),  # F5: a sensor's action when built ("" = the first in action_order)
+			"sound": int(b.get("sound", 1)),  # F5: how many walls' worth of sound an edge piece stops (a soundproof wall: 2)
 			"player_placeable": bool(b.get("player_placeable", true)),  # false: town pieces (W1a)
 			"against_wall": bool(b.get("against_wall", false)),
 			"needs_project": str(b.get("needs_project", "")),  # M17a: can't be built until that project is done  # W1c: stands at the back of its cell, not the middle
@@ -168,8 +170,8 @@ func validate() -> PackedStringArray:
 		if b["kind"] == "turret" and (b["damage"] <= 0.0 or b["range"] <= 0.0 or b["interval"] <= 0.0
 				or not items.has(b["ammo"]) or b["ammo_cap"] <= 0 or b["loudness"] <= 0.0):
 			errors.append("turret '%s' needs damage, range, interval, a known ammo item, ammo_cap and loudness" % id)
-		if b["kind"] == "sensor" and (not b["sense"] in ["motion", "noise"] or b["range"] <= 0.0):
-			errors.append("sensor '%s' needs sense motion or noise and a positive range" % id)
+		if b["kind"] == "sensor" and (not b["sense"] in ["motion", "noise", "night"] or (b["range"] <= 0.0 and b["sense"] != "night")):
+			errors.append("sensor '%s' needs sense motion, noise or night, and a positive range to sense in" % id)
 		if b["kind"] in ["floodlight", "noisemaker", "fence", "repair_station"] and b["watts"] <= 0.0:
 			errors.append("%s '%s' needs power (watts)" % [b["kind"], id])
 		if b["kind"] == "repair_station" and (b["range"] <= 0.0 or b["interval"] <= 0.0):

@@ -7,6 +7,8 @@ extends RefCounted
 ##   Noise sensor: hears a one-off sound within its range at threshold or more (walls muffle as usual).
 ##     It ignores continuous hums (your own machines) and the noisemakers' blare, so a decoy can't keep
 ##     setting itself off.
+##   F5 dusk timer: "senses" the night (from sunset to sunrise); built set to Machines off, so the factory on its
+##     power network rests through the dark, when zombies hear furthest, and starts again at dawn.
 ##   A tripwire bell that rings sets off every sensor within trigger_radius, whatever it watches.
 ## A sensor is "on" while it senses something and for its action's hold after that. Actions (defense.json):
 ##   quiet: every machine and generator on the sensor's power network is switched off while it's on.
@@ -14,6 +16,8 @@ extends RefCounted
 ##   decoy: when it comes on, every charged, powered noisemaker within radius blares (a one-off at its loudness
 ##     every pulse for `blare` seconds, then `recharge` seconds before it can go again).
 ##   lock_doors: every door within radius is shut when it comes on and stays shut (E can't open it) while it's on.
+##   F5 machines_off: every machine on the sensor's power network is switched off while it's on (generators keep
+##     running for lights, fences and turrets, and fall silent if nothing else draws on them).
 ## Floodlights can also be set to light every night on their own (E on one).
 
 var data: GameData
@@ -49,7 +53,8 @@ func cfg() -> Dictionary:
 func _on_added(key: String) -> void:
 	match build.kind_of(build.pieces[key]["id"]):
 		"sensor":
-			sensors[key] = {"action": cfg()["action_order"][0], "on": false, "hold": 0.0, "bell": false}
+			var first: String = data.buildables[build.pieces[key]["id"]]["action"]  # F5: the dusk timer starts on Machines off
+			sensors[key] = {"action": first if first != "" else cfg()["action_order"][0], "on": false, "hold": 0.0, "bell": false}
 		"floodlight":
 			floodlights[key] = {"night": false, "on": false, "lit": false}
 		"noisemaker":
@@ -143,6 +148,9 @@ func tick(dt: float, horde: Horde, night: bool, bells: Array) -> void:
 			s["on"] = true
 			_fire(key, what)
 		elif not on:
+			if s["on"] and _is_timer(key):  # F5: say when the dusk timer lets the machines go again
+				var ends := "machines back on" if s["action"] in ["machines_off", "quiet"] else "%s ends" % action_name(s["action"]).to_lower()
+				_say("%s: morning, %s" % [base_log.thing_name(key) if base_log != null else "Dusk timer", ends], build.piece_center(key))
 			s["on"] = false
 	_apply()
 
@@ -150,6 +158,8 @@ func tick(dt: float, horde: Horde, night: bool, bells: Array) -> void:
 ## What sensor `key` notices right now ("" if nothing): "zombies" (motion) or the loudest sound's kind (noise).
 func sense(key: String, horde: Horde) -> String:
 	var b: Dictionary = data.buildables[build.pieces[key]["id"]]
+	if b["sense"] == "night":  # F5: the dusk timer
+		return "night" if _night else ""
 	var at := build.piece_center(key)
 	var reach: float = b["range"]
 	if b["sense"] == "motion":
@@ -185,6 +195,9 @@ func _fire(key: String, what: String) -> void:
 			if _flat(build.piece_center(nk), at) <= float(cfg()["actions"]["decoy"]["radius"]) and fire_noisemaker(nk):
 				fired += 1
 		_say("%s: %s, decoy: %s" % [who, what, ("%d noisemaker%s going off" % [fired, "" if fired == 1 else "s"]) if fired > 0 else "no noisemaker ready"], at)
+		return
+	if _is_timer(key):  # F5: "Dusk timer: night, machines off"
+		_say("%s: night, %s" % [who, action_name(s["action"]).to_lower()], at)
 		return
 	_say("%s: %s, %s on" % [who, what, action_name(s["action"]).to_lower()], at)
 
@@ -231,6 +244,10 @@ func _apply() -> void:
 				for k: String in power.network_of(key).get("keys", []):
 					if build.kind_of(build.pieces[k]["id"]) in ["machine", "generator"]:
 						off[k] = true
+			"machines_off":  # F5
+				for k: String in power.network_of(key).get("keys", []):
+					if build.kind_of(build.pieces[k]["id"]) == "machine":
+						off[k] = true
 			"floodlights":
 				for fk: String in floodlights:
 					if _flat(build.piece_center(fk), at) <= float(cfg()["actions"]["floodlights"]["radius"]):
@@ -250,6 +267,11 @@ func _apply() -> void:
 		f["on"] = (f["night"] or lit_by.has(fk)) and _night
 		power.wants[fk] = f["on"]
 		f["lit"] = f["on"] and power.is_powered(fk)
+
+
+## F5: is this sensor a dusk timer (it senses the night, not zombies or sounds)?
+func _is_timer(key: String) -> bool:
+	return build.pieces.has(key) and data.buildables[build.pieces[key]["id"]]["sense"] == "night"
 
 
 ## Is this door held shut by a sensor?
