@@ -151,6 +151,63 @@ func test_gear_piece_in_colour_and_equip_on_click() -> void:
 	_teardown()
 
 
+## P8 (Emmitt: "with colored items the shift+click to inventory function breaks"): shift- or ctrl-click on a
+## coloured gear piece moves it like a stack does: from your pockets into the crate, back again, and a worn piece
+## off into your pockets. A plain click still only selects it.
+func test_shift_click_moves_gear_pieces() -> void:
+	_setup()
+	var piece := sim.gear.make("hard_hat", "civilian", "blue", {"carry_kg": 4.0}, 0.9, "Blue Lid")
+	sim.gear.pieces.append(piece)
+	var uid := int(piece["uid"])
+	screen.open()
+	_gear_tile(uid).pressed.emit()
+	check(not sim.gear.find(uid).is_empty() and not _in_crate(uid), "a plain click leaves it in your pockets")
+	_hold(KEY_SHIFT, true)
+	_gear_tile(uid).pressed.emit()
+	_hold(KEY_SHIFT, false)
+	check(sim.gear.find(uid).is_empty() and _in_crate(uid), "shift-click puts the piece in the crate")
+	_hold(KEY_CTRL, true)
+	_gear_tile(uid).pressed.emit()
+	_hold(KEY_CTRL, false)
+	check(not sim.gear.find(uid).is_empty() and not _in_crate(uid), "ctrl-click on it in the crate brings it back")
+	sim.equip_gear(uid)
+	screen.refresh()
+	eq(sim.gear.equipped.get("head", {}).get("uid"), uid, "worn")
+	_hold(KEY_SHIFT, true)
+	_live("Slot_head").pressed.emit()
+	_hold(KEY_SHIFT, false)
+	check(not sim.gear.equipped.has("head") and not sim.gear.find(uid).is_empty(), "shift-click on the worn piece takes it off into your pockets")
+	_teardown()
+
+
+func _hold(key: Key, down: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = key
+	event.pressed = down
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+
+
+## The live tile holding gear piece `uid` (each refresh rebuilds the tiles; the new ones get renamed while the old
+## ones wait to be freed).
+func _gear_tile(uid: int) -> Button:
+	for b: Button in screen.find_children("*", "Button", true, false):
+		if not b.is_queued_for_deletion() and str(b.get("drag_value")) == InventoryScreen.GEAR + str(uid):
+			return b
+	return null
+
+
+func _live(tile_name: String) -> Button:
+	for b: Button in screen.find_children(tile_name, "Button", true, false):
+		if not b.is_queued_for_deletion():
+			return b
+	return null
+
+
+func _in_crate(uid: int) -> bool:
+	return sim.container_gear(crate_key).any(func(p: Dictionary) -> bool: return int(p["uid"]) == uid)
+
+
 func _button(text: String) -> Button:
 	for b: Button in screen.find_children("*", "Button", true, false):
 		if b.text == text and not b.is_queued_for_deletion():

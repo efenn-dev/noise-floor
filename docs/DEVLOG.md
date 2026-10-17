@@ -2,6 +2,16 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P8 Shift-click works on coloured gear
+
+Emmitt: "with colored items the shift+click to inventory function breaks". Item stacks used a click handler that checks shift (move the whole stack) and ctrl (move one). Gear pieces, the rarity-coloured items, were wired straight to "select", so shift- or ctrl-click only highlighted them.
+
+**Built:** gear tiles use `InventoryScreen._on_gear_slot`. Shift- or ctrl-click moves the piece to the other side (`move_gear`): pockets to the open container and back, or a worn piece off into your pockets. A plain click still selects it.
+
+**Try it:** `play.bat --loot`, put a coloured piece in your pockets, then shift-click it into the fridge and back.
+
+**Tests:** 20,606 green (new `test_shift_click_moves_gear_pieces`: real shift and ctrl key presses through Godot's input, clicking the live tiles).
+
 ## 2026-10-16 — P7 Updates that can't leave a half-new game
 
 Emmitt watched his son's stream: white poles through the arms and the old loose fists. The game on main and the family zip both looked right. His copy was half updated: the new arm models (in `assets\`) with the old arm code (in `src\`). The old code adds a sleeve tube, white here because the new model has no sleeve material for it to borrow. The old updater copied the new files over the old ones folder by folder (`assets` before `src`). Its unzip (Expand-Archive) takes 25 s on this PC and longer on his, with no sign of progress, so a closed window or a second click left a mix. The new updater, the one that sends his logs, is only installed at the very end of an update, which is why no logs came.
