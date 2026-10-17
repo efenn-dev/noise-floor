@@ -190,7 +190,7 @@ func _frames(n: int) -> void:
 
 
 func test_ads_and_scope_zoom_on_right_click() -> void:
-	# V15: every gun aims; iron sights narrow 15%, and the existing scope still reaches 35 degrees.
+	# V15: every gun aims; iron sights narrow 15%; V39: a fitted scope zooms to its gun's SCOPE_FOV.
 	_setup()
 	InputSetup.register()
 	InputSetup.assume_captured = true
@@ -209,19 +209,19 @@ func test_ads_and_scope_zoom_on_right_click() -> void:
 	_right_click(true)
 	await _frames(20)
 	check(shooter.aiming(), "aiming down the scope")
-	near(player.camera.fov, Shooter.AIM_FOV, "holding it zooms in to 35 degrees")
+	near(player.camera.fov, Shooter.scope_fov("hunting_rifle"), "holding it zooms in to the rifle scope's 20 degrees")
 	var rifle_model := player.camera.find_child("Gun_hunting_rifle", true, false) as Node3D
 	var scope_model := rifle_model.find_child("Attachment_scope", true, false) as Node3D
 	check(rifle_model.visible and scope_model != null and scope_model.visible,
 			"the held rifle and fitted scope stay visible while looking through it")
 	await _frames(10)
-	near(player.camera.fov, Shooter.AIM_FOV, "and stays zoomed while held")
+	near(player.camera.fov, Shooter.scope_fov("hunting_rifle"), "and stays zoomed while held")
 	_right_click(false)
 	await _frames(20)
 	near(player.camera.fov, base, "letting go restores the view")
 	shooter.hold_aim = true  # --aim
 	await _frames(20)
-	near(player.camera.fov, Shooter.AIM_FOV, "--aim holds the zoom for screenshots")
+	near(player.camera.fov, Shooter.scope_fov("hunting_rifle"), "--aim holds the zoom for screenshots")
 	sim.swap_hands()
 	await _frames(20)
 	near(player.camera.fov, base, "the pipe in hand: no zoom")
@@ -255,9 +255,16 @@ func test_crosshair_shows_the_spread() -> void:
 	main.shooter.hold_aim = true
 	await _frames(2)
 	check(not cross.visible and not main._dot.visible, "ADS hides both crosshair and centre dot")
+	check(not main.scope_overlay.visible, "iron sights: no scope view")
+	var scope: Dictionary = main.sim.gear.make("scope", "civilian", "white")
+	main.sim.gear.pieces.append(scope)
+	main.sim.attach_part(scope["uid"])
+	await _frames(3)
+	check(main.scope_overlay.visible and not cross.visible, "V39: through a fitted scope, its own reticle and not the crosshair")
+	eq(main.scope_overlay.mouse_filter, Control.MOUSE_FILTER_IGNORE, "the scope view never catches the mouse")
 	main.shooter.hold_aim = false
 	await _frames(2)
-	check(cross.visible, "letting go shows the gun crosshair again")
+	check(cross.visible and not main.scope_overlay.visible, "letting go shows the gun crosshair again")
 	main.sim.guns.raising = 0.0
 	check(main.shooter.fire() != -2, "a shot")
 	await _frames(2)

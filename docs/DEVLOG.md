@@ -30,6 +30,43 @@ Emmitt: "can we make it easier to update the game for kaleb so he sees the new c
 **For Kaleb's PC:** it gets the new launcher with its next update from R:, so this PC must be on when he starts the game that once. Leave the window open until "Updated". From then on, updates also come over the internet, whether or not this PC is on.
 
 **Known gaps:** play logs still only reach R:, so they only arrive when his PC can see the share.
+## 2026-10-16 — V39 Supporting hands that cradle, a two-handed axe, and a real scope
+
+Emmitt, with screenshots: "the left hand should be palm up and the arm is floating. the axe has a finger that looks off, maybe rethink the grip with 2 hands. pistol looks a bit weird but acceptable for now." Then: "I found a scope but it doesn't zoom in much and has no reticle".
+
+**Built:**
+- **Long guns rest in the left palm** (`Hands.CRADLES`, `cradle_basis`): the rifle's fore-end, the shotgun's pump and the crossbow's stock now sit in the left palm, with the forearm running back and off to the lower left.
+  - Why it looked wrong: a wrap-round grip, rolled like the gun hand, could only set the forearm square to the barrel, so the arm stuck straight out to the left.
+  - The hand keeps the cradle while it slides along the barrel (pumping). It blends back to the old grip once it leaves the barrel's line (reloads).
+  - Its fingers rest in the HoldMag pose.
+- **Two-handed axe:** a right-hander's chopping grip, with the left hand at the foot of the handle and the right hand 30 cm up it. Before, both hands were bunched 9 cm apart at the foot, and the left's fingers poked out past the right.
+- **Scopes zoom per gun** (`Shooter.SCOPE_FOV`): about 4.4x on the hunting rifle (20 degrees), 2.9x on the crossbow, 1.9x on a pistol. Before, every scope stopped at 35 degrees (barely 2x).
+- **Mouse look scales with zoom:** looking turns slower while zoomed (`Player.LOOK_FOV`), so a 20-degree scope isn't twitchy.
+- **A scope view** (`ScopeOverlay`):
+  - black round a round lens, with a soft rim;
+  - a duplex reticle: thick outer posts, fine centre lines and a red centre dot;
+  - three holdover ticks below the centre.
+  - It fades in with the aim; the normal crosshair hides while it shows.
+
+**Try it:** `play.bat --gun=rifle`, `play.bat --gun=shotgun`, `play.bat --weapon=axe`, `play.bat --gun=rifle --aim`
+
+**Tests:** 20,617 green.
+- New `test_long_guns_rest_in_a_palm_up_cradle`: palm up, forearm back and to the left; the cradle holds while sliding along the barrel and lets go off the barrel's line; the pistol is unchanged.
+- The scope zoom test now uses each gun's own zoom, and the crosshair test checks that a fitted scope shows its reticle, not the crosshair.
+- Soak 1 day OK, 143 s.
+
+**Known gaps:**
+- In the axe's block, the left hand shows its palm.
+- The pistol hold is unchanged, as Emmitt asked.
+## 2026-10-16 — P8 Shift-click works on coloured gear
+
+Emmitt: "with colored items the shift+click to inventory function breaks". Item stacks used a click handler that checks shift (move the whole stack) and ctrl (move one). Gear pieces, the rarity-coloured items, were wired straight to "select", so shift- or ctrl-click only highlighted them.
+
+**Built:** gear tiles use `InventoryScreen._on_gear_slot`. Shift- or ctrl-click moves the piece to the other side (`move_gear`): pockets to the open container and back, or a worn piece off into your pockets. A plain click still selects it.
+
+**Try it:** `play.bat --loot`, put a coloured piece in your pockets, then shift-click it into the fridge and back.
+
+**Tests:** 20,606 green (new `test_shift_click_moves_gear_pieces`: real shift and ctrl key presses through Godot's input, clicking the live tiles).
 
 ## 2026-10-16 — P7 Updates that can't leave a half-new game
 

@@ -27,7 +27,11 @@ const DOUBLE_SIDED := ["Arm Sleeve", "Arm Skin", "FP Sleeve", "FP Glove"]
 const MELEE := {
 	"pipe": {"right": [Vector3.ZERO, Vector3.ZERO]},
 	"bat": {"right": [Vector3.ZERO, Vector3.ZERO], "left": [Vector3(0, -0.07, 0), Vector3(0, 0, 0)]},
-	"axe": {"right": [Vector3(0, 0.02, 0), Vector3.ZERO], "left": [Vector3(0, -0.07, 0), Vector3.ZERO]},  # left hand at the end of the handle, like a real axe grip
+	# V39 (Emmitt: "the axe has a finger that looks off, maybe rethink the grip with 2 hands"): the hands were
+	# 9 cm apart at the foot of the handle, the left's fingers poking out past the right. Now a two-handed hold:
+	# a right-hander's chopping grip, the left hand at the foot and the right 30 cm up the handle (the other way
+	# round, the upper left hand faced you palm-first with its fingers splayed behind the handle).
+	"axe": {"right": [Vector3(0, 0.30, 0), Vector3.ZERO], "left": [Vector3(0, -0.02, 0), Vector3.ZERO]},
 	"machete": {"right": [Vector3.ZERO, Vector3.ZERO]},
 	"knife": {"right": [Vector3.ZERO, Vector3.ZERO]},
 }
@@ -42,6 +46,18 @@ const GUNS := {
 			"left": [Vector3(0.0, -0.015, -0.23), Vector3(90, 0, 0)]},
 	"crossbow": {"right": [Vector3(0.0, -0.020, 0.18), Vector3(-15, 0, 0)],
 			"left": [Vector3(0.0, 0.0, -0.18), Vector3(90, 0, 0)]},
+}
+
+## V39 (Emmitt: "the left hand should be palm up and the arm is floating"): a long gun's fore-end rests in the
+## left palm, the forearm running back and down toward the left shoulder. The wrap-round grip, rolled like the
+## gun hand, could only set the forearm square to the barrel: straight out to the left, as if floating. Per gun,
+## in the gun's space (it points -Z, up +Y): which way the palm faces, which way the forearm runs, and the
+## fingers' pose. The hand keeps this until it leaves the barrel's line (a reload), not when it slides along it
+## (the shotgun's pump).
+const CRADLES := {
+	"hunting_rifle": {"palm": Vector3(0.3, 1.0, 0.0), "forearm": Vector3(-0.6, -0.5, 0.62), "pose": "HoldMag"},
+	"shotgun": {"palm": Vector3(0.3, 1.0, 0.0), "forearm": Vector3(-0.6, -0.5, 0.62), "pose": "HoldMag"},
+	"crossbow": {"palm": Vector3(0.3, 1.0, 0.0), "forearm": Vector3(-0.6, -0.5, 0.62), "pose": "HoldMag"},
 }
 
 ## V30 throwables sit across the right palm with the forearm leaving the lower-right of the view.
@@ -69,6 +85,16 @@ static func hand_basis(base: Basis, roll: float) -> Basis:
 	return base * Basis(Vector3.UP, roll) * Basis(Vector3.RIGHT, WRIST_TILT)
 
 
+## V39: the hand's basis that faces its palm along `palm` and runs its forearm along `forearm` (both in the
+## weapon's space). The model's palm faces -X on the right hand and +X on the mirrored left; its forearm is FOREARM.
+static func cradle_basis(palm: Vector3, forearm: Vector3, side: String) -> Basis:
+	var palm_h := Vector3.LEFT if side == "right" else Vector3.RIGHT
+	var fore_h := (FOREARM - palm_h * FOREARM.dot(palm_h)).normalized()
+	var p := palm.normalized()
+	var f := (forearm - p * forearm.dot(p)).normalized()
+	return Basis(p, f, p.cross(f)) * Basis(palm_h, fore_h, palm_h.cross(fore_h)).inverse()
+
+
 ## Adds the hands a weapon needs as children named Hand_R / Hand_L. `table` is MELEE or GUNS. Each hand is
 ## rolled about its grip axis so that, with the weapon in its resting pose (`rest`, camera space), the forearm
 ## runs off toward the bottom corner of the screen instead of up past the camera.
@@ -87,6 +113,11 @@ static func attach(weapon: Node3D, id: String, table: Dictionary, rest: Basis = 
 		hand.set_meta("grip_position", pr[0])
 		hand.set_meta("side", side)
 		hand.transform = Transform3D(hand_basis(base, best_roll(base, rest, ARM_DIR[side].normalized())), pr[0])
+		if side == "left" and table == GUNS and CRADLES.has(id):
+			var cradle: Dictionary = CRADLES[id]
+			hand.set_meta("cradle", cradle_basis(cradle["palm"], cradle["forearm"], side))
+			hand.set_meta("cradle_pose", cradle["pose"])
+			hand.basis = hand.get_meta("cradle")
 		weapon.add_child(hand)
 		set_pose(hand, "Grip")
 
@@ -125,6 +156,11 @@ static func reaim(holder: Node3D, cam_basis: Basis) -> void:
 		if hand.has_meta("target_base"):
 			free = clampf(float(hand.get_meta("target_weight", 1.0)) * position.distance_to(hand.get_meta("grip_position", position))
 					/ FREE_AT, 0.0, 1.0)
+		if hand.has_meta("cradle"):
+			# V39: cradled until it leaves the barrel's line; sliding along it (the pump) keeps the cradle.
+			var off := position - (hand.get_meta("grip_position", position) as Vector3)
+			free = clampf(Vector2(off.x, off.y).length() / FREE_AT, 0.0, 1.0)
+			hand.basis = (hand.get_meta("cradle") as Basis).slerp(hand.basis.orthonormalized(), free)
 		if free > 0.0:
 			_point_at_shoulder(hand, holder, cam_basis, side, free)
 
@@ -165,6 +201,8 @@ static func clear_target(hand: Node3D) -> void:
 ## V13: cross-fades a rigged arm to one of its single-pose animations. Static hands and placeholders have
 ## no AnimationPlayer, so this deliberately does nothing for them.
 static func set_pose(hand: Node3D, pose: String, blend: float = 0.12) -> void:
+	if pose == "Grip" and hand != null and hand.has_meta("cradle_pose"):
+		pose = String(hand.get_meta("cradle_pose"))  # V39: a cradling hand's resting fingers
 	if hand == null:
 		return
 	var players := hand.find_children("*", "AnimationPlayer", true, false)

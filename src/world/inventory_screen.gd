@@ -260,6 +260,36 @@ func move(item: String, side: String, whole_stack: bool) -> void:
 	refresh()
 
 
+## P8 (Emmitt: "with colored items the shift+click to inventory function breaks"): a gear piece's tile only
+## selected it, so shift- or ctrl-click on a coloured piece did nothing a stack's would. A piece is one thing, so
+## both move it to the other side.
+func _on_gear_slot(uid: int, side: String) -> void:
+	if Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL):
+		move_gear(uid, side)
+	else:
+		select_gear(uid, side)
+
+
+## Moves a gear piece to the other side: between your pockets and the open container, or a worn piece back to
+## your pockets.
+func move_gear(uid: int, side: String) -> void:
+	if _selected == GEAR + str(uid):
+		_selected = ""
+	if side == WORN:
+		var worn := sim.gear.find(uid)
+		if not worn.is_empty():
+			message.emit(sim.unequip_gear(sim.gear.slot_of(worn)))
+		refresh()
+		return
+	if _container_id == "":
+		message.emit("No container within reach")
+		return
+	var result := sim.move_container_gear(_container_id, uid, side == CRATE)
+	if result["why"] != "":
+		message.emit(result["why"])
+	refresh()
+
+
 ## M13: selects a gear piece (in your pockets, or WORN).
 func select_gear(uid: int, side: String = POCKETS) -> void:
 	_selected = GEAR + str(uid)
@@ -755,7 +785,7 @@ func _gear_slot(piece: Dictionary, side: String) -> Button:
 	n.add_theme_color_override("font_color", Color(1, 0.5, 0.4) if not sim.gear.working(piece) else Color.WHITE)
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(n)
-	b.pressed.connect(select_gear.bind(int(piece["uid"]), side))
+	b.pressed.connect(_on_gear_slot.bind(int(piece["uid"]), side))
 	b.gui_input.connect(_on_gear_input.bind(int(piece["uid"]), side))
 	return b
 
@@ -840,7 +870,7 @@ func _fill_wearing() -> void:
 			b.tooltip_text = "%s · %s" % [piece["name"], sim.gear.condition_text(piece)]
 			b.toggle_mode = true
 			b.button_pressed = _selected == GEAR + str(piece["uid"]) and _selected_side == WORN
-			b.pressed.connect(select_gear.bind(int(piece["uid"]), WORN))
+			b.pressed.connect(_on_gear_slot.bind(int(piece["uid"]), WORN))
 			b.gui_input.connect(_on_gear_input.bind(int(piece["uid"]), WORN))
 			var icon := gear_icon(sim.gear.color(piece), sim.gear.base_of(piece)["name"], rect.size - Vector2(10, 10), piece["base"])
 			icon.position = Vector2(5, 5)
