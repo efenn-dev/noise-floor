@@ -74,6 +74,8 @@ P6 (playtest: a swapped door "disappeared"): `BuildController.try_remove` posts 
 
 P7 (the son's copy ran new models with old code after an update closed halfway): `update.ps1` unpacks with .NET ZipFile, moves the whole new `game` (and `godot`, only if its exe changed) in beside the live folder as `<part>.new` and swaps it in with two renames (`Install-Part`); `Restore-Interrupted` puts back a `<part>.old` left without its live folder and clears stray `.new` folders; a named mutex makes a second launcher wait. The new updater reaches a PC only at the end of a completed update (it copies itself last).
 
+P8: gear tiles in the inventory screen use `_on_gear_slot` (shift/ctrl-click: `move_gear`, between pockets and the open container, or worn back to pockets); before, they only selected.
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

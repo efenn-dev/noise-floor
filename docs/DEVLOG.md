@@ -30,6 +30,15 @@ Emmitt, with screenshots: "the left hand should be palm up and the arm is floati
 **Known gaps:**
 - In the axe's block, the left hand shows its palm.
 - The pistol hold is unchanged, as Emmitt asked.
+## 2026-10-16 — P8 Shift-click works on coloured gear
+
+Emmitt: "with colored items the shift+click to inventory function breaks". Item stacks used a click handler that checks shift (move the whole stack) and ctrl (move one). Gear pieces, the rarity-coloured items, were wired straight to "select", so shift- or ctrl-click only highlighted them.
+
+**Built:** gear tiles use `InventoryScreen._on_gear_slot`. Shift- or ctrl-click moves the piece to the other side (`move_gear`): pockets to the open container and back, or a worn piece off into your pockets. A plain click still selects it.
+
+**Try it:** `play.bat --loot`, put a coloured piece in your pockets, then shift-click it into the fridge and back.
+
+**Tests:** 20,606 green (new `test_shift_click_moves_gear_pieces`: real shift and ctrl key presses through Godot's input, clicking the live tiles).
 
 ## 2026-10-16 — P7 Updates that can't leave a half-new game
 
