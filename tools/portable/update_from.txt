@@ -1,6 +1,9 @@
 # Where "Play Noise Floor.bat" looks for a newer NoiseFloor.zip (with its version.txt) before the game starts.
 # One folder per line; the first one that answers wins. Lines starting with # are ignored.
+# P9: folders are tried first; a line starting https:// (the family's private CDN folder, password in
+# family_cdn.txt) is tried only when none of them answers, e.g. when the PC with the drive is off.
 R:\Reserve\Noise Floor
 \\NUGGET\Reserve\Noise Floor
 \\nugget.attlocal.net\Reserve\Noise Floor
 \\192.168.1.148\Reserve\Noise Floor
+https://cdn.agencyedge.io/noisefloor

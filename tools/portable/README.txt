@@ -20,6 +20,9 @@ it says "Updating", leave the black window open until it says "Updated" (usually
 minute); the game starts by itself after that. If it's closed early, the old version is kept
 and the update tries again next time. If the drive can't be reached, it just plays the
 version it has.
+It also checks the family's private folder online (when the family drive can't be reached, e.g. the other PC
+is off), so updates arrive either way. family_cdn.txt holds that folder's password: keep it with the game,
+don't share it.
 To update by hand instead: extract the new NoiseFloor.zip and replace the old NoiseFloor folder.
 The saves stay where they are either way.
 

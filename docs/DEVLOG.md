@@ -2,6 +2,34 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P9 Kaleb's updates come from the internet too
+
+Emmitt: "can we make it easier to update the game for kaleb so he sees the new changes? we can use our cdn server". Kaleb's copy only updated from R: over the home network, which needs this PC switched on and his PC able to reach the share. His logs never arrived, so it probably wasn't reaching it.
+
+**Built:**
+- **A private family folder on the CDN:** https://cdn.agencyedge.io/noisefloor/ on hermes.
+  - Password-protected (nginx basic auth, `/etc/nginx/noisefloor.htpasswd`), so the game and its paid arm models stay family-only. Wrong or missing password: 401.
+  - Never cached.
+  - Written by the restricted `cdnpublish` account, the same one ClipLab publishes with.
+  - The nginx config was backed up to `/root/cdn.nginx.bak-20261016` and tested before reload. ClipLab's downloads and cliplabpro.com still answer.
+- **`tools/publish_family.sh` publishes to both:** R: and the CDN. Each zip is uploaded and renamed into place, with version.txt last.
+  - Both version.txt files carry the zip's SHA-256 on a second line. Old launchers read only the first line, so they're unaffected.
+  - `NO_CDN=1` skips the upload.
+- **The launcher (`update.ps1`) falls back to the CDN:** it tries the R: folders first (fast at home), then `https://cdn.agencyedge.io/noisefloor`, using the password in `family_cdn.txt`.
+  - `make_portable.sh` copies that file in from `~/.noisefloor/family_cdn.txt`. It's never in git.
+  - Downloads show progress every 10%.
+  - A copy whose fingerprint doesn't match is thrown away (a folder copy too).
+  - The P7 folder swap installs it.
+
+**Tested** (scratch install, R: unreachable):
+- Downloaded from the CDN and installed in 38 s; a second start said up to date.
+- A wrong password keeps the old version.
+- A damaged copy keeps the old version.
+- The CDN now holds 43be875 with the new launcher.
+
+**For Kaleb's PC:** it gets the new launcher with its next update from R:, so this PC must be on when he starts the game that once. Leave the window open until "Updated". From then on, updates also come over the internet, whether or not this PC is on.
+
+**Known gaps:** play logs still only reach R:, so they only arrive when his PC can see the share.
 ## 2026-10-16 — V39 Supporting hands that cradle, a two-handed axe, and a real scope
 
 Emmitt, with screenshots: "the left hand should be palm up and the arm is floating. the axe has a finger that looks off, maybe rethink the grip with 2 hands. pistol looks a bit weird but acceptable for now." Then: "I found a scope but it doesn't zoom in much and has no reticle".
