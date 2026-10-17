@@ -3,8 +3,25 @@
 # one that answers wins), and if that folder's version.txt differs from game\version.txt it copies NoiseFloor.zip
 # down, unpacks it, and mirrors its game and godot folders over these (saved games live in %APPDATA%, never here).
 # A folder that doesn't answer within a few seconds is skipped; any problem leaves this copy exactly as it was.
+# P6: it also copies this PC's play-session logs to logs\<computer name>\ in that folder, so a problem met on
+# another PC can be read on the one that makes the game (best effort: a drive you can't write to is skipped).
 param([string]$Here)
 $ErrorActionPreference = "Stop"
+
+function Send-SessionLogs([string]$src) {
+    try {
+        $sessions = Join-Path $env:APPDATA "Godot\app_userdata\Noise Floor\sessions"
+        if (-not (Test-Path -LiteralPath $sessions)) { return }
+        $to = Join-Path (Join-Path $src "logs") $env:COMPUTERNAME
+        # /XO: only logs that are new or changed; one quick retry, so a read-only drive can't hold up the game.
+        robocopy $sessions $to *.txt /XO /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { Write-Host "Couldn't copy the play logs to the family drive." }
+        else { Write-Host "Play logs copied to the family drive." }
+    } catch {
+        Write-Host "Couldn't copy the play logs ($($_.Exception.Message))."
+    }
+}
+
 try {
     $local = ""
     $localFile = Join-Path $Here "game\version.txt"
@@ -20,6 +37,7 @@ try {
         $found = Receive-Job $job
         Remove-Job $job -Force
         if (-not $found) { continue }
+        Send-SessionLogs $src
         $remote = (Get-Content -LiteralPath $ver -TotalCount 1).Trim()
         if ($remote -eq $local) {
             Write-Host "Noise Floor is up to date."
