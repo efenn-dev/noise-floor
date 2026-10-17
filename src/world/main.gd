@@ -51,6 +51,7 @@ extends Node3D
 ##                                   shown in the inventory screen (M13)
 ##   --mod-screen[=pistol|rifle]     that gun plus every part in pockets, with its modding panel open (V23)
 ##   --zombie-type=TYPE              what --zombie spawns (shambler, runner, crawler, screamer, brute)
+##   --zombie-body=A,B,...           the bodies --zombie's zombies wear, in order (default, heavy, slim, short, woman; V36)
 ##   --drive[=car_N]                 start in a car (car_0, a sedan, by default; wrecks can't be driven)
 ##   --no-hints                      no first-game hints (they only show in a new game without --demo-*/--cam)
 ##   --hints                         show the first-game hints anyway (for screenshots)
@@ -1779,6 +1780,9 @@ func _build_zombies(args: Dictionary) -> void:
 		for i in range(0, v.size() - 1, 2):
 			var z := sim.horde.spawn(args.get("zombie-type", "shambler"), Vector3(v[i].to_float(), 0, v[i + 1].to_float()))
 			z.facing = (player.position - z.pos).normalized()
+			var bodies := String(args.get("zombie-body", "")).split(",", false)
+			if not bodies.is_empty():  # V36: e.g. --zombie-body=heavy,short to see their hats
+				ZombieBody.forced_bodies[z.id] = bodies[(i >> 1) % bodies.size()]
 			if args.has("dead-zombies"):  # S4: a corpse to look at (with --advance so the sim registers it)
 				ZombieBody.settle_deaths = true  # V35: shown already fallen
 				ZombieBody.forced_death_style = str(args.get("death-style", ""))

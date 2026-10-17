@@ -92,6 +92,7 @@ var death_dir := Vector3.ZERO  # V7: which way it was knocked as it died (it fal
 var death_style := ""
 static var settle_deaths := false  # --dead-zombies (screenshots): bodies are already down, the fall finished
 static var forced_death_style := ""  # --death-style=back|forward (screenshots)
+static var forced_bodies := {}  # V36: zombie id -> body name, from --zombie-body (screenshots)
 const BACK_FALL_SHARE := 3  # of every 5 zombies (by id) fall backwards; the rest forwards, unless hit hard
 const HARD_HIT := 3.0       # knockback (m/s) that always knocks it over backwards
 const FORWARD_FALL_TIME := 0.8  # seconds to tip over forwards
@@ -229,6 +230,8 @@ static func _plain_material_for_look(source: StandardMaterial3D, tint: Color) ->
 ## reloads and every PC agree). Ids come in blocks of five, each block a hashed shuffle of the five bodies,
 ## so any handful of zombies spawned together is a mix rather than a run of the same person.
 static func variant_for(id: int, type: String) -> int:
+	if forced_bodies.has(id) and BODIES.has(forced_bodies[id]):
+		return BODIES.find(forced_bodies[id])
 	if type == "brute":
 		return BODIES.find("heavy")
 	var n := BODIES.size()

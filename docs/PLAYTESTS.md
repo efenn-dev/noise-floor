@@ -16,6 +16,10 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-16 (evening) — Emmitt's son with Emmitt, verbal (relayed in the session), build 6bda979 (P5)
+- Confusing: "we removed a door and added our own and it disappeared when using it. Then we couldnt add a new door." He got frustrated. The logs were on his PC, which never sent them anywhere.
+- Reproduced in the game scene: taking a piece down (right-click in build mode) said nothing, so a door clicked on in build mode just vanished. Then, looking at the empty doorway, the door ghost went past it onto a wall inside the house ("Already built"). Building on the lawn just outside was the only way in. Fixed in P6. The launcher now copies his session logs to R:/Reserve/Noise Floor/logs/.
+
 ## 2026-10-16 — Emmitt, verbal (relayed in the session), build 6c486b6 (F6 part 2)
 - Confusing: "one of the reasons I didn't like building in the game was because the conveyor belts were hard to tell if they snapped into a machine like in satisfactory. I just built a machine with conveyor belts around all sides and still didn't know how it worked." Machines take input only at the back and give output at the front, and nothing showed which side was which or whether a belt connected. Fixed in P4: IN/OUT arrows on every machine and its ghost, belts that snap, a green tick or red X at every belt end, look-at lines that say what feeds what. Then (after seeing it): "can we make the graphics a bit better where the belt actually connects to the machines so items don't look like they float over the belts?" (P4: chutes and port frames) and "how should we make users gather materials for things like the smelter?" (P5: gather by hand at resource nodes, and the build line says what's missing and where it comes from).
 

@@ -26,6 +26,38 @@ Emmitt: "we really need some hand models, these look cursed". He bought Davlet's
 - The glove tag's top edge is a little blocky up close.
 - Swapping sleeve or glove colours means changing two constants and re-running both scripts.
 - A public release would need a packed build and a look at the pack's own licence text.
+## 2026-10-16 — P6 Doors you can swap: taking pieces down says so, and a door goes in the doorway you look at
+
+Emmitt's son pulled down a house's front door, built his own, "used it and it disappeared", then couldn't build a new one. He got frustrated. In the game scene, two things went wrong:
+- Right-click in build mode takes a piece down without a word, so clicking a door in build mode just made it vanish (its materials went quietly back into a crate).
+- A wall, door or window goes on the far edge of the cell you aim at. Looking at an empty doorway, the look ray went through it and hit the floor or wall inside, so the ghost sat on a wall inside the house and said "Already built". Only aiming at the lawn just outside worked.
+
+**Built:**
+- **Taking something down says what came down and where its materials went:** "Took down the Door: 6 Plank, 8 Nails back in the crate" (or "in your pockets"; a town door gives 2 planks).
+- **A door goes in the doorway you look through:** with a wall, door or window picked, looking through a gap in a wall line (walls on both sides, low enough to walk through) aims at that gap (`BuildController.gap_on_ray`, `is_wall_gap`). The end of a wall line and open ground keep the old aim.
+- The build line no longer errors the frame after a removal (the piece's body is still in the physics world until it's freed; `update_aim` now ignores it).
+- **His logs come to us:** the portable launcher (`update.ps1`) copies the PC's session logs to `logs\<computer name>\` in the family folder at each start (new or changed logs only; a drive it can't write to is skipped). The first start after this update brings in the new launcher; from the start after that, his logs appear in R:/Reserve/Noise Floor/logs/.
+
+**Try it:** `play.bat`, walk to a house, B, pick Door, look at its front door, right-click (the message says what came back), keep looking at the empty doorway (green ghost in it) and left-click. Esc, then E opens it.
+
+**Tests:** 20,592 green (new `test_door_swap_world.gd`, real game scene: take the town door down, see the message, the ghost sits in the empty doorway, a new door goes in, E opens it and it's still there, take it down for its full cost and build again; the end of a wall line isn't a gap). Soak 1 day OK, 143 s.
+
+**Known gaps:** what "used it and it disappeared" was exactly is a best guess (build mode right-click) until his logs arrive. Right-click still takes a piece down with no undo.
+
+**Next:** the FPS arms (Davlet pack, bought), then PT.
+## 2026-10-16 — V36 Hats that fit: the hard hat and cap sized to each body's head
+
+Emmitt: "when we changed the zombie models the clothing got messed up a bit, mostly just the headwear scaled strangely to the new zombies". The hard hat (heavy body) and the cap (short body) were fixed sizes left over from the old blocky zombie: about twice as wide as the new MakeHuman heads and too flat, so they looked like sombreros with the dark scalp poking through the top, and the cap's bill floated at eye level.
+
+**Built:**
+- **Hats are fitted to the head they sit on:** `zombie_mpfb.py` `head_fit` measures the head (its vertices above the hat band plus the hair on it), then grows the dome until all of it is inside with a little clearance. The hard hat is a proper dome with an oval brim and a moulded ridge on top; the cap is a snug crown with its bill coming out of the front at the band, dipping slightly. `zombie_heavy.glb` and `zombie_short.glb` rebuilt; the other three bodies wear no hat and are unchanged.
+- **`--zombie-body=A,B,...`** (screenshots): the bodies `--zombie`'s zombies wear, in order, e.g. `--zombie-body=heavy,short`.
+
+**Try it:** `play.bat --zombies=0 --zombie=-0.3,-1.6,0.3,-1.6 --zombie-body=heavy,short --cam=0,0,-0.4,0,3 --time=12` puts a hard hat and a cap zombie right in front of you. Brutes always wear the hard hat body.
+
+**Tests:** 20,575 green (new `test_hats_fit_their_heads` in `test_zombie_types_world.gd`: each hat covers the top of the head and its hair, and is at most 1.75 (hard hat) / 1.45 (cap) heads wide; the old ones were about 2.1 and 1.8 with hair through the top). Soak 1 day OK, 148 s (in the usual range; only models changed).
+
+**Known gaps:** hats never come off (a head shot could knock one off later).
 
 **Next:** PT, Emmitt's first loud night.
 
