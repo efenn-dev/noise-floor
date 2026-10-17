@@ -26,6 +26,9 @@ sed 's/\r$//; s/$/\r/' tools/portable/play.bat > "$out/Play Noise Floor.bat"
 sed 's/\r$//; s/$/\r/' tools/portable/README.txt > "$out/README.txt"
 sed 's/\r$//; s/$/\r/' tools/portable/update_from.txt > "$out/update_from.txt"  # where the launcher looks for updates
 sed 's/\r$//; s/$/\r/' tools/portable/update.ps1 > "$out/update.ps1"
+# P9: the launcher's password for the family's private CDN folder; kept outside git (~/.noisefloor/family_cdn.txt).
+cred="${FAMILY_CDN_CREDENTIALS:-$HOME/.noisefloor/family_cdn.txt}"
+if [ -f "$cred" ]; then cp "$cred" "$out/family_cdn.txt"; else echo "make_portable: no $cred, so this copy can't update from the CDN" >&2; fi
 python - "$out" build/NoiseFloor.zip <<'PY'
 import sys, zipfile
 from pathlib import Path
