@@ -48,6 +48,10 @@ const WEAPON_LOOKS := {
 		"Weapon Wood": {"texture": "gun_wood", "tile_m": 0.25, "tint": Color(1.0, 0.9, 0.78)},
 		"Weapon Grip": {"texture": "cloth_cotton", "tile_m": 0.08, "tint": Color(0.36, 0.34, 0.31), "metallic": 0.0, "roughness": 0.95},
 		"Weapon Edge": {"texture": "gun_metal", "tile_m": 0.1, "tint": Color(1.0, 1.0, 1.0), "metallic": 0.8, "roughness": 0.25},
+		# V38: the axe's painted head and wide ground bevel (less metallic than the edges above, so they stay light).
+		# On the car-paint photo: the gun-metal one is half as bright and turned the red nearly black.
+		"Axe Paint": {"texture": "car_paint", "tile_m": 0.15, "tint": Color(0.88, 0.16, 0.1), "metallic": 0.15, "roughness": 0.42},
+		"Axe Bevel": {"texture": "car_paint", "tile_m": 0.08, "tint": Color(0.95, 0.96, 1.0), "metallic": 0.5, "roughness": 0.2},
 	},
 	"untextured": [],
 }
@@ -66,10 +70,10 @@ const STYLES := {
 		[0.54, Vector3(-0.3, -0.24, -0.66), Vector3(-15, -45, -80)],
 		[1.0, Vector3(0.32, -0.36, -0.5), Vector3(-55, 0, 25)]]},
 	"overhead": {"time": 0.45, "strike": 0.55, "keys": [
-		[0.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 0, 22)],
+		[0.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 35, 22)],
 		[0.38, Vector3(0.18, 0.12, -0.34), Vector3(40, 0, -5)],
 		[0.58, Vector3(0.06, -0.48, -0.68), Vector3(-105, 0, 5)],
-		[1.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 0, 22)]]},
+		[1.0, Vector3(0.28, -0.38, -0.5), Vector3(-52, 35, 22)]]},
 	"slash": {"time": 0.26, "strike": 0.45, "keys": [
 		[0.0, Vector3(0.3, -0.33, -0.48), Vector3(-55, 0, 25)],
 		[0.3, Vector3(0.4, -0.18, -0.42), Vector3(5, 15, -45)],

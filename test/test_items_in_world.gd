@@ -117,6 +117,16 @@ func test_every_item_and_wearable_has_a_model_that_lies_on_the_floor() -> void:
 		model.free()
 
 
+## V38: a dropped melee weapon lies on its flat side, not balanced on its edge: an axe shows the side of its
+## head, so it lies about as low as the head is thick, not as tall as the head is long (20 cm).
+func test_dropped_blades_lie_flat() -> void:
+	for look: String in ["axe", "machete", "knife"]:
+		var model := BagView.make_model(look)
+		var box := BagView.bounds(model)
+		check(box.size.y < 0.06, "a dropped %s lies on its side (%.3f m high)" % [look, box.size.y])
+		model.free()
+
+
 func test_the_placer_puts_it_on_the_floor_you_aim_at_not_a_wall() -> void:
 	var sim := _sim()
 	sim.player_pos = Vector3.ZERO
