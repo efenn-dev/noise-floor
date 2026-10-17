@@ -118,3 +118,39 @@ func _colours(body: ZombieBody) -> Dictionary:
 			if mat != null:
 				out[mat.resource_name] = mat.get_meta("look_tint", mat.albedo_color)  # V2: before texture brightness
 	return out
+
+
+## V36: the hard hat and the cap are fitted to their bodies' heads. Each covers the top of the head and its hair
+## and is little wider than the head (fixed sizes made sombreros with the scalp showing through on the new bodies).
+func test_hats_fit_their_heads() -> void:
+	# At most this many heads wide: a brimmed hard hat and a snug cap (the old ones were about twice).
+	for fit: Array in [["heavy", "Hard Hat", 1.75], ["short", "Cap", 1.45]]:
+		var model: Node3D = ZombieBody.MODELS[ZombieBody.BODIES.find(fit[0])].instantiate()
+		var hat := _surface_box(model, fit[1], -INF)
+		var skin := _surface_box(model, "Zombie Skin", hat.position.y)
+		var hair := _surface_box(model, "Hair", hat.position.y)
+		check(hat.size.x > 0.05 and skin.size.x > 0.05, "the %s body has a %s and a head under it" % fit.slice(0, 2))
+		check(hat.end.y > skin.end.y + 0.005, "the %s covers the top of the head" % fit[1])
+		check(hat.end.y > hair.end.y + 0.003, "and the hair on it")
+		var head := skin.merge(hair).size.x
+		check(hat.size.x < head * fit[2], "the %s is %.3f m wide on a %.3f m head" % [fit[1], hat.size.x, head])
+		model.free()
+
+
+func _surface_box(model: Node3D, material_name: String, above_y: float) -> AABB:
+	var box := AABB()
+	var first := true
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh.mesh.get_surface_count():
+			var mat := mesh.mesh.surface_get_material(i)
+			if mat == null or mat.resource_name != material_name:
+				continue
+			for v: Vector3 in mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+				if v.y <= above_y:
+					continue
+				if first:
+					box = AABB(v, Vector3.ZERO)
+					first = false
+				else:
+					box = box.expand(v)
+	return box
