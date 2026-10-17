@@ -71,6 +71,8 @@ P5 (gathering by hand): resources.json kinds have "hand" (item, count, seconds, 
 
 P6 (playtest: a swapped door "disappeared"): `BuildController.try_remove` posts "Took down the X: <refund> back in the crate|your pockets" (`removed_words`); wall, door and window aims fill a gap in a wall line that the look ray passes through (`gap_on_ray`, `is_wall_gap`: an empty edge with a wall, door or window on both sides along the line, crossed below the piece's height), otherwise the far edge of the hit cell as before. The portable `update.ps1` copies the PC's `sessions/*.txt` to `<family folder>/logs/<COMPUTERNAME>/` at each start (`Send-SessionLogs`), so the son's logs are at R:/Reserve/Noise Floor/logs/.
 
+P7 (the son's copy ran new models with old code after an update closed halfway): `update.ps1` unpacks with .NET ZipFile, moves the whole new `game` (and `godot`, only if its exe changed) in beside the live folder as `<part>.new` and swaps it in with two renames (`Install-Part`); `Restore-Interrupted` puts back a `<part>.old` left without its live folder and clears stray `.new` folders; a named mutex makes a second launcher wait. The new updater reaches a PC only at the end of a completed update (it copies itself last).
+
 V30 screenshot flags: `--gun=shotgun|crossbow` gives, loads and raises either new primary with matching ammunition; `--throw=pipe_bomb|bottle` readies that throwable in the right hand with its predicted arc visible.
 
 V13/V15 screenshot flags: `--reload-at=T` freezes the gun's reload at fraction T (0-1), `--inspect-at=T` freezes the inspect (V) of whatever is in hand, `--block` holds the melee/fists guard pose (combine with `--weapon` or `--fists`); e.g. `tools/shot.sh mag --gun --reload-at=0.62 --time=12`.

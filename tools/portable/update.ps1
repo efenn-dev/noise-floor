@@ -1,10 +1,14 @@
 # Noise Floor, portable copy: brings in a newer build from the family drive, if one is there.
 # "Play Noise Floor.bat" runs this before the game starts. It reads update_from.txt (one folder per line, the first
 # one that answers wins), and if that folder's version.txt differs from game\version.txt it copies NoiseFloor.zip
-# down, unpacks it, and mirrors its game and godot folders over these (saved games live in %APPDATA%, never here).
-# A folder that doesn't answer within a few seconds is skipped; any problem leaves this copy exactly as it was.
+# down, unpacks it, and swaps the new game and godot folders in (saved games live in %APPDATA%, never here).
+# A folder that doesn't answer within a few seconds is skipped; any problem leaves this copy as it was.
 # P6: it also copies this PC's play-session logs to logs\<computer name>\ in that folder, so a problem met on
 # another PC can be read on the one that makes the game (best effort: a drive you can't write to is skipped).
+# P7: the son's game ran the new arm models with the old code: an update closed halfway had copied assets\ but
+# not src\. Each folder is now copied in full beside the live one (game.new) and swapped in by two renames, so a
+# closed window leaves the old version or the new one, never a mix; the unzip is .NET's (seconds, not minutes);
+# each step says what it's doing; and a second launcher waits for the first instead of copying over it.
 param([string]$Here)
 $ErrorActionPreference = "Stop"
 
@@ -22,7 +26,58 @@ function Send-SessionLogs([string]$src) {
     }
 }
 
+# A swap cut off between its two renames leaves part.old and no part: put the old one back. A copy cut off
+# before its swap leaves a half-filled part.new: clear it.
+function Restore-Interrupted([string]$Here) {
+    foreach ($part in @("game", "godot")) {
+        $live = Join-Path $Here $part
+        $old = Join-Path $Here "$part.old"
+        if (-not (Test-Path -LiteralPath $live) -and (Test-Path -LiteralPath $old)) {
+            Rename-Item -LiteralPath $old -NewName $part
+            Write-Host "Put back the $part folder from an update that was cut off."
+        }
+        $staged = Join-Path $Here "$part.new"
+        if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# The whole new folder goes in beside the live one first, then two renames swap it in.
+function Install-Part([string]$from, [string]$Here, [string]$part) {
+    $live = Join-Path $Here $part
+    $staged = Join-Path $Here "$part.new"
+    $old = Join-Path $Here "$part.old"
+    foreach ($leftover in @($staged, $old)) {
+        if (Test-Path -LiteralPath $leftover) { Remove-Item -LiteralPath $leftover -Recurse -Force }
+    }
+    try {
+        Move-Item -LiteralPath $from -Destination $staged  # instant on the same drive
+    } catch {
+        robocopy $from $staged /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "copying the $part folder failed" }
+    }
+    if (Test-Path -LiteralPath $live) { Rename-Item -LiteralPath $live -NewName "$part.old" }
+    Rename-Item -LiteralPath $staged -NewName $part
+    Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# True if the new folder's Godot is the same file as the one already here (it rarely changes; 170 MB to move).
+function Same-Godot([string]$new, [string]$Here) {
+    $a = Get-ChildItem -LiteralPath $new -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $a) { return $true }
+    $b = Join-Path (Join-Path $Here "godot") $a.Name
+    if (-not (Test-Path -LiteralPath $b)) { return $false }
+    return (Get-Item -LiteralPath $b).Length -eq $a.Length
+}
+
+$mutex = New-Object System.Threading.Mutex($false, "NoiseFloorUpdate")
+$held = $false
 try {
+    if (-not $mutex.WaitOne(0)) {
+        Write-Host "Noise Floor is already updating in another window: waiting for it to finish..."
+        [void]$mutex.WaitOne()
+    }
+    $held = $true
+    Restore-Interrupted $Here
     $local = ""
     $localFile = Join-Path $Here "game\version.txt"
     if (Test-Path -LiteralPath $localFile) { $local = (Get-Content -LiteralPath $localFile -TotalCount 1).Trim() }
@@ -43,20 +98,22 @@ try {
             Write-Host "Noise Floor is up to date."
             return
         }
+        Write-Host ""
         Write-Host "Updating Noise Floor to: $remote"
+        Write-Host "This takes about a minute. Please don't close this window."
         $tmp = Join-Path $env:TEMP "noise_floor_update"
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
         New-Item -ItemType Directory -Path $tmp | Out-Null
+        Write-Host "  1/3 Copying the new version from the family drive..."
         Copy-Item -LiteralPath (Join-Path $src "NoiseFloor.zip") -Destination (Join-Path $tmp "NoiseFloor.zip")
-        Expand-Archive -LiteralPath (Join-Path $tmp "NoiseFloor.zip") -DestinationPath $tmp -Force
+        Write-Host "  2/3 Unpacking it..."
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $tmp "NoiseFloor.zip"), $tmp)
         $new = Join-Path $tmp "NoiseFloor"
         if (-not (Test-Path -LiteralPath (Join-Path $new "game\project.godot"))) { throw "the new copy looks incomplete" }
-        # version.txt goes last, so a copy that fails halfway (the game still open, say) is tried again next start.
-        foreach ($part in @("game", "godot")) {
-            robocopy (Join-Path $new $part) (Join-Path $Here $part) /MIR /XF version.txt /NFL /NDL /NJH /NJS /NP | Out-Null
-            if ($LASTEXITCODE -ge 8) { throw "copying the $part folder failed" }
-        }
-        Copy-Item -LiteralPath (Join-Path $new "game\version.txt") -Destination $localFile -Force
+        Write-Host "  3/3 Putting it in place..."
+        if (-not (Same-Godot (Join-Path $new "godot") $Here)) { Install-Part (Join-Path $new "godot") $Here "godot" }
+        Install-Part (Join-Path $new "game") $Here "game"
         foreach ($f in @("README.txt", "update_from.txt", "update.ps1")) {
             $from = Join-Path $new $f
             if (Test-Path -LiteralPath $from) { Copy-Item -LiteralPath $from -Destination (Join-Path $Here $f) -Force }
@@ -66,5 +123,9 @@ try {
         return
     }
 } catch {
+    Restore-Interrupted $Here
     Write-Host "Couldn't update ($($_.Exception.Message)); playing the version you have."
+} finally {
+    if ($held) { $mutex.ReleaseMutex() }
+    $mutex.Dispose()
 }
