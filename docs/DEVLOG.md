@@ -2,6 +2,47 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-17 — P11 Chop trees for planks, strip broken cars for scrap
+
+Same playtest as P10 (Emmitt and Kaleb, 30+ minutes): "The problem was resources ... We need a way to chop down trees for lumber and a way to get metal scrap."
+
+**Built:**
+- **Swing at a tree to chop it down** (`Salvage`, `SimWorld.player_hit_tree`).
+  - Every tree counts: the town's, the suburbs', and the thousand in the countryside.
+  - Each hit does the weapon's melee damage times its class's wood factor (axe 2.2, blade and blunt 0.8, fists 1.0).
+  - An axe fells a tree in 5 hits, a pipe in about 18, and bare fists fell a small pine in about 24.
+  - A tree gives 6 planks (a small pine 3). They go into your pockets, and whatever doesn't fit lies on the ground where you stand.
+  - The tree tips over away from you (`CountryView.tipped`, 1.4 s) and is gone; you can walk through where it stood.
+  - Felled trees stay down (saved under "salvage").
+- **Swing at a car that won't drive to strip it.**
+  - Strippable cars:
+    - the town's broken-down cars (flat tyres, dead engine, smashed)
+    - downtown's and the park's burned-out wrecks
+    - the highway and junkyard wrecks
+  - One scrap metal for every 80 damage (blunt 1.4, axe 1.0, blade 0.5, fists 0.3), until it's stripped: a sedan holds 8, a pickup 10, a van 12.
+  - A car that still drives says so and gives nothing.
+- **Both are loud.** Every chop (42), a falling tree (55) and every strip (52) is a one-off noise zombies hear (noise.json). Each hit wears the weapon like a hit on a door.
+  - New synthesized sounds `chop`, `tree_fall`, `metal_strip` (tools/audio/synth.py).
+- **The game says how:**
+  - Looking at a tree: "[LMB] swing at it to chop it down for planks (an axe is quickest; it's loud)".
+  - Looking at a broken car: "[LMB] swing at it to strip scrap metal (N left; loud)".
+  - While you chop, "Chopping: 40%" shows under it.
+  - Planks' and scrap metal's "where" (shown when you're short, and in the P10 build menu) and the controls screen mention trees and broken cars.
+- Flags for screenshots:
+  - `--tree` stands you by the nearest town tree with an axe.
+  - `--tree=T` fells it and freezes the fall at fraction T.
+  - `--wreck` stands you beside the nearest car you can strip.
+
+**Try it on the PC:** start a game, walk to a tree and click at it (the pipe works; an axe from a house or the hardware store is much quicker). A broken car on Main Street gives scrap the same way.
+
+**Known gaps:**
+- Trees don't grow back and leave no stump.
+- The navmesh keeps a felled trunk as an obstacle until the next bake, so zombies may step round an empty spot.
+- Wrecks look the same stripped as whole.
+- Drivable cars can't be stripped, on purpose (nobody wrecks the car they drive by accident).
+
+**Next:** the next playtest, with P10 and P11 together.
+
 ## 2026-10-16 — P9 Kaleb's updates come from the internet too
 
 Emmitt: "can we make it easier to update the game for kaleb so he sees the new changes? we can use our cdn server". Kaleb's copy only updated from R: over the home network, which needs this PC switched on and his PC able to reach the share. His logs never arrived, so it probably wasn't reaching it.

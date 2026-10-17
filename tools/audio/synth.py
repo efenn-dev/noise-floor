@@ -510,6 +510,43 @@ def wood_break() -> np.ndarray:
     return fade_edges(normalize(out, -2))
 
 
+def chop() -> np.ndarray:
+    """P11: an axe biting into a trunk: a hollow wooden knock, a short bite of splinters, a low body thud."""
+    knock = clank(0.45, [(220, 1.0, 0.07), (520, 0.6, 0.05), (980, 0.3, 0.03)])
+    n = len(knock)
+    bite = oneshot_noise(n, bp(2200, 1.0)) * decay(n, 0.012, attack=0.0005)
+    out = knock + 0.7 * normalize(bite, 0) + 0.6 * thump(0.45, 120, 60, 0.07)
+    return fade_edges(normalize(out, -3))
+
+
+def tree_fall() -> np.ndarray:
+    """P11: a tree going over: a long creaking crack, the rush of branches, and the trunk hitting the ground."""
+    n = seconds(2.2)
+    out = np.zeros(n)
+    t = t_axis(n)
+    creak_n = seconds(1.1)
+    ct = t_axis(creak_n)
+    creak = np.sin(2 * np.pi * np.cumsum(140 + 60 * np.sin(2 * np.pi * 3.0 * ct)) / SR) * np.minimum(1.0, ct / 0.3)
+    creak *= np.exp(-ct / 0.9) * (0.6 + 0.4 * oneshot_noise(creak_n, bp(600, 1.0)))
+    place(out, 0.5 * creak, 0.0, wrap=False)
+    rush = oneshot_noise(n, bp(1800, 2.0)) * np.clip((t - 0.5) / 0.7, 0.0, 1.0) * np.exp(-np.clip(t - 1.35, 0.0, None) / 0.12)
+    out += 0.45 * normalize(rush, 0)
+    landing = thump(0.8, 70, 32, 0.25) + 0.6 * clank(0.8, [(130, 1.0, 0.12), (300, 0.5, 0.08)])
+    place(out, landing, 1.35, wrap=False)
+    return fade_edges(normalize(out, -2))
+
+
+def metal_strip() -> np.ndarray:
+    """P11: prying a panel off a wreck: a loud dented clank, a rattle of loose metal, a short screech."""
+    hit = clank(0.6, [(310, 1.0, 0.12), (787, 0.7, 0.09), (1460, 0.45, 0.07), (2390, 0.25, 0.05)])
+    n = len(hit)
+    t = t_axis(n)
+    rattle = oneshot_noise(n, bp(4200, 1.0)) * decay(n, 0.08, attack=0.01)
+    screech = np.sin(2 * np.pi * np.cumsum(1900 - 500 * t) / SR) * np.exp(-np.abs(t - 0.22) / 0.05) * 0.25
+    out = hit + 0.35 * normalize(rattle, 0) + screech + 0.5 * thump(0.6, 110, 50, 0.08)
+    return fade_edges(normalize(out, -3))
+
+
 def reload_click() -> np.ndarray:
     """A magazine going in and the slide racking: two metal clicks."""
     n = seconds(0.45)
@@ -692,7 +729,8 @@ def main() -> None:
              "creak": creak, "clang_far": clang_far,  # V4: ambience
              "headshot": headshot,  # V7
              "weapon_break": weapon_break,  # V9
-             "glass_break": glass_break, "wood_break": wood_break}  # W2
+             "glass_break": glass_break, "wood_break": wood_break,  # W2
+             "chop": chop, "tree_fall": tree_fall, "metal_strip": metal_strip}  # P11
     global rng
     for name, make in loops.items():
         if only is not None and name not in only:

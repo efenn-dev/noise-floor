@@ -28,6 +28,7 @@ var target_container := ""  # id of the loot container being looked at, "" if no
 var target_key := ""  # piece key of the machine/belt/bed/crate being looked at
 var target_car := ""  # id of the car being looked at, "" if none
 var target_project := ""  # M17a: id of the project (the water tower) being looked at, "" if none
+var target_tree: Array = []  # P11: the tree you look at: [id, kind, foot]
 var target_trunk := false  # looking at the car's back (or it's a wreck): E searches instead of getting in
 var last_message := ""
 
@@ -127,6 +128,7 @@ func update_target() -> void:
 	target_key = ""
 	target_car = ""
 	target_trunk = false
+	target_tree = []
 	target_project = ""
 	if builder.active:
 		return
@@ -159,6 +161,9 @@ func update_target() -> void:
 		target_container = hit["collider"].get_meta("container_id")
 		if target_container != was_container:
 			last_message = ""
+		return
+	if not hit.is_empty() and not CountryView.tree_at(hit["collider"], int(hit.get("shape", 0))).is_empty():
+		target_tree = CountryView.tree_at(hit["collider"], int(hit.get("shape", 0)))  # P11
 		return
 	if hit.is_empty() or hit["collider"] == null or not hit["collider"].has_meta("piece_key"):
 		return
@@ -323,9 +328,14 @@ func status_text() -> String:
 		return _car_status()
 	if target_project != "":
 		return project_status(target_project)
+	if not target_tree.is_empty():
+		return tree_status()
 	if target_container != "":
 		var c: Dictionary = sim.loot.containers.get(target_container, {})
 		var name := sim.loot.display_name(target_container)
+		if sim.wreck_type(target_container) != "":  # P11: a highway or junkyard wreck
+			name += "
+" + strip_words(target_container)
 		if c.get("searched", false):
 			return "%s · searched\n[E] open%s" % [name, ("\n" + last_message) if last_message != "" else ""]
 		if sim.loot.active == target_container:
@@ -590,6 +600,24 @@ func _list(counts: Dictionary, empty: String = "nothing") -> String:
 	return ", ".join(parts) if not parts.is_empty() else empty
 
 
+## P11: what looking at a tree says.
+func tree_status() -> String:
+	var tip := "an axe is quickest" if sim.gear.weapon_class() != "axe" else "your axe will make short work of it"
+	var lines := PackedStringArray(["Tree", "[LMB] swing at it to chop it down for planks (%s; it's loud)" % tip])
+	if last_message != "":
+		lines.append(last_message)
+	return "
+".join(lines)
+
+
+## P11: what a wreck you look at gives when you swing at it.
+func strip_words(id: String) -> String:
+	var left := sim.salvage.scrap_left(id, sim.wreck_type(id))
+	if left <= 0:
+		return "Stripped: nothing left on it"
+	return "[LMB] swing at it to strip scrap metal (%d left; loud)" % left
+
+
 ## What looking at a car shows: what it is, its gas and damage, and what the keys do here.
 func _car_status() -> String:
 	var c: Dictionary = sim.vehicles.cars[target_car]
@@ -621,6 +649,8 @@ func _car_status() -> String:
 		keys.append("[R] pour in gas cans")
 	if c["wreck"] == "" and float(c["hp"]) < float(s["hp"]):
 		keys.append("[T] repair (metal plate + 4 nails)")
+	if sim.wreck_type(target_car) != "":
+		keys.append(strip_words(target_car))  # P11
 	var lines := PackedStringArray([head, "   ".join(keys)])
 	if last_message != "":
 		lines.append(last_message)

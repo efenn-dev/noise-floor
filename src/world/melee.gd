@@ -318,7 +318,14 @@ func swing() -> int:
 		if not hit.is_empty():  # V3: a swing into a wall puffs dust and jars the view (at the strike)
 			var fx := "dust"
 			var col: Object = hit["collider"]
-			if col != null and col.has_meta("piece_key"):  # W2: windows shatter, town doors splinter
+			var tree := CountryView.tree_at(col, int(hit.get("shape", 0)))
+			var wreck := _wreck_id(col)
+			if not tree.is_empty():  # P11: chop trees for planks
+				fx = "wood"
+				_say(sim.player_hit_tree(tree[0], tree[1], tree[2]))
+			elif wreck != "":  # P11: strip broken cars for scrap
+				_say(sim.player_hit_wreck(wreck, hit["position"]))
+			elif col != null and col.has_meta("piece_key"):  # W2: windows shatter, town doors splinter
 				var mat := sim.piece_material(col.get_meta("piece_key"))
 				if sim.player_hit_piece(col.get_meta("piece_key"), sim.melee_damage(), sim.gear.weapon_class()) != "":
 					fx = "glass" if mat == "glass" else "wood"
@@ -333,6 +340,25 @@ func swing() -> int:
 	_pending.append({"at": strike_in, "kind": "zombie", "pos": hit["position"], "normal": hit["normal"],
 			"killed": killed, "head": head})
 	return id
+
+
+## P11: the car a swing struck: a CarBody's id, or a countryside wreck's (its trunk's container id); "" otherwise.
+func _wreck_id(col: Object) -> String:
+	if col is CarBody:
+		return (col as CarBody).id
+	if col != null and col.has_meta("container_id") and sim.wreck_type(str(col.get_meta("container_id"))) != "":
+		return str(col.get_meta("container_id"))
+	return ""
+
+
+## P11: a line from a hit on the world, under the crosshair for a moment (a felled tree's planks stay longer).
+func _say(text: String) -> void:
+	if text == "":
+		return
+	last_message = text
+	_message_time = 3.0 if text.begins_with("Timber") or text.begins_with("+") else 1.2
+	if text.begins_with("Timber"):
+		sim.add_message(text, 4.0)
 
 
 ## What you see and hear of a hit, at the strike moment of the swing.

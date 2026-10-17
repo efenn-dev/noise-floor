@@ -31,7 +31,8 @@ const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": 
 		"weapon_break": ["weapon_break"],  # V9: a weapon snapping
 		"bottle_break": ["bottle_break"], "pipe_bomb": ["pipe_bomb"],
 		"glass_break": ["glass_break"], "glass_clear": ["glass_break"],
-		"vault": STEPS, "wood_hit": ["bash"], "wood_break": ["wood_break"]}  # W2, V17
+		"vault": STEPS, "wood_hit": ["bash"], "wood_break": ["wood_break"],  # W2, V17
+		"chop": ["chop"], "tree_fall": ["tree_fall"], "metal_strip": ["metal_strip"]}  # P11
 const CHOREOGRAPHED_RELOADS: Array[String] = ["pistol", "hunting_rifle", "shotgun", "crossbow"]
 ## Gunshots are 85-95 loud, so the usual boost would blare: they play this much under their level instead.
 const GUN_BOOST := -8.0

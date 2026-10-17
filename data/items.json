@@ -1,7 +1,7 @@
 {
-	"plank": { "name": "Plank", "color": "#a07850", "weight": 1.0, "where": "pull town furniture and doors down (B, then right-click), search houses, or chop them at a timber stand in the woods (E)" },
+	"plank": { "name": "Plank", "color": "#a07850", "weight": 1.0, "where": "chop down a tree (swing at it; an axe is quickest), pull town furniture and doors down (B, then right-click), search houses, or chop them at a timber stand in the woods (E)" },
 	"nails": { "name": "Nails", "color": "#c8c8d0", "weight": 0.01, "where": "search hardware stores, garages and kitchens, or make them: a Press turns metal plates into nails" },
-	"scrap_metal": { "name": "Scrap metal", "color": "#8a5a3c", "weight": 0.5, "where": "search cars, garages and trash, pull town furniture down (B, then right-click), or pull it from a scrap heap at the junkyard (E)" },
+	"scrap_metal": { "name": "Scrap metal", "color": "#8a5a3c", "weight": 0.5, "where": "strip a broken-down car or a wreck (swing at it), search cars, garages and trash, pull town furniture down (B, then right-click), or pull it from a scrap heap at the junkyard (E)" },
 	"metal_plate": { "name": "Metal plate", "color": "#7890a8", "weight": 0.5, "where": "a smelter makes them from scrap metal (or search factories and garages)" },
 	"dirty_water": { "name": "Rainwater", "color": "#8a9a70", "weight": 0.5, "where": "a rain collector fills on its own, or draw it at a farm well (E)" },
 	"clean_water": { "name": "Clean water", "color": "#80c0f0", "weight": 0.5, "water": 40 },

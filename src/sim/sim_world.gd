@@ -43,6 +43,7 @@ var made_yesterday: Dictionary = {}
 var made_mark: Dictionary = {}
 var _carts_seen := 0  # carts.delivered already counted in this session's stats
 var milestones: Milestones  # F2: the Hub
+var salvage: Salvage  # P11: felled trees and stripped wrecks
 ## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
 var rescue_state := ""
 var rescue_day := -1  # the day the broadcast started, then the day rescued
@@ -173,6 +174,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	# many tests that build turrets or extractors don't need to; a real new game clears this (main.gd).
 	milestones.grant_all_but_final()
 	build.milestones = milestones  # F2: the Hub's milestones unlock the advanced pieces
+	salvage = Salvage.new(data)  # P11
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
 	factory.skills = skills  # belt speed, craft speed, planter yield
@@ -1209,6 +1211,7 @@ func place_country(country: Dictionary) -> void:
 	for w: Dictionary in country.get("wrecks", []):
 		if w.has("id"):
 			loot.add(w["id"], w["table"], w["pos"] + Vector3(0, 1.0, 0))
+			salvage.wrecks[w["id"]] = str(w["type"])  # P11: and stripped for scrap
 
 
 ## W1b/V28: one starting zombie in each house the plan picked (plan["zombies"]), facing its front door;
@@ -2061,6 +2064,70 @@ func player_hit_piece(key: String, damage: float, by: String) -> String:
 		_told_glass = true
 		add_message("Breaking glass is loud: everything nearby heard that", 6.0)
 	return "broke"
+
+
+## P11: a melee hit on a tree (`id` from Salvage.tree_id, `kind` its plan's kind, `at` its foot). A few hits fell it
+## (an axe is quickest, fists slowest) and its planks go in your pockets, the rest on the ground. Returns the HUD line.
+func player_hit_tree(id: String, kind: String, at: Vector3) -> String:
+	if salvage.felled.has(id):
+		return ""
+	var r := salvage.hit_tree(id, kind, melee_damage(), gear.weapon_class())
+	_wear_melee()
+	if not r["felled"]:
+		noise.emit_kind(at, "chop")
+		var tip := "" if gear.weapon_class() == "axe" else " (an axe is quicker)"
+		return "Chopping: %d%%%s" % [roundi(float(r["done"]) * 100.0), tip]
+	noise.emit_kind(at, "tree_fall")
+	stats.gathered += int(r["planks"])
+	stats.note("felled a tree")
+	_practice("scavenging", "search")
+	return "Timber! " + _give_or_lay("plank", int(r["planks"]), at)
+
+
+## P11: the car type of a wreck you can strip, or "" (a car that still drives isn't one).
+func wreck_type(id: String) -> String:
+	if salvage.wrecks.has(id):
+		return str(salvage.wrecks[id])
+	if vehicles.cars.has(id) and str(vehicles.cars[id]["wreck"]) != "":
+		return str(vehicles.cars[id]["type"])
+	return ""
+
+
+## P11: a melee hit on a car: a wreck gives scrap metal every few hits until it's stripped. Loud. Returns the HUD line.
+func player_hit_wreck(id: String, at: Vector3) -> String:
+	var type := wreck_type(id)
+	if type == "":
+		return "This car still runs: strip a broken one for scrap" if vehicles.cars.has(id) else ""
+	if salvage.scrap_left(id, type) <= 0:
+		return "Stripped: nothing left on it but the shell"
+	var r := salvage.hit_wreck(id, type, melee_damage(), gear.weapon_class())
+	_wear_melee()
+	noise.emit_kind(at, "metal_strip")
+	if int(r["scrap"]) <= 0:
+		return "Prying it apart: %d scrap left in it" % int(r["left"])
+	stats.gathered += int(r["scrap"])
+	_practice("scavenging", "search")
+	return "%s (%d left in it)" % [_give_or_lay("scrap_metal", int(r["scrap"]), at), int(r["left"])]
+
+
+## P11: `n` of `item` into your pockets, as many as fit under your carry limit; the rest lies at `at`. Returns "+6 Plank".
+func _give_or_lay(item: String, n: int, at: Vector3) -> String:
+	var kg := maxf(0.001, float(data.items[item].get("weight", 1.0)))
+	var fits := clampi(int(floor((carry_limit() - carried_kg()) / kg + 1e-6)), 0, n)
+	if fits > 0:
+		inventory.add(item, fits)
+	var text := "+%d %s" % [n, data.item_name(item)]
+	if fits < n:
+		_lay(Vector3(at.x, player_pos.y, at.z).lerp(player_pos, 0.5), player_yaw(), {item: n - fits}, [])
+		text += ": your pockets are full, %d on the ground" % (n - fits)
+	return text
+
+
+## P11: a hit on the world wears the weapon in hand like a hit on a door does.
+func _wear_melee() -> void:
+	if gear.wear_weapon(skills.bonus("wear_cut")) == "broke":
+		add_message("Your weapon broke! Find another weapon", 7.0)
+		noise.emit(player_pos, noise_loudness("weapon_break"), "weapon_break")
 
 
 ## Melee damage of one body hit: the weapon's, plus Strength, Heavy Swing and (V10) the skill for this

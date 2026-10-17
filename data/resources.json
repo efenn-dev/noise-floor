@@ -12,6 +12,18 @@
 	},
 	"purity": { "poor": 0.5, "normal": 1.0, "rich": 2.0 },
 	"_hand_about": "P5: E on a node gathers by hand: `count` of `item` every `seconds` (divided by the node's purity), a one-off at `loudness` each time, while you stay within reach. Slower than its extractor and you stand there making noise: the first rung before the machines.",
+	"_salvage_about": "P11 (playtest: \"We need a way to chop down trees for lumber and a way to get metal scrap\"): swing a melee weapon at a tree or at a car that won't drive. Each hit does the weapon's melee damage times the factor for its class (axe, blade, blunt, fists). A tree falls once it has taken its kind's hp and gives its planks (into your pockets, the rest on the ground where it stood); felled trees stay down (saved). A wreck gives one scrap metal for every `per_scrap` damage, up to its type's `scrap`, then it's stripped (saved). Every hit is a one-off noise (noise.json sounds chop, tree_fall, metal_strip) and wears the weapon.",
+	"salvage": {
+		"trees": {
+			"tree": { "hp": 480, "planks": 6 },
+			"pine_tree": { "hp": 480, "planks": 6 },
+			"pine_tree_small": { "hp": 240, "planks": 3 }
+		},
+		"wood_factor": { "axe": 2.2, "blade": 0.8, "blunt": 0.8, "fists": 1.0 },
+		"wrecks": { "sedan": 8, "pickup": 10, "van": 12 },
+		"per_scrap": 80,
+		"metal_factor": { "blunt": 1.4, "axe": 1.0, "blade": 0.5, "fists": 0.3 }
+	},
 	"nodes": [
 		{ "id": "junkyard_1", "kind": "scrap_heap", "purity": "rich", "pos": [153, -57], "prop": [0, -4.0], "yaw": 10 },
 		{ "id": "junkyard_2", "kind": "scrap_heap", "purity": "normal", "pos": [177, -53], "prop": [0, -4.0], "yaw": -20 },

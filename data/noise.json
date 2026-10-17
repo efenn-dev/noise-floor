@@ -37,6 +37,9 @@
 		"gun_mod": 18
 		,"bottle_break": 65
 		,"pipe_bomb": 150
+		,"chop": 42
+		,"tree_fall": 55
+		,"metal_strip": 52
 	},
 	"director": {
 		"listen_distance": 50,
