@@ -2,6 +2,25 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — V38 An axe that looks like an axe
+
+Emmitt: "I'd like to fix the axe, it looks more like a sledgehammer". The head was one flat-sided block 5 cm thick with a square back. You held it with the blade pointing straight away, so all you ever saw was the back of the head. It was dark gunmetal, which renders nearly black, and on the ground it balanced on its edge.
+
+**Built:**
+- **A felling-axe head** (`tools/art/axe.py`), built through cross-sections from back to blade:
+  - a slim rounded back, a fuller eye, and cheeks tapering to a sharp edge;
+  - the blade flares to 14 cm tall, and its edge curves (furthest forward in the middle);
+  - painted red, with a wide, bright ground bevel ("Axe Paint" / "Axe Bevel" in `Melee.WEAPON_LOOKS`, on the car-paint photo, because the gunmetal one turned the red almost black);
+  - a slimmer oval handle with a swell at the foot, its top showing through the eye.
+- **Held turned 35 degrees at rest** (the "overhead" style's rest keys), so you see the side of the head. The chop still swings round to hit edge-first.
+- **Dropped melee weapons lie on their flat side** (`BagView`): the axe shows its red head; the machete and knife no longer balance on their edges.
+
+**Try it:** `play.bat --weapon=axe`, `play.bat --drop=axe,machete,knife --cam=0,0,0,0,-40`
+
+**Tests:** 20,599 green (new `test_dropped_blades_lie_flat`). Soak 1 day OK, 153 s.
+
+**Known gaps:** at night the held head is a dark silhouette like everything else; the hotbar icon is the old picture.
+
 ## 2026-10-16 — V37 Real first-person arms: Davlet's FPS Arms Pack 06
 
 Emmitt: "we really need some hand models, these look cursed". He bought Davlet's Modular FPS Arms Pack 06 on Superhive ($26, royalty-free). The old arms were a MakeHuman hand with tube sleeves added in the engine. Now the game uses the pack's own stitched leather gloves and olive canvas jacket sleeves.

@@ -94,7 +94,9 @@ static func make_model(look: String) -> Node3D:
 		else:
 			_apply_item_materials(inner)
 		if Melee.MODELS.has(look):
-			inner.rotation = Vector3(deg_to_rad(-90.0), 0.0, 0.0)  # it points up its +Y: lay it along the floor
+			# It points up its +Y with its striking side to -Z: lay it along the floor on its flat side (V38: on its
+			# striking side, an axe or a blade balanced on its edge), so the side of an axe head faces up.
+			inner.basis = Basis(Vector3.UP, Vector3.FORWARD, Vector3.LEFT)
 		elif Shooter.MODELS.has(look):
 			inner.rotation = Vector3(0.0, 0.0, deg_to_rad(90.0))  # on its side
 	var root := Node3D.new()
