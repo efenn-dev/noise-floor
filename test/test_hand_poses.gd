@@ -134,3 +134,36 @@ func test_a_free_hand_turns_its_forearm_to_the_shoulder() -> void:
 	Hands.reaim(holder, Basis())
 	check(left.basis.is_equal_approx(on_grip), "back on the grip it holds exactly as before")
 	holder.free()
+
+
+## V39 (Emmitt: "the left hand should be palm up and the arm is floating"): under a long gun's fore-end the left
+## hand cradles it palm-up with the forearm running back and down to the left; it keeps that sliding along the
+## barrel (the shotgun's pump) and lets go of it when it leaves the barrel's line (a reload).
+func test_long_guns_rest_in_a_palm_up_cradle() -> void:
+	for gun: String in ["hunting_rifle", "shotgun", "crossbow"]:
+		var holder := Node3D.new()
+		holder.position = Vector3(0.2, -0.25, -0.5)
+		Hands.attach(holder, gun, Hands.GUNS)
+		var left := holder.get_node("Hand_L") as Node3D
+		var grip: Vector3 = left.get_meta("grip_position")
+		Hands.set_target(left, grip, Vector3.ZERO)
+		Hands.reaim(holder, Basis())
+		var cradle: Dictionary = Hands.CRADLES[gun]
+		check((left.basis * Vector3.RIGHT).normalized().dot(Vector3.UP) > 0.85, "%s: the left palm faces up" % gun)
+		var palm := (cradle["palm"] as Vector3).normalized()
+		var fore := ((cradle["forearm"] as Vector3) - palm * (cradle["forearm"] as Vector3).dot(palm)).normalized()
+		var forearm := (left.basis * Hands.FOREARM).normalized()
+		check(forearm.dot(fore) > 0.99 and forearm.z > 0.3 and forearm.x < -0.3,
+				"%s: the forearm runs back and off to the left, toward the left shoulder" % gun)
+		var cradled := left.basis
+		Hands.set_target(left, grip + Vector3(0, 0, 0.1), Vector3.ZERO)
+		Hands.reaim(holder, Basis())
+		check(left.basis.is_equal_approx(cradled), "%s: sliding along the barrel keeps the cradle" % gun)
+		Hands.set_target(left, grip + Vector3(0, -0.12, 0.05), Vector3(1.2, 0, 0))
+		Hands.reaim(holder, Basis())
+		check(not left.basis.is_equal_approx(cradled), "%s: off the barrel's line it lets go of the cradle" % gun)
+		holder.free()
+	var pistol := Node3D.new()
+	Hands.attach(pistol, "pistol", Hands.GUNS)
+	check(not (pistol.get_node("Hand_L") as Node3D).has_meta("cradle"), "a pistol's left hand still wraps the grip")
+	pistol.free()

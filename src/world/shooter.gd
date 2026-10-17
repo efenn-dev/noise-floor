@@ -107,6 +107,10 @@ const ZONE_WORDS := {"head": "Headshot!", "torso": "Hit", "arm": "Arm hit", "leg
 const KICK_DEG := {"pistol": 2.0, "hunting_rifle": 5.0, "shotgun": 9.0, "crossbow": 0.8}
 const KICK_BACK := 12.0  # how fast the kick comes back down, per second
 const AIM_FOV := 35.0  # P2/V15: right click (hold) with a scope aims at this field of view
+## V39 (Emmitt: "I found a scope but it doesn't zoom in much and has no reticle"): 35 degrees was barely 2x.
+## Each gun's scope now zooms to its own field of view (the normal view is 75): about 4.4x on the hunting rifle,
+## 2.9x on the crossbow, 1.9x on a pistol. Others keep AIM_FOV.
+const SCOPE_FOV := {"hunting_rifle": 20.0, "crossbow": 30.0, "pistol": 45.0}
 ## V16: on iron sights the gun skips what's closer to your eye than this, so the stock under your cheek doesn't
 ## fill the bottom of the view (the receiver, sights and both hands are farther out). Q6: only the gun's own
 ## surfaces fade out (distance fade, per pixel); it used to be the camera's near plane, which also sliced the
@@ -680,9 +684,9 @@ func _process(delta: float) -> void:
 		feel.kick = _kick  # V3: ViewFeel adds shake and bob and applies it to the camera
 	else:
 		camera.rotation.x = _kick  # the head holds the look; the camera only carries the kick
-	var aimed_fov := AIM_FOV if sim.guns.scoped() else base_fov * IRON_FOV_MULT
-	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
 	var gun_base := str(sim.gear.gun().get("base", ""))
+	var aimed_fov := scope_fov(gun_base) if sim.guns.scoped() else base_fov * IRON_FOV_MULT
+	camera.fov = move_toward(camera.fov, aimed_fov if aiming() else base_fov, ZOOM_SPEED * delta)
 	var clip: float = 0.0 if sim.guns.scoped() else float(ADS_NEAR.get(gun_base, 0.0)) * _aim_weight
 	for mat: BaseMaterial3D in _fade_materials.get(gun_base, []):
 		mat.distance_fade_min_distance = maxf(0.0, clip - ADS_FADE_BAND)
@@ -696,6 +700,16 @@ func _process(delta: float) -> void:
 
 ## V15: true while any gun is aimed. Reload/inspect/raise/sprint all lower it; a scope only changes the FOV
 ## and adds its extra cone tightening once this is true.
+## V39: how far `gun_base`'s scope zooms (vertical field of view, degrees).
+static func scope_fov(gun_base: String) -> float:
+	return float(SCOPE_FOV.get(gun_base, AIM_FOV))
+
+
+## V39: how far into the scope view you are, 0-1 (the gun hides above 0.9 and ScopeOverlay draws the eyepiece).
+func scope_weight() -> float:
+	return _aim_weight if aiming() and sim.guns.scoped() else 0.0
+
+
 func aiming() -> bool:
 	return (_aim_held or hold_aim) and sim.guns.in_hand() and not builder.active and not sim.player.dead \
 			and not sim.player.asleep and sim.guns.reloading <= 0.0 and sim.guns.raising <= 0.0 \
