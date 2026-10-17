@@ -2,6 +2,30 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — V37 Real first-person arms: Davlet's FPS Arms Pack 06
+
+Emmitt: "we really need some hand models, these look cursed". He bought Davlet's Modular FPS Arms Pack 06 on Superhive ($26, royalty-free). The old arms were a MakeHuman hand with tube sleeves added in the engine. Now the game uses the pack's own stitched leather gloves and olive canvas jacket sleeves.
+
+**Built:**
+- **`tools/art/fp_arm_fps06.py`** (Blender) turns the pack's variant 02a into `fp_arm_right.glb` / `fp_arm_left.glb` on the game's existing 17-bone arm contract, so every weapon, reload and inspect pose works unchanged:
+  - Every vertex moves from the pack's Unreal pose to the game's grip. It reuses `fp_arm_mpfb.py`'s palm alignment.
+  - The fingers wrap the 34 mm handle by searched joint bends. Every joint curls forward, so the engine's pose maths works, and no part of the glove goes inside the handle (clearance 17.7 mm).
+  - The elbow is straightened, so the sleeve runs 0.69 m back from the wrist, off the screen.
+  - About 23k triangles and 1 MB per arm. The seven textures (3.7 MB) are shared files in `assets/textures/fp_arms/` that both models point at, so Godot imports each once.
+- **`tools/art/fp_arm_fps06_textures.py`** (Pillow) shrinks the 4K textures for the game: sleeve colour c3 (olive) and glove colour 02 (tan), with their baked shading multiplied in. It also tints the glove's grey brand tag to leather and makes it matte; it was flashing like a chip of metal.
+- **`hands.gd`:** the pack's materials keep their own textures and are drawn from both sides. An arm that brings its own sleeve gets no extension tube. The fist is tightened (fingers 100/110/70 degrees, the thumb tucked against the side) so it reads as a fist from the player's eye.
+- **`tools/art/hand_poses.gd`** renders the six hand poses from the front, the eye and the index side, for tuning.
+- The pack's files stay local-only (`C:/projects/assets-src/fps-arms`). The licence is noted in `assets/CREDITS.md`.
+
+**Try it:** `play.bat --fists`, `play.bat --gun`, `play.bat --gun=rifle --aim=irons`, `play.bat --weapon=bat`.
+
+**Tests:** 20,565 green. `test_the_sleeve_carries_on_to_the_shoulder` now checks the arm's own sleeve: it reaches more than 0.6 m back, keeps its textures, is drawn from both sides, and gets no tube. Soak 1 day OK.
+
+**Known gaps:**
+- The thumb rests along the side of the fist, not across the fingers.
+- The glove tag's top edge is a little blocky up close.
+- Swapping sleeve or glove colours means changing two constants and re-running both scripts.
+- A public release would need a packed build and a look at the pack's own licence text.
 ## 2026-10-16 — P6 Doors you can swap: taking pieces down says so, and a door goes in the doorway you look at
 
 Emmitt's son pulled down a house's front door, built his own, "used it and it disappeared", then couldn't build a new one. He got frustrated. In the game scene, two things went wrong:

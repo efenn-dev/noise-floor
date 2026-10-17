@@ -83,32 +83,34 @@ func test_a_fist_is_closed_and_flat_is_straight() -> void:
 	sk.get_parent().get_parent().queue_free()
 
 
+## V37: the bought arms' own jacket sleeve runs from the glove on past the elbow toward the shoulder, so no
+## extension tube is added (the old arms' V31 tube stays for models with an "Arm Sleeve").
 func test_the_sleeve_carries_on_to_the_shoulder() -> void:
 	if not ResourceLoader.exists(ARM):
 		return
 	var arm := Hands.make("right")
-	var ext := arm.find_child("SleeveExtension", true, false) as BoneAttachment3D
-	check(ext != null, "the sleeve extension is on the arm")
-	eq(ext.bone_name, "Forearm", "riding the forearm bone")
-	var tube := ext.get_child(0) as MeshInstance3D
-	var mesh := tube.mesh as CylinderMesh
-	check(mesh.height > 0.65 and mesh.height < 0.85, "one sleeve over the forearm and on past the elbow (%.2f m)" % mesh.height)
-	check(tube.position.y + mesh.height / 2.0 > 0.2, "it starts near the wrist, over the forearm (V31), not at the elbow")
-	check(mesh.top_radius < mesh.bottom_radius, "narrow at the wrist, wider toward the shoulder")
-	check(tube.material_override != null and tube.material_override.resource_name != "Arm Sleeve (hidden)",
-			"dressed in the sleeve's own cloth")
+	check(arm.find_child("SleeveExtension", true, false) == null, "the arm brings its own sleeve: no tube added")
 	var sk := arm.get_node(Hands.SKELETON_PATH) as Skeleton3D
-	var cuff := Hands.cuff_centre(arm, sk)
-	check(Vector2(cuff.x, cuff.z).length() > 0.05, "the model's cuff sits well off the bone's line (%.3f m)" % Vector2(cuff.x, cuff.z).length())
-	near(tube.position.x, cuff.x, "the sleeve is centred on the cuff, not on the bone (V31)", 0.001)
-	near(tube.position.z, cuff.z, "the sleeve is centred on the cuff (z)", 0.001)
-	var hidden := false
+	var wrist := sk.get_bone_global_rest(sk.find_bone("Hand")).origin
+	var back := (sk.get_bone_global_rest(sk.find_bone("Forearm")).origin - wrist).normalized()
+	var reach := 0.0
+	var looks := {}
 	for mi: MeshInstance3D in arm.find_children("*", "MeshInstance3D", true, false):
 		for i in (mi.mesh.get_surface_count() if mi.mesh else 0):
 			var source := mi.mesh.surface_get_material(i)
-			if source != null and source.resource_name == "Arm Sleeve":
-				hidden = mi.get_surface_override_material(i).resource_name == "Arm Sleeve (hidden)"
-	check(hidden, "the model's own off-line sleeve is hidden")
+			if source == null:
+				continue
+			var shown := mi.get_surface_override_material(i)
+			looks[source.resource_name] = shown if shown != null else source
+			if source.resource_name == "FP Sleeve":
+				for v: Vector3 in mi.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+					reach = maxf(reach, (mi.transform * v - wrist).dot(back))
+	check(reach > 0.6, "the sleeve runs %.2f m back from the wrist, past the elbow" % reach)
+	for name: String in ["FP Glove", "FP Sleeve"]:
+		check(looks.has(name), "the arm has its %s" % name)
+		var mat := looks.get(name) as StandardMaterial3D
+		check(mat != null and mat.albedo_texture != null, "%s keeps the pack's own texture" % name)
+		check(mat != null and mat.cull_mode == BaseMaterial3D.CULL_DISABLED, "%s is drawn from both sides" % name)
 	var player := arm.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	check(player.has_animation("Fist") and player.get_animation("Fist").get_track_count() == 15,
 			"the arm plays the engine-built poses")
