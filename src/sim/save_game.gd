@@ -202,6 +202,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"carts": sim.carts.to_dict(),  # F5: the home stop and each cart's trip and load
 		"projects_done": sim.projects.done.duplicate(),
 		"milestones": sim.milestones.to_dict(),
+		"learning": sim.learning.to_dict(),  # P10
 		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
@@ -336,6 +337,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.carts.from_dict(d.get("carts", {}))  # F5: none before
 	sim._carts_seen = sim.carts.delivered
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2
+	sim.learning.load_dict(d.get("learning", {}))  # P10: a save from before knows every piece
 	if version < 22:
 		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build
 	var rescue: Dictionary = d.get("rescue", {})

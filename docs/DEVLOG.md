@@ -2,6 +2,36 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P10 A picture build menu, and pieces you learn by building
+
+Playtest (Emmitt and Kaleb, 30+ minutes): Kaleb "can't read very well", so the build menu's wall of text lost him: "thumbnails and a sidebar nav with icons for categories so he can see the machines better and the items required to craft it". Emmitt: "players should be limited on what they can build early so they can get eased into what they can build and how the items work."
+
+**Built:**
+- **The build menu (B) is pictures first** (`BuildMenu`):
+  - A sidebar of group pictures (Base, Hub, Factory, Extractors, Power, Defense; `GROUP_PICS`).
+  - The group's pieces as big picture tiles, five across, each with its cost as item pictures and counts, green when the crates near you and your pockets can pay, red when not.
+  - The right side shows the piece you point at: a big picture, its numbers, "Costs" as item pictures with have / need (and where to find whatever's short), "Makes" as item pictures (scrap → plate; the Press shows four of its recipes), the plain line, and its hotbar key.
+  - Drawn for 1600 x 900 and scaled up on bigger windows (1.6 x on Emmitt's 2560 x 1440), so the pictures are big enough for a child.
+- **Pieces you learn by building** (`Learning`, `data/learning.json`):
+  - A new game opens five pieces: foundation, wall, door, bed, storage crate.
+  - Each piece in `after` opens once you've built the piece it names: a door teaches the workbench; a workbench teaches the generator, the Hub, the nail turret and the rain collector; a generator the power pole; a pole the smelter; a smelter the belt and the Press, and so on. Taking a piece down doesn't forget what it taught.
+  - The Hub milestones still lock the advanced machines, and the Hub itself needs a workbench.
+  - "New to build: Workbench. Find it in the build menu (B)" when you learn something. Its tile and its group's sidebar picture say NEW until you point at it.
+  - A locked tile is dark, with a padlock and the picture of what to build first (the Hub's for a milestone piece). The right side shows every piece on the way as pictures, in order, from the one you can build now ("Learn it by building these in order: Generator → Power pole → Smelter").
+  - Clicking a locked piece says why instead of starting build mode. `BuildGrid.can_place` refuses it with the same words.
+  - The objectives panel's defend and feed goals say how to learn their piece when it's locked ("First learn it: build a Workbench, then the Nail turret.").
+  - Saved under "learning". A save from before P10 knows every piece, and so do test worlds; a real new game starts over (`main.gd`). The start-of-game crate doesn't count as the player building.
+- `--build-menu=ID` opens the menu pointing at that piece, for screenshots.
+
+**Try it on the PC:** start a new game (`play.bat`), press B. Build a foundation and a door, then press B again: the workbench says NEW.
+
+**Known gaps:**
+- The group pictures are pieces from each group, not drawn icons.
+- The tiles still carry names (small) for grown-ups. Nothing is read aloud.
+- The learning order is a first guess. Tune `data/learning.json` after the next playtest.
+
+**Next:** P11, from the same playtest: chopping trees for planks and stripping wrecked cars for scrap metal.
+
 ## 2026-10-16 — P9 Kaleb's updates come from the internet too
 
 Emmitt: "can we make it easier to update the game for kaleb so he sees the new changes? we can use our cdn server". Kaleb's copy only updated from R: over the home network, which needs this PC switched on and his PC able to reach the share. His logs never arrived, so it probably wasn't reaching it.

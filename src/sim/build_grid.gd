@@ -41,6 +41,7 @@ var _key_kind: Dictionary = {}
 ## M17a: set by SimWorld, so pieces with a data "needs_project" (the water tap) wait for that project.
 var projects: Projects
 var milestones: Milestones  # F2: pieces the Hub's milestones unlock
+var learning: Learning  # P10: pieces you learn by building another first
 
 
 func _init(p_data: GameData) -> void:
@@ -231,6 +232,8 @@ func can_place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 		return "Only found in town"
 	if milestones != null and not milestones.unlocked(id):
 		return "Unlock it at the Hub: %s" % milestones.cfg(milestones.unlocked_by(id)).get("name", "a milestone")
+	if learning != null and not learning.knows(id):
+		return "Build a %s first to learn this" % String(data.buildables[learning.after(id)]["name"]).to_lower()
 	if _kind(id) == "hub" and first_of_kind("hub") != "":
 		return "You already have a Hub"
 	if projects != null and not projects.unlocked(id):
@@ -273,6 +276,8 @@ func place(id: String, cell: Vector2i, side: int, inv: Inventory) -> String:
 	pieces[key] = piece
 	_index(key)
 	piece_added.emit(key)
+	if learning != null:
+		learning.note_built(id)  # P10
 	piece_built.emit(key)
 	return ""
 
