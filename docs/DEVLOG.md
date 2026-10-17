@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-16 — P7 Updates that can't leave a half-new game
+
+Emmitt watched his son's stream: white poles through the arms and the old loose fists. The game on main and the family zip both looked right. His copy was half updated: the new arm models (in `assets\`) with the old arm code (in `src\`). The old code adds a sleeve tube, white here because the new model has no sleeve material for it to borrow. The old updater copied the new files over the old ones folder by folder (`assets` before `src`). Its unzip (Expand-Archive) takes 25 s on this PC and longer on his, with no sign of progress, so a closed window or a second click left a mix. The new updater, the one that sends his logs, is only installed at the very end of an update, which is why no logs came.
+
+**Built (`tools/portable/update.ps1`):**
+- **Whole folders, swapped:** the new game folder is unpacked in full and moved in beside the live one (`game.new`), then two renames swap it in. Closing the window at any point leaves the old version or the new one, never a mix. A swap cut off between its renames is put back at the next start, and half-copied folders are cleared. Godot's folder is only replaced when its exe changed.
+- **Fast:** .NET's ZipFile unpacks in 3 s; a whole update took under 4 s on this PC (the old one, 25 s just to unpack).
+- **Says what it's doing:** "Updating ... Please don't close this window", then steps 1/3 to 3/3 and "Updated".
+- **One at a time:** a second launcher waits for the first instead of copying over it.
+- The README says to leave the window open until "Updated".
+
+**Tested** on a scratch copy of the family build:
+- An old install updated in 3.6 s, with a stray file gone.
+- A cut-off swap was restored.
+- Two launchers at once: the second waited, then found nothing to do.
+
+**For his PC:** his copy still runs the old updater, which tries the update again at every start until it finishes. Once it does (leave the window open until "Updated"), the new updater takes over and his logs start arriving on the family drive.
+
 ## 2026-10-16 — V38 An axe that looks like an axe
 
 Emmitt: "I'd like to fix the axe, it looks more like a sledgehammer". The head was one flat-sided block 5 cm thick with a square back. You held it with the blade pointing straight away, so all you ever saw was the back of the head. It was dark gunmetal, which renders nearly black, and on the ground it balanced on its edge.

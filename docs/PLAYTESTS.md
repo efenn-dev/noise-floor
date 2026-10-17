@@ -16,6 +16,10 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-16 (late) — Emmitt watching his son's stream (screenshots), son's PC
+- Broken: "those hands and arms look cursed. theres a white pole going through them and the fingers still look like before" (fists and the police pump shotgun).
+- Cause: his copy ran the new arm models with the OLD hands.gd. The old code always adds a sleeve tube (white, since the new model has no "Arm Sleeve" for it to borrow) and the old loose fist. An update closed halfway: robocopy copies `assets\` before `src\`, and the old Expand-Archive takes 25 s on this PC, longer on his. His logs never arrived either, because the new update.ps1 is only installed at the very end of an update. Fixed in P7 (the updater swaps whole folders).
+
 ## 2026-10-16 (night) — Emmitt, verbal (relayed in the session), build dc78b2d (V37 arms)
 - Arms: "those models don't really look like the ones we purchased but its much better than before".
 - Fix first: "the axe, it looks more like a sledgehammer". Fixed in V38.
