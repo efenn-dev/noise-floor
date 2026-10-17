@@ -16,6 +16,12 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-16 (late night) — Emmitt 30+ minutes and his son (Kaleb, 6) longer, verbal (relayed in the session), build 8069e47 (P9)
+- Fun: "I actually had a lot more fun than I expected on the first night. It felt a bit challenging but very manageable for a newbie."
+- Confusing: Kaleb "got a bit frustrated with building for a few reasons but mostly because he can't read very well. it may help to have thumbnails and a sidebar nav with icons for categories so he can see the machines better and the items required to craft it." Fixed in P10 (the picture build menu).
+- Confusing: "The problem was resources and lack of guidance in building. I feel like players should be limited on what they can build early so they can get eased into what they can build and how the items work." Fixed in P10 (pieces you learn by building).
+- Wanted: "We need a way to chop down trees for lumber and a way to get metal scrap." Next (P11).
+
 ## 2026-10-16 (night) — Emmitt, screenshots, build 43be875
 - Hands: "much better but the left hand should be palm up and the arm is floating. the axe has a finger that looks off, maybe rethink the grip with 2 hands. pistol looks a bit weird but acceptable for now."
 - Scope: "I found a scope but it doesn't zoom in much and has no reticle".

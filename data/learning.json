@@ -1,0 +1,25 @@
+{
+	"_about": "P10 (playtest: a new player faced 50 pieces at once and didn't know where to start): pieces you learn by building. A piece in 'after' can be built once you have built the piece it names at least once in this game (taking it down again doesn't forget it); the build menu shows it locked with that piece's picture. Pieces not listed here are open from the start, unless a Hub milestone or a project locks them (the milestone pieces need the Hub, which needs a workbench). Test worlds know every piece; a real new game starts knowing only the open ones (main.gd), and a save from before P10 knows everything.",
+	"after": {
+		"barricade": "wall",
+		"spikes": "barricade",
+		"bear_trap": "spikes",
+		"tripwire": "spikes",
+		"workbench": "door",
+		"stove": "bed",
+		"nail_turret": "workbench",
+		"hub": "workbench",
+		"generator": "workbench",
+		"power_pole": "generator",
+		"soundproof_wall": "generator",
+		"electric_heater": "power_pole",
+		"dusk_timer": "power_pole",
+		"smelter": "power_pole",
+		"belt": "smelter",
+		"press": "smelter",
+		"cart_stop": "belt",
+		"rain_collector": "workbench",
+		"planter": "rain_collector",
+		"water_tap": "rain_collector"
+	}
+}

@@ -36,6 +36,7 @@ var difficulty: Dictionary = {}  # V29: Easy/Normal/Hard multipliers: data/diffi
 var resources: Dictionary = {}   # F1: resource node kinds, purities and the nodes on the map: data/resources.json
 var areas: Dictionary = {}       # W3e: each WorldMap area's map name, loot multiplier and map colour: data/areas.json
 var milestones: Dictionary = {}  # F2: the Hub's tiers and milestones, and the rescue broadcast: data/milestones.json
+var learning: Dictionary = {}    # P10: pieces you learn by building ("after"): data/learning.json
 var hit_zones: Dictionary = {}   # V33: damage per hit zone (torso, arm, leg), the leg line and the limp: data/hit_zones.json
 var load_errors: PackedStringArray = []
 
@@ -64,6 +65,8 @@ static func load_default() -> GameData:
 	data.areas.erase("_about")
 	data.milestones = _read_json(DIR + "milestones.json", data)
 	data.milestones.erase("_about")
+	data.learning = _read_json(DIR + "learning.json", data)
+	data.learning.erase("_about")
 	data.hit_zones = _read_json(DIR + "hit_zones.json", data)
 	data.hit_zones.erase("_about")
 	return data
@@ -227,6 +230,17 @@ func validate() -> PackedStringArray:
 		for item: String in ms.get("cost", {}):
 			if not items.has(item):
 				errors.append("milestone '%s' costs unknown item '%s'" % [id, item])
+	for id: String in learning.get("after", {}):  # P10: every "after" chain names real pieces and ends at an open one
+		var seen := {}
+		var at := id
+		while learning["after"].has(at) and not seen.has(at):
+			seen[at] = true
+			if not buildables.has(at) or not buildables.has(str(learning["after"][at])):
+				errors.append("learning: '%s' after '%s' names an unknown piece" % [at, learning["after"][at]])
+				break
+			at = str(learning["after"][at])
+		if seen.has(at):
+			errors.append("learning: '%s' is in a loop of pieces that need each other" % id)
 	for area: String in WorldMap.AREAS:  # W3e: every area has a name and a loot multiplier
 		var a: Dictionary = areas.get(area, {})
 		if str(a.get("name", "")) == "" or float(a.get("loot", 0.0)) < 1.0:

@@ -43,6 +43,7 @@ var made_yesterday: Dictionary = {}
 var made_mark: Dictionary = {}
 var _carts_seen := 0  # carts.delivered already counted in this session's stats
 var milestones: Milestones  # F2: the Hub
+var learning: Learning  # P10: pieces you learn by building
 var salvage: Salvage  # P11: felled trees and stripped wrecks
 ## F2: the rescue broadcast from the radio mast: "" (not yet), "broadcasting" (tonight), "rescued" (won).
 var rescue_state := ""
@@ -174,6 +175,8 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	# many tests that build turrets or extractors don't need to; a real new game clears this (main.gd).
 	milestones.grant_all_but_final()
 	build.milestones = milestones  # F2: the Hub's milestones unlock the advanced pieces
+	learning = Learning.new(data)  # P10: tests' worlds know every piece too; a real new game starts over (main.gd)
+	build.learning = learning
 	salvage = Salvage.new(data)  # P11
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
@@ -253,6 +256,7 @@ func step() -> void:
 	vehicles.tick(TICK)
 	_tick_hotwire()
 	_tick_gather()  # P5
+	_tick_learning()  # P10
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
@@ -509,6 +513,17 @@ func _watch_pete() -> void:
 	if busy and not _pete_busy:
 		base_log.add_once("pete", 120.0, "Old Pete is on the move", at)
 	_pete_busy = busy
+
+
+## P10: says what the last piece built taught you (Learning.news), once.
+func _tick_learning() -> void:
+	var news := learning.take_news()
+	if news.is_empty():
+		return
+	var names := PackedStringArray()
+	for id: String in news:
+		names.append(String(data.buildables[id]["name"]))
+	add_message("New to build: %s. Find it in the build menu (B)" % ", ".join(names), 8.0)
 
 
 func add_message(text: String, seconds: float = 6.0) -> void:
@@ -997,7 +1012,10 @@ func deposit(key: String) -> Dictionary:
 func place_start_stash(cell: Vector2i) -> String:
 	var was_muted := stats.muted
 	stats.muted = true  # the game set this up, not the player
+	var learner := build.learning
+	build.learning = null  # P10: nor did the player learn anything building it
 	var key := _place_start_stash(cell)
+	build.learning = learner
 	stats.muted = was_muted
 	return key
 

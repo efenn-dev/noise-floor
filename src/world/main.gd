@@ -224,6 +224,7 @@ func _ready() -> void:
 	sim.clock.seconds_per_day = Settings.day_minutes * 60.0
 	if not _demo_run(args):
 		sim.milestones.done.clear()  # F2: a real game starts with every Hub milestone ahead (a save brings its own)
+		sim.learning.start_new_game()  # P10: and knowing only the first few pieces
 	if args.has("day"):
 		sim.clock.day = maxi(1, int(args["day"]))  # M16: --day=16 starts in winter (a save sets its own day)
 	if args.has("screenshot"):
@@ -367,6 +368,9 @@ func _ready() -> void:
 		_setup_loot_flag(str(args["loot"]))
 	if args.has("build-menu"):
 		_open_build_menu()  # S3: --build-menu, for screenshots (B in game)
+		if str(args["build-menu"]) != "":
+			build_menu.highlight(str(args["build-menu"]))  # P10: --build-menu=smelter points at that piece
+			build_menu.show_group(BuildMenu.group_of(str(args["build-menu"])))
 	if args.has("tree"):
 		_stand_by_tree(str(args["tree"]))  # P11: --tree[=T], for screenshots
 	if args.has("wreck"):
