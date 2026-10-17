@@ -42,7 +42,7 @@ const ROWS := [
 	["Build", ["build_place"], "", "build it (from your pockets and crates nearby)"],
 	["Build", ["build_remove"], "", "pull down what you look at (the town's pieces give a little salvage)"],
 	["Build", [], "Esc", "stop building"],
-	["Fight (melee and firearms)", ["attack"], "", "swing your melee weapon, or fire the firearm in hand"],
+	["Fight (melee and firearms)", ["attack"], "", "swing your melee weapon (at a tree it chops it down for planks, at a broken car it strips scrap metal), or fire the firearm in hand"],
 	["Fight (melee and firearms)", ["aim"], "", "hold to aim a firearm (a scope zooms); with melee or fists, hold to block"],
 	["Fight (melee and firearms)", ["swap_hands"], "", "cycle Melee, Primary and Sidearm (empty slots are skipped)"],
 	["Fight (melee and firearms)", ["refuel"], "", "reload the firearm in hand (at a car: pour in gas)"],
@@ -67,7 +67,7 @@ const ROWS := [
 ## S4: the six steps of a first factory, shown under the controls (Playtest #1: building and machines
 ## were not clear). test_help_screen.gd checks they're on screen.
 const GUIDE := [
-	"1. The crate beside you holds your starting kit: press E on it to open it. More scrap metal and planks: search cars and houses, pull town furniture down (B, right-click), or press E at a scrap heap (junkyard) or timber stand (woods) to gather by hand.",
+	"1. The crate beside you holds your starting kit: press E on it to open it. More planks and scrap metal: swing at a tree to chop it down or at a broken car to strip it, search cars and houses, pull town furniture down (B, right-click), or press E at a scrap heap (junkyard) or timber stand (woods) to gather by hand.",
 	"2. Press 1 and click the ground to lay foundations. Everything you build stands on them.",
 	"3. Press B, click Smelter, then click a foundation to place it (R turns it). Esc stops building.",
 	"4. Machines need power: build a Generator and a Power pole beside the smelter (B, Power). E on the generator loads gas cans; the crate has some, G siphons more from cars.",

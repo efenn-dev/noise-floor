@@ -6,6 +6,8 @@ extends Node3D
 ## cans carry "container_id", so the Interactor searches them like a fridge (SimWorld.place_street registers
 ## them). At night every lamp post's lantern glows and lights a small warm omni light. Road markings (centre
 ## dashes and kerbs) are plain meshes with no collider. No rules live here.
+## P11: a tree's body carries "tree" ([id, kind, foot], read by CountryView.tree_at), and a tree the sim fells
+## (Salvage) tips over away from you and is gone.
 
 const MODELS := {
 	"lamp_post": "res://assets/models/lamp_post.glb",
@@ -23,6 +25,9 @@ var bodies: Array = []   # one StaticBody3D per street item, in plan order (test
 var lights: Array = []   # OmniLight3D per lamp post
 var lit := false
 var _lamp_mats: Array = []
+var _trees: Dictionary = {}  # P11: tree id -> its body
+var _falling: Array = []  # P11: [body, seconds so far, tip axis, standing transform, foot]
+var _seen_changes := -1
 
 
 func setup(p_sim: SimWorld, street: Dictionary) -> void:
@@ -33,9 +38,34 @@ func setup(p_sim: SimWorld, street: Dictionary) -> void:
 	_set_lit(sim.clock.is_night())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if sim != null and sim.clock.is_night() != lit:
 		_set_lit(not lit)
+	if sim != null and sim.salvage.changes != _seen_changes:
+		_seen_changes = sim.salvage.changes
+		for id: String in sim.salvage.felled:
+			if not _trees.has(id):
+				continue
+			var body: StaticBody3D = _trees[id]
+			_trees.erase(id)
+			for cs: CollisionShape3D in body.find_children("*", "CollisionShape3D", false, false):
+				cs.set_deferred("disabled", true)
+			if id == sim.salvage.last_felled and is_inside_tree():
+				var foot: Vector3 = body.get_meta("tree")[2]
+				var cam := get_viewport().get_camera_3d()
+				var away := (foot - cam.global_position) if cam != null else Vector3.FORWARD
+				away.y = 0.0
+				var axis := Vector3.UP.cross(away.normalized() if away.length_squared() > 1e-4 else Vector3.FORWARD).normalized()
+				_falling.append([body, maxf(CountryView.hold_fall, 0.0) * CountryView.FALL_TIME, axis, body.global_transform, foot])
+			else:
+				body.visible = false
+	for f: Array in _falling:
+		f[1] = float(f[1]) + delta
+		var t := CountryView.fall_fraction(float(f[1]))
+		(f[0] as Node3D).global_transform = CountryView.tipped(f[3], f[4], f[2], t)
+		if t >= 1.0:
+			(f[0] as Node3D).visible = false
+	_falling = _falling.filter(func(f: Array) -> bool: return CountryView.fall_fraction(float(f[1])) < 1.0)
 
 
 func _set_lit(on: bool) -> void:
@@ -68,6 +98,14 @@ func _add_item(item: Dictionary) -> StaticBody3D:
 	model.position.y = StreetPlan.SIZES[kind].y / 2.0 * scale  # kit models stand on the floor of their centred box
 	body.add_child(model)
 	match kind:
+		"tree":  # P11: the axe's target
+			var id := Salvage.tree_id(item["pos"])
+			body.set_meta("tree", [id, "tree", item["pos"]])
+			if not sim.salvage.felled.has(id):
+				_trees[id] = body
+			else:
+				body.visible = false
+				shape.disabled = true
 		"trash_can":
 			body.set_meta("container_id", item["id"])
 		"mailbox":

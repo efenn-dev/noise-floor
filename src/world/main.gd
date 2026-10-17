@@ -371,6 +371,10 @@ func _ready() -> void:
 		if str(args["build-menu"]) != "":
 			build_menu.highlight(str(args["build-menu"]))  # P10: --build-menu=smelter points at that piece
 			build_menu.show_group(BuildMenu.group_of(str(args["build-menu"])))
+	if args.has("tree"):
+		_stand_by_tree(str(args["tree"]))  # P11: --tree[=T], for screenshots
+	if args.has("wreck"):
+		_stand_by_wreck()  # P11: --wreck, for screenshots
 	if args.has("gear"):
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
@@ -1229,6 +1233,9 @@ func _update_hud(delta: float) -> void:
 	_build_label.text = builder.status_text()
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
+	if use != "" and melee.last_message != "" and not use.contains(melee.last_message):
+		use += "
+" + melee.last_message  # P11: "Chopping: 40%" under the tree you're looking at
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
 	var gun_up := driving == null and sim.guns.in_hand() and sim.ready_throw == "" and not builder.active and not sim.player.dead
 	scope_overlay.show_scope(shooter.scope_weight() if gun_up else 0.0)  # V39: the scope's own reticle
@@ -1380,6 +1387,7 @@ func _build_country() -> void:
 	country_view.name = "CountryView"
 	add_child(country_view)
 	country_view.setup(country)
+	country_view.salvage = sim.salvage  # P11: felled trees go
 	node_view = NodeView.new()
 	node_view.name = "NodeView"
 	add_child(node_view)
@@ -1553,6 +1561,50 @@ func _build_player(args: Dictionary) -> void:
 	sim.spawn_point = player.position
 	sim.player_pos = player.position
 	sim.player.respawned.connect(_on_respawned)
+
+
+## P11 --tree[=T]: an axe in hand, a few steps from the town tree nearest you, looking at it; with T it's felled and
+## held at fraction T (0-1) of its fall.
+func _stand_by_tree(t: String) -> void:
+	var best: StaticBody3D = null
+	for b: StaticBody3D in street_view.bodies:
+		if b.get_meta("street_kind", "") == "tree" and (best == null
+				or b.global_position.distance_to(player.global_position) < best.global_position.distance_to(player.global_position)):
+			best = b
+	if best == null:
+		return
+	var foot: Vector3 = best.get_meta("tree")[2]
+	var away := Vector3(player.global_position.x - foot.x, 0.0, player.global_position.z - foot.z)
+	away = away.normalized() if away.length_squared() > 0.01 else Vector3.BACK
+	player.global_position = Vector3(foot.x, player.global_position.y, foot.z) + away * (4.5 if t != "" else 1.6)
+	player.set_look(rad_to_deg(atan2(away.x, away.z)), 12.0 if t != "" else 4.0)
+	_hold_weapon("axe")
+	if t != "":
+		CountryView.hold_fall = clampf(t.to_float(), 0.0, 1.0)
+		var info: Array = best.get_meta("tree")
+		while not sim.salvage.felled.has(info[0]):
+			sim.salvage.hit_tree(info[0], info[1], 999.0, "axe")
+
+
+## P11 --wreck: beside the nearest car that won't drive (one you can strip for scrap), looking at its side.
+func _stand_by_wreck() -> void:
+	var best := ""
+	for id: String in cars:
+		if sim.wreck_type(id) != "" and (best == "" or (cars[id] as Node3D).global_position.distance_to(player.global_position)
+				< (cars[best] as Node3D).global_position.distance_to(player.global_position)):
+			best = id
+	if best == "":
+		return
+	var car: Node3D = cars[best]
+	var side := car.global_basis.x.normalized()
+	player.global_position = Vector3(car.global_position.x, player.global_position.y, car.global_position.z) + side * 2.4
+	player.set_look(rad_to_deg(atan2(side.x, side.z)), -10.0)
+
+
+func _hold_weapon(base: String) -> void:
+	var piece := sim.gear.make(base, "civilian", "white")
+	sim.gear.pieces.append(piece)
+	sim.gear.equip(piece["uid"])
 
 
 ## --inside=N: stand in house N's kitchen, across the cell from its fridge, looking at it.

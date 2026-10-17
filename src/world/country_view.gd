@@ -4,11 +4,16 @@ extends Node3D
 ## leaf colour) with its trunk as a collider (so you, zombies and the navmesh go round them), the highway's
 ## wrecked cars as solid props, and an invisible wall round the map's edge behind the tree belt. Leaves take the
 ## season's colours like the town's trees (apply_season). No rules live here.
+## P11: every tree's trunk body carries "trees" (per collision shape: [id, kind, foot]; `tree_at` reads it), so a melee
+## hit knows which tree it struck; a tree the sim fells (Salvage) tips over away from you and is gone.
 
 const TRUNK := Vector2(0.28, 2.6)  # radius and height of a scale-1 trunk collider (StreetPlan.COLLIDERS "tree")
 const WRECK_MODELS := {"sedan": "res://assets/models/sedan.glb", "pickup": "res://assets/models/pickup.glb"}
 const WRECK_BOXES := {"sedan": Vector3(1.9, 1.5, 4.4), "pickup": Vector3(2.0, 1.85, 5.2)}  # data/vehicles.json sizes
 const WALL_HEIGHT := 6.0
+const TREES := ["tree", "pine_tree", "pine_tree_small"]
+const FALL_TIME := 1.4  # P11: seconds a felled tree takes to hit the ground
+static var hold_fall := -1.0  # P11: --tree=T freezes a falling tree at fraction T of its fall (screenshots)
 ## How each kind is solid: "trunk" (a thin cylinder), "box" (its model's box), or not at all (bushes).
 const COLLIDE := {"tree": "trunk", "pine_tree": "trunk", "pine_tree_small": "trunk", "rock": "box",
 		"guardrail": "box", "concrete_barrier": "box", "road_sign": "box", "farm_fence": "box",
@@ -29,6 +34,11 @@ var plan: Dictionary
 var trees: MultiMeshInstance3D
 var _tree_mesh: Mesh  # our own copy, so the season can recolour its leaves
 var _leaf_materials: Dictionary = {}  # surface index -> original material
+var salvage: Salvage  # P11: set by main.gd; felled trees are hidden
+var _tree_at: Dictionary = {}  # P11: tree id -> [MultiMesh, instance index, CollisionShape3D, standing Transform3D, foot]
+var _gone: Dictionary = {}  # tree id -> true once hidden
+var _falling: Array = []  # [id, seconds so far, tip axis]
+var _seen_changes := -1
 
 
 ## W3d: `edge_wall` false for a second CountryView that only scatters (the farms' corn, fences and hay).
@@ -102,6 +112,7 @@ func _scatter(kind: String, list: Array) -> void:
 	body.collision_layer = Layers.WORLD
 	body.collision_mask = 0
 	var collide: String = COLLIDE.get(kind, "")
+	var tree_ids := []  # P11: per collision shape, in order
 	for i in list.size():
 		var it: Dictionary = list[i]
 		var sc := float(it.get("scale", 1.0))
@@ -117,6 +128,10 @@ func _scatter(kind: String, list: Array) -> void:
 			cyl.height = TRUNK.y * sc
 			cs.shape = cyl
 			cs.position = (it["pos"] as Vector3) + Vector3(0, cyl.height / 2.0, 0)
+			if kind in TREES:  # P11: which tree this trunk is, for the axe
+				var id := Salvage.tree_id(it["pos"])
+				tree_ids.append([id, kind, it["pos"]])
+				_tree_at[id] = [mm, i, cs, Transform3D(basis, at) * local, it["pos"]]
 		else:
 			var shape := BoxShape3D.new()
 			shape.size = box.size * sc
@@ -129,10 +144,80 @@ func _scatter(kind: String, list: Array) -> void:
 	add_child(multi)
 	if kind == "tree":
 		trees = multi
+	if not tree_ids.is_empty():
+		body.set_meta("trees", tree_ids)
 	if body.get_child_count() > 0:
 		add_child(body)
 	else:
 		body.free()
+
+
+## P11: the tree a melee hit or a look struck: [id, kind, foot], or [] if `col` (and its shape `shape`) isn't one.
+static func tree_at(col: Object, shape: int) -> Array:
+	if col == null:
+		return []
+	if col.has_meta("trees"):
+		var list: Array = col.get_meta("trees")
+		return list[shape] if shape >= 0 and shape < list.size() else []
+	if col.has_meta("tree"):
+		return col.get_meta("tree")
+	return []
+
+
+func _process(delta: float) -> void:
+	if salvage != null and salvage.changes != _seen_changes:
+		_seen_changes = salvage.changes
+		var falls := salvage.last_felled
+		for id: String in salvage.felled:
+			if _tree_at.has(id) and not _gone.has(id):
+				_gone[id] = true
+				(_tree_at[id][2] as CollisionShape3D).set_deferred("disabled", true)
+				if id == falls and is_inside_tree():
+					_falling.append([id, maxf(hold_fall, 0.0) * FALL_TIME, _fall_axis(_tree_at[id][4])])
+				else:
+					_hide(id)
+	for f: Array in _falling:
+		f[1] = float(f[1]) + delta
+		var t := fall_fraction(float(f[1]))
+		var info: Array = _tree_at[f[0]]
+		if t >= 1.0:
+			_hide(f[0])
+			continue
+		(info[0] as MultiMesh).set_instance_transform(info[1], tipped(info[3], info[4], f[2], t))
+	_falling = _falling.filter(func(f: Array) -> bool: return fall_fraction(float(f[1])) < 1.0)
+
+
+## P11: how far over a tree is `seconds` after it was felled (0-1; held at hold_fall for screenshots).
+static func fall_fraction(seconds: float) -> float:
+	var t := clampf(seconds / FALL_TIME, 0.0, 1.0)
+	return minf(t, hold_fall) if hold_fall >= 0.0 else t
+
+
+## P11: a standing tree's transform `xf` tipped over about its `foot` toward the horizontal `axis` side, `t` of the way
+## (0-1, speeding up as it goes, like a falling tree).
+static func tipped(xf: Transform3D, foot: Vector3, axis: Vector3, t: float) -> Transform3D:
+	var turn := Transform3D(Basis(axis, deg_to_rad(88.0) * t * t), Vector3.ZERO)
+	return Transform3D(Basis(), foot) * turn * Transform3D(Basis(), -foot) * xf
+
+
+## The axis a tree at `foot` tips about so it falls away from the camera.
+func _fall_axis(foot: Vector3) -> Vector3:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	var away := (foot - cam.global_position) if cam != null else Vector3.FORWARD
+	away.y = 0.0
+	if away.length_squared() < 1e-4:
+		away = Vector3.FORWARD
+	return Vector3.UP.cross(away.normalized()).normalized()
+
+
+func _hide(id: String) -> void:
+	var info: Array = _tree_at[id]
+	(info[0] as MultiMesh).set_instance_transform(info[1], Transform3D(Basis().scaled(Vector3.ONE * 0.001), Vector3(0, -50, 0)))
+
+
+## Whether tree `id` has been taken out of the picture (tests).
+func is_gone(id: String) -> bool:
+	return _gone.has(id)
 
 
 func _add_wrecks(list: Array) -> void:
