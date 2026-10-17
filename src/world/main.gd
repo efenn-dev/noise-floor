@@ -171,6 +171,7 @@ var heard_map: HeardMap  # F5
 var _materials_hud: Label
 var view_feel: ViewFeel  # V3: bob, sway, shake, hit marker, red edge, impact puffs
 var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
+var scope_overlay: ScopeOverlay  # V39: the eyepiece and reticle while looking through a scope
 var _dot: ColorRect      # the centre dot, shown otherwise
 var _keys_label: Label   # P3: the one-line key hint at the bottom, for what you're doing now
 ## P3: the key hint line never gets longer than this (it drops its least useful keys first).
@@ -1226,7 +1227,8 @@ func _update_hud(delta: float) -> void:
 	var use := _car_hud() if driving != null else interactor.status_text()
 	_interact_label.text = use if use != "" else (shooter.last_message if shooter.last_message != "" else melee.last_message)
 	var gun_up := driving == null and sim.guns.in_hand() and sim.ready_throw == "" and not builder.active and not sim.player.dead
-	crosshair.visible = gun_up and (not shooter.aiming() or sim.guns.scoped())  # V15: irons hide it, a scope keeps it as the reticle
+	scope_overlay.show_scope(shooter.scope_weight() if gun_up else 0.0)  # V39: the scope's own reticle
+	crosshair.visible = gun_up and not shooter.aiming()  # V15: irons hide it; V39: a scope shows its own reticle
 	_dot.visible = not gun_up
 	if gun_up:
 		crosshair.update_from(sim.guns.spread_deg(), player.camera)
@@ -2019,6 +2021,9 @@ func _build_hud() -> void:
 	_dot.size = Vector2(4, 4)
 	_dot.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
 	layer.add_child(_dot)
+	scope_overlay = ScopeOverlay.new()  # V39: under the crosshair and the rest of the HUD
+	layer.add_child(scope_overlay)
+	layer.move_child(scope_overlay, 0)
 	crosshair = Crosshair.new()  # P2: its ticks ignore the mouse too (it sets that on its own children)
 	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
 	crosshair.visible = false
