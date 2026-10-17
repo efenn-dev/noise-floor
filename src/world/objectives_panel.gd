@@ -101,7 +101,7 @@ func _show_defend(g: Guidance) -> void:
 		var done := i < current
 		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
 		_lines[i].add_theme_color_override("font_color", DONE if done else (Color.WHITE if i == current else DIM))
-	_detail.text = [
+	_detail.text = _learn_hint(["nail_turret", "press", "belt", ""][mini(current, 3)]) + [
 		"B, Defense group: a nail turret (10 metal plates, 20 nails). E on it loads nails from your pockets.",
 		"A Press on a foundation, with power (generator, pole, gas). E loads it with metal plates; it makes nails. R switches what it makes: bolts, rifle rounds.",
 		"Lay a belt from the Press's front to the turret (hold the button and drag). An ammo hopper in front of a turret feeds it too.",
@@ -118,12 +118,25 @@ func _show_feed(g: Guidance) -> void:
 		var done := bool(g.feed_met[i]) if i < g.feed_met.size() else false
 		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
 		_lines[i].add_theme_color_override("font_color", DONE if done else (Color.WHITE if i == current else DIM))
-	_detail.text = [
+	_detail.text = _learn_hint(["rain_collector", "", "planter", ""][mini(current, 3)]) + [
 		"B, Factory: a rain collector fills with rain on its own (no power). A water pump on a farm well is faster.",
 		"A purifier on a foundation, with power. Feed it the dirty water (E, or a belt into its back).",
 		"A planter: E loads seeds and dirty water. Every harvest gives a seed back, so one seed lasts for ever.",
 		"A canner with power: two vegetables and a metal plate make two cans that never spoil. L shows what your base made.",
 	][mini(current, 3)]
+
+
+## P10: when the goal's piece isn't learned yet (Learning), how to learn it: "First learn it: build a Generator →
+## Power pole → Smelter, then the Press." ("" when it's known.)
+func _learn_hint(id: String) -> String:
+	if id == "" or sim.learning == null:
+		return ""
+	var path := sim.learning.path_to(id)
+	if path.is_empty():
+		return ""
+	var names := path.map(func(p: String) -> String: return String(sim.data.buildables[p]["name"]))
+	return "First learn it: build a %s, then the %s.
+" % [" → ".join(names), sim.data.buildables[id]["name"]]
 
 
 func text() -> String:

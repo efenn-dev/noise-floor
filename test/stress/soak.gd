@@ -651,6 +651,7 @@ func _kit_crate() -> Inventory:
 func _grab() -> void:
 	main = current_scene as Node3D
 	sim = main.sim
+	sim.learning.knows_all = true  # P10: the bot builds its factory straight away, not in the order a new player learns it
 	# Q3: the park's zombies are the ones standing in it at the start. Q4: after a load (ids are new) each zombie
 	# is matched to the one saved at its spot and keeps its watch: a park zombie stays one, drawn or not, wherever
 	# it is now, and a zombie that wasn't one (a wave or town zombie standing in the park) isn't made one. Only a

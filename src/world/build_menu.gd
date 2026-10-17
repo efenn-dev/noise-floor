@@ -1,14 +1,29 @@
 class_name BuildMenu
 extends CanvasLayer
-## S3: B opens this. Every piece you can build, in groups, with its cost (grey when the crates near you and
-## your pockets can't pay). Click one to start building it (build mode, the ghost, as before). Hover or click
-## one and press 1-9 or 0 to put it on that hotbar key (Hotbar). Esc or B closes it. The game keeps running.
-## The rules stay in the sim: this reads BuildController.PIECES, GameData and Hotbar and shows them.
+## S3: B opens this. Every piece you can build, with its cost. Click one to start building it (build mode, the
+## ghost, as before). Hover or click one and press 1-9 or 0 to put it on that hotbar key (Hotbar). Esc or B closes
+## it. The game keeps running. The rules stay in the sim: this reads BuildController.PIECES, GameData, Learning,
+## Milestones and Hotbar and shows them.
+## P10 (playtest: a six-year-old who can't read yet was lost in a wall of text): pictures first. A sidebar of group
+## pictures on the left; the group's pieces as big picture tiles, each with its cost as item pictures and counts (red
+## when the crates near you and your pockets can't pay). Pieces you haven't learned yet (Learning) or a Hub milestone
+## locks are dark, with a padlock and the picture of what to build first, after the open ones; newly learned ones say
+## NEW. The right side shows the piece you point at: its picture, what it costs (have / need, and where to find what's
+## missing), what it makes (as item pictures) and a plain line.
 
 signal message(text: String)
 signal picked(id: String)
 
 const GOLD := Color(0.95, 0.8, 0.55)
+const GOOD := Color(0.6, 0.9, 0.6)
+const SHORT := Color(1.0, 0.5, 0.42)
+const DIM := Color(1, 1, 1, 0.68)
+const COLUMNS := 5
+const TILE := Vector2(126, 156)
+const PIC := 88
+## P10: each group's picture in the sidebar (one of its pieces, as the hotbar draws it).
+const GROUP_PICS := {"Base": "wall", "Hub": "hub", "Factory": "smelter", "Extractors": "salvager", "Power": "generator",
+		"Defense": "nail_turret"}
 static var _small: Dictionary = {}  # F5: small_icon's cache
 const GROUPS := [
 	["Base", ["foundation", "wall", "soundproof_wall", "door", "barricade", "bed", "storage", "workbench", "stove", "electric_heater"]],
@@ -79,10 +94,17 @@ const BLURBS := {
 var sim: SimWorld
 var builder: BuildController
 var highlighted := ""  # the piece last hovered or clicked: the number keys put it on the hotbar
+var group := "Base"  # P10: the group whose tiles show
 
 var _root: Control
-var _buttons: Dictionary = {}  # id -> Button
-var _details: Label
+var _buttons: Dictionary = {}  # id -> its tile (a Button)
+var _tiles: Dictionary = {}  # id -> {"pic", "lock", "first", "new", "name", "costs": [[item, Label]]}
+var _grids: Dictionary = {}  # group -> GridContainer
+var _sides: Dictionary = {}  # group -> its sidebar Button
+var _side_new: Dictionary = {}  # group -> its sidebar NEW badge
+var _note: Label
+var _center: CenterContainer
+var _info: VBoxContainer  # the right-hand side: the piece you point at
 var _stop: Button
 
 
@@ -102,8 +124,20 @@ func open() -> void:
 	_root.visible = true
 	if highlighted == "" or not _buttons.has(highlighted):
 		highlighted = builder.piece() if builder.active else "foundation"
+	group = group_of(highlighted)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	refresh()
+	fit()
+
+
+## P10: the menu is drawn for a 1600 x 900 window and scaled up on a bigger one (pictures a child can see on a
+## 1440p screen), never down; it leaves the hotbar along the bottom in view.
+func fit() -> void:
+	var view := _root.get_viewport_rect().size
+	var s := clampf(minf(view.x / 1600.0, view.y / 900.0), 1.0, 1.6)
+	_center.scale = Vector2(s, s)
+	_center.position = Vector2.ZERO
+	_center.size = Vector2(view.x, view.y - 100.0 * s) / s
 
 
 func close() -> void:
@@ -111,11 +145,15 @@ func close() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-## Clicking a piece: build mode with it, and the menu goes.
+## Clicking a piece: build mode with it, and the menu goes. A locked piece says what opens it instead.
 func pick(id: String) -> void:
 	if not _buttons.has(id):
 		return
-	highlighted = id
+	highlight(id)
+	var why := lock_text(id)
+	if why != "":
+		message.emit(why)
+		return
 	builder.select_id(id)
 	builder.set_active(true)
 	close()
@@ -125,7 +163,22 @@ func pick(id: String) -> void:
 func highlight(id: String) -> void:
 	if _buttons.has(id):
 		highlighted = id
+		sim.learning.seen(id)  # P10: NEW goes once you've looked at it
 		refresh()
+
+
+## P10: the sidebar: show the group `g`'s tiles.
+func show_group(g: String) -> void:
+	if _grids.has(g) and g != group:
+		group = g
+		refresh()
+
+
+static func group_of(id: String) -> String:
+	for g: Array in GROUPS:
+		if id in g[1]:
+			return g[0]
+	return GROUPS[0][0]
 
 
 ## Pressing 1-9 or 0 with a piece highlighted: it goes on that key. Returns the message shown.
@@ -160,30 +213,39 @@ func _input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if is_open() and sim.player.dead:
 		close()
+	if is_open():
+		fit()  # wrapped labels settle over a frame or two, and the window may change size
 
 
-# --- Drawing -------------------------------------------------------------------
+# --- What the menu says -------------------------------------------------------------
 
-func refresh() -> void:
-	if sim == null:
-		return
-	var stock := sim.stock_at(sim.player_pos)
-	for id: String in _buttons:
-		var b: Button = _buttons[id]
-		var info: Dictionary = sim.data.buildables[id]
-		var can := stock.has_all(info["cost"]) and _unlocked(id)
-		b.add_theme_color_override("font_color", (GOLD if id == highlighted else Color.WHITE) if can else Color(0.75, 0.55, 0.5))
-		b.button_pressed = id == highlighted or (builder.active and builder.piece() == id)
-	_stop.visible = builder.active
-	_details.text = details_text(highlighted)
+## "" when `id` may be built (cost aside); otherwise why not, in a few words (as BuildGrid.can_place says it).
+func lock_text(id: String) -> String:
+	var learning := sim.learning
+	if learning != null and not learning.knows(id):
+		return "Build a %s first to learn this" % String(sim.data.buildables[learning.after(id)]["name"]).to_lower()
+	var ms := sim.milestones
+	if ms != null and not ms.unlocked(id):
+		return "Unlock it at the Hub: %s" % ms.cfg(ms.unlocked_by(id)).get("name", "a milestone")
+	if sim.build.projects != null and not sim.build.projects.unlocked(id):
+		var project := str(sim.data.buildables[id].get("needs_project", ""))
+		return "Needs the %s running first" % String(sim.data.projects.get(project, {}).get("name", "project")).to_lower()
+	return ""
 
 
-## The lines under the list for `id`: name and cost, its numbers, a plain line, and which key it's on.
-func details_text(id: String) -> String:
-	if id == "" or not sim.data.buildables.has(id):
-		return "Point at a piece to read about it."
+## P10: the piece whose picture a locked tile shows: what to build first (the piece before it, or the Hub).
+func first_piece(id: String) -> String:
+	if sim.learning != null and not sim.learning.knows(id):
+		return sim.learning.after(id)
+	if sim.milestones != null and not sim.milestones.unlocked(id):
+		return "hub"
+	return ""
+
+
+## The piece's numbers: loudness, power, range, hp.
+func facts_text(id: String) -> String:
 	var info: Dictionary = sim.data.buildables[id]
-	var facts := PackedStringArray([String(info["name"]), cost_text(info["cost"])])
+	var facts := PackedStringArray()
 	if float(info.get("loudness", 0.0)) > 0.0:
 		facts.append("loudness %d" % int(info["loudness"]))
 	if float(info.get("watts", 0.0)) > 0.0:
@@ -193,11 +255,24 @@ func details_text(id: String) -> String:
 	if float(info.get("range", 0.0)) > 0.0:
 		facts.append("range %d m" % int(info["range"]))
 	facts.append("%d hp" % int(info["hp"]))
-	var lines := PackedStringArray([" · ".join(facts), String(BLURBS.get(id, ""))])
-	if not _unlocked(id):
-		lines.append("Needs the %s running first" % String(sim.data.projects.get(info.get("needs_project", ""), {}).get("name", "project")).to_lower())
+	return " · ".join(facts)
+
+
+func key_text(id: String) -> String:
 	var slot := sim.hotbar.find(Hotbar.build_entry(id))
-	lines.append(("On key %s. " % Hotbar.key_name(slot) if slot != -1 else "") + "Press 1-9 or 0 to put it on that key. Click to build it.")
+	return ("On key %s. " % Hotbar.key_name(slot) if slot != -1 else "") + "Press 1-9 or 0 to put it on that key. Click to build it."
+
+
+## The words for `id`: name, cost and numbers, a plain line, what locks it and which key it's on.
+func details_text(id: String) -> String:
+	if id == "" or not sim.data.buildables.has(id):
+		return "Point at a piece to read about it."
+	var info: Dictionary = sim.data.buildables[id]
+	var lines := PackedStringArray([" · ".join([String(info["name"]), cost_text(info["cost"]), facts_text(id)]),
+			String(BLURBS.get(id, ""))])
+	if lock_text(id) != "":
+		lines.append(lock_text(id))
+	lines.append(key_text(id))
 	return "\n".join(lines)
 
 
@@ -208,8 +283,190 @@ func cost_text(cost: Dictionary) -> String:
 	return ", ".join(parts)
 
 
-func _unlocked(id: String) -> bool:
-	return sim.build.projects == null or sim.build.projects.unlocked(id)
+## P10: the recipes a machine piece can run (its "recipes", or its one "recipe").
+func recipes_of(id: String) -> Array:
+	var info: Dictionary = sim.data.buildables[id]
+	var out: Array = info.get("recipes", [])
+	if out.is_empty() and str(info.get("recipe", "")) != "":
+		out = [str(info["recipe"])]
+	return out.filter(func(r: String) -> bool: return sim.data.recipes.has(r))
+
+
+## P10: a group's pieces in the order its tiles show: the ones you can build first, then the locked ones.
+func tile_order(g: String) -> Array:
+	var ids := _ids_of(g)
+	var open := ids.filter(func(id: String) -> bool: return lock_text(id) == "")
+	var locked := ids.filter(func(id: String) -> bool: return lock_text(id) != "")
+	return open + locked
+
+
+# --- Drawing -------------------------------------------------------------------
+
+func refresh() -> void:
+	if sim == null:
+		return
+	var stock := sim.stock_at(sim.player_pos)
+	for g: String in _grids:
+		var grid: GridContainer = _grids[g]
+		grid.visible = g == group
+		(_sides[g] as Button).button_pressed = g == group
+		var order := tile_order(g)
+		var fresh := false
+		for i in order.size():
+			grid.move_child(_buttons[order[i]], i)
+			fresh = fresh or (sim.learning.fresh.has(order[i]) and lock_text(order[i]) == "")
+		(_side_new[g] as Control).visible = fresh
+	for id: String in _buttons:
+		_refresh_tile(id, stock)
+	_stop.visible = builder.active
+	_note.text = String(GROUP_NOTES.get(group, ""))
+	_show_info(highlighted, stock)
+
+
+func _ids_of(g: String) -> Array:
+	for entry: Array in GROUPS:
+		if entry[0] == g:
+			return (entry[1] as Array).filter(func(id: String) -> bool: return sim.data.buildables.has(id))
+	return []
+
+
+func _refresh_tile(id: String, stock: Inventory) -> void:
+	var b: Button = _buttons[id]
+	var t: Dictionary = _tiles[id]
+	var locked := lock_text(id) != ""
+	b.button_pressed = id == highlighted or (builder.active and builder.piece() == id)
+	(t["pic"] as TextureRect).modulate = Color(0.3, 0.3, 0.32) if locked else Color.WHITE
+	(t["lock"] as Control).visible = locked
+	var first := first_piece(id) if locked else ""
+	(t["first"] as TextureRect).texture = _piece_pic(first, 48) if first != "" else null
+	(t["first"] as Control).visible = first != ""
+	(t["new"] as Control).visible = sim.learning.fresh.has(id) and not locked
+	(t["name"] as Control).modulate = Color(1, 1, 1, 0.5) if locked else Color.WHITE
+	var cost: Dictionary = sim.data.buildables[id]["cost"]
+	for pair: Array in t["costs"]:
+		var label: Label = pair[1]
+		label.add_theme_color_override("font_color", GOOD if stock.count(pair[0]) >= int(cost[pair[0]]) else SHORT)
+		label.modulate.a = 0.5 if locked else 1.0
+
+
+## The right-hand side for `id`, built afresh: picture and name, what locks it, costs, what it makes, a plain line.
+func _show_info(id: String, stock: Inventory) -> void:
+	for c in _info.get_children():
+		_info.remove_child(c)
+		c.queue_free()
+	if id == "" or not sim.data.buildables.has(id):
+		_info.add_child(_label("Point at a piece to see it.", 16, true))
+		return
+	var info: Dictionary = sim.data.buildables[id]
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 12)
+	_info.add_child(top)
+	var big := _pic_rect(_piece_pic(id, 112), 112)
+	if lock_text(id) != "":
+		big.modulate = Color(0.45, 0.45, 0.47)
+	top.add_child(big)
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(words)
+	var name_label := _label(String(info["name"]), 24, true)
+	name_label.add_theme_color_override("font_color", GOLD)
+	words.add_child(name_label)
+	var facts := _label(facts_text(id), 14, true)
+	facts.modulate = DIM
+	words.add_child(facts)
+
+	var why := lock_text(id)
+	if why != "":
+		var row := HFlowContainer.new()  # a long path wraps
+		row.add_theme_constant_override("h_separation", 8)
+		row.add_theme_constant_override("v_separation", 4)
+		_info.add_child(row)
+		var lock := LockIcon.new()
+		lock.custom_minimum_size = Vector2(24, 28)
+		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(lock)
+		var path: Array = sim.learning.path_to(id) if sim.learning != null else []
+		if path.is_empty() and first_piece(id) != "":
+			path = [first_piece(id)]
+		for i in path.size():  # P10: every piece to build on the way, as pictures, the one you can build now first
+			if i > 0:
+				var arrow := _label("→", 18)
+				arrow.modulate = DIM
+				arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				row.add_child(arrow)
+			row.add_child(_pic_rect(_piece_pic(path[i], 44), 44))
+		if path.size() > 1:
+			var names := path.map(func(p: String) -> String: return String(sim.data.buildables[p]["name"]))
+			why = "Learn it by building these in order: %s" % " → ".join(names)
+		var why_label := _label(why, 16, true)
+		why_label.add_theme_color_override("font_color", SHORT)
+		_info.add_child(why_label)
+
+	_info.add_child(_heading("Costs"))
+	var costs := HFlowContainer.new()
+	costs.add_theme_constant_override("h_separation", 14)
+	_info.add_child(costs)
+	var where := PackedStringArray()
+	for item: String in info["cost"]:
+		var need := int(info["cost"][item])
+		var have := stock.count(item)
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 4)
+		chip.tooltip_text = sim.data.item_name(item)
+		costs.add_child(chip)
+		chip.add_child(_pic_rect(item_pic(item, 36), 36))
+		var count := _label("%d / %d" % [mini(have, 999), need], 18)
+		count.add_theme_color_override("font_color", GOOD if have >= need else SHORT)
+		count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		chip.add_child(count)
+		if have < need:
+			var from := str(sim.data.items.get(item, {}).get("where", ""))
+			if from != "":
+				where.append("%s: %s" % [sim.data.item_name(item), from])
+	for line: String in where:
+		var w := _label(line, 13, true)
+		w.modulate = DIM
+		_info.add_child(w)
+
+	var recipes := recipes_of(id)
+	if not recipes.is_empty():
+		_info.add_child(_heading("Makes" if recipes.size() == 1 else "Makes (R switches)"))
+		for r: String in recipes.slice(0, 4):
+			_info.add_child(_recipe_row(sim.data.recipes[r]))
+
+	_info.add_child(_label(String(BLURBS.get(id, "")), 16, true))
+	var keys := _label(key_text(id), 13, true)
+	keys.modulate = DIM
+	_info.add_child(keys)
+
+
+## One recipe as pictures: what goes in (with counts), an arrow, what comes out.
+func _recipe_row(recipe: Dictionary) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var ins: Dictionary = recipe.get("in", {})
+	for item: String in ins:
+		row.add_child(_item_count(item, int(ins[item])))
+	var arrow := _label("→" if not ins.is_empty() else "makes", 22 if not ins.is_empty() else 14)
+	arrow.modulate = DIM
+	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(arrow)
+	var outs: Dictionary = recipe.get("out", {})
+	for item: String in outs:
+		row.add_child(_item_count(item, int(outs[item])))
+	return row
+
+
+func _item_count(item: String, n: int) -> Control:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	box.tooltip_text = sim.data.item_name(item)
+	box.add_child(_pic_rect(item_pic(item, 30), 30))
+	if n > 1:
+		var count := _label("×%d" % n, 14)
+		count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		box.add_child(count)
+	return box
 
 
 func _build() -> void:
@@ -219,17 +476,20 @@ func _build() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP  # clicks off the panel mustn't reach the game
 	add_child(_root)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.offset_bottom = -180.0  # leave the hotbar along the bottom in view
+	_center = center
 	_root.add_child(center)
 	var panel := PanelContainer.new()
+	var look := StyleBoxFlat.new()
+	look.bg_color = Color(0.09, 0.09, 0.1, 0.94)  # P10: solid enough that the world doesn't show through the pictures
+	look.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", look)
 	center.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
+		margin.add_theme_constant_override("margin_" + side, 14)
 	panel.add_child(margin)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 8)
 	margin.add_child(column)
 
 	var head := HBoxContainer.new()
@@ -247,57 +507,201 @@ func _build() -> void:
 	_stop.pressed.connect(stop_building)
 	head.add_child(_stop)
 
-	var groups := HBoxContainer.new()
-	groups.add_theme_constant_override("separation", 18)
-	column.add_child(groups)
-	for g: Array in GROUPS:
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 4)
-		groups.add_child(box)
-		var gt := Label.new()
-		gt.text = g[0]
-		gt.add_theme_font_size_override("font_size", 20)
-		gt.add_theme_color_override("font_color", GOLD)
-		box.add_child(gt)
-		var note := Label.new()
-		note.text = String(GROUP_NOTES.get(g[0], ""))
-		note.add_theme_font_size_override("font_size", 13)
-		note.modulate = Color(1, 1, 1, 0.7)
-		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note.custom_minimum_size = Vector2(250, 0)
-		box.add_child(note)
-		for id: String in g[1]:
-			if not sim.data.buildables.has(id):
-				continue
-			var b := Button.new()
-			b.name = "Piece_" + id
-			b.text = "%s  (%s)" % [sim.data.buildables[id]["name"], cost_text(sim.data.buildables[id]["cost"])]
-			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			b.focus_mode = Control.FOCUS_NONE
-			b.toggle_mode = true
-			b.custom_minimum_size = Vector2(250, 30)
-			b.add_theme_font_size_override("font_size", 15)
-			var pic := InventoryScreen.icon_for("piece_" + id)  # S4: tools/art/piece_icons.gd
-			if pic != null:
-				# F5: a fixed 26 px picture, not an expanding one: an expanding icon was squeezed out of rows with a
-				# long cost (the Hub, the Salvager, the rain collector had none).
-				b.icon = small_icon(pic, 26)
-			b.mouse_entered.connect(highlight.bind(id))
-			b.pressed.connect(pick.bind(id))
-			box.add_child(b)
-			_buttons[id] = b
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 14)
+	column.add_child(body)
 
-	_details = Label.new()
-	_details.add_theme_font_size_override("font_size", 17)
-	_details.custom_minimum_size = Vector2(0, 90)
-	_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_details)
-	var hint := Label.new()
-	hint.text = "Click a piece to build it (then LMB places, drag for a row, R turns, RMB removes, Esc stops)  ·  1-9, 0 puts the piece you point at on that hotbar key  ·  B or Esc closes this"
-	hint.add_theme_font_size_override("font_size", 14)
-	hint.modulate = Color(1, 1, 1, 0.65)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# The sidebar: one big picture per group.
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 6)
+	body.add_child(side)
+	for g: Array in GROUPS:
+		var sb := Button.new()
+		sb.name = "Group_" + g[0]
+		sb.toggle_mode = true
+		sb.focus_mode = Control.FOCUS_NONE
+		sb.custom_minimum_size = Vector2(104, 74)
+		sb.tooltip_text = g[0]
+		sb.pressed.connect(show_group.bind(g[0]))
+		side.add_child(sb)
+		var inner := VBoxContainer.new()
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		inner.alignment = BoxContainer.ALIGNMENT_CENTER
+		inner.add_theme_constant_override("separation", 0)
+		sb.add_child(inner)
+		var gp := _pic_rect(_piece_pic(str(GROUP_PICS.get(g[0], "")), 48), 48)
+		gp.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		inner.add_child(gp)
+		var gl := _label(g[0], 14)
+		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(gl)
+		var gn := _new_badge()
+		gn.position = Vector2(4, 4)
+		sb.add_child(gn)
+		_sides[g[0]] = sb
+		_side_new[g[0]] = gn
+
+	# The tiles: the group's pieces as pictures.
+	var grid_w := COLUMNS * TILE.x + (COLUMNS - 1) * 6
+	var middle := VBoxContainer.new()
+	middle.add_theme_constant_override("separation", 6)
+	body.add_child(middle)
+	_note = _label("", 13, true)
+	_note.modulate = DIM
+	_note.custom_minimum_size = Vector2(grid_w, 34)
+	middle.add_child(_note)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(grid_w + 14, TILE.y * 3 + 12)
+	middle.add_child(scroll)
+	var stack := VBoxContainer.new()
+	scroll.add_child(stack)
+	for g: Array in GROUPS:
+		var grid := GridContainer.new()
+		grid.name = "Tiles_" + g[0]
+		grid.columns = COLUMNS
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		stack.add_child(grid)
+		_grids[g[0]] = grid
+		for id: String in g[1]:
+			if sim.data.buildables.has(id):
+				grid.add_child(_make_tile(id))
+
+	# The piece you point at.
+	var right := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.28)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	right.add_theme_stylebox_override("panel", style)
+	right.custom_minimum_size = Vector2(350, 0)
+	body.add_child(right)
+	_info = VBoxContainer.new()
+	_info.add_theme_constant_override("separation", 7)
+	right.add_child(_info)
+
+	var hint := _label("Click a piece to build it (then LMB places, drag for a row, R turns, RMB removes, Esc stops)  ·  1-9, 0 puts the piece you point at on that hotbar key  ·  B or Esc closes this", 13, true)
+	hint.modulate = Color(1, 1, 1, 0.6)
+	hint.custom_minimum_size = Vector2(900, 0)
 	column.add_child(hint)
+
+
+## One piece's tile: its picture (dark, with a padlock and what to build first, when locked), its name, its cost.
+func _make_tile(id: String) -> Button:
+	var b := Button.new()
+	b.name = "Piece_" + id
+	b.focus_mode = Control.FOCUS_NONE
+	b.toggle_mode = true
+	b.custom_minimum_size = TILE
+	b.tooltip_text = String(sim.data.buildables[id]["name"])
+	b.mouse_entered.connect(highlight.bind(id))
+	b.pressed.connect(pick.bind(id))
+	var inner := VBoxContainer.new()
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inner.offset_top = 5
+	inner.add_theme_constant_override("separation", 2)
+	b.add_child(inner)
+	var pic := _pic_rect(_piece_pic(id, PIC), PIC)
+	pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(pic)
+	var name_label := _label(String(sim.data.buildables[id]["name"]), 13)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.custom_minimum_size = Vector2(TILE.x - 8, 0)
+	name_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(name_label)
+	var costs := HBoxContainer.new()
+	costs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	costs.alignment = BoxContainer.ALIGNMENT_CENTER
+	costs.add_theme_constant_override("separation", 2)
+	inner.add_child(costs)
+	var pairs := []
+	var cost: Dictionary = sim.data.buildables[id]["cost"]
+	for item: String in cost:
+		costs.add_child(_pic_rect(item_pic(item, 18), 18))
+		var n := _label(str(int(cost[item])), 12)
+		costs.add_child(n)
+		pairs.append([item, n])
+	var first := TextureRect.new()
+	first.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	first.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	first.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	first.size = Vector2(48, 48)
+	first.position = Vector2(TILE.x - 52, PIC - 40)
+	b.add_child(first)
+	var lock := LockIcon.new()
+	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lock.size = Vector2(22, 26)
+	lock.position = Vector2(TILE.x / 2.0 - 11, PIC / 2.0 - 8)
+	b.add_child(lock)
+	var fresh := _new_badge()
+	fresh.position = Vector2(5, 5)
+	b.add_child(fresh)
+	_buttons[id] = b
+	_tiles[id] = {"pic": pic, "lock": lock, "first": first, "new": fresh, "name": name_label, "costs": pairs}
+	return b
+
+
+func _new_badge() -> Label:
+	var badge := _label("NEW", 12)
+	badge.add_theme_color_override("font_color", Color(0.1, 0.08, 0.02))
+	var style := StyleBoxFlat.new()
+	style.bg_color = GOLD
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	badge.add_theme_stylebox_override("normal", style)
+	badge.visible = false
+	return badge
+
+
+func _label(text: String, px: int, wrap := false) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", px)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if wrap else TextServer.AUTOWRAP_OFF
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func _heading(text: String) -> Label:
+	var l := _label(text, 14)
+	l.add_theme_color_override("font_color", GOLD)
+	return l
+
+
+func _pic_rect(tex: Texture2D, px: int) -> TextureRect:
+	var r := TextureRect.new()
+	r.texture = tex
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(px, px)
+	return r
+
+
+func _piece_pic(id: String, px: int) -> Texture2D:
+	var pic := InventoryScreen.icon_for("piece_" + id)  # S4: tools/art/piece_icons.gd
+	return small_icon(pic, px) if pic != null else null
+
+
+## P10: an item's picture at `px`, or a square of its colour when it has none.
+func item_pic(item: String, px: int) -> Texture2D:
+	var pic := InventoryScreen.icon_for(item)
+	if pic != null:
+		return small_icon(pic, px)
+	var key := "swatch:%s@%d" % [item, px]
+	if not _small.has(key):
+		var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
+		img.fill(Color(str(sim.data.items.get(item, {}).get("color", "#888888"))))
+		_small[key] = ImageTexture.create_from_image(img)
+	return _small[key]
 
 
 ## F5: `pic` scaled down to `px` square (cached), for a button icon that keeps its size whatever the text.
@@ -311,3 +715,18 @@ static func small_icon(pic: Texture2D, px: int) -> Texture2D:
 		_small[key] = ImageTexture.create_from_image(img)
 	return _small[key]
 
+
+## P10: a padlock, drawn (no font here is sure to have one).
+class LockIcon extends Control:
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		var metal := Color(0.92, 0.92, 0.9)
+		var thick := maxf(2.0, w * 0.14)
+		draw_arc(Vector2(w / 2.0, h * 0.42), w * 0.3, PI, TAU, 16, metal, thick)
+		draw_line(Vector2(w * 0.2, h * 0.42), Vector2(w * 0.2, h * 0.5), metal, thick)
+		draw_line(Vector2(w * 0.8, h * 0.42), Vector2(w * 0.8, h * 0.5), metal, thick)
+		var body := Rect2(Vector2(0, h * 0.45), Vector2(w, h * 0.55))
+		draw_rect(body, Color(0.95, 0.78, 0.35))
+		draw_rect(body, Color(0.2, 0.15, 0.05), false, 1.5)
+		draw_circle(Vector2(w / 2.0, h * 0.7), w * 0.1, Color(0.2, 0.15, 0.05))
