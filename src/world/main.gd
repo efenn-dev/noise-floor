@@ -173,6 +173,7 @@ var view_feel: ViewFeel  # V3: bob, sway, shake, hit marker, red edge, impact pu
 var crosshair: Crosshair  # P2: shown with a gun in hand; the gap is the spread
 var scope_overlay: ScopeOverlay  # V39: the eyepiece and reticle while looking through a scope
 var _dot: ColorRect      # the centre dot, shown otherwise
+var _hold_ring: BuildController.HoldRing  # P12: fills round the dot while right-click is held on a piece
 var _keys_label: Label   # P3: the one-line key hint at the bottom, for what you're doing now
 ## P3: the key hint line never gets longer than this (it drops its least useful keys first).
 const KEY_HINT_MAX := 110
@@ -371,6 +372,13 @@ func _ready() -> void:
 		if str(args["build-menu"]) != "":
 			build_menu.highlight(str(args["build-menu"]))  # P10: --build-menu=smelter points at that piece
 			build_menu.show_group(BuildMenu.group_of(str(args["build-menu"])))
+	if args.has("hold-remove"):  # P12: --hold-remove[=T]: in build mode looking at the start crate, right-click held T of the way
+		builder.set_active(true)
+		builder.select_id("wall")
+		var crate := sim.build.piece_center(sim.build.key_for("storage", STASH_CELL))
+		player.global_position = Vector3(crate.x - 2.2, player.global_position.y, crate.z)
+		player.set_look(-90.0, -12.0)
+		builder.hold_for_shot(clampf(float(args["hold-remove"]) if str(args["hold-remove"]).is_valid_float() else 0.6, 0.0, 0.99))
 	if args.has("tree"):
 		_stand_by_tree(str(args["tree"]))  # P11: --tree[=T], for screenshots
 	if args.has("wreck"):
@@ -695,12 +703,12 @@ func _fill_demo_log() -> void:
 func _tick_perk_pick() -> void:
 	if perk_pick.is_open():
 		if sim.player.dead or sim.zombie_within(PERK_PICK_CLOSE):
-			perk_pick.close()
+			perk_pick.close_for("zombie")  # P12: it comes back once things are quiet again
 		return
 	if _shot_path != "" or GameSession.skip_hints or menus.is_open() or inventory_screen.is_open() 			or skills_screen.is_open() or workbench_screen.is_open() or _m15_screen_open() or build_menu.is_open():
 		return
 	if sim.perk_offer_ready():
-		sim.perk_offer_day = sim.clock.day
+		sim.note_perk_offered()  # P12: counted; Later or a zombie sets the snooze
 		perk_pick.open()
 
 
@@ -1230,6 +1238,9 @@ func _on_respawned() -> void:
 
 func _update_hud(delta: float) -> void:
 	_keys_label.text = key_hint_text()
+	_hold_ring.set_progress(builder.remove_progress())  # P12
+	if build_menu.is_open():
+		sim.stats.build_menu_seconds += delta  # P12: for the session log
 	_build_label.text = builder.status_text()
 	_materials_hud.text = builder.materials_text() + "\n" + sim.guns.hands_text()  # M13, M14: what's in your hands
 	var use := _car_hud() if driving != null else interactor.status_text()
@@ -1248,7 +1259,7 @@ func _update_hud(delta: float) -> void:
 		notes.append(m["text"])
 	_message_label.text = "\n".join(notes)
 	_perk_badge.visible = sim.skills.perk_points > 0
-	_perk_badge_label.text = "K: %d perk point%s" % [sim.skills.perk_points, "" if sim.skills.perk_points == 1 else "s"]
+	_perk_badge_label.text = "K: %d perk point%s to spend" % [sim.skills.perk_points, "" if sim.skills.perk_points == 1 else "s"]
 	_update_gear_toast()
 	objectives_panel.refresh()
 	_build_label.position.y = 52.0
@@ -2084,6 +2095,10 @@ func _build_hud() -> void:
 	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
 	crosshair.visible = false
 	layer.add_child(crosshair)
+	_hold_ring = BuildController.HoldRing.new()  # P12
+	_hold_ring.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE)
+	_hold_ring.visible = false
+	layer.add_child(_hold_ring)
 	# The HUD only shows things; it must never catch the mouse. A locked mouse sits in the middle of the
 	# screen, right on the crosshair, and a HUD element there would swallow every look and click.
 	for child in layer.get_children():
@@ -2163,7 +2178,7 @@ func key_hint_text() -> String:
 	elif driving != null:
 		parts.append_array(["WASD drive", "Space handbrake", "E get out", "H horn", "F lights"])
 	elif builder.active:
-		parts.append_array(["1-0 hotbar", "R rotate", "LMB place (drag: a row)", "RMB remove", "B menu", "Esc stop", "wheel next"])
+		parts.append_array(["1-0 hotbar", "R rotate", "LMB place (drag: a row)", "hold RMB remove", "B menu", "Esc stop", "wheel next"])
 	elif placer != null and placer.active():
 		parts.append_array(["LMB put down", "wheel turn", "RMB or Esc stop"])  # V34
 	else:
@@ -2304,6 +2319,7 @@ func _open_build_menu() -> void:
 	if skills_screen.is_open():
 		skills_screen.close()
 	sim.player_pos = player.global_position
+	sim.stats.build_menu_opens += 1  # P12: for the session log
 	build_menu.open()
 
 

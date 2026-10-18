@@ -33,9 +33,13 @@ const PIECES := ["foundation", "wall", "door", "barricade", "belt", "smelter", "
 		"soundproof_wall", "dusk_timer", "cart_stop"]
 ## Shrink the "is anything in the way" box so touching neighbours and the ground don't count.
 const CLEARANCE := Vector3(0.1, 0.06, 0.1)
+const HOLD_TO_REMOVE := 0.6  # P12: seconds right-click is held on a piece before it comes down
 
 var sim: SimWorld
 var camera: Camera3D
+var remove_hold := 0.0  # P12: seconds right-click has been held on the piece you look at
+var _holding := false  # P12: right-click is down since start_remove_hold
+var _hold_key := ""  # P12: the piece the hold started on (looking at another starts over)
 var exclude: Array[RID] = []
 
 var active := false
@@ -113,6 +117,8 @@ func piece() -> String:
 func set_active(on: bool) -> void:
 	dragging = false
 	active = on
+	_holding = false  # P12
+	remove_hold = 0.0
 	last_message = ""
 	if not on:
 		_ghost.visible = false
@@ -150,13 +156,74 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.is_action_released("build_place") and dragging:
 			finish_drag()
 		elif event.is_action_pressed("build_remove"):
-			try_remove()
+			start_remove_hold()  # P12: held, not tapped
+	if event.is_action_released("build_remove"):
+		cancel_remove_hold()
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if active:
 		update_aim()
 		_rings.visible = _ghost.visible and not heard.is_empty()  # F5
+		_tick_remove_hold(delta)  # P12
+
+
+## P12 (the Hub came down three times in one sitting; Kaleb's door vanished): a piece comes down after HOLD_TO_REMOVE
+## seconds of right-click held on it, not at a tap, since right-click is "block" and "aim" everywhere else. Looking
+## at another piece starts over; letting go early cancels and says to hold.
+func start_remove_hold() -> void:
+	update_aim()
+	_holding = true
+	_hold_key = aim_remove_key
+	remove_hold = 0.0
+	if aim_remove_key == "":
+		last_message = "Look at something you built"
+
+
+func cancel_remove_hold() -> void:
+	if _holding and _hold_key != "":
+		sim.stats.remove_taps += 1  # a tap: the log says how often players expect instant removal
+		last_message = "Hold right-click to take it down"
+	_holding = false
+	_hold_key = ""
+	remove_hold = 0.0
+
+
+func _tick_remove_hold(delta: float) -> void:
+	if not _holding or _hold_frozen:
+		return
+	if not Input.is_action_pressed("build_remove"):
+		cancel_remove_hold()
+		return
+	if aim_remove_key == "":
+		remove_hold = 0.0
+		return
+	if aim_remove_key != _hold_key:
+		_hold_key = aim_remove_key
+		remove_hold = 0.0
+	remove_hold += delta
+	if remove_hold >= HOLD_TO_REMOVE:
+		_holding = false
+		_hold_key = ""
+		remove_hold = 0.0
+		try_remove()
+
+
+## P12: --hold-remove=T: a hold frozen at fraction T of HOLD_TO_REMOVE on whatever you look at (screenshots).
+var _hold_frozen := false
+func hold_for_shot(t: float) -> void:
+	update_aim()
+	_holding = true
+	_hold_frozen = true
+	_hold_key = aim_remove_key
+	remove_hold = t * HOLD_TO_REMOVE
+
+
+## P12: how far through the hold (0-1) the HUD's ring shows; 0 when not holding on a piece.
+func remove_progress() -> float:
+	if not _holding or aim_remove_key == "":
+		return 0.0
+	return clampf(remove_hold / HOLD_TO_REMOVE, 0.0, 1.0)
 
 
 func try_place() -> String:
@@ -290,6 +357,7 @@ func try_remove() -> String:
 		refund.refund_to_storage = true  # refunds go back in the crate, not your back
 		last_message = sim.build.remove(key, refund)
 		if last_message == "":
+			sim.stats.note_removed(piece["id"])  # P12
 			sim.add_message(removed_words(String(sim.data.buildables[piece["id"]]["name"]), back, not refund.crates.is_empty()), 5.0)
 		update_aim()
 	return last_message
@@ -490,9 +558,9 @@ func status_text() -> String:
 	var info: Dictionary = sim.data.buildables[piece()]
 	var lines := PackedStringArray()
 	lines.append("BUILD  %s  (%s)" % [info["name"], _cost_text(info["cost"])])
-	var hint := "1-0 hotbar · wheel: next piece · B menu · R rotate · LMB build (drag: a row) · RMB remove · Esc stop · uses crates within %dm" % int(sim.data.survival["storage_range"])
+	var hint := "1-0 hotbar · wheel: next piece · B menu · R rotate · LMB build (drag: a row) · hold RMB: take down · Esc stop · uses crates within %dm" % int(sim.data.survival["storage_range"])
 	if aim_remove_key != "":
-		hint += "   [RMB removes this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
+		hint += "   [hold RMB to take down this %s]" % sim.data.buildables[sim.build.pieces[aim_remove_key]["id"]]["name"]
 	lines.append(hint)
 	var ports := port_text()  # P4
 	if ports != "":
@@ -529,3 +597,22 @@ func _cost_text(cost: Dictionary) -> String:
 	for item: String in cost:
 		parts.append("%d %s" % [cost[item], sim.data.item_name(item)])
 	return ", ".join(parts)
+
+
+## P12: the ring round the HUD's centre dot that fills while right-click is held on a piece (main.gd `_hold_ring`).
+class HoldRing extends Control:
+	var progress := 0.0
+
+	func set_progress(p: float) -> void:
+		if not is_equal_approx(p, progress):
+			progress = p
+			queue_redraw()
+		visible = p > 0.0
+
+	func _draw() -> void:
+		if progress <= 0.0:
+			return
+		var r := 14.0 * maxf(1.0, get_viewport_rect().size.y / 900.0)  # bigger on a bigger screen, like the build menu
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(0, 0, 0, 0.45), 5.0)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(1, 1, 1, 0.3), 3.0)
+		draw_arc(Vector2.ZERO, r, -PI / 2.0, -PI / 2.0 + TAU * progress, 48, Color(1.0, 0.62, 0.4, 0.95), 3.5)

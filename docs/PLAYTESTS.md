@@ -16,6 +16,13 @@ Add an entry after playing at least 30 minutes on `main` via `play.bat`. Short a
 - Session log: paste user://sessions/<date>.txt here if the game wrote one.
 ```
 
+## 2026-10-18 — log review: Emmitt's 14 session logs (10-13 to 10-16) and Kaleb's 10-15 log
+- Kaleb's newer logs never reached the family drive: his PC never finished the update that installs the log-sending launcher. They're still on his PC (`%APPDATA%/Godot/app_userdata/Noise Floor/sessions`).
+- Emmitt's 60-minute sitting on 43be875: 0 deaths, 64 kills, heat at its cap by day 3, 11 waves. Built 50 pieces but 1 belt; turrets fired 74 times, loaded by hand only. The Hub was built 4 times (so it came down 3 times). 4 doors destroyed while away, the first 5 real minutes in. 10 perk points earned, 0 spent; mufflers 0.
+- Across every session, both players: perk points 7, 7, 11, 10 and Kaleb's 14, all unspent; mufflers 0; Kaleb built nothing. The dawn perk pick needed no zombie within 25 m, once a day: in a busy town it never came.
+- The log couldn't say the difficulty, whether the goals were ever seen, whether a perk pick was offered, or how long the build menu was open.
+- Fixed in P12: perk picks at any quiet moment (12 m, snoozed by Later), hold right-click to take a piece down, and those lines in the log. Still to do from the review: say what the zombies hear and the fix (mufflers), doors, a payoff for the first factory, spoken lines for Kaleb.
+
 ## 2026-10-16 (late night) — Emmitt 30+ minutes and his son (Kaleb, 6) longer, verbal (relayed in the session), build 8069e47 (P9)
 - Fun: "I actually had a lot more fun than I expected on the first night. It felt a bit challenging but very manageable for a newbie."
 - Confusing: Kaleb "got a bit frustrated with building for a few reasons but mostly because he can't read very well. it may help to have thumbnails and a sidebar nav with icons for categories so he can see the machines better and the items required to craft it." Fixed in P10 (the picture build menu).

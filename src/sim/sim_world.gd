@@ -54,9 +54,13 @@ var broadcast_hours := 0.0
 var rescue_due := -1.0
 var _signal_on := true  # the mast had power last tick (to say when it drops and comes back)
 ## F4: the last game day the dawn perk pick was offered (not saved: a loaded game with points offers it again).
-var perk_offer_day := 0
+var perk_snooze_until := 0.0  # P12: no perk pick before this absolute game hour (clock_hours); Later and a zombie set it; saved
+var _combat_at := -100.0  # P12: clock_hours of your last swing, shot or hit taken: a pick waits for calm
 var _heard_cache: Dictionary = {}  # F5: heard_preview results, cleared when the build grid changes
-const PERK_OFFER_SAFE := 25.0  # no living zombie this close (metres) when the pick opens
+const PERK_OFFER_SAFE := 12.0  # no living zombie this close (metres) when the pick opens (P12: 25 never held in town)
+const PERK_OFFER_CALM := 0.2  # P12: game hours since your last swing, shot or hit before a pick opens (12 s real)
+const PERK_SNOOZE_LATER := 4.0  # P12: game hours "Later" puts the pick off
+const PERK_SNOOZE_CLOSED := 1.0  # P12: game hours before a pick a zombie interrupted comes back
 ## M15: what happened at your base (the last 50 events with game time). L opens it.
 var base_log: BaseLog
 ## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
@@ -345,6 +349,8 @@ func step() -> void:
 	var feed_msg := guidance.tick_feed(clock, factory)  # F6: "Live off your base"
 	if feed_msg != "":
 		add_message(feed_msg, 10.0)
+	if ticks % TICK_RATE == 0:
+		_note_goals()  # P12: once a second
 	if not stats.turret_fed:
 		for t: Factory.Turret in factory.turrets.values():
 			if t.fed > 0:
@@ -526,6 +532,19 @@ func _tick_learning() -> void:
 	add_message("New to build: %s. Find it in the build menu (B)" % ", ".join(names), 8.0)
 
 
+## P12: the session log's goals line: how far each Guidance chapter has got, and when it last moved (RunStats.note_goal).
+func _note_goals() -> void:
+	if guidance.active or guidance.completed:
+		stats.note_goal("first night", Guidance.COMPLETE if guidance.completed else guidance.step(build, player_pos),
+				Guidance.COMPLETE, when_text())
+	if guidance.defend_active or guidance.defend_done:
+		stats.note_goal("defend your base", Guidance.DEFEND_STEPS if guidance.defend_done else guidance.defend_step(build),
+				Guidance.DEFEND_STEPS, when_text())
+	if guidance.feed_active or guidance.feed_done:
+		stats.note_goal("live off your base", Guidance.FEED_STEPS if guidance.feed_done else guidance.feed_step(),
+				Guidance.FEED_STEPS, when_text())
+
+
 func add_message(text: String, seconds: float = 6.0) -> void:
 	messages.append({"text": text, "time_left": seconds})
 
@@ -597,6 +616,7 @@ func zombie_hit_player(z: ZombieBrain) -> Dictionary:
 			damage *= maxf(0.0, 1.0 - float(w["block_reduction"]) * block_factor)
 	result["damage"] = damage
 	player.damage(damage, z.type)
+	note_combat()  # P12
 	if damage > 0.0 and not player.dead:
 		if z.stats.has("stumble_time"):
 			player.stumble(float(z.stats["stumble_time"]), float(z.stats["stumble_slow"]))
@@ -2034,6 +2054,7 @@ func swing() -> bool:
 	respawn_grace = 0.0
 	if not player_vault.is_empty() or not player.try_swing(swing_cooldown()):
 		return false
+	note_combat()  # P12
 	_practice("strength", "swing")
 	return true
 
@@ -2265,6 +2286,7 @@ func draw_weapon(slot: String) -> String:
 ## shoot_zombie() if the ray met a zombie.
 func fire() -> String:
 	respawn_grace = 0.0
+	note_combat()  # P12: even an empty click means you're in a fight
 	if not player_vault.is_empty():
 		return "Finish climbing first"
 	var why := guns.can_fire()
@@ -3193,11 +3215,42 @@ static func heard_far(radii: PackedFloat32Array) -> float:
 
 
 ## F4: whether to offer the perk pick now (PerkPickScreen): unspent points, daytime, not offered yet today, and safe
-## (alive, awake, on foot, no living zombie within PERK_OFFER_SAFE). main.gd opens it and sets perk_offer_day.
+## P12 (every log, both players: 7-14 perk points a sitting, none spent): a pick opens at any quiet moment, not once
+## at dawn: points to spend, past the snooze (Later: PERK_SNOOZE_LATER; a zombie closed it: PERK_SNOOZE_CLOSED),
+## alive, awake, on foot, PERK_OFFER_CALM since you last swung, fired or were hit, no living zombie within
+## PERK_OFFER_SAFE, and daylight or a shelter round you. main.gd opens it (note_perk_offered).
 func perk_offer_ready() -> bool:
-	if skills.perk_points <= 0 or perk_offer_day == clock.day or clock.is_night():
+	if skills.perk_points <= 0 or clock_hours() < perk_snooze_until:
 		return false
-	return not player.dead and not player.asleep and vehicles.driving == "" and not zombie_within(PERK_OFFER_SAFE)
+	if player.dead or player.asleep or vehicles.driving != "" or clock_hours() - _combat_at < PERK_OFFER_CALM:
+		return false
+	if clock.is_night() and not guidance.is_sheltered(build, player_pos):
+		return false
+	return not zombie_within(PERK_OFFER_SAFE)
+
+
+## P12: game hours since day 1 00:00 (the clock's day and time of day in one number).
+func clock_hours() -> float:
+	return (clock.day - 1) * 24.0 + clock.time_of_day
+
+
+## P12: the perk pick opened: counted for the session log.
+func note_perk_offered() -> void:
+	stats.perk_picks_offered += 1
+
+
+## P12: no perk pick for `hours` of game time: "Later" (or Esc), or a zombie came close ("zombie").
+func perk_snooze(hours: float, why: String = "later") -> void:
+	perk_snooze_until = clock_hours() + hours
+	if why == "zombie":
+		stats.perk_picks_closed += 1
+	else:
+		stats.perk_picks_later += 1
+
+
+## P12: a swing, a shot or a hit taken: the perk pick waits PERK_OFFER_CALM after it.
+func note_combat() -> void:
+	_combat_at = clock_hours()
 
 
 ## F4: is a living zombie within `r` m of you (flat distance)?

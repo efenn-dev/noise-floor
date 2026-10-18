@@ -71,6 +71,17 @@ var hub_belt := 0
 var cart_items := 0
 ## P5: items gathered by hand at resource nodes.
 var gathered := 0
+## P12 (the logs couldn't say why 24 perk points went unspent or whether the goals were ever seen): what the perk pick
+## did, how far each goal chapter got, the build menu's use, pieces taken down, and right-click taps too short to
+## take anything down (a player expecting the old instant removal).
+var perk_picks_offered := 0
+var perk_picks_later := 0
+var perk_picks_closed := 0  # by a zombie coming close
+var goals: Dictionary = {}  # chapter -> {"step", "of", "when"}: the furthest step and when it was reached
+var build_menu_opens := 0
+var build_menu_seconds := 0.0
+var removed: Dictionary = {}  # piece id -> taken down
+var remove_taps := 0
 
 
 func add_real_time(seconds: float) -> void:
@@ -159,6 +170,18 @@ func note_level(skill: String, level: int) -> void:
 		return
 	levels_gained[skill] = int(levels_gained.get(skill, 0)) + 1
 	note("%s reached level %d" % [_words(skill), level])
+
+
+## P12: goal chapter `chapter` stands at `step` of `of`; kept with when it last moved forward.
+func note_goal(chapter: String, step: int, of: int, when: String) -> void:
+	var g: Dictionary = goals.get(chapter, {})
+	if g.is_empty() or step > int(g["step"]):
+		goals[chapter] = {"step": step, "of": of, "when": when}
+
+
+func note_removed(id: String) -> void:
+	if not muted:
+		removed[id] = int(removed.get(id, 0)) + 1
 
 
 func note_perk_points(n: int) -> void:
@@ -277,6 +300,34 @@ static func cause_text(cause: String) -> String:
 	return "killed by a " + _words(cause)
 
 
+## P12: "Goals: first night 4/4 (day 2 06:10); defend your base 2/4 (day 3 09:00)."
+func _goals_line() -> String:
+	if goals.is_empty():
+		return "Goals: none shown (no first-game guidance in this game)."
+	var parts := PackedStringArray()
+	for chapter: String in ["first night", "defend your base", "live off your base"]:
+		if goals.has(chapter):
+			var g: Dictionary = goals[chapter]
+			parts.append("%s %d/%d (%s)" % [chapter, g["step"], g["of"], g["when"]])
+	return "Goals: " + "; ".join(parts) + "."
+
+
+## P12: "Build menu: opened 12 times, 4:10 in it. Took down 4 pieces: 3 hub, 1 door. Right-click taps too short: 6."
+func _menu_line() -> String:
+	var out := ("Build menu: opened %d time%s, %s in it." % [build_menu_opens, "" if build_menu_opens == 1 else "s",
+			stamp(build_menu_seconds)]) if build_menu_opens > 0 else "Build menu: never opened."
+	var total := 0
+	var parts := PackedStringArray()
+	for id: String in removed:
+		parts.append("%d %s" % [removed[id], _words(id)])
+		total += int(removed[id])
+	if total > 0:
+		out += " Took down %d piece%s: %s." % [total, "" if total == 1 else "s", ", ".join(parts)]
+	if remove_taps > 0:
+		out += " Right-click taps too short to take anything down: %d." % remove_taps
+	return out
+
+
 ## 125 seconds -> "2:05".
 static func stamp(seconds: float) -> String:
 	return "%d:%02d" % [floori(seconds / 60.0), int(seconds) % 60]
@@ -305,6 +356,8 @@ func summary_lines() -> PackedStringArray:
 		parts.append("%d %s" % [built[id], _words(id)])
 		total += int(built[id])
 	out.append(("Built %d piece%s: %s." % [total, "" if total == 1 else "s", ", ".join(parts)]) if total > 0 else "Built nothing.")
+	out.append(_goals_line())  # P12
+	out.append(_menu_line())  # P12
 	var killed := PackedStringArray()
 	var kill_types := kills_by_type.keys()
 	kill_types.sort()
@@ -357,7 +410,10 @@ func _p3_lines() -> PackedStringArray:
 	for perk: String in perks_spent:
 		spent += int(perks_spent[perk])
 		pk.append(_words(perk) + ((" x%d" % perks_spent[perk]) if int(perks_spent[perk]) > 1 else ""))
-	out.append("Perk points earned: %d, spent: %d%s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else ""])
+	var picks := "Picks offered: %d" % perk_picks_offered  # P12
+	if perk_picks_later > 0 or perk_picks_closed > 0:
+		picks += " (Later %d, a zombie closed %d)" % [perk_picks_later, perk_picks_closed]
+	out.append("Perk points earned: %d, spent: %d%s. %s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else "", picks])
 	if guns.is_empty():
 		out.append("Weapons: never fired or thrown.")
 	else:

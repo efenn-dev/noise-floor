@@ -70,7 +70,7 @@ func test_off_unless_enabled() -> void:
 
 
 ## P3: everything the log can hold, each list at its longest, still fits in 55 lines.
-func test_a_full_log_stays_under_55_lines() -> void:
+func test_a_full_log_stays_under_60_lines() -> void:
 	var sim := SimWorld.new(10.0)
 	var slog := SessionLog.new()
 	slog.path_override = PATH
@@ -96,9 +96,50 @@ func test_a_full_log_stays_under_55_lines() -> void:
 		st.note_away("North wall destroyed", "day 1 11:00")
 	for i in 12:
 		st.note_house("house %d" % i)
+	st.perk_picks_offered = 3  # P12
+	st.perk_picks_later = 2
+	st.perk_picks_closed = 1
+	st.note_goal("first night", 2, 4, "day 1 12:00")
+	st.note_goal("first night", 4, 4, "day 2 06:10")
+	st.note_goal("first night", 3, 4, "day 2 07:00")  # never goes backwards
+	st.note_goal("defend your base", 1, 4, "day 2 09:00")
+	st.build_menu_opens = 12
+	st.build_menu_seconds = 250.0
+	st.note_removed("hub")
+	st.note_removed("hub")
+	st.note_removed("door")
+	st.remove_taps = 6
 	var lines := slog.lines()
-	check(lines.size() <= 55, "at most 55 lines (%d)" % lines.size())
-	check("Perk points earned: 4, spent: 1 (soft step)." in lines, "perk points spent are recorded")
+	check(lines.size() <= 58, "at most 58 lines (%d)" % lines.size())  # P12: two more lines (goals, the build menu)
+	check("Perk points earned: 4, spent: 1 (soft step). Picks offered: 3 (Later 2, a zombie closed 1)." in lines, "perk points and picks are recorded")
+	check("Goals: first night 4/4 (day 2 06:10); defend your base 1/4 (day 2 09:00)." in lines, "the goals line (%s)" % lines)
+	check("Build menu: opened 12 times, 4:10 in it. Took down 3 pieces: 2 hub, 1 door. Right-click taps too short to take anything down: 6." in lines,
+			"the build menu line")
+	check(lines[2].contains("Difficulty: Normal"), "the header says the difficulty (%s)" % lines[2])
 	check("Gear equipped: Rare work boots." in lines, "equipped gear is recorded")
 	check("First five minutes:" in lines, "the first-five-minutes timeline is still there")
+	slog.free()
+
+
+func test_the_sim_notes_how_far_the_goals_got() -> void:
+	var sim := SimWorld.new(10.0)
+	sim.guidance.start(1)
+	for i in SimWorld.TICK_RATE + 1:
+		sim.step()
+	check(sim.stats.goals.has("first night"), "the first-night chapter is noted once it's active")
+	eq(int(sim.stats.goals["first night"]["step"]), 0, "at its first goal")
+	sim.guidance.note_consumed(100.0, 100.0)
+	sim.guidance.note_bed()
+	for i in SimWorld.TICK_RATE + 1:
+		sim.step()
+	eq(int(sim.stats.goals["first night"]["step"]), 2, "two goals done: step 2 (%s)" % sim.stats.goals)
+	check("day 1" in String(sim.stats.goals["first night"]["when"]), "with when")
+	check(not sim.stats.goals.has("defend your base"), "a chapter that hasn't started isn't listed")
+	var slog := SessionLog.new()
+	slog.path_override = PATH
+	slog.setup(sim)
+	var said := false
+	for l: String in slog.lines():
+		said = said or l.begins_with("Goals: first night 2/4")
+	check(said, "and the log says so")
 	slog.free()
