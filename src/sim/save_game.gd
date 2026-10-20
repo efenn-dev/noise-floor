@@ -63,7 +63,7 @@ extends RefCounted
 ## 25 = W3d the farms and the hunting cabin: their pieces are saved like the town's, and "rural_skipped" names the
 ## buildings left out because the save had something built there (as for 24). A save from before 25 gets them laid
 ## fresh round its own pieces (holds_rural) and their zombies.
-const VERSION := 25
+const VERSION := 26
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_DOWNTOWN := 23
 const FIRST_WITH_SUBURBS := 24
@@ -167,22 +167,26 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 	for b: Dictionary in sim.bags:
 		bags.append({"id": b["id"], "pos": _v3(b["pos"]), "items": b["items"], "gear": b.get("gear", []).duplicate(true),
 				"kind": b.get("kind", SimWorld.BAG), "yaw": float(b.get("yaw", 0.0))})
-	var p := sim.player
+	var p: PlayerStats = sim.players[0].stats
+	var roster := []  # co-op A: every player; slot 0's keys are also written at the top level as they always were
+	for i in sim.players.size():
+		roster.append(_slot_dict(sim, i))
 	return {
 		"version": VERSION,
+		"players": roster,
 		"difficulty": sim.difficulty.id,
 		"seed": sim.seed_value,
 		"ticks": sim.ticks,
 		"clock": {"time": sim.clock.time_of_day, "day": sim.clock.day},
-		"inventory": _counts(sim.inventory),
+		"inventory": _counts(sim.players[0].inventory),
 		"player": {"health": p.health, "food": p.food, "water": p.water, "energy": p.energy, "stamina": p.stamina,
 				"bleeding": p.bleeding, "deaths": p.deaths, "dead": p.dead, "respawn_timer": p.respawn_timer,
 				"warmth": p.warmth},
 		# Saved while driving: you load standing beside the car, not inside it.
-		"player_pos": _v3(sim.vehicles.exit_pos(sim.vehicles.driving) if sim.vehicles.driving != "" else sim.player_pos),
-		"spawn_point": _v3(sim.spawn_point),
+		"player_pos": _v3(_standing(sim, 0)),
+		"spawn_point": _v3(sim.players[0].spawn_point),
 		"pieces": pieces,
-		"hotbar": sim.hotbar.to_dict(),  # S3; V19: both bars
+		"hotbar": sim.players[0].hotbar.to_dict(),  # S3; V19: both bars
 		"machines": machines,
 		"belts": belts,
 		"routers": routers,
@@ -203,8 +207,8 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"projects_done": sim.projects.done.duplicate(),
 		"milestones": sim.milestones.to_dict(),
 		"learning": sim.learning.to_dict(),  # P10
-		"perk_snooze": sim.perk_snooze_until,  # P12
-		"perk_reset_day": sim.perk_reset_day,  # P13
+		"perk_snooze": sim.players[0].perk_snooze_until,  # P12
+		"perk_reset_day": sim.players[0].perk_reset_day,  # P13
 		"salvage": sim.salvage.to_dict(),  # P11: felled trees, stripped wrecks
 		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
 		"zombies": zombies,
@@ -213,12 +217,12 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"searched": searched,
 		"loot_contents": loot_contents,
 		"vehicles": sim.vehicles.to_dict(),
-		"skills": sim.skills.xp,
-		"perks": sim.skills.perks,
-		"perk_points": sim.skills.perk_points,
+		"skills": sim.players[0].skills.xp,
+		"perks": sim.players[0].skills.perks,
+		"perk_points": sim.players[0].skills.perk_points,
 		"guidance": sim.guidance.to_dict(),
-		"gear": sim.gear.to_dict(),
-		"hands": sim.guns.hands,
+		"gear": sim.players[0].gear.to_dict(),
+		"hands": sim.players[0].guns.hands,
 		"stats": sim.tally,
 		"infamy": sim.director.infamy,
 		"unlocked": sim.director.unlocked,
@@ -227,6 +231,80 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"next_bag": sim._next_bag,
 		"rng_state": str(sim._rng.state),
 	}
+
+
+## Co-op A: one player's share of the save (the same keys slot 0 has at the top level).
+static func _slot_dict(sim: SimWorld, i: int) -> Dictionary:
+	var s: PlayerSlot = sim.players[i]
+	var p := s.stats
+	return {
+		"name": s.name,
+		"inventory": _counts(s.inventory),
+		"player": {"health": p.health, "food": p.food, "water": p.water, "energy": p.energy, "stamina": p.stamina,
+				"bleeding": p.bleeding, "deaths": p.deaths, "dead": p.dead, "respawn_timer": p.respawn_timer,
+				"warmth": p.warmth},
+		"player_pos": _v3(_standing(sim, i)),
+		"spawn_point": _v3(s.spawn_point),
+		"hotbar": s.hotbar.to_dict(),
+		"perk_snooze": s.perk_snooze_until,
+		"perk_reset_day": s.perk_reset_day,
+		"skills": s.skills.xp,
+		"perks": s.skills.perks,
+		"perk_points": s.skills.perk_points,
+		"gear": s.gear.to_dict(),
+		"hands": s.guns.hands,
+	}
+
+
+## Where player `i` stands for the save: beside the car if they're driving (you load standing beside it, not inside).
+static func _standing(sim: SimWorld, i: int) -> Vector3:
+	var car := sim.vehicles.car_of(i)
+	return sim.vehicles.exit_pos(car) if car != "" else sim.players[i].pos
+
+
+## Co-op A: lays one player's share `sd` (see _slot_dict; an old save's top level for slot 0) over the active player.
+static func _load_slot(sim: SimWorld, sd: Dictionary, version: int) -> void:
+	sim.inventory.take_all(_counts(sim.inventory))  # keep the same Inventory object: others hold it
+	sim.inventory.give_all(_ints(sd["inventory"]))
+	var pl: Dictionary = sd["player"]
+	var p := sim.player
+	for key: String in ["health", "food", "water", "energy", "stamina", "respawn_timer"]:
+		p.set(key, float(pl[key]))
+	p.bleeding = bool(pl["bleeding"])
+	p.warmth = float(pl.get("warmth", 100.0))  # M16: full for a save from before 11
+	p.deaths = int(pl["deaths"])
+	p.dead = bool(pl["dead"])
+	sim.player_pos = _to_v3(sd["player_pos"])
+	sim.spawn_point = _to_v3(sd["spawn_point"])
+	sim.hotbar.load_saved(sd.get("hotbar", []))  # S3: defaults before 13; V19: an old single bar is split
+	sim.perk_snooze_until = float(sd.get("perk_snooze", 0.0))  # P12
+	sim.perk_reset_day = int(sd.get("perk_reset_day", -1))  # P13
+	for s: String in sd.get("skills", {}):
+		if s == "melee":
+			# V10 (14): Melee split into Blunt, Blades and Axe. What you'd earned counts toward all three.
+			for into: String in ["blunt", "blades", "axe"]:
+				sim.skills.xp[into] = maxf(float(sim.skills.xp.get(into, 0.0)), float(sd["skills"][s]))
+			continue
+		sim.skills.xp[s] = float(sd["skills"][s])
+	sim.skills.perks = {}
+	for perk: String in sd.get("perks", {}):
+		sim.skills.perks[perk] = int(sd["perks"][perk])
+	sim.skills.perk_points = int(sd.get("perk_points", sim.skills.points_earned()))
+	if sd.has("gear"):
+		sim.gear.load_dict(sd["gear"])
+	else:  # before M13: the pipe you always had becomes a white piece in the weapon slot
+		sim.gear.load_dict({})
+		sim.gear.give_start()
+	if version < 15:
+		_wear_best_legacy_bag(sim)
+	var saved_hands := str(sd.get("hands", "melee"))
+	if version < 15 and saved_hands == "gun":
+		saved_hands = sim.gear.gun_slot()
+	if saved_hands in Gear.FIREARM_SLOTS and sim.gear.equipped.get(saved_hands) is Dictionary:
+		sim.guns.hands = saved_hands
+		sim.gear.set_active_gun(saved_hands)
+	else:
+		sim.guns.hands = "melee"
 
 
 ## Lays saved state over a freshly made SimWorld whose town (loot containers, cars) is already set up,
@@ -241,18 +319,12 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.ticks = int(d["ticks"])
 	sim.clock.time_of_day = float(d["clock"]["time"])
 	sim.clock.day = int(d["clock"]["day"])
-	sim.inventory.take_all(_counts(sim.inventory))  # keep the same Inventory object: others hold it
-	sim.inventory.give_all(_ints(d["inventory"]))
-	var pl: Dictionary = d["player"]
-	var p := sim.player
-	for key: String in ["health", "food", "water", "energy", "stamina", "respawn_timer"]:
-		p.set(key, float(pl[key]))
-	p.bleeding = bool(pl["bleeding"])
-	p.warmth = float(pl.get("warmth", 100.0))  # M16: full for a save from before 11
-	p.deaths = int(pl["deaths"])
-	p.dead = bool(pl["dead"])
-	sim.player_pos = _to_v3(d["player_pos"])
-	sim.spawn_point = _to_v3(d["spawn_point"])
+	var roster: Array = d.get("players", [])  # co-op A: every player; an older save has one, at the top level
+	sim.as_player(0, _load_slot.bind(sim, roster[0] if not roster.is_empty() else d, version))
+	for i in range(1, roster.size()):
+		var sd: Dictionary = roster[i]
+		var idx := sim.add_player(str(sd.get("name", "Player %d" % (i + 1))))
+		sim.as_player(idx, _load_slot.bind(sim, sd, version))
 	for pd: Dictionary in d["pieces"]:
 		var piece := {"id": pd["id"], "cell": _to_v2(pd["cell"]), "side": int(pd["side"]),
 				"hp": int(pd["hp"]), "open": bool(pd["open"]), "wear": float(pd["wear"])}
@@ -312,7 +384,6 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			bin.put(str(bd["item"]), int(bd["count"]))
 		if bin != null:
 			bin.timer = float(bd.get("timer", 0.0))
-	sim.hotbar.load_saved(d.get("hotbar", []))  # S3: defaults before 13; V19: an old single bar is split
 	sim.automation.load_dict(d.get("automation", {}))
 	sim.defense.sprung = {}
 	for key: String in d.get("sprung", []):
@@ -341,8 +412,6 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim._carts_seen = sim.carts.delivered
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2
 	sim.learning.load_dict(d.get("learning", {}))  # P10: a save from before knows every piece
-	sim.perk_snooze_until = float(d.get("perk_snooze", 0.0))  # P12
-	sim.perk_reset_day = int(d.get("perk_reset_day", -1))  # P13
 	sim.salvage.load_dict(d.get("salvage", {}))  # P11: none before
 	if version < 22:
 		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build
@@ -378,35 +447,9 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 			sim.loot.containers[id]["gear"].append(Gear.clean(gp))
 	if d.has("vehicles"):
 		sim.vehicles.load_dict(d["vehicles"])
-	for s: String in d.get("skills", {}):
-		if s == "melee":
-			# V10 (14): Melee split into Blunt, Blades and Axe. What you'd earned counts toward all three.
-			for into: String in ["blunt", "blades", "axe"]:
-				sim.skills.xp[into] = maxf(float(sim.skills.xp.get(into, 0.0)), float(d["skills"][s]))
-			continue
-		sim.skills.xp[s] = float(d["skills"][s])
-	sim.skills.perks = {}
-	for perk: String in d.get("perks", {}):
-		sim.skills.perks[perk] = int(d["perks"][perk])
-	sim.skills.perk_points = int(d.get("perk_points", sim.skills.points_earned()))
 	sim.guidance.load_dict(d.get("guidance", {}))
-	if d.has("gear"):
-		sim.gear.load_dict(d["gear"])
-	else:  # before M13: the pipe you always had becomes a white piece in the weapon slot
-		sim.gear.load_dict({})
-		sim.gear.give_start()
 	if version < FIRST_WITH_GEAR:
 		sim.spawn_old_pete()  # he wasn't in the hall before M13
-	if version < 15:
-		_wear_best_legacy_bag(sim)
-	var saved_hands := str(d.get("hands", "melee"))
-	if version < 15 and saved_hands == "gun":
-		saved_hands = sim.gear.gun_slot()
-	if saved_hands in Gear.FIREARM_SLOTS and sim.gear.equipped.get(saved_hands) is Dictionary:
-		sim.guns.hands = saved_hands
-		sim.gear.set_active_gun(saved_hands)
-	else:
-		sim.guns.hands = "melee"
 	var st: Dictionary = d.get("stats", {})
 	sim.tally = {"kills": int(st.get("kills", 0)), "deaths": int(st.get("deaths", 0))}
 	sim.director.infamy = float(d.get("infamy", 0.0))

@@ -11,8 +11,22 @@ var difficulty: Difficulty
 ## V18: id -> {table: String, pos: Vector3, searched: bool, items: Inventory, gear: Array};
 ## revealed contents stay here until the player chooses what to take.
 var containers: Dictionary = {}
-var active := ""        # id being searched now, "" if none
-var progress := 0.0     # seconds into the current search
+## Co-op A: which player `active`, `progress`, start() and tick() mean (SimWorld sets it with its active player);
+## each player may be searching something of their own.
+var actor := 0
+var _searches: Dictionary = {}  # actor -> {"id", "progress"}
+var active: String:  # id the actor is searching now, "" if none
+	get: return str(_searches.get(actor, {}).get("id", ""))
+	set(v):
+		if v == "":
+			_searches.erase(actor)
+		else:
+			_searches[actor] = {"id": v, "progress": float(_searches.get(actor, {}).get("progress", 0.0))}
+var progress: float:  # seconds into the actor's search
+	get: return float(_searches.get(actor, {}).get("progress", 0.0))
+	set(v):
+		if _searches.has(actor):
+			_searches[actor]["progress"] = v
 ## Set by SimWorld (M12): Scavenging and Quick Fingers make searches quicker, Lucky Find adds an item.
 var skills: Skills
 
@@ -127,8 +141,9 @@ func reveal(id: String) -> Dictionary:
 		items[item] = int(items.get(item, 0)) + int(c["extra"][item])
 	c["searched"] = true
 	var done := {"id": id, "items": items, "table": c["table"], "lucky": lucky}
-	active = ""
-	progress = 0.0
+	for who: int in _searches.keys():  # co-op A: whoever was searching it, it's done
+		if str(_searches[who]["id"]) == id:
+			_searches.erase(who)
 	return done
 
 

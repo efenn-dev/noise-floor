@@ -10,8 +10,25 @@ var data: GameData
 ##        running: bool, speed: float (m/s), lights: bool,
 ##        key_in: where its key is ("ignition", "glovebox", "house" or "lost"), hotwired: bool}
 var cars: Dictionary = {}
-var driving := ""  # id of the car the player is in, or ""
-var hotwire_left := 0.0  # seconds of hotwiring to go in the car you're in; 0 = not hotwiring
+## Co-op A: which player `driving`, `hotwire_left`, enter() and exit() mean (SimWorld sets it with its active
+## player); each player may be in a car of their own.
+var actor := 0
+var _driving: Dictionary = {}  # actor -> the car they're in
+var _hotwire: Dictionary = {}  # actor -> seconds of hotwiring to go
+var driving: String:  # id of the car the actor is in, or ""
+	get: return str(_driving.get(actor, ""))
+	set(v):
+		if v == "":
+			_driving.erase(actor)
+		else:
+			_driving[actor] = v
+var hotwire_left: float:  # seconds of hotwiring to go in the car the actor is in; 0 = not hotwiring
+	get: return float(_hotwire.get(actor, 0.0))
+	set(v):
+		if v <= 0.0:
+			_hotwire.erase(actor)
+		else:
+			_hotwire[actor] = v
 
 
 func _init(p_data: GameData) -> void:
@@ -78,6 +95,8 @@ func why_not(id: String) -> String:
 func enter(id: String) -> String:
 	if driving != "":
 		return "Already driving"
+	if driver_of(id) != -1:
+		return "Someone's already in it"  # co-op A
 	var why := why_not(id)
 	if why != "":
 		return why
@@ -96,6 +115,18 @@ func exit() -> String:
 		cars[id]["lights"] = false
 	driving = ""
 	return id
+
+
+## Co-op A: the player in car `id`, or -1; `car_of(who)` the car player `who` is in ("" if none).
+func driver_of(id: String) -> int:
+	for who: int in _driving:
+		if str(_driving[who]) == id:
+			return who
+	return -1
+
+
+func car_of(who: int) -> String:
+	return str(_driving.get(who, ""))
 
 
 ## Where you stand after getting out: beside the driver's door (the car's left, -X side).
@@ -223,8 +254,8 @@ func load_dict(d: Dictionary) -> void:
 		c["hotwired"] = bool(s.get("hotwired", false))
 		c["fresh"] = float(s.get("fresh", 0.0))
 		c["stale"] = bool(s.get("stale", false))
-	driving = ""
-	hotwire_left = 0.0
+	_driving.clear()
+	_hotwire.clear()
 
 
 ## About three weeks in, the gas left in the town's tanks has gone stale: only the gas you poured in
