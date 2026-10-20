@@ -71,6 +71,9 @@ var hub_belt := 0
 var cart_items := 0
 ## P5: items gathered by hand at resource nodes.
 var gathered := 0
+## R1b: items taken from forage piles, and crashed supply trucks searched.
+var pile_items := 0
+var trucks_searched := 0
 ## P12 (the logs couldn't say why 24 perk points went unspent or whether the goals were ever seen): what the perk pick
 ## did, how far each goal chapter got, the build menu's use, pieces taken down, and right-click taps too short to
 ## take anything down (a player expecting the old instant removal).
@@ -375,6 +378,10 @@ func summary_lines() -> PackedStringArray:
 		out.append("Belts handed the Hub %d part%s." % [hub_belt, "" if hub_belt == 1 else "s"])  # F4 part 2
 	if gathered > 0:
 		out.append("Gathered by hand: %d item%s." % [gathered, "" if gathered == 1 else "s"])  # P5
+	if pile_items > 0:
+		out.append("Took %d item%s from forage piles." % [pile_items, "" if pile_items == 1 else "s"])  # R1b
+	if trucks_searched > 0:
+		out.append("Searched %d crashed supply truck%s." % [trucks_searched, "" if trucks_searched == 1 else "s"])  # R1b
 	if cart_items > 0:
 		out.append("Supply carts brought home %d item%s." % [cart_items, "" if cart_items == 1 else "s"])  # F5
 	out.append(_loud_line("Loudest one-off sound", loudest_sound))

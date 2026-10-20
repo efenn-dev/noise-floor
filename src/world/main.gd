@@ -24,6 +24,9 @@ extends Node3D
 ##   --throw=ITEM          V30: ready pipe_bomb or bottle with its predicted arc visible
 ##   --drop=A,B,...        V34: lay these items or gear bases (rifle, jacket, axe...) in a row in front of you
 ##   --place=ITEM          V34: start placing ITEM (an item or a gear base) with its see-through ghost showing
+##   --truck[=quiet]       R1b: a supply truck off the road 12 m ahead, horn stuck on (quiet: already searched)
+##   --piles               R1b: a scrap pile and a log pile a few metres ahead
+##   --guardian=TYPE       R1b: stand before that named guardian at their post (sheriff, pharmacist, farmer, lineman)
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
@@ -394,6 +397,12 @@ func _ready() -> void:
 		_stand_by_tree(str(args["tree"]))  # P11: --tree[=T], for screenshots
 	if args.has("wreck"):
 		_stand_by_wreck()  # P11: --wreck, for screenshots
+	if args.has("truck"):  # R1b: --truck[=quiet], a supply truck off the road ahead, horn stuck on
+		_crash_truck_ahead(str(args["truck"]) == "quiet")
+	if args.has("piles"):  # R1b: --piles, two forage piles ahead
+		_piles_around()
+	if args.has("guardian"):  # R1b: --guardian=sheriff|pharmacist|farmer|lineman, before that one at their post
+		_stand_before_guardian(str(args["guardian"]))
 	if args.has("gear"):
 		_give_rolled_gear(args["gear"])  # --gear=yellow: a rolled piece in your pockets, selected
 	if args.has("skills"):
@@ -1232,6 +1241,8 @@ func _apply_save(save: Dictionary) -> void:
 		sim.spawn_house_zombies(suburbs)  # W3c: and West and East Street's
 	if not SaveGame.holds_rural(save):
 		_spawn_rural_zombies()  # W3d: and the countryside's
+	if not SaveGame.holds_supplies(save):
+		sim.spawn_guardians()  # R1b: the named dead are new to this save
 	player.position = sim.player_pos
 	for car: CarBody in cars.values():
 		car.place_from_sim()  # parked where you left it
@@ -1403,6 +1414,8 @@ func _build_country() -> void:
 	for n: Dictionary in sim.resource_nodes:
 		keep_out.append(Vector2(n["pos"].x, n["pos"].z))
 		keep_out.append(Vector2(n["prop_pos"].x, n["prop_pos"].z))
+	for sp: Dictionary in sim.supplies.truck_cfg().get("spots", []):  # R1b: nor where a supply truck may land
+		keep_out.append(Vector2(float(sp["pos"][0]), float(sp["pos"][1])))
 	country = CountryPlan.generate(sim.seed_value, keep_out)
 	sim.place_country(country)  # W3d: the wrecks' trunks can be searched
 	country_view = CountryView.new()
@@ -1703,6 +1716,7 @@ func _build_building(args: Dictionary) -> void:
 	add_child(builder)
 	builder.setup(sim, player.camera, [player.get_rid()])
 	add_child(CartView.new(sim))  # F5: supply carts
+	add_child(SupplyView.new(sim))  # R1b: crashed supply trucks and forage piles
 	var ports := PortView.new()  # P4: machines' IN/OUT arrows, belt ends' ticks and crosses
 	add_child(ports)
 	ports.setup(sim)
@@ -1855,6 +1869,7 @@ func _build_zombies(args: Dictionary) -> void:
 		if args.get("zombies", "") != "0":
 			sim.spawn_house_zombies(town)  # W1b: one waits inside about one house in three
 			sim.spawn_old_pete()  # M13: the named zombie in the factory hall, with his fire axe
+			sim.spawn_guardians()  # R1b: the sheriff, the pharmacist, the farmer and the lineman at their posts
 			sim.spawn_park_zombies(park)  # M17a: shamblers and runners in and between the warehouses
 			sim.spawn_downtown_zombies(downtown)  # W3b: in the shops and on Market Street
 			sim.spawn_house_zombies(suburbs)  # W3c: one in about a third of West and East Street's houses
@@ -2280,6 +2295,42 @@ func _save_screenshot() -> void:
 
 
 ## Parses `--key=value` / `--key` flags given after `--` on the command line.
+## R1b: --truck: a supply truck off the road 12 m ahead of you, horn blaring, its zombies round it (quiet: searched,
+## so the horn's stopped), for screenshots and trying it.
+func _crash_truck_ahead(quiet: bool) -> void:
+	var ahead := player.global_position - player.global_basis.z * 12.0
+	var t := sim.supplies.add_truck(Vector3(ahead.x, 0.0, ahead.z), player.rotation.y + 0.6, sim.clock.day,
+			sim.clock_hours() + 6.0, -1, "the road ahead")
+	sim.place_truck(t, quiet)
+	if quiet:
+		sim.reveal_container(t["id"])
+
+
+## R1b: --piles: a scrap pile and a log pile a few metres ahead, left and right.
+func _piles_around() -> void:
+	var fwd := -player.global_basis.z
+	var right := player.global_basis.x
+	var kinds: Array = sim.supplies.piles_cfg().get("kinds", ["scrap_pile"])
+	for i in 2:
+		var at := player.global_position + fwd * 5.0 + right * (3.0 if i == 0 else -3.0)
+		sim.supplies.add_pile(str(kinds[i % kinds.size()]), Vector3(at.x, 0.0, at.z), sim.clock.day)
+	player.set_look(player.rotation_degrees.y, -12.0)
+
+
+## R1b: --guardian=TYPE: the named guardians at their posts (if --zombies=0 left them out), and you 5 m in front of
+## that one, looking at them.
+func _stand_before_guardian(type: String) -> void:
+	sim.spawn_guardians()
+	for id: int in sim.horde.zombies:
+		var z: ZombieBrain = sim.horde.zombies[id]
+		if z.type == type:
+			var at := z.pos + z.facing * 5.0
+			player.position = Vector3(at.x, 0.0, at.z)
+			var to := z.pos - player.position
+			player.set_look(rad_to_deg(atan2(-to.x, -to.z)), -6.0)
+			return
+
+
 func _parse_user_args() -> Dictionary:
 	var out := {}
 	for arg in OS.get_cmdline_user_args():

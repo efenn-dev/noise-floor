@@ -63,7 +63,7 @@ extends RefCounted
 ## 25 = W3d the farms and the hunting cabin: their pieces are saved like the town's, and "rural_skipped" names the
 ## buildings left out because the save had something built there (as for 24). A save from before 25 gets them laid
 ## fresh round its own pieces (holds_rural) and their zombies.
-const VERSION := 26
+const VERSION := 27
 const FIRST_WITH_PARK := 12
 const FIRST_WITH_DOWNTOWN := 23
 const FIRST_WITH_SUBURBS := 24
@@ -108,6 +108,11 @@ static func holds_factory(d: Dictionary) -> bool:
 ## skips cells you built on), so it can't land on top of your own pieces.
 static func holds_props(d: Dictionary) -> bool:
 	return int(d.get("version", 0)) >= FIRST_WITH_PROPS
+
+
+## R1b: a save from 27 on holds the supply schedule (trucks, piles, which guardians were put out).
+static func holds_supplies(d: Dictionary) -> bool:
+	return d.has("supplies")
 
 
 static func to_dict(sim: SimWorld) -> Dictionary:
@@ -210,6 +215,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"perk_snooze": sim.players[0].perk_snooze_until,  # P12
 		"perk_reset_day": sim.players[0].perk_reset_day,  # P13
 		"salvage": sim.salvage.to_dict(),  # P11: felled trees, stripped wrecks
+		"supplies": sim.supplies.to_dict(),  # R1b: trucks, piles, the guardians put out
 		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
 		"zombies": zombies,
 		"next_zombie": sim.horde._next_id,
@@ -413,6 +419,8 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2
 	sim.learning.load_dict(d.get("learning", {}))  # P10: a save from before knows every piece
 	sim.salvage.load_dict(d.get("salvage", {}))  # P11: none before
+	sim.supplies.from_dict(d.get("supplies", {}))  # R1b: none before 27
+	sim.register_supplies()  # the trucks' containers and wrecks, before their searched state and contents below
 	if version < 22:
 		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build
 	var rescue: Dictionary = d.get("rescue", {})

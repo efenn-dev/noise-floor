@@ -114,6 +114,7 @@ var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
 var carts: Carts  # F5: supply carts between cart stops
+var supplies: Supplies  # R1b: supply trucks off the road, forage piles, the named dead at their posts
 const GATHER_REACH := 4.0  # stay this close to the node (its spot or its pile) or the gathering stops
 ## F6: what machines made yesterday (item -> count), and Factory.made as it stood when today began.
 var made_yesterday: Dictionary = {}
@@ -139,7 +140,7 @@ const PERK_SNOOZE_CLOSED := 1.0  # P12: game hours before a pick a zombie interr
 var base_log: BaseLog
 ## M15: radio alerts sent to the HUD (far events while you carry a radio), newest last. For tests.
 var radio_lines: Array = []
-var _pete_busy := false
+var _named_busy: Dictionary = {}  # R1b: the named zombies (Old Pete, the sheriff...) off their spots at the last check
 ## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
 var vehicles: Vehicles
 ## V25: saved first-hour objectives and the most recent quick-equip suggestion.
@@ -218,6 +219,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	projects = Projects.new(data)
 	carts = Carts.new(data, build)  # F5
 	carts.crates_near = cart_crates
+	supplies = Supplies.new(data, seed_value)  # R1b
 	build.projects = projects  # M17a: the water tap can't be built until the tower runs
 	factory.storage_at = _storage_at_cell  # F3: belts can fill crates
 	factory.sink_at = _sink_at_cell  # F4: and feed the Hub
@@ -335,6 +337,7 @@ func step() -> void:
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
 	noise.continuous.append_array(projects.noise_sources())  # M17a: hammering and the tower pump
 	noise.continuous.append_array(carts.noise_sources())  # F5: supply carts on the road
+	noise.continuous.append_array(supplies.noise_sources(clock_hours(), truck_searched))  # R1b: a crashed truck's stuck horn
 	_tick_rescue()  # F2
 	_note_noise()
 	_tick_first_night()
@@ -380,7 +383,7 @@ func step() -> void:
 	automation.tick(TICK, horde, night, defense.bells)
 	base_log.tick(TICK)
 	if ticks % TICK_RATE == 0:
-		_watch_pete()
+		_watch_named()
 	var wave := director.tick(TICK, noise, night, horde)
 	if stats.is_peak_heat(director.heat):
 		stats.note_heat(director.heat, when_text())
@@ -388,8 +391,9 @@ func step() -> void:
 		add_message(director.newly_unlocked["message"], 8.0)
 	_count_kills()
 	if clock.day != _day:
+		var midnight := clock.day == _day + 1 and clock.time_of_day < 1.0  # R1b: the clock wrapped; a day set by hand (a test, --day) lands no truck
 		_day = clock.day
-		_new_day()
+		_new_day(midnight)
 	if not wave.is_empty():
 		stats.note_wave(wave["kind"], wave["edge"])
 		var what: String = {"wanderers": "Something is stirring", "group": "Moaning", "horde": "A horde is coming"}[wave["kind"]]
@@ -567,19 +571,19 @@ func _zombies_near(at: Vector3) -> String:
 	return "1 zombie" if n == 1 else "%d zombies" % n
 
 
-## M15: the base log notes Old Pete leaving his spot (chasing, investigating or breaking something).
-func _watch_pete() -> void:
-	var busy := false
-	var at := Vector3.ZERO
+## M15/R1b: the base log notes a named zombie (Old Pete, the sheriff...) leaving its spot (chasing, investigating or
+## breaking something): "Sheriff Dale is on the move".
+func _watch_named() -> void:
+	var busy := {}
 	for id: int in horde.zombies:
 		var z: ZombieBrain = horde.zombies[id]
-		if z.type == "old_pete" and not z.is_dead() and z.state in [ZombieBrain.State.CHASE, ZombieBrain.State.INVESTIGATE,
-				ZombieBrain.State.BREAK, ZombieBrain.State.CLIMB, ZombieBrain.State.ATTACK]:
-			busy = true
-			at = z.pos
-	if busy and not _pete_busy:
-		base_log.add_once("pete", 120.0, "Old Pete is on the move", at)
-	_pete_busy = busy
+		if bool(data.zombies[z.type].get("named", false)) and not z.is_dead() and z.state in [ZombieBrain.State.CHASE,
+				ZombieBrain.State.INVESTIGATE, ZombieBrain.State.BREAK, ZombieBrain.State.CLIMB, ZombieBrain.State.ATTACK]:
+			busy[z.type] = z.pos
+	for type: String in busy:
+		if not _named_busy.has(type):
+			base_log.add_once("named:" + type, 120.0, "%s is on the move" % data.zombies[type]["name"], busy[type])
+	_named_busy = busy
 
 
 ## P10: says what the last piece built taught you (Learning.news), once.
@@ -956,6 +960,8 @@ func container_name(id: String) -> String:
 		return "Crate"
 	if id.begins_with(CORPSE):
 		return "Corpse"
+	if id.begins_with(TRUCK):
+		return "Supply truck"  # R1b
 	if loot.containers.has(id):
 		var table := str(loot.containers[id]["table"])
 		return "Trunk" if table == "car_trunk" else loot.display_name(id)
@@ -2093,6 +2099,8 @@ func reveal_container(id: String) -> String:
 func _finish_search(found: Dictionary) -> void:
 	_practice("scavenging", "search")
 	var id := str(found["id"])
+	if id.begins_with(TRUCK):
+		stats.trucks_searched += 1  # R1b
 	var items: Dictionary = _rot_old_food(found["items"])
 	var armoury := _search_guns(found)
 	for item: String in armoury["items"]:
@@ -2988,7 +2996,7 @@ func resource_node(id: String) -> Dictionary:
 	for n: Dictionary in resource_nodes:
 		if n["id"] == id:
 			return n
-	return {}
+	return supplies.pile_node(id)  # R1b: a forage pile is a node with no extractor ({} if it isn't one either)
 
 
 ## P5: what a node gives by hand (resources.json kinds.<kind>.hand: item, count, seconds, loudness, verb), {} if nothing.
@@ -3045,6 +3053,11 @@ func _tick_gather() -> void:
 	noise.emit(n["prop_pos"], float(hand["loudness"]), "gather_" + String(n["kind"]))
 	_practice("scavenging", "search")
 	add_message("+%d %s" % [int(hand["count"]), data.item_name(hand["item"])], 1.5)
+	if n.get("pile", false):  # R1b: a forage pile runs out
+		stats.pile_items += int(hand["count"])
+		if supplies.take_from_pile(gathering, int(hand["count"])) <= 0:
+			gathering = ""
+			add_message("That's the lot: the pile's picked clean", 3.0)
 
 
 ## P5: what you're short of to build `id` with `stock`, and where each comes from: "6 Scrap metal (search cars ...)".
@@ -3601,8 +3614,10 @@ func _on_piece_built(key: String) -> void:
 # --- The world gets worse (M11) -------------------------------------------------
 
 ## Each new day: fresh food rots, and about three weeks in the town's gas goes stale.
-func _new_day() -> void:
+func _new_day(midnight: bool = true) -> void:
 	salvage.new_day(clock.day)  # R1a: stumps become saplings, saplings trees again
+	if midnight:
+		_supply_day()  # R1b: a truck off the road every few days, a forage pile a day
 	made_yesterday = _made_since(made_mark)  # F6
 	made_mark = factory.made.duplicate()
 	for piece: Dictionary in gear.wear_day():
@@ -3649,6 +3664,8 @@ func _rot_old_food(items: Dictionary) -> Dictionary:
 
 
 const CORPSE := "corpse_"  # S4: loot container id prefix for a dead zombie
+const TRUCK := "truck_"  # R1b: loot container id prefix for a crashed supply truck's back
+const GUARDIAN_POSTS := ["police", "pharmacy", "barn_west", "tower"]  # R1b: where a named guardian can stand (guardian_posts)
 
 
 func _count_kills() -> void:
@@ -3710,11 +3727,12 @@ func _zombie_drop(z: ZombieBrain, cid: String) -> void:
 		return
 	stats.note_gear(piece.get("rarity", "white"))
 	var extra: Dictionary = data.guns["zombie_extra_uniques"].get(z.type, {})
-	if not extra.is_empty():  # M14: Old Pete also carries his deer rifle and some rounds
-		loot.add_extra(cid, extra.get("ammo", {}).duplicate())
-		loot.add_gear(cid, [piece, gear.roll_unique(rng, extra["unique"])])
-	else:
-		loot.add_gear(cid, [piece])
+	var pieces := [piece]
+	if extra.has("unique"):  # M14: Old Pete also carries his deer rifle
+		pieces.append(gear.roll_unique(rng, extra["unique"]))
+	if not (extra.get("ammo", {}) as Dictionary).is_empty():  # and some rounds (R1b: the named dead's pockets: shells, med kits, nails)
+		loot.add_extra(cid, extra["ammo"].duplicate())
+	loot.add_gear(cid, pieces)
 	if unique != "" or piece["rarity"] in ["gold", "set"]:
 		add_message("%s is carrying something %s: search the body" % [data.zombies[z.type]["name"] if unique != "" else "That one",
 				Gear.rarity_word(piece["rarity"])], 6.0)
@@ -3733,6 +3751,163 @@ func spawn_old_pete() -> ZombieBrain:
 	z.facing = at["facing"]
 	z.set_guard(at["guard"], at["pos"])  # Q4: he never leaves the hall
 	return z
+
+
+# --- Supplies (R1b) ----------------------------------------------------------------
+
+## R1b: at each new day the supply schedule runs (Supplies.new_day): a truck off the road every few days and a forage
+## pile on a clear spot round town.
+func _supply_day() -> void:
+	var came := supplies.new_day(clock.day, clock_hours(), _pile_spot_taken)
+	for t: Dictionary in came["trucks"]:
+		place_truck(t)
+
+
+## R1b: no forage pile here: off the map, on a road, on a cell something stands on (a floor, a foundation, a crate, a
+## town prop), in a house, on a resource node or by its model, by a truck, or under a player's start.
+func _pile_spot_taken(at: Vector3) -> bool:
+	var flat := Vector2(at.x, at.z)
+	if not WorldMap.EXTENT.has_point(flat) or WorldMap.on_road(flat, 3.0):
+		return true
+	var cell := BuildGrid.world_to_cell(at)
+	if house_cells.has(cell) or build.nodes.has(cell) or build.pieces.has("f:%d:%d" % [cell.x, cell.y]) \
+			or build.pieces.has("o:%d:%d" % [cell.x, cell.y]):
+		return true
+	for n: Dictionary in resource_nodes:
+		if _flat_dist(at, n["prop_pos"]) < 5.0 or _flat_dist(at, n["pos"]) < 4.0:
+			return true
+	for t: Dictionary in supplies.trucks:
+		if _flat_dist(at, t["pos"]) < 8.0:
+			return true
+	for s: PlayerSlot in players:
+		if _flat_dist(at, s.spawn_point) < 6.0:
+			return true
+	return false
+
+
+## R1b: a truck `t` (Supplies.add_truck) goes into the world: its back a container to search (the truck's loot table)
+## and a wreck to strip for scrap, its horn a noise until it's searched (Supplies.noise_sources), `zombies` shamblers
+## already shuffling toward it, a base log line (the radio relays it) naming the spot, and a message with the direction
+## for anyone awake. `quiet`: just the container and the wreck (a load, a flag).
+func place_truck(t: Dictionary, quiet: bool = false) -> void:
+	var id := str(t["id"])
+	if not loot.containers.has(id):
+		loot.add(id, str(supplies.truck_cfg().get("table", "supply_truck")), t["pos"])
+	salvage.wrecks[id] = str(t["model"])
+	if quiet:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, id, "crowd"])
+	for i in int(supplies.truck_cfg().get("zombies", 3)):
+		var a := rng.randf_range(0.0, TAU)
+		var r := rng.randf_range(7.0, 11.0)
+		var z := horde.spawn("shambler", t["pos"] + Vector3(cos(a) * r, 0, sin(a) * r))
+		z.facing = (t["pos"] - z.pos).normalized()
+		z.hear(t["pos"], "truck:" + id, 600.0)
+	base_log.add("A supply truck went off the road on %s: its horn's stuck on" % t["where"], t["pos"])
+	add_message("A horn starts blaring somewhere to the %s" % base_log.direction(t["pos"]), 8.0)
+
+
+## R1b: whether a truck's back has been searched (its horn stops then).
+func truck_searched(id: String) -> bool:
+	return loot.containers.has(id) and bool(loot.containers[id]["searched"])
+
+
+## R1b: after a load: the saved trucks' containers and wrecks again (their searched state and contents come after, with
+## every other container's, in SaveGame.apply).
+func register_supplies() -> void:
+	for t: Dictionary in supplies.trucks:
+		place_truck(t, true)
+
+
+## R1b (Emmitt: "more places like where we got Pete's old rifle"): the named dead at their posts, each with a gold piece
+## of their own (gear.json zombie_uniques) and their pockets (guns.json zombie_extra_uniques): the sheriff in the police
+## station's armory, the pharmacist behind her counter, the farmer in the west barn, the lineman at the water tower.
+## Old Pete's pattern (spawn_old_pete): a guardian who never leaves the place. Each is put out once a game
+## (Supplies.guardians); a living one comes back through the horde's save. Returns the zombies put out.
+func spawn_guardians() -> Array:
+	var out := []
+	var posts := guardian_posts()
+	for type: String in data.supplies.get("guardians", {}):
+		if supplies.guardians.has(type) or not data.zombies.has(type):
+			continue
+		var post := str(data.supplies["guardians"][type].get("post", ""))
+		if not posts.has(post):
+			continue
+		var at: Dictionary = posts[post]
+		var z := horde.spawn(type, at["pos"])
+		z.facing = at["facing"]
+		z.set_guard(at["guard"], at["pos"])
+		supplies.guardians.append(type)
+		out.append(z)
+	return out
+
+
+## R1b: where each guardian stands, from the seeded plans (so the same in every copy of this game): "police" (the
+## armory behind the inside wall, facing its doorway), "pharmacy" (by the back wall, facing the door), "barn_west"
+## (inside the big doorway), "tower" (the south side of the water tower). Each: {pos, facing, guard: Rect2}.
+func guardian_posts() -> Dictionary:
+	var out := {}
+	var downtown := DowntownPlan.generate(seed_value)
+	var police := DowntownPlan.shop(downtown, "police")
+	if not police.is_empty():
+		var r: Rect2 = police["rect"]
+		var wall_row := int(police["door_cell"].y) + int(police["inside_wall"])
+		var cell := _free_shop_cell(downtown, police, Vector2(r.get_center().x, r.end.y - 3.0),
+				func(c: Vector2i) -> bool: return c.y >= wall_row)
+		if cell.x > -9999:
+			var doorway := Vector2i(int(r.position.x / BuildGrid.GRID) + int(police["inside_doorway"]), wall_row)
+			out["police"] = {"pos": _cell_mid(cell), "facing": _toward(cell, doorway), "guard": r}
+	var pharmacy := DowntownPlan.shop(downtown, "pharmacy")
+	if not pharmacy.is_empty():
+		var r: Rect2 = pharmacy["rect"]
+		var cell := _free_shop_cell(downtown, pharmacy, Vector2(r.get_center().x, r.position.y + 1.0),
+				func(_c: Vector2i) -> bool: return true)
+		if cell.x > -9999:
+			out["pharmacy"] = {"pos": _cell_mid(cell), "facing": _toward(cell, pharmacy["door_cell"]), "guard": r}
+	for barn: Dictionary in RuralPlan.generate(seed_value)["barns"]:
+		if barn["farm"] == "west":
+			var r: Rect2 = barn["rect"]
+			out["barn_west"] = {"pos": Vector3(r.position.x + 3.0, 0.1, r.position.y + 9.0), "facing": Vector3(-1, 0, 0), "guard": r}
+	out["tower"] = {"pos": ParkPlan.TOWER_POS + Vector3(0, 0.1, 4.5), "facing": Vector3(0, 0, 1),
+			"guard": ParkPlan.tower_rect().grow(7.0)}
+	return out
+
+
+## The shop cell nearest `target` that `keep` allows, isn't a door and is clear of the shop's props; (-9999, -9999) if none.
+func _free_shop_cell(plan: Dictionary, shop: Dictionary, target: Vector2, keep: Callable) -> Vector2i:
+	var best := Vector2i(-9999, -9999)
+	var best_d := INF
+	for c: Vector2i in shop["cells"]:
+		if c == shop["door_cell"] or c == shop["back_door_cell"] or not bool(keep.call(c)):
+			continue
+		var mid := Vector2((c.x + 0.5) * BuildGrid.GRID, (c.y + 0.5) * BuildGrid.GRID)
+		if not DowntownPlan.is_clear(plan, mid, 0.7):
+			continue
+		var d := mid.distance_to(target)
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+static func _cell_mid(c: Vector2i) -> Vector3:
+	return Vector3((c.x + 0.5) * BuildGrid.GRID, 0.1, (c.y + 0.5) * BuildGrid.GRID)
+
+
+static func _toward(a: Vector2i, b: Vector2i) -> Vector3:
+	var v := Vector3(b.x - a.x, 0, b.y - a.y)
+	return v.normalized() if v.length_squared() > 0.01 else Vector3.FORWARD
+
+
+## R1b: the named dead still standing, for the map: [{type, name, pos}].
+func named_alive() -> Array:
+	var out := []
+	for id: int in horde.zombies:
+		var z: ZombieBrain = horde.zombies[id]
+		if bool(data.zombies[z.type].get("named", false)) and not z.is_dead():
+			out.append({"type": z.type, "name": str(data.zombies[z.type]["name"]), "pos": z.pos})
+	return out
 
 
 ## R on a machine that can make more than one thing (the Press: nails or repair kits): switches to the

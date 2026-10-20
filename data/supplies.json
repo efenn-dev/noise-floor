@@ -1,0 +1,34 @@
+{
+	"_about": "R1b: what the world puts out on a schedule (Supplies). truck: every `every_days` game days from `first_day`, a supply truck goes off the road at one of `spots` (seeded, never the same spot twice running): a `model` vehicle whose back is a `table` loot container, its horn stuck on at `horn_loudness` for `horn_hours` or until it's searched (a continuous noise: the zombies and the Director hear it), `zombies` shamblers already shuffling toward it, a base-log line (the radio relays it) naming the spot. piles: Rust-style forage piles: from `first_day`, `per_day` piles a day up to `max` living, each a `kinds` resource kind (resources.json kinds with `holds`: hand-gathered, no extractor) on a seeded clear spot in `area` [x, z, w, h] (not on a road, a floor, a house, a node, or within `apart` m of another pile; `tries` spots looked at). guardians: the named dead at their posts (SimWorld.spawn_guardians; `post` is one of SimWorld.GUARDIAN_POSTS), each a zombies.json type marked `named` with a gold piece in gear.json zombie_uniques and pockets in guns.json zombie_extra_uniques.",
+	"truck": {
+		"first_day": 2,
+		"every_days": 3,
+		"horn_hours": 6,
+		"horn_loudness": 70,
+		"zombies": 3,
+		"model": "van",
+		"table": "supply_truck",
+		"spots": [
+			{ "name": "the highway, north of the junction", "pos": [250, -90], "yaw": 20 },
+			{ "name": "the south road, past Market Street", "pos": [9, 120], "yaw": -15 },
+			{ "name": "County Road West", "pos": [-120, 51], "yaw": 100 },
+			{ "name": "the north road, past the park", "pos": [8, -330], "yaw": 170 },
+			{ "name": "the highway, south of town", "pos": [250, 210], "yaw": -25 }
+		]
+	},
+	"piles": {
+		"first_day": 1,
+		"per_day": 1,
+		"max": 4,
+		"kinds": ["scrap_pile", "log_pile"],
+		"area": [-90, -100, 180, 150],
+		"apart": 14.0,
+		"tries": 40
+	},
+	"guardians": {
+		"sheriff": { "post": "police", "where": "the police station's armory" },
+		"pharmacist": { "post": "pharmacy", "where": "behind the pharmacy counter" },
+		"farmer": { "post": "barn_west", "where": "the west farm's barn" },
+		"lineman": { "post": "tower", "where": "the water tower" }
+	}
+}

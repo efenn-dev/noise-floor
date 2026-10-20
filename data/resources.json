@@ -8,8 +8,13 @@
 		"fuel_tank": { "name": "Fuel tanker", "extractor": "fuel_pump", "model": "fuel_tanker",
 			"hand": { "item": "gas_can", "count": 1, "seconds": 30.0, "loudness": 30, "verb": "drain gas" } },
 		"timber": { "name": "Timber stand", "extractor": "sawmill", "model": "timber_stand",
-			"hand": { "item": "plank", "count": 1, "seconds": 5.0, "loudness": 60, "verb": "chop planks" } }
+			"hand": { "item": "plank", "count": 1, "seconds": 5.0, "loudness": 60, "verb": "chop planks" } },
+		"scrap_pile": { "name": "Scrap pile", "extractor": "", "model": "scrap_heap", "scale": 0.45, "holds": 6,
+			"hand": { "item": "scrap_metal", "count": 1, "seconds": 3.0, "loudness": 45, "verb": "pull scrap from the pile" } },
+		"log_pile": { "name": "Log pile", "extractor": "", "model": "timber_stand", "scale": 0.55, "holds": 5,
+			"hand": { "item": "plank", "count": 1, "seconds": 4.0, "loudness": 50, "verb": "split planks off the logs" } }
 	},
+	"_piles_about": "R1b: a kind with `holds` and no extractor is a forage pile (Supplies): hand-gathered until its `holds` are gone, then it's gone; `model` is drawn at `scale`. Where and how often they turn up is data/supplies.json piles.",
 	"purity": { "poor": 0.5, "normal": 1.0, "rich": 2.0 },
 	"_hand_about": "P5: E on a node gathers by hand: `count` of `item` every `seconds` (divided by the node's purity), a one-off at `loudness` each time, while you stay within reach. Slower than its extractor and you stand there making noise: the first rung before the machines.",
 	"_salvage_about": "P11 (playtest: \"We need a way to chop down trees for lumber and a way to get metal scrap\"): swing a melee weapon at a tree or at a car that won't drive. Each hit does the weapon's melee damage times the factor for its class (axe, blade, blunt, fists). A tree falls once it has taken its kind's hp and gives its planks (into your pockets, the rest on the ground where it stood); felled trees stay down (saved). A wreck gives one scrap metal for every `per_scrap` damage, up to its type's `scrap`, then it's stripped (saved). Every hit is a one-off noise (noise.json sounds chop, tree_fall, metal_strip) and wears the weapon.",
