@@ -2,6 +2,24 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-19 — R1a Materials on their own: the excavators you'll actually meet
+
+Emmitt: "we were finding it hard to get materials" and "I want some way to also automate the basic materials like in Satisfactory with excavators." The excavators existed since F1 (the Salvager, Sawmill, water and fuel pumps on resource nodes) but their nearest spots were the junkyard and the woods, behind a Hub milestone, and nothing led a player there. R1b (supply trucks, named guardians) follows.
+
+**Built:**
+- **Two resource nodes by the start** (`data/resources.json`): `town_scrap`, a poor scrap heap on the empty lot just east of Main Street (26, 16), and `town_timber`, a poor timber stand on the lot to the west (-26, 16). Both about 30 m from the start, probed clear of every house, shop, tree and road. Poor purity: a start, not a free lunch. Loud ones, too: a Salvager by the base is the game's first real "wall it or muffle it".
+- **A guided chapter, "Dig in"** (`Guidance.tick_dig`, `dig_step`, `DIG_HOWTO`, `DIG_DONE`; saved under "dig"): it starts when the first night's goals are done (or from day 2) and leads: build a Hub → hand in the Salvage rig → put a Salvager on a scrap heap → power it until it has dug 10 scrap on its own. The turret chapter ("Defend your base") now waits for it, so a player meets materials before defence. The objectives panel shows it first (`ObjectivesPanel._show_dig`), with how to learn the Hub when it's locked. The session log's goals line carries it. Flag `--dig[=N]`.
+- **Hordes bring their pockets:** wave zombies carry the new `zombie_wave` loot table (more scrap and nails, the odd plate) via `ZombieBrain.loot_table`, set by the Director's waves; their corpses use it. A loud base costs a fight and pays in materials.
+- **Felled trees grow back** (`Salvage.stage`, `new_day`, `felled` now holds the day): a stump for 3 days (out of sight, walk-through), a sapling (the tree at a third of its size) until day 7, then a tree again that can be chopped again. Both tree views follow (`CountryView._show_stage`, `StreetView._set_stage`). A P11 save's felled list counts as felled today. Flag `--tree=sapling`.
+
+**Try it on the PC:** a new game, survive the first night, and the panel says "DIG IN". Press M: two yellow spots sit either side of Main Street. `play.bat --dig=2` shows the chapter with the Hub built and the rig handed in.
+
+**Known gaps:**
+- A wave zombie saved alive loses its fuller pockets on load (corpses aren't saved; the table isn't either).
+- The stump is simply out of sight; a stump model would be a small art job.
+- The chapter's numbers (10 scrap) and the town nodes' purity are first guesses for the next log.
+
+**Next:** R1b (supply trucks, named guardians with their own gold items), then co-op Phase B.
 ## 2026-10-19 — Co-op A: the rules can hold two players
 
 Emmitt: "my son really wants to play with me". The plan is `docs/COOP_PLAN.md`; this is its first phase, the one with nothing to look at: the sim no longer assumes one player. Everything single-player plays exactly as before.

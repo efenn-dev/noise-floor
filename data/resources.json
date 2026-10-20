@@ -25,6 +25,8 @@
 		"metal_factor": { "blunt": 1.4, "axe": 1.0, "blade": 0.5, "fists": 0.3 }
 	},
 	"nodes": [
+		{ "id": "town_scrap", "kind": "scrap_heap", "purity": "poor", "pos": [26, 16], "prop": [0, 4.0], "yaw": 20 },
+		{ "id": "town_timber", "kind": "timber", "purity": "poor", "pos": [-26, 16], "prop": [-3.5, 0], "yaw": 40 },
 		{ "id": "junkyard_1", "kind": "scrap_heap", "purity": "rich", "pos": [153, -57], "prop": [0, -4.0], "yaw": 10 },
 		{ "id": "junkyard_2", "kind": "scrap_heap", "purity": "normal", "pos": [177, -53], "prop": [0, -4.0], "yaw": -20 },
 		{ "id": "junkyard_3", "kind": "scrap_heap", "purity": "normal", "pos": [197, -27], "prop": [4.0, 0], "yaw": 70 },

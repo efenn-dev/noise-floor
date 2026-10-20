@@ -37,6 +37,22 @@ var defend_held := false
 var defend_night_kills := -1  # turret kills when tonight began; -1 when it isn't watching a night
 var defend_told := -1  # the last goal it said how to do (so a goal met between ticks still gets its message)
 
+## R1a (Emmitt: "some way to also automate the basic materials like in Satisfactory with excavators"): "Dig in", shown
+## right after the first night, before the turret: build a Hub, hand in the Salvage rig, put a Salvager on a scrap heap
+## (there's one by the start now), power it until it has dug 10 scrap on its own. The turret chapter waits for it.
+const DIG_STEPS := 4
+const DIG_SCRAP := 10
+const DIG_HOWTO := [
+	"New goal: dig in. Build a Hub at your base (B, Hub; it needs a workbench first). O shows the goals.",
+	"Hub built. E on it: hand in the Salvage rig (20 planks, 20 scrap metal, 10 nails) and it unlocks the Salvager.",
+	"Salvage rig done. Build a Salvager on a scrap heap's yellow spot: there's a small heap just east of Main Street (M shows it).",
+	"Salvager built. Power it (a generator and a pole in reach): it digs scrap on its own. 10 pieces proves it. A belt from its front into a crate keeps them.",
+]
+const DIG_DONE := "Your base digs its own scrap. A Sawmill does the same for planks on a timber stand (the Lumber yard milestone; one stands west of Main Street), water and fuel pumps too."
+var dig_active := false
+var dig_done := false
+var dig_told := -1
+
 ## F6 (compact and deep): "Live off your base", the third chapter. It starts when "Defend your base" is done, or from
 ## FEED_START_DAY in any game (so a player still on the defence gets it too), and walks a food and water chain: collect
 ## water with a machine (rain collector or well pump), clean it (purifier or water tap), grow food (planter), can it
@@ -139,6 +155,8 @@ func tick_defend(clock: GameClock, build: BuildGrid, factory: Factory) -> String
 	if defend_done:
 		return ""
 	if not defend_active:
+		if dig_active and not dig_done:
+			return ""  # R1a: materials first, then the turret
 		if (active and completed) or (not active and clock.day >= 2):
 			defend_active = true
 			defend_told = defend_step(build)
@@ -191,6 +209,46 @@ func tick_feed(clock: GameClock, factory: Factory) -> String:
 		feed_told = now
 		return FEED_HOWTO[now]
 	return ""
+
+
+## R1a: one tick of "Dig in". Starts when the first night's goals are done (or from day 2 in an unguided game) and
+## returns the message to show when a goal is met, like tick_defend.
+func tick_dig(clock: GameClock, build: BuildGrid, factory: Factory, milestones: Milestones) -> String:
+	if dig_done:
+		return ""
+	if not dig_active:
+		if (active and completed) or (not active and clock.day >= 2):
+			dig_active = true
+			dig_told = dig_step(build, factory, milestones)
+			return DIG_HOWTO[dig_told]
+		return ""
+	var now := dig_step(build, factory, milestones)
+	if now >= DIG_STEPS:
+		dig_done = true
+		return DIG_DONE
+	if now > dig_told:
+		dig_told = now
+		return DIG_HOWTO[now]
+	return ""
+
+
+## R1a: which "Dig in" goal is next (DIG_STEPS when they're all done).
+func dig_step(build: BuildGrid, factory: Factory, milestones: Milestones) -> int:
+	if build.first_of_kind("hub") == "":
+		return 0
+	if not milestones.is_done("salvage_rig"):
+		return 1
+	var dug := 0
+	var any := false
+	for m: Factory.Machine in factory.machines.values():
+		if m.recipe_id == "salvage_scrap":
+			any = true
+			dug += m.crafted
+	if not any:
+		return 2
+	if dug < DIG_SCRAP:
+		return 3
+	return DIG_STEPS
 
 
 ## F6: which "Live off your base" goal is next: the first not met yet (FEED_STEPS when they're all done).
@@ -381,7 +439,8 @@ func to_dict() -> Dictionary:
 			"better_gear_seconds": better_gear_seconds,
 			"defend": {"active": defend_active, "done": defend_done, "ammo_made": defend_ammo_made, "fed": defend_fed,
 					"held": defend_held, "night_kills": defend_night_kills, "told": defend_told},  # F4
-			"feed": {"active": feed_active, "done": feed_done, "met": feed_met, "told": feed_told}}  # F6
+			"feed": {"active": feed_active, "done": feed_done, "met": feed_met, "told": feed_told},  # F6
+			"dig": {"active": dig_active, "done": dig_done, "told": dig_told}}  # R1a
 
 
 func load_dict(d: Dictionary) -> void:
@@ -413,6 +472,10 @@ func load_dict(d: Dictionary) -> void:
 	for i in mini(met.size(), FEED_STEPS):
 		feed_met[i] = bool(met[i])
 	feed_told = int(fd.get("told", -1))
+	var gd: Dictionary = d.get("dig", {})  # R1a (an older save starts the chapter fresh)
+	dig_active = bool(gd.get("active", false))
+	dig_done = bool(gd.get("done", false))
+	dig_told = int(gd.get("told", -1))
 
 
 ## Screenshot helper: show the first two goals complete and the shelter partly built.

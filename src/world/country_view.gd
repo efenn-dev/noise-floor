@@ -13,6 +13,7 @@ const WRECK_BOXES := {"sedan": Vector3(1.9, 1.5, 4.4), "pickup": Vector3(2.0, 1.
 const WALL_HEIGHT := 6.0
 const TREES := ["tree", "pine_tree", "pine_tree_small"]
 const FALL_TIME := 1.4  # P11: seconds a felled tree takes to hit the ground
+const SAPLING_SCALE := 0.35  # R1a: a felled tree three days on
 static var hold_fall := -1.0  # P11: --tree=T freezes a falling tree at fraction T of its fall (screenshots)
 ## How each kind is solid: "trunk" (a thin cylinder), "box" (its model's box), or not at all (bushes).
 const COLLIDE := {"tree": "trunk", "pine_tree": "trunk", "pine_tree_small": "trunk", "rock": "box",
@@ -175,13 +176,21 @@ func _process(delta: float) -> void:
 				if id == falls and is_inside_tree():
 					_falling.append([id, maxf(hold_fall, 0.0) * FALL_TIME, _fall_axis(_tree_at[id][4])])
 				else:
-					_hide(id)
+					_show_stage(id)
+		for id: String in _gone.keys():  # R1a: saplings, and trees grown back
+			if not salvage.felled.has(id):
+				_gone.erase(id)
+				var info: Array = _tree_at[id]
+				(info[0] as MultiMesh).set_instance_transform(info[1], info[3])
+				(info[2] as CollisionShape3D).set_deferred("disabled", false)
+			elif salvage.stage(id) == "sapling" and not _falling.any(func(f: Array) -> bool: return f[0] == id):
+				_show_stage(id)
 	for f: Array in _falling:
 		f[1] = float(f[1]) + delta
 		var t := fall_fraction(float(f[1]))
 		var info: Array = _tree_at[f[0]]
 		if t >= 1.0:
-			_hide(f[0])
+			_show_stage(f[0])
 			continue
 		(info[0] as MultiMesh).set_instance_transform(info[1], tipped(info[3], info[4], f[2], t))
 	_falling = _falling.filter(func(f: Array) -> bool: return fall_fraction(float(f[1])) < 1.0)
@@ -213,6 +222,20 @@ func _fall_axis(foot: Vector3) -> Vector3:
 func _hide(id: String) -> void:
 	var info: Array = _tree_at[id]
 	(info[0] as MultiMesh).set_instance_transform(info[1], Transform3D(Basis().scaled(Vector3.ONE * 0.001), Vector3(0, -50, 0)))
+
+
+## R1a: draw felled tree `id` as its stage: a stump is out of the picture, a sapling the tree at SAPLING_SCALE.
+func _show_stage(id: String) -> void:
+	if salvage == null or salvage.stage(id) != "sapling":
+		_hide(id)
+		return
+	var info: Array = _tree_at[id]
+	(info[0] as MultiMesh).set_instance_transform(info[1], scaled_about(info[3], info[4], SAPLING_SCALE))
+
+
+## A standing tree's transform `xf` shrunk to `s` about its `foot`.
+static func scaled_about(xf: Transform3D, foot: Vector3, s: float) -> Transform3D:
+	return Transform3D(Basis(), foot) * Transform3D(Basis().scaled(Vector3.ONE * s), Vector3.ZERO) * Transform3D(Basis(), -foot) * xf
 
 
 ## Whether tree `id` has been taken out of the picture (tests).

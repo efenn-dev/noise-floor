@@ -60,10 +60,14 @@ func refresh() -> void:
 		return
 	var g := sim.guidance
 	var first_night := g.active and not g.completed
-	var feed := not first_night and g.feed_active and not g.feed_done  # F6: the third chapter (shown over the second)
-	var defend := not first_night and not feed and g.defend_active and not g.defend_done  # F4: the second chapter
-	visible = not suppressed and (first_night or defend or feed) and (Settings.show_objectives or force_visible)
+	var dig := not first_night and g.dig_active and not g.dig_done  # R1a: materials, right after the first night
+	var feed := not first_night and not dig and g.feed_active and not g.feed_done  # F6: the third chapter (shown over the second)
+	var defend := not first_night and not dig and not feed and g.defend_active and not g.defend_done  # F4: the second chapter
+	visible = not suppressed and (first_night or dig or defend or feed) and (Settings.show_objectives or force_visible)
 	if not visible:
+		return
+	if dig:
+		_show_dig(g)
 		return
 	if feed:
 		_show_feed(g)
@@ -89,6 +93,24 @@ func refresh() -> void:
 		_detail.text = "Night is 21:00 to dawn. Keep yourself and the shelter standing."
 	else:
 		_detail.text = "O hides objectives · change this in Settings"
+
+
+## R1a: "Dig in": a Hub, the Salvage rig, a Salvager on a heap, powered until it has dug on its own.
+func _show_dig(g: Guidance) -> void:
+	_title.text = "DIG IN  ·  O hide"
+	var current := g.dig_step(sim.build, sim.factory, sim.milestones)
+	var labels := ["Build a Hub", "Hand in the Salvage rig at the Hub", "Build a Salvager on a scrap heap",
+			"Power it: %d scrap dug on its own" % Guidance.DIG_SCRAP]
+	for i in _lines.size():
+		var done := i < current
+		_lines[i].text = ("✓ " if done else ("› " if i == current else "  ")) + labels[i]
+		_lines[i].add_theme_color_override("font_color", DONE if done else (Color.WHITE if i == current else DIM))
+	_detail.text = _learn_hint(["hub", "", "", ""][mini(current, 3)]) + [
+		"B, Hub group: the Hub (20 planks, 10 scrap metal, 10 nails) on a foundation. Its milestones unlock the machines that work the world's resources.",
+		"E on the Hub, pick Salvage rig, and it takes the parts from your pockets or a crate within 8 m. A belt into the Hub hands parts in too.",
+		"The yellow spot on a scrap heap: a small one sits just east of Main Street (M shows every spot). It needs no foundation. Loud: wall it or muffle it.",
+		"A generator (E loads gas cans) and a power pole within reach. Watch its front: scrap comes out on its own. A belt from there into a crate keeps it.",
+	][mini(current, 3)]
 
 
 ## F4: "Defend your base": a turret, its ammo from a machine, fed by belt, a night held.

@@ -322,6 +322,22 @@ func _ready() -> void:
 			sim.guidance.feed_met[i] = i < met
 		sim.guidance.feed_told = met
 		objectives_panel.force_visible = true
+	if args.has("dig"):  # R1a: the "Dig in" goals, the first N done (for screenshots)
+		var dug := int(str(args["dig"])) if str(args["dig"]) != "" else 0
+		sim.guidance.active = true
+		sim.guidance.completed = true
+		sim.guidance.dig_active = true
+		sim.learning.knows_all = true  # the Hub, for the picture (a real game learns it from a workbench)
+		if dug >= 1:
+			var ahead := player.global_position - player.global_basis.z * 5.0
+			var cell := BuildGrid.world_to_cell(ahead)
+			var stock := Inventory.new()
+			stock.give_all({"plank": 50, "nails": 80, "metal_plate": 50, "scrap_metal": 40})
+			sim.build.place("foundation", cell, BuildGrid.Side.NORTH, stock)
+			sim.build.place("hub", cell, BuildGrid.Side.SOUTH, stock)
+		if dug >= 2:
+			sim.milestones.done.append("salvage_rig")
+		objectives_panel.force_visible = true
 	if args.has("defend"):  # F4: the "Defend your base" goals, the first N done (for screenshots)
 		var done := int(str(args["defend"])) if str(args["defend"]) != "" else 0
 		sim.guidance.active = true
@@ -1586,10 +1602,15 @@ func _stand_by_tree(t: String) -> void:
 	player.set_look(rad_to_deg(atan2(away.x, away.z)), 12.0 if t != "" else 4.0)
 	_hold_weapon("axe")
 	if t != "":
-		CountryView.hold_fall = clampf(t.to_float(), 0.0, 1.0)
 		var info: Array = best.get_meta("tree")
 		while not sim.salvage.felled.has(info[0]):
 			sim.salvage.hit_tree(info[0], info[1], 999.0, "axe")
+		if t == "sapling":  # R1a: --tree=sapling: felled three days ago, growing back
+			sim.salvage.felled[info[0]] = sim.clock.day - Salvage.SAPLING_DAYS
+			sim.salvage.last_felled = ""
+			sim.salvage.changes += 1
+		else:
+			CountryView.hold_fall = clampf(t.to_float(), 0.0, 1.0)
 
 
 ## P11 --wreck: beside the nearest car that won't drive (one you can strip for scrap), looking at its side.

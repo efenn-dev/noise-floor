@@ -382,8 +382,12 @@ func _save_load() -> String:
 	while current_scene == null or current_scene == main or not current_scene.get("sim"):
 		await process_frame
 	_grab()
+	# R1a: the skills come straight off the load. The ten settle frames below are for the world (zombies, bodies); the
+	# bot may already swing or bandage in them, which is practice, not a round-trip change.
+	var xp_after := snappedf(_xp_total(), 0.01)
 	await _frames(10)
 	var after := _snapshot()
+	after["skills_xp"] = xp_after
 	for k: String in before:
 		if str(before[k]) != str(after[k]):
 			failures.append("save round-trip changed %s: %s -> %s" % [k, before[k], after[k]])
