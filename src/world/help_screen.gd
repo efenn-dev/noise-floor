@@ -40,7 +40,7 @@ const ROWS := [
 	["Build", ["build_next", "build_prev"], "Mouse wheel", "next or previous piece while building"],
 	["Build", ["build_rotate"], "", "turn the piece"],
 	["Build", ["build_place"], "", "build it (from your pockets and crates nearby)"],
-	["Build", ["build_remove"], "", "pull down what you look at (the town's pieces give a little salvage)"],
+	["Build", ["build_remove"], "", "hold it on what you look at to take it down (the town's pieces give a little salvage)"],
 	["Build", [], "Esc", "stop building"],
 	["Fight (melee and firearms)", ["attack"], "", "swing your melee weapon (at a tree it chops it down for planks, at a broken car it strips scrap metal), or fire the firearm in hand"],
 	["Fight (melee and firearms)", ["aim"], "", "hold to aim a firearm (a scope zooms); with melee or fists, hold to block"],

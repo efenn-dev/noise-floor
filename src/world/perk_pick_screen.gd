@@ -1,9 +1,11 @@
 class_name PerkPickScreen
 extends CanvasLayer
-## F4: the dawn perk pick (his son's session logs: 14 perk points earned, none spent). Once a day, in daylight and
-## with no zombie near (SimWorld.perk_offer_ready), main.gd opens this: three big cards, one perk from each tree
-## (Skills.offer). A click spends a point on that perk; with points left it shows the next three, otherwise it
-## closes. "Later" (or Esc) closes it until tomorrow; K still opens the full skills screen any time.
+## F4: the perk pick (his son's session logs: 14 perk points earned, none spent). At a quiet moment with points to
+## spend (SimWorld.perk_offer_ready), main.gd opens this: three big cards, one perk from each tree (Skills.offer). A
+## click spends a point on that perk; with points left it shows the next three, otherwise it closes. "Later" (or
+## Esc) puts it off a few game hours (`later`); a zombie coming close puts it off one (`close_for`). K still opens
+## the full skills screen any time. P12 (it was once a day at dawn with no zombie within 25 m, which in a busy town
+## never came: 24 points unspent between the two of them): the first pick explains itself (`_intro`).
 
 signal message(text: String)
 
@@ -14,6 +16,8 @@ var sim: SimWorld
 var offered: Array = []  # the perk ids on the cards now
 var _root: Control
 var _points: Label
+var _intro: Label  # P12
+var _center: CenterContainer  # P12: scaled by fit()
 var _cards: HBoxContainer
 
 
@@ -32,6 +36,16 @@ func open() -> void:
 	_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	refresh()
+	fit()
+
+
+## P12: drawn for a 1600 x 900 window and scaled up on a bigger one (like the build menu), never down.
+func fit() -> void:
+	var view := _root.get_viewport_rect().size
+	var s := clampf(minf(view.x / 1600.0, view.y / 900.0), 1.0, 1.6)
+	_center.scale = Vector2(s, s)
+	_center.position = Vector2.ZERO
+	_center.size = view / s
 
 
 func close() -> void:
@@ -41,8 +55,22 @@ func close() -> void:
 
 func _input(event: InputEvent) -> void:
 	if is_open() and event.is_action_pressed("free_mouse"):
-		close()
+		later()
 		get_viewport().set_input_as_handled()
+
+
+## P12: "Later" or Esc: closed by choice, back in a few game hours.
+func later() -> void:
+	sim.perk_snooze(SimWorld.PERK_SNOOZE_LATER)
+	close()
+
+
+## P12: closed by the game (`why` "zombie": one came close): back sooner, and it says so.
+func close_for(why: String) -> void:
+	sim.perk_snooze(SimWorld.PERK_SNOOZE_CLOSED, why)
+	if why == "zombie":
+		message.emit("A zombie's close. The perk pick comes back when it's quiet (or press K)")
+	close()
 
 
 ## Spends a point on card `i` (the card buttons; tests call it).
@@ -61,6 +89,7 @@ func pick(i: int) -> void:
 func refresh() -> void:
 	var sk := sim.skills
 	_points.text = "%d perk point%s to spend" % [sk.perk_points, "" if sk.perk_points == 1 else "s"]
+	_intro.visible = sk.perks.is_empty()  # P12: the first pick explains what this is
 	offered = sk.offer(sim.clock.day + sk.perks.values().reduce(func(a: int, r: int) -> int: return a + r, 0))
 	for c: Node in _cards.get_children():
 		c.queue_free()
@@ -114,17 +143,22 @@ func _build() -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(dim)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_center = center
 	_root.add_child(center)
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 18)
 	center.add_child(col)
-	var heading := _label(col, 40, "A new day. Pick a perk!")
+	var heading := _label(col, 40, "A quiet moment: pick a perk!")
 	heading.add_theme_color_override("font_color", GOLD)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_points = _label(col, 22, "")
 	_points.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_intro = _label(col, 19, "You earn a perk point every %d skill levels, just by doing things. A perk is a bonus you keep for good. Click a card to take it; the other two come round again." % int(sim.data.skills["levels_per_perk_point"]))
+	_intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_intro.custom_minimum_size = Vector2(900, 0)
+	_intro.modulate = Color(1, 1, 1, 0.85)
 	_cards = HBoxContainer.new()
 	_cards.alignment = BoxContainer.ALIGNMENT_CENTER
 	_cards.add_theme_constant_override("separation", 24)
@@ -136,7 +170,7 @@ func _build() -> void:
 	later.custom_minimum_size = Vector2(200, 48)
 	later.add_theme_font_size_override("font_size", 20)
 	later.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	later.pressed.connect(close)
+	later.pressed.connect(self.later)
 	col.add_child(later)
 	var foot := _label(col, 16, "Click a card to take it. K shows every skill and perk any time.")
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

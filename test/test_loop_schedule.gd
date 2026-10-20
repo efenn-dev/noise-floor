@@ -203,21 +203,60 @@ func test_the_perk_offer_is_one_per_tree_lowest_rank_first() -> void:
 	eq(sk.offer(5).size(), offer.size() - 1, "a tree with every perk at the top has no card")
 
 
-func test_the_perk_pick_waits_for_points_daylight_and_safety() -> void:
+func test_the_perk_pick_waits_for_points_calm_and_safety() -> void:
+	# P12: not once at dawn with nothing within 25 m (which, in a town full of zombies, never came: 24 points unspent
+	# between Emmitt and Kaleb), but at any quiet moment.
 	var sim := SimWorld.new(9.0)
 	sim.player_pos = Vector3(0, 0, 0)
 	check(not sim.perk_offer_ready(), "no points: nothing to offer")
 	sim.skills.perk_points = 2
 	check(sim.perk_offer_ready(), "points in daylight: offer it")
-	sim.perk_offer_day = sim.clock.day
-	check(not sim.perk_offer_ready(), "once a day")
-	sim.clock.day += 1
 	var z := sim.horde.spawn("shambler", Vector3(10, 0, 0))
-	check(not sim.perk_offer_ready(), "not with a zombie close")
+	check(not sim.perk_offer_ready(), "not with a zombie 10 m off")
+	z.pos = Vector3(14, 0, 0)
+	check(sim.perk_offer_ready(), "14 m off is far enough (it was 25)")
+	z.pos = Vector3(10, 0, 0)
 	z.hurt(9999.0)
 	check(sim.perk_offer_ready(), "a dead one doesn't count")
+	sim.swing()
+	check(not sim.perk_offer_ready(), "not right after a swing")
+	sim.clock.time_of_day += SimWorld.PERK_OFFER_CALM + 0.01
+	check(sim.perk_offer_ready(), "a few seconds of calm later: yes")
+	sim.perk_snooze(SimWorld.PERK_SNOOZE_LATER)
+	check(not sim.perk_offer_ready(), "Later puts it off")
+	eq(sim.stats.perk_picks_later, 1, "and the log counts it")
+	sim.clock.time_of_day += SimWorld.PERK_SNOOZE_LATER - 1.0
+	check(not sim.perk_offer_ready(), "still off an hour before")
+	sim.clock.time_of_day += 1.01
+	check(sim.perk_offer_ready(), "then back (%.2f h)" % sim.clock.time_of_day)
+	sim.perk_snooze(SimWorld.PERK_SNOOZE_CLOSED, "zombie")
+	eq(sim.stats.perk_picks_closed, 1, "a zombie closing it is counted apart")
+	sim.clock.time_of_day += SimWorld.PERK_SNOOZE_CLOSED + 0.01
+	check(sim.perk_offer_ready(), "and it comes back sooner")
 	sim.clock.time_of_day = 23.0
-	check(not sim.perk_offer_ready(), "not at night")
+	check(not sim.perk_offer_ready(), "not at night out in the open")
+	sim.inventory.give_all({"plank": 100, "nails": 100})
+	var N := BuildGrid.Side.NORTH
+	for cell: Vector2i in [Vector2i(20, 20)]:
+		eq(sim.build.place("foundation", cell, N, sim.inventory), "", "a shelter floor")
+		eq(sim.build.place("bed", cell, N, sim.inventory), "", "a bed")
+		for side: int in [BuildGrid.Side.NORTH, BuildGrid.Side.EAST, BuildGrid.Side.SOUTH]:
+			eq(sim.build.place("wall", cell, side, sim.inventory), "", "a wall")
+		eq(sim.build.place("door", cell, BuildGrid.Side.WEST, sim.inventory), "", "a door")
+	sim.player_pos = Vector3(41, 0, 41)
+	check(sim.guidance.is_sheltered(sim.build, sim.player_pos), "inside the shelter")
+	check(sim.perk_offer_ready(), "at night indoors is a quiet moment too")
+	sim.note_perk_offered()
+	eq(sim.stats.perk_picks_offered, 1, "an offer is counted")
+	# The snooze survives a save.
+	sim.perk_snooze(3.0)
+	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
+	near(float(d["perk_snooze"]), sim.perk_snooze_until, "the snooze is saved")
+	var b := SimWorld.new(9.0)
+	b.loot.add("car_0", "car_trunk", Vector3(0, 0, -15))
+	b.add_car("car_0")
+	eq(SaveGame.apply(b, d), "", "loads")
+	near(b.perk_snooze_until, sim.perk_snooze_until, "and comes back")
 
 
 func test_the_perk_pick_screen_spends_points() -> void:
@@ -236,4 +275,21 @@ func test_the_perk_pick_screen_spends_points() -> void:
 	screen.pick(1)
 	eq(sim.skills.perk_points, 0, "the last point")
 	check(not screen.is_open(), "closes when they're spent")
+	eq(sim.stats.perk_picks_later, 0, "spending every point isn't Later")
+	# P12: Later and a zombie closing it set the snooze; the first pick explains itself.
+	sim.skills.perks.clear()
+	sim.skills.perk_points = 1
+	screen.open()
+	check(screen._intro.visible, "no perk taken yet: the screen says what a perk is")
+	screen.later()
+	check(not screen.is_open() and sim.stats.perk_picks_later == 1, "Later closes it and is counted")
+	check(sim.perk_snooze_until > sim.clock_hours() + 1.0, "and puts it off a while")
+	sim.perk_snooze_until = 0.0
+	screen.open()
+	screen.close_for("zombie")
+	check(not screen.is_open() and sim.stats.perk_picks_closed == 1, "a zombie closing it is counted")
+	check(sim.perk_snooze_until <= sim.clock_hours() + SimWorld.PERK_SNOOZE_CLOSED + 0.01, "and it comes back sooner")
+	sim.skills.perks["soft_step"] = 1
+	screen.open()
+	check(not screen._intro.visible, "once you have a perk, no explanation")
 	screen.free()

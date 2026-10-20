@@ -95,8 +95,8 @@ func lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	out.append("Noise Floor session log, written %s" % Time.get_datetime_string_from_system(false, true))
 	out.append("Build: " + GameSession.version_line())
-	out.append("Started %s. Save slot: %s. World seed %d, game clock now %s." % [
-			_stamp, GameSession.current_slot_name, sim.seed_value, sim.when_text()])
+	out.append("Started %s. Save slot: %s. Difficulty: %s. World seed %d, game clock now %s." % [  # P12: difficulty
+			_stamp, GameSession.current_slot_name, sim.difficulty.display_name(), sim.seed_value, sim.when_text()])
 	out.append("")
 	var worn := PackedStringArray()  # P3: what you wear (and hold) right now
 	for slot: String in sim.gear.equipped:

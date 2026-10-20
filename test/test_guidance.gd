@@ -46,7 +46,7 @@ func test_perk_toast_badge_and_obvious_skills_points() -> void:
 	check(_said(sim, "Perk point! Press K to spend it"), "earning a point gives the clear K toast")
 	main._update_hud(0.0)
 	check(main._perk_badge.visible, "unspent points show a HUD badge")
-	eq(main._perk_badge_label.text, "K: 1 perk point", "badge gives the key and count")
+	eq(main._perk_badge_label.text, "K: 1 perk point to spend", "badge gives the key and count")
 	main.skills_screen.open()
 	main.skills_screen.refresh()
 	check("UNSPENT PERK POINT" in main.skills_screen._points_label.text, "the skills screen makes the point obvious")

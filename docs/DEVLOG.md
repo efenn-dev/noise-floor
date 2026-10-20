@@ -2,6 +2,41 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-18 — P12 Perk picks that happen, hold right-click to take things down, logs that answer
+
+A review of Emmitt's 14 session logs and Kaleb's one (PLAYTESTS 2026-10-18). Three things the logs made plain:
+- 24 perk points unspent between them, in every session. The dawn perk pick needed no zombie within 25 m, once a day, one card, and a zombie within 12 m closed it for the day. In a town with 11 waves an hour, that moment never came.
+- The Hub built 4 times in one sitting (so taken down 3 times), and Kaleb's vanishing door before it: in build mode a single right-click deleted what you looked at, while right-click is "block" and "aim" everywhere else.
+- The log couldn't say the difficulty, whether the goals were seen, whether a pick was offered, or how the build menu was used.
+
+**Built:**
+- **The perk pick opens at any quiet moment** (`SimWorld.perk_offer_ready`):
+  - points to spend; nothing swung, fired or taken for 12 real seconds (`PERK_OFFER_CALM`); no living zombie within 12 m (`PERK_OFFER_SAFE`, was 25); daylight, or night inside a shelter; alive, awake, on foot.
+  - "Later" or Esc puts it off 4 game hours (`PERK_SNOOZE_LATER`); a zombie coming within 12 m closes it, says so, and it's back in 1 (`PERK_SNOOZE_CLOSED`). Both are saved (`perk_snooze`).
+  - It already offered the next three cards while points remained; now it also gets the chance to.
+  - The first pick explains itself: "You earn a perk point every 3 skill levels, just by doing things. A perk is a bonus you keep for good."
+  - Scaled up on big windows like the build menu. The HUD badge says "K: 3 perk points to spend".
+- **Hold right-click to take a piece down** (`BuildController.HOLD_TO_REMOVE`, 0.6 s):
+  - A ring round the centre dot fills while you hold (`BuildController.HoldRing`, main.gd `_hold_ring`).
+  - Let go early: "Hold right-click to take it down". Look away: it starts over. Leave build mode: it's dropped.
+  - The build line says "hold RMB: take down" and "[hold RMB to take down this Door]"; the controls screen too.
+- **The session log says more** (`RunStats`):
+  - The header carries the difficulty.
+  - "Perk points earned: 10, spent: 0. Picks offered: 3 (Later 2, a zombie closed 1)."
+  - "Goals: first night 4/4 (day 2 06:10); defend your base 2/4 (day 3 09:00)." (`note_goal`, from `SimWorld._note_goals` once a second)
+  - "Build menu: opened 12 times, 4:10 in it. Took down 3 pieces: 2 hub, 1 door. Right-click taps too short to take anything down: 6."
+  - Under 60 lines now (was 55).
+- Flag `--hold-remove[=T]` (a hold frozen T of the way on the start crate, for screenshots).
+
+**Try it on the PC:** `play.bat`, swing at a few zombies, then stand still somewhere quiet for a few seconds: the cards come up. In build mode, hold right-click on a wall and watch the ring.
+
+**Known gaps:**
+- The pick's "quiet" test is distance and time, not line of sight: a zombie 13 m away in plain view counts as quiet.
+- Nothing is read aloud yet (Kaleb).
+- The rest of the review: mufflers and "what they hear", doors, a payoff for the first factory.
+
+**Next:** the next playtest with these logs; then "what the zombies hear" (the muffler prompt) from the same review.
+
 ## 2026-10-17 — P11 Chop trees for planks, strip broken cars for scrap
 
 Same playtest as P10 (Emmitt and Kaleb, 30+ minutes): "The problem was resources ... We need a way to chop down trees for lumber and a way to get metal scrap."

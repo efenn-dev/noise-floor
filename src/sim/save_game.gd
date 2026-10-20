@@ -203,6 +203,7 @@ static func to_dict(sim: SimWorld) -> Dictionary:
 		"projects_done": sim.projects.done.duplicate(),
 		"milestones": sim.milestones.to_dict(),
 		"learning": sim.learning.to_dict(),  # P10
+		"perk_snooze": sim.perk_snooze_until,  # P12
 		"salvage": sim.salvage.to_dict(),  # P11: felled trees, stripped wrecks
 		"rescue": {"state": sim.rescue_state, "day": sim.rescue_day, "hours": sim.broadcast_hours, "due": sim.rescue_due},
 		"zombies": zombies,
@@ -339,6 +340,7 @@ static func apply(sim: SimWorld, d: Dictionary) -> String:
 	sim._carts_seen = sim.carts.delivered
 	sim.milestones.load_dict(d.get("milestones", {}))  # F2
 	sim.learning.load_dict(d.get("learning", {}))  # P10: a save from before knows every piece
+	sim.perk_snooze_until = float(d.get("perk_snooze", 0.0))  # P12
 	sim.salvage.load_dict(d.get("salvage", {}))  # P11: none before
 	if version < 22:
 		sim.milestones.grant_all_but_final()  # F2: an older game keeps every piece it could build
