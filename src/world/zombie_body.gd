@@ -75,6 +75,7 @@ const LOOKS := {
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
 const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)
 const GRUNTS := 11  # assets/sounds/zombie/grunt_NN.wav
+static var puppet_all := false  # Co-op B: on a joiner every body follows the brain the host refreshes (_puppet)
 
 var brain: ZombieBrain
 var player: Node3D
@@ -365,6 +366,9 @@ func _init() -> void:
 func _physics_process(delta: float) -> void:
 	if brain == null:
 		return
+	if puppet_all:
+		_puppet(delta)
+		return
 	if brain.climb_landing.is_finite():
 		global_position = brain.climb_landing
 		brain.climb_landing = Vector3.INF
@@ -435,6 +439,29 @@ func _physics_process(delta: float) -> void:
 	if face.length_squared() > 1e-4:
 		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), clampf(6.0 * delta, 0.0, 1.0))
 	brain.blocked_by = _blocking_piece(dir)
+
+
+## Co-op B: on a joiner the brain's position, facing and state come from the host; the body slides there and plays
+## the animation its state and speed call for. No steering, no line of sight, no pushing, no resting.
+func _puppet(delta: float) -> void:
+	_frame += 1
+	var was := global_position
+	var to := brain.pos - global_position
+	if to.length() > 6.0 or not to.is_finite():
+		global_position = brain.pos if brain.pos.is_finite() else global_position
+	else:
+		global_position += to * clampf(10.0 * delta, 0.0, 1.0)
+	velocity = (global_position - was) / maxf(delta, 0.001)
+	var face := Vector3(brain.facing.x, 0, brain.facing.z)
+	if face.length_squared() > 1e-4:
+		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), clampf(8.0 * delta, 0.0, 1.0))
+	_animate(delta)
+	_speak(delta)
+	if brain.is_dead():
+		_set_hitboxes(false)
+		_lie_down(delta)
+	elif (_frame + brain.id) % 10 == 0:
+		_set_hitboxes(player != null and global_position.distance_to(player.global_position) < ZombieHitboxes.RANGE)
 
 
 ## W3b: starts or ends resting (see REST_BEYOND): the animation player stops advancing (manual mode keeps the

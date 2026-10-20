@@ -2,6 +2,31 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-20 — Co-op B: Kaleb can walk into Dad's world
+
+docs/COOP_PLAN.md Phase B. The title screen has **Host a game (house network)** and **Join a game**. Hosting opens a port and says so with a beacon every second, so the joiner's screen lists "Dad's game — 192.168.1.5" without any typing (a typed address stays as the fallback, and a name box). Joining asks the host for a place, gets the world as a save and loads it the way a save loads, arrives standing beside the host facing them, and from then on sees what the host sees: the clock, every zombie, belts and machines, cars, doors opening, walls going up or coming down, containers searched, trucks landing. The other player is a blue capsule with their name over it. The joiner walks and looks; doing things (E, swings, building, pockets) is Phase C, and a gate swallows those keys with a line saying so.
+
+**Built:**
+- `NetSync` (src/sim/net_sync.gd, pure): `snapshot` is the save dictionary; `refresh` carries the clock, every player's name, position, facing, light, sneaking and stats, every zombie (id, type, pos, facing, state, hp...), belts' items, machines' progress and stock, cars, piece changes since the last refresh (added / changed / removed, from the build grid's signals, plus a once-a-second sweep for damage), containers newly searched, and the supply lists when they change; `apply_refresh` lays it onto a copy that never steps (`paused`) and leaves the joiner's own slot's position alone; `player_state` / `apply_player_state` carry the joiner's position up (slot 0 and bad numbers refused).
+- `NetSession` (src/world/net_session.gd): one node under the tree's root, so it outlives the scene reload a join does. Godot's ENet, four RPCs (`rpc_hello` → `rpc_welcome` + `rpc_snapshot`, then `rpc_refresh` at 10 Hz reliable, `rpc_player_state` at 20 Hz unreliable), DEFLATE-packed dictionaries, a UDP beacon on 40612 (`listen` / `games`), `JOIN_TIMEOUT` 8 s with a plain-words failure. A returning joiner gets their old slot back by name; a newcomer arrives at the host's right hand. The host's slot takes the host's name (saves carry it now).
+- `PeerView` (the capsule and tag), `NetGate` (swallows the joiner's action keys, says why every 3 s), `ZombieBody.puppet_all` (a joiner's bodies slide to where the host's brains are, animated by state and speed; no steering, sight or resting).
+- `main.gd`: `_net_setup` after `_ready` (hosting from `--host`, the title's choice or the pause menu's "Host this game"; joining from `--join` or the join screen: the link waits, the scene reloads into the world when it arrives); a joiner's scene sets `sim.local`/`active` to its slot, pauses the sim, faces the host on arrival, ages its own HUD messages, follows the host's clock for the sky and parks the cars where the host says (`_joiner_tick`); saving and loading are the host's only. `Menus`: the two title buttons, the join screen, hosting from an empty slot starts a new game. `GameSession.net_role` / `net_name`.
+- Flags `--host[=PORT]`, `--join=ADDR[:PORT]`, `--name=NAME`, `--join-screen`. `test/test_net_sync.gd` (snapshot, every kind of change through a refresh, the joiner's own position kept, zombies cleared, walls removed, positions up with the guards) and `test/test_net_session.gd` (host and joiner in one process over 127.0.0.1: the slot, the world file, refreshes, the position up, the beacon; nobody home is said in words).
+
+**Try it on the PC (two machines on the house network):** on yours, `play.bat`, **Host a game**, pick your save (or an empty slot for a new game). On Kaleb's, **Join a game**: your game appears in a second or two; he types his name and presses it. He arrives beside you. On one PC: a second window with `play.bat --join=127.0.0.1 --name=Kaleb` while the first runs `play.bat --host`.
+
+**Tests:** the full suite green (23,752 checks on the run before the last test fix; `tools/test.sh net_` 68 checks: the snapshot loads as a copy; a refresh carries every kind of change and the copy matches the host piece by piece, zombie by zombie, belt by belt; the joiner's own position is kept; cleared zombies and removed walls go; positions up with slot 0 and NaN refused; the real link in one process: welcome, world file, refreshes, position up, beacon, nobody-home in words). Soak one game-day: SOAK OK, 165 s (with other work running on the box). Screenshots: the title's two new buttons, the join screen, and a real two-process join on this PC (a headless host, the joiner's shot shows "Dad" in a blue capsule beside it in Dad's world).
+
+**Known gaps (Phase C and on):**
+- The joiner can't do anything yet: no E, no swings, no building, no pockets, no cars. The gate says so.
+- No sound of the host's machines on the joiner (the noise field isn't refreshed; the joiner's sim never steps), no corpses to search (not stepped either), no base log or radio lines.
+- Every zombie is refreshed every time (about 8 KB a refresh with the whole town; fine on a house network, Phase E trims it) and all bodies animate on the joiner (no resting).
+- A capsule, not a survivor body; the host's bag drops and thrown things aren't carried.
+- If the host quits, the joiner is told and stays in a frozen copy until they quit to the title.
+- The portable launcher doesn't know about joining yet (Phase E); Kaleb's PC needs this build through the usual update first.
+
+**Next:** co-op Phase C (every action through one gate: run locally, send to the host), per docs/COOP_PLAN.md.
+
 ## 2026-10-20 — R1b Supply trucks, forage piles, the named dead
 
 Emmitt: "should we make loot respawn? we were finding it hard to get materials ... maybe make more places like where we got Pete's old rifle?", then "nodes like in Rust". Plain loot respawn would undercut the factory (R1a), so loot comes back three ways that each cost something: a trip, a fight, or a walk round the block.

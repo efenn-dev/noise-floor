@@ -12,6 +12,9 @@ signal base_log_requested  # M15
 signal help_requested(from: String)  # P3: "Controls" on the title ("title") or the pause menu ("pause")
 signal quit_to_title
 signal settings_changed
+signal host_now  # Co-op B: the pause menu's "Host this game"
+signal join_opened  # Co-op B: the join screen is up: start listening for games
+signal join_requested(address: String, port: int, p_name: String)  # Co-op B: "Join" on the join screen
 
 var _title: Control
 var _slot_picker: Control
@@ -35,7 +38,14 @@ var _load_button: Button
 var _objectives_check: CheckBox
 var _settings_back_to := ""  # "title" or "pause"
 var _slot_summaries: Array = []
-var _slot_mode := "continue"
+var _slot_mode := "continue"  # "new", "continue" or (Co-op B) "host": a used slot is hosted, an empty one starts a hosted new game
+var _join: Control  # Co-op B: the join screen
+var _join_list: VBoxContainer
+var _join_status: Label
+var _join_name: LineEdit
+var _join_address: LineEdit
+var _join_tick := 0.0
+var _join_seen := -1
 var _pending_action := ""
 var _pending_slot := 0
 
@@ -55,6 +65,8 @@ func _init() -> void:
 	_title.get_child(0).add_child(_spacer())
 	_continue_button = _button(_title, "Continue", func() -> void: open_slots(false))
 	_button(_title, "New game", func() -> void: open_slots(true))
+	_button(_title, "Host a game (house network)", open_slots_host)  # Co-op B
+	_button(_title, "Join a game", show_join)
 	_button(_title, "Settings", func() -> void: show_settings("title"))
 	_button(_title, "Controls", func() -> void: help_requested.emit("title"))
 	_button(_title, "Quit", func() -> void: get_tree().quit())
@@ -120,6 +132,7 @@ func _init() -> void:
 	_button(_pause, "Resume", func() -> void: resume.emit())
 	_button(_pause, "Save game", func() -> void: save_requested.emit())
 	_load_button = _button(_pause, "Load last save", func() -> void: load_requested.emit())
+	_button(_pause, "Host this game (house network)", func() -> void: host_now.emit())  # Co-op B
 	_button(_pause, "Base log (L)", func() -> void: base_log_requested.emit())
 	_button(_pause, "Settings", func() -> void: show_settings("pause"))
 	_button(_pause, "Controls (F1)", func() -> void: help_requested.emit("pause"))
@@ -130,6 +143,7 @@ func _init() -> void:
 	_status = _label("", 20)
 	_pause.get_child(0).add_child(_status)
 
+	_build_join()  # Co-op B: the join screen, built with the others
 	_settings = _screen()
 	_build_settings(_settings.get_child(0))
 	hide_all()
@@ -158,6 +172,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func show_title(slots: Variant) -> void:
+	GameSession.net_role = ""  # Co-op B: back at the title nothing is being hosted
 	if slots is Array:
 		_slot_summaries = slots.duplicate(true)
 	else:
@@ -186,9 +201,13 @@ func update_slots(slots: Array) -> void:
 
 func choose_slot(slot: int) -> void:
 	var info := _slot_info(slot)
-	if _slot_mode == "continue":
+	if _slot_mode == "continue" or _slot_mode == "host":
 		if bool(info.get("used", false)):
 			continue_game.emit(slot)
+			return
+		if _slot_mode == "continue":
+			return
+		_show_name_entry(slot)  # Co-op B: hosting from an empty slot starts a new game in it
 		return
 	if bool(info.get("used", false)):
 		_pending_action = "overwrite"
@@ -268,12 +287,14 @@ func set_status(text: String) -> void:
 
 
 func hide_all() -> void:
-	for c in [_title, _slot_picker, _new_profile, _pause, _settings]:
-		c.visible = false
+	for c in [_title, _slot_picker, _new_profile, _pause, _settings, _join]:
+		if c != null:
+			c.visible = false
 
 
 func is_open() -> bool:
-	return _title.visible or _slot_picker.visible or _new_profile.visible or _pause.visible or _settings.visible
+	return _title.visible or _slot_picker.visible or _new_profile.visible or _pause.visible or _settings.visible \
+			or (_join != null and _join.visible)
 
 
 func title_open() -> bool:
@@ -490,6 +511,8 @@ func _spacer() -> Control:
 
 ## The title flickers now and then, like a failing sign.
 func _process(delta: float) -> void:
+	if _join != null and _join.visible:
+		_tick_join(delta)
 	if _title == null or not _title.visible:
 		return
 	_flicker -= delta
@@ -501,3 +524,122 @@ func _process(delta: float) -> void:
 ## The stats line under the pause menu: days, deaths, kills, noise made.
 func set_stats(text: String) -> void:
 	_stats_label.text = text
+
+
+# --- Co-op B: hosting and joining over the house network -------------------------------------------------
+
+## "Host a game": the slot picker with hosting on; a used slot continues it as the host, an empty one starts a new
+## game that is hosted (main.gd reads GameSession.net_role once the world is built).
+func open_slots_host() -> void:
+	GameSession.net_role = "host"
+	_slot_mode = "host"
+	_slot_heading.text = "Choose the save to host (an empty slot starts a new game)"
+	_rebuild_slot_rows()
+	hide_all()
+	_slot_picker.visible = true
+
+
+## "Join a game": the games heard on the house network as buttons, a typed address as the fallback, your name.
+func show_join() -> void:
+	_join_seen = -1
+	hide_all()
+	_join.visible = true
+	join_opened.emit()
+
+
+func join_open() -> bool:
+	return _join != null and _join.visible
+
+
+func _build_join() -> void:
+	_join = _screen()
+	var box: Control = _join.get_child(0)
+	box.add_child(_label("Join a game on the house network", 48))
+	box.add_child(_label("Dad starts his game with Host a game; it shows up here on its own.", 20))
+	box.add_child(_spacer())
+	_join_list = VBoxContainer.new()
+	_join_list.add_theme_constant_override("separation", 10)
+	_join_list.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(_join_list)
+	_join_status = _label("Listening for a game...", 20)
+	_join_status.modulate = Color(1, 1, 1, 0.8)
+	box.add_child(_join_status)
+	box.add_child(_spacer())
+	var name_row := HBoxContainer.new()
+	name_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	name_row.add_theme_constant_override("separation", 12)
+	var name_label := _label("Your name", 22)
+	name_row.add_child(name_label)
+	_join_name = LineEdit.new()
+	_join_name.custom_minimum_size = Vector2(280, 44)
+	_join_name.add_theme_font_size_override("font_size", 22)
+	_join_name.max_length = 16
+	_join_name.text = GameSession.net_name if GameSession.net_name != "" else OS.get_environment("USERNAME")
+	name_row.add_child(_join_name)
+	box.add_child(name_row)
+	var addr_row := HBoxContainer.new()
+	addr_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	addr_row.add_theme_constant_override("separation", 12)
+	addr_row.add_child(_label("Or type the host's address", 22))
+	_join_address = LineEdit.new()
+	_join_address.custom_minimum_size = Vector2(280, 44)
+	_join_address.add_theme_font_size_override("font_size", 22)
+	_join_address.placeholder_text = "192.168.1.5"
+	addr_row.add_child(_join_address)
+	box.add_child(addr_row)
+	box.add_child(_spacer())
+	_button(_join, "Join", _join_pressed)
+	_button(_join, "Back", func() -> void: show_title(_slot_summaries))
+
+
+func _tick_join(delta: float) -> void:
+	_join_tick += delta
+	if _join_tick < 0.5:
+		return
+	_join_tick = 0.0
+	var net := NetSession.current
+	if net == null or not is_instance_valid(net):
+		_join_status.text = "Listening for a game..."
+		return
+	if net.role == "joiner":
+		_join_status.text = net.status
+	else:
+		_join_status.text = "Listening for a game..." if net.games.is_empty() else "%d game%s heard" % [net.games.size(),
+				"" if net.games.size() == 1 else "s"]
+	if net.games.size() == _join_seen:
+		return
+	_join_seen = net.games.size()
+	for c: Node in _join_list.get_children():
+		_join_list.remove_child(c)
+		c.queue_free()
+	for key: String in net.games:
+		var g: Dictionary = net.games[key]
+		var b := Button.new()
+		b.text = "%s's game  —  %s" % [g["name"], g["address"]]
+		b.custom_minimum_size = Vector2(560, 60)
+		b.add_theme_font_size_override("font_size", 22)
+		b.pressed.connect(_pick_game.bind(str(g["address"]), int(g["port"])))
+		_join_list.add_child(b)
+
+
+func _pick_game(address: String, port: int) -> void:
+	_join_address.text = "%s:%d" % [address, port]
+	_join_pressed()
+
+
+func _join_pressed() -> void:
+	var p_name := GameSession.clean_name(_join_name.text, 2)
+	GameSession.net_name = p_name
+	var typed := _join_address.text.strip_edges()
+	if typed == "":
+		var net := NetSession.current
+		if net != null and is_instance_valid(net) and not net.games.is_empty():
+			var g: Dictionary = net.games.values()[0]
+			typed = "%s:%d" % [g["address"], int(g["port"])]
+	if typed == "":
+		_join_status.text = "No game heard yet: wait a moment, or type the host's address"
+		return
+	var parts := typed.split(":")
+	var port := int(parts[1]) if parts.size() > 1 and parts[1].is_valid_int() else NetSession.PORT
+	_join_status.text = "Joining %s..." % parts[0]
+	join_requested.emit(parts[0], port, p_name)

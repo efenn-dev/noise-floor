@@ -34,6 +34,10 @@ const VERSION_PATH := "res://version.txt"
 static var version_path := VERSION_PATH
 ## True once the build line has been printed to the console (main.gd, once per run).
 static var build_printed := false
+## Co-op B: "host" once the title's "Host a game" was picked (main.gd hosts when the world is built); "" otherwise.
+static var net_role := ""
+## Co-op B: the name typed on the join screen (the host sees it over your head).
+static var net_name := ""
 
 
 static func slot_path(slot: int) -> String:

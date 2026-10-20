@@ -27,6 +27,10 @@ extends Node3D
 ##   --truck[=quiet]       R1b: a supply truck off the road 12 m ahead, horn stuck on (quiet: already searched)
 ##   --piles               R1b: a scrap pile and a log pile a few metres ahead
 ##   --guardian=TYPE       R1b: stand before that named guardian at their post (sheriff, pharmacist, farmer, lineman)
+##   --host[=PORT]         Co-op B: host this game on the house network (port 40611 unless given)
+##   --join=ADDR[:PORT]    Co-op B: join the game at that address; the scene reloads into the host's world when it arrives
+##   --name=NAME           Co-op B: your name over your head in the other player's game
+##   --join-screen         Co-op B: open the title's Join a game screen, for screenshots
 ##   --swing-at=T          V11: freeze the melee swing at fraction T (0-1), for screenshots
 ##   --reload-at=T         V13: freeze a held gun's reload at fraction T (0-1), for screenshots
 ##   --inspect-at=T        V13: freeze the held gun, melee weapon or fists inspecting at T (0-1)
@@ -217,6 +221,7 @@ func _ready() -> void:
 	if args.has("blood"):
 		Settings.blood = str(args["blood"]) != "off"  # V32: this run only, not saved
 	ZombieHitboxes.show = args.has("hitboxes")  # V33
+	ZombieBody.puppet_all = NetSession.is_joiner()  # Co-op B: a joiner's zombies follow the host's refreshes
 	var save := {}
 	if GameSession.pending_load != "":
 		save = SaveGame.read(GameSession.pending_load)
@@ -233,6 +238,8 @@ func _ready() -> void:
 	if args.has("screenshot"):
 		_shot_path = args["screenshot"] if args["screenshot"] != "" else "user://shot.png"
 		sim.paused = true
+	if args.has("join") and not NetSession.is_joiner():
+		_shot_path = ""  # Co-op B: a shot waits for the joined world (the scene reloads once it arrives)
 	if not _loaded and not args.has("no-hints") and (_wants_hints(args) or args.has("objectives")):
 		sim.guidance.start(sim.clock.day, int(sim.tally["deaths"]))
 	session_log = SessionLog.new()
@@ -526,6 +533,7 @@ func _ready() -> void:
 	if _shot_path == "" and not menus.is_open() and not inventory_screen.is_open() and not skills_screen.is_open() \
 			and not workbench_screen.is_open() and not _m15_screen_open() and not build_menu.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_net_setup.call_deferred(args)  # Co-op B: after _ready, when the tree's root can take the link node
 	sim.stats.muted = false
 
 
@@ -770,6 +778,8 @@ func _process(delta: float) -> void:
 			GameSession.slot_real_seconds += played
 		if sim.update(delta) > 0:
 			_apply_time()
+		if NetSession.is_joiner():
+			_joiner_tick(delta)
 		return
 	_frames += 1
 	if _frames == SHOT_DELAY_FRAMES:
@@ -951,7 +961,7 @@ func _sync_player() -> void:
 	player.speed_multiplier = p.speed_multiplier()
 	player.can_sprint = p.can_sprint()
 	p.sprinting = Vector2(player.velocity.x, player.velocity.z).length() > Player.WALK_SPEED + 0.5
-	if _shot_path == "":
+	if _shot_path == "" and not NetSession.is_joiner():  # Co-op B: the host's sleep speeds the host's clock, not a joiner's walking
 		Engine.time_scale = float(sim.data.survival["sleep_time_scale"]) if p.asleep else 1.0
 	if driving != null and p.dead:
 		_exit_car()
@@ -1123,11 +1133,18 @@ func _build_menus(args: Dictionary) -> void:
 		var why := save_game()
 		menus.set_status("Saved." if why == "" else why))
 	menus.load_requested.connect(load_game)
+	menus.host_now.connect(_host_now)  # Co-op B
+	menus.join_opened.connect(func() -> void: _listen_for_games.call_deferred())  # deferred: the screen may open during _ready
+	menus.join_requested.connect(func(address: String, port: int, p_name: String) -> void:
+		GameSession.net_name = p_name
+		_start_join(address, port, p_name))
 	menus.base_log_requested.connect(func() -> void:
 		_resume()
 		base_log_screen.open())
 	menus.quit_to_title.connect(func() -> void:
 		save_game()
+		if NetSession.current != null and is_instance_valid(NetSession.current):
+			NetSession.current.close()  # Co-op B: the link ends with the game
 		GameSession.started = false
 		_reload_with(""))
 	menus.settings_changed.connect(_apply_settings)
@@ -1140,12 +1157,14 @@ func _build_menus(args: Dictionary) -> void:
 		elif from == "pause":
 			menus.show_pause(FileAccess.file_exists(GameSession.save_path)))
 	var has_save := FileAccess.file_exists(GameSession.save_path)
-	var title_only := args.size() == 1 and (args.has("title") or args.has("slots") or args.has("new-game"))
+	var title_only := args.size() == 1 and (args.has("title") or args.has("slots") or args.has("new-game") or args.has("join-screen"))
 	var flags := not args.is_empty() and not title_only
-	if args.has("title") or args.has("slots") or args.has("new-game") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
+	if args.has("title") or args.has("slots") or args.has("new-game") or args.has("join-screen") or (not flags and not GameSession.skip_menu and not GameSession.started and not _loaded):
 		menus.show_title(GameSession.slot_summaries())
 		if args.has("slots"):
 			menus.open_slots(false)
+		elif args.has("join-screen"):  # Co-op B: the join screen, for screenshots
+			menus.show_join()
 		elif args.has("new-game"):  # V29: the New game screen (name and difficulty) for that slot, for screenshots
 			var slot_arg := str(args["new-game"])
 			menus.open_slots(true)
@@ -1203,6 +1222,8 @@ func _apply_settings() -> void:
 
 ## Saves the game (sim state plus where you're looking). Returns "" or what went wrong.
 func save_game() -> String:
+	if NetSession.is_joiner():
+		return "Only the host saves the game"  # Co-op B
 	sim.player_pos = player.global_position
 	return SaveGame.write(sim, GameSession.save_path,
 			{"look": [player.rotation_degrees.y, player.head.rotation_degrees.x],
@@ -1211,6 +1232,9 @@ func save_game() -> String:
 
 ## Loads the last save: the scene restarts and lays the save over a freshly built town.
 func load_game() -> void:
+	if NetSession.is_joiner():
+		sim.add_message("The host's world is the game; there's nothing to load here", 3.0)  # Co-op B
+		return
 	if not FileAccess.file_exists(GameSession.save_path):
 		sim.add_message("No save yet (F5 saves)", 3.0)
 		return
@@ -1231,6 +1255,12 @@ func _apply_save(save: Dictionary) -> void:
 	if why != "":
 		sim.add_message(why, 6.0)
 		return
+	if NetSession.is_joiner():  # Co-op B: this machine draws the joiner's slot and never runs the rules
+		var slot := NetSession.current.local_slot
+		if slot >= 0 and slot < sim.players.size():
+			sim.local = slot
+			sim.active = slot
+		sim.paused = true
 	if not SaveGame.holds_props(save):
 		town_pieces += sim.place_props(town)  # W1c: furnish an older save's houses (not where you built)
 	if not SaveGame.holds_park(save):
@@ -1248,6 +1278,10 @@ func _apply_save(save: Dictionary) -> void:
 		car.place_from_sim()  # parked where you left it
 	var look: Array = save.get("look", [0.0, 0.0])
 	player.set_look(float(look[0]), float(look[1]))
+	if NetSession.is_joiner() and sim.players.size() > 1:  # Co-op B: you arrive facing the host
+		var to: Vector3 = sim.players[0].pos - player.position
+		if Vector2(to.x, to.z).length() > 0.5:
+			player.set_look(rad_to_deg(atan2(-to.x, -to.z)), 0.0)
 	nav.bake_now()  # the saved base changes where zombies can walk
 	_apply_time()
 	sim.add_message("Loaded: day %d, %s" % [sim.clock.day, sim.clock.clock_text()], 3.0)
@@ -1717,6 +1751,7 @@ func _build_building(args: Dictionary) -> void:
 	builder.setup(sim, player.camera, [player.get_rid()])
 	add_child(CartView.new(sim))  # F5: supply carts
 	add_child(SupplyView.new(sim))  # R1b: crashed supply trucks and forage piles
+	add_child(PeerView.new(sim))  # Co-op B: the other players
 	var ports := PortView.new()  # P4: machines' IN/OUT arrows, belt ends' ticks and crosses
 	add_child(ports)
 	ports.setup(sim)
@@ -2329,6 +2364,89 @@ func _stand_before_guardian(type: String) -> void:
 			var to := z.pos - player.position
 			player.set_look(rad_to_deg(atan2(-to.x, -to.z)), -6.0)
 			return
+
+
+# --- Co-op B: the house network ------------------------------------------------------------
+
+## Co-op B: hosting (--host[=PORT], the title's "Host a game", the pause menu's "Host this game") and joining
+## (--join=ADDR[:PORT], the title's "Join a game"), once the world is built. A joiner's scene attaches the copy it
+## just loaded; a first --join run starts the link and reloads when the world arrives.
+func _net_setup(args: Dictionary) -> void:
+	if args.has("host") or GameSession.net_role == "host":
+		var net := NetSession.start(get_tree().root)
+		if net.role == "":
+			var port := int(str(args["host"])) if args.has("host") and str(args["host"]) != "" else NetSession.PORT
+			var why := net.host(_net_name(args), port)
+			sim.add_message(why if why != "" else "Hosting on the house network (port %d): others can Join a game" % port, 6.0)
+		if net.role == "host":
+			net.attach(sim)
+	elif NetSession.is_joiner():
+		NetSession.current.attach(sim)
+		add_child(NetGate.new(sim))  # last, so it sees the actions first
+		sim.add_message("You're in %s's world. Walk about; doing things comes in the next update" % sim.players[0].name, 8.0)
+	elif args.has("join"):
+		var target := str(args["join"]).split(":")
+		_start_join(target[0], int(target[1]) if target.size() > 1 and target[1].is_valid_int() else NetSession.PORT,
+				_net_name(args))
+
+
+## The join screen is up: hear the hosts on the house network.
+func _listen_for_games() -> void:
+	var why := NetSession.start(get_tree().root).listen()
+	if why != "":
+		menus.set_status(why)
+
+
+func _net_name(args: Dictionary) -> String:
+	if args.has("name") and str(args["name"]) != "":
+		return str(args["name"])
+	if GameSession.net_name != "":
+		return GameSession.net_name
+	return GameSession.current_slot_name
+
+
+## Starts joining; when the world arrives the scene reloads as a load of it (the link outlives the reload).
+func _start_join(address: String, port: int, p_name: String) -> void:
+	var net := NetSession.start(get_tree().root)
+	if net.role != "":
+		return
+	var why := net.join(address, port, p_name)
+	if why != "":
+		menus.set_status(why)
+		sim.add_message(why, 6.0)
+		return
+	net.snapshot_arrived.connect(func() -> void:
+		GameSession.started = true
+		_reload_with(NetSession.JOIN_FILE), CONNECT_ONE_SHOT)
+	net.link_failed.connect(func(w: String) -> void:
+		menus.set_status(w)
+		sim.add_message(w, 6.0)
+		net.close(), CONNECT_ONE_SHOT)
+	sim.add_message("Joining %s..." % address, 6.0)
+
+
+## The pause menu's "Host this game": open the port on the game already running.
+func _host_now() -> void:
+	var net := NetSession.start(get_tree().root)
+	var why := ""
+	if net.role == "":
+		why = net.host(_net_name({}), NetSession.PORT)
+	if net.role == "host":
+		net.attach(sim)
+	menus.set_status("Hosting: others pick Join a game on their title screen" if why == "" else why)
+
+
+## Co-op B: what a joiner's frame does in place of the sim's step: the HUD's messages age, the sky follows the host's
+## clock, the cars stand where the host says.
+func _joiner_tick(delta: float) -> void:
+	for m: Dictionary in sim.messages:
+		m["time_left"] -= delta
+	sim.messages = sim.messages.filter(func(m: Dictionary) -> bool: return m["time_left"] > 0.0)
+	_apply_time()
+	for id: String in cars:
+		var car: CarBody = cars[id]
+		if sim.vehicles.cars.has(id) and car.position.distance_to(sim.vehicles.cars[id]["pos"]) > 0.3:
+			car.place_from_sim()
 
 
 func _parse_user_args() -> Dictionary:

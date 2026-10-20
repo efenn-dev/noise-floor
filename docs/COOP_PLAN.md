@@ -50,7 +50,7 @@ Each phase is one pull request (or two), tests green, single-player untouched, a
 
 The sim's one `player` becomes `players[]`, with everything that was one-per-game becoming one-per-player: PlayerStats, Inventory, Gear, Gunplay, Hotbar, Skills, position and facing, the active search, the car being driven, the pending vault. `sim.player`, `sim.inventory`, `sim.gear` and friends stay as aliases for player 0 so the ~260 places in the drawing code that use them keep compiling, and get rewritten to "the local player" in Phase C. Zombies, the Director, noise, loot and cars take a player index or a position instead of assuming the one. Saves hold a `players` list (an old save becomes a one-player list). The soak and every test still pass. A headless test plays two players in the same sim: both loot, both build, a zombie switches to the nearer one.
 
-### Phase B — Kaleb can walk into Dad's world (1–2 sessions)
+### Phase B — Kaleb can walk into Dad's world (1–2 sessions) — DONE 2026-10-20 (see the devlog)
 
 - Title screen: **Host a game** / **Join Dad's game**. Hosting opens a port on the house network and announces itself (a UDP broadcast every second), so joining needs no typing: the launcher lists games it hears. A typed address stays as the fallback.
 - Godot's built-in ENet networking (`ENetMultiplayerPeer`, `@rpc`), nothing third-party.
