@@ -104,6 +104,7 @@ func test_save_and_load() -> void:
 	eq(SaveGame.apply(b, d), "", "loads")
 	eq(b.hotbar.to_dict(), saved, "and both bars came back")
 	d.erase("hotbar")
+	d.erase("players")  # co-op A: a save from before the hotbar has no players list either; slot 0 is the top level
 	var c := SimWorld.new()
 	eq(SaveGame.apply(c, d), "", "a save without one loads")
 	eq(c.hotbar.to_dict(), Hotbar.new(sim.data).to_dict(), "with the defaults")

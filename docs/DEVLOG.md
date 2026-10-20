@@ -2,6 +2,28 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-19 — Co-op A: the rules can hold two players
+
+Emmitt: "my son really wants to play with me". The plan is `docs/COOP_PLAN.md`; this is its first phase, the one with nothing to look at: the sim no longer assumes one player. Everything single-player plays exactly as before.
+
+**Built:**
+- **`PlayerSlot`** (new): everything that is one-per-player in one object: stats (health, hunger, warmth, death), pockets, gear, the gun in hand, the hotbar, skills and the perk tree, position and facing, flashlight, sneaking, a window climb in progress, the spawn point and respawn grace, HUD messages, hand-gathering, a readied throwable, the perk pick's snooze and reset day.
+- **`SimWorld.players`** holds them; **`active`** says which one the old `player`, `inventory`, `gear`, `guns`, `hotbar`, `skills` and `player_*` names mean. Those are properties now that read and write `players[active]`, so the hundreds of rules written for one player act for whichever player is active without being rewritten. `as_player(i, what)` runs something as player i (the host will run a joined player's actions that way); `local` is the player this machine draws. `add_player(name)` joins one, standing at the host's spawn point.
+- **Each tick runs the per-player rules for every player** (`_tick_player`: hotwiring, gathering, carry weight, warmth, window climbs, hunger and health, the gun in hand, sprint and sneak practice, the search in progress), then the shared ones once (machines, zombies, the Director, carts...).
+- **Zombies mind the nearest living player** (`Horde.nearest_player` from a roster the sim builds each tick; the nearest of all when nobody's alive). Attack events carry whom they went for, and the bite lands on that player (or their car).
+- **A search per player** (`Loot.actor`, `_searches`): two players can search two fridges at once; a container revealed is done for whoever was on it. **A car per player** (`Vehicles.actor`, `_driving`, `driver_of`, `car_of`): "Someone's already in it".
+- **Saves hold everyone**: save VERSION 26 writes a `players` list (each with the keys slot 0 always had) and keeps slot 0's keys at the top level as before; loading an older save makes one player; a fixture `save_v25.json` joins the others.
+- Deaths and respawns run the one-player rules as the player they happened to (their own bag where they fell, their own spawn point).
+
+**Try it on the PC:** nothing new to see. `play.bat` as usual; if anything about hunger, searching, driving, dying or loading feels different, that's a bug in this phase.
+
+**Known gaps:**
+- A zombie's line of sight (`los_clear`) is still set by the world for the local player only; the host's world will raycast per player in Phase B/C.
+- Base-wide bonuses (belt speed, machine quiet, turret parts) read the host's skills and gear. Guidance's first-night chapter watches the host.
+- The world draws and controls slot 0 only. Phase B puts a second body in it.
+
+**Next:** co-op Phase B: Host / Join on the title screen over the house network, the joiner walking in the host's world.
+
 ## 2026-10-19 — P13 The perk trees, Diablo 2 style
 
 Emmitt, looking at the P12 perk pick: "can we turn this into a skill tree like in Diablo 2?" The plan is `docs/SKILL_TREE_PLAN.md`; this is the build.
