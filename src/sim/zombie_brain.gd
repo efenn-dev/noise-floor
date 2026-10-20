@@ -41,6 +41,7 @@ const MACHINE_REACH := 2.2  # close enough to a noisy machine to start wrecking 
 var id: int
 var type: String
 var stats: Dictionary
+var loot_table := "zombie"  # R1a: what its corpse holds (data/loot.json); the Director's waves set "zombie_wave"
 var difficulty: Difficulty
 var hp: float
 var state: int = State.IDLE

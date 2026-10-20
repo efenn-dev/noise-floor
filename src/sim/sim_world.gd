@@ -183,6 +183,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	learning = Learning.new(data)  # P10: tests' worlds know every piece too; a real new game starts over (main.gd)
 	build.learning = learning
 	salvage = Salvage.new(data)  # P11
+	salvage.day = clock.day  # R1a: felled trees grow back by the day
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
 	skills = Skills.new(data)
 	factory.skills = skills  # belt speed, craft speed, planter yield
@@ -344,6 +345,9 @@ func step() -> void:
 				(", heading for " + target) if target != "" else ""], wave.get("start", player_pos))
 	_radio()
 	guidance.tick(TICK, clock, build, int(tally["deaths"]), player_pos)
+	var dig_msg := guidance.tick_dig(clock, build, factory, milestones)  # R1a: "Dig in" (before the turret chapter)
+	if dig_msg != "":
+		add_message(dig_msg, 10.0)
 	var defend_msg := guidance.tick_defend(clock, build, factory)  # F4: "Defend your base"
 	if defend_msg != "":
 		add_message(defend_msg, 10.0)
@@ -538,6 +542,9 @@ func _note_goals() -> void:
 	if guidance.active or guidance.completed:
 		stats.note_goal("first night", Guidance.COMPLETE if guidance.completed else guidance.step(build, player_pos),
 				Guidance.COMPLETE, when_text())
+	if guidance.dig_active or guidance.dig_done:
+		stats.note_goal("dig in", Guidance.DIG_STEPS if guidance.dig_done else guidance.dig_step(build, factory, milestones),
+				Guidance.DIG_STEPS, when_text())
 	if guidance.defend_active or guidance.defend_done:
 		stats.note_goal("defend your base", Guidance.DEFEND_STEPS if guidance.defend_done else guidance.defend_step(build),
 				Guidance.DEFEND_STEPS, when_text())
@@ -3500,6 +3507,7 @@ func _on_piece_built(key: String) -> void:
 
 ## Each new day: fresh food rots, and about three weeks in the town's gas goes stale.
 func _new_day() -> void:
+	salvage.new_day(clock.day)  # R1a: stumps become saplings, saplings trees again
 	made_yesterday = _made_since(made_mark)  # F6
 	made_mark = factory.made.duplicate()
 	for piece: Dictionary in gear.wear_day():
@@ -3563,7 +3571,7 @@ func _count_kills() -> void:
 ## plus whatever it carried (_zombie_drop).
 func _add_corpse(z: ZombieBrain) -> void:
 	var cid := CORPSE + str(z.id)
-	loot.add(cid, "zombie", z.pos)
+	loot.add(cid, z.loot_table, z.pos)  # R1a: a wave zombie's pockets are fuller
 	if int(embedded_bolts.get(z.id, 0)) > 0:
 		loot.add_extra(cid, {"bolt": int(embedded_bolts[z.id])})
 		embedded_bolts.erase(z.id)

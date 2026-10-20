@@ -106,6 +106,7 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 		type_counts[type] = int(type_counts.get(type, 0)) + 1
 		live_counts[type] = int(live_counts.get(type, 0)) + 1
 		var z := horde.spawn(type, spot)
+		z.loot_table = "zombie_wave"  # R1a: the horde brings its pockets (scrap, nails, the odd plate)
 		var first: Vector3 = route[0] if not route.is_empty() else lure["pos"]
 		z.facing = (first - spot).normalized()
 		z.hear_via(route, lure["pos"], lure["key"], float(cfg["lure_time"]))

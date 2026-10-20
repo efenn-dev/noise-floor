@@ -25,7 +25,8 @@ var bodies: Array = []   # one StaticBody3D per street item, in plan order (test
 var lights: Array = []   # OmniLight3D per lamp post
 var lit := false
 var _lamp_mats: Array = []
-var _trees: Dictionary = {}  # P11: tree id -> its body
+var _trees: Dictionary = {}  # P11: tree id -> its body (standing)
+var _down: Dictionary = {}  # R1a: tree id -> its body while felled (a stump or a sapling)
 var _falling: Array = []  # P11: [body, seconds so far, tip axis, standing transform, foot]
 var _seen_changes := -1
 
@@ -43,11 +44,20 @@ func _process(delta: float) -> void:
 		_set_lit(not lit)
 	if sim != null and sim.salvage.changes != _seen_changes:
 		_seen_changes = sim.salvage.changes
+		for id: String in _down.keys():  # R1a: saplings, and trees grown back
+			var down: StaticBody3D = _down[id]
+			if not sim.salvage.felled.has(id):
+				_down.erase(id)
+				_trees[id] = down
+				_set_stage(down, "")
+			elif sim.salvage.stage(id) == "sapling" and not _falling.any(func(f: Array) -> bool: return f[0] == down):
+				_set_stage(down, "sapling")
 		for id: String in sim.salvage.felled:
 			if not _trees.has(id):
 				continue
 			var body: StaticBody3D = _trees[id]
 			_trees.erase(id)
+			_down[id] = body
 			for cs: CollisionShape3D in body.find_children("*", "CollisionShape3D", false, false):
 				cs.set_deferred("disabled", true)
 			if id == sim.salvage.last_felled and is_inside_tree():
@@ -58,13 +68,14 @@ func _process(delta: float) -> void:
 				var axis := Vector3.UP.cross(away.normalized() if away.length_squared() > 1e-4 else Vector3.FORWARD).normalized()
 				_falling.append([body, maxf(CountryView.hold_fall, 0.0) * CountryView.FALL_TIME, axis, body.global_transform, foot])
 			else:
-				body.visible = false
+				_set_stage(body, sim.salvage.stage(id))
 	for f: Array in _falling:
 		f[1] = float(f[1]) + delta
 		var t := CountryView.fall_fraction(float(f[1]))
 		(f[0] as Node3D).global_transform = CountryView.tipped(f[3], f[4], f[2], t)
 		if t >= 1.0:
-			(f[0] as Node3D).visible = false
+			(f[0] as Node3D).global_transform = f[3]  # back upright, then shown as its stage
+			_set_stage(f[0], sim.salvage.stage(str((f[0] as Node).get_meta("tree")[0])))
 	_falling = _falling.filter(func(f: Array) -> bool: return CountryView.fall_fraction(float(f[1])) < 1.0)
 
 
@@ -101,11 +112,13 @@ func _add_item(item: Dictionary) -> StaticBody3D:
 		"tree":  # P11: the axe's target
 			var id := Salvage.tree_id(item["pos"])
 			body.set_meta("tree", [id, "tree", item["pos"]])
+			model.set_meta("stood_scale", model.scale)
 			if not sim.salvage.felled.has(id):
 				_trees[id] = body
 			else:
-				body.visible = false
+				_down[id] = body
 				shape.disabled = true
+				_set_stage(body, sim.salvage.stage(id))
 		"trash_can":
 			body.set_meta("container_id", item["id"])
 		"mailbox":
@@ -114,6 +127,18 @@ func _add_item(item: Dictionary) -> StaticBody3D:
 			_add_lamp(body, model)
 	add_child(body)
 	return body
+
+
+## R1a: a felled tree's body as its stage: a stump is out of sight, a sapling the model at SAPLING_SCALE, "" a tree
+## again (full size, solid).
+func _set_stage(body: StaticBody3D, stage: String) -> void:
+	body.visible = stage != "stump"
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			(child as CollisionShape3D).set_deferred("disabled", stage != "")
+		elif child is Node3D and child.has_meta("stood_scale"):
+			var stood: Vector3 = child.get_meta("stood_scale")
+			(child as Node3D).scale = stood * (CountryView.SAPLING_SCALE if stage == "sapling" else 1.0)
 
 
 func _add_lamp(body: StaticBody3D, model: Node3D) -> void:
