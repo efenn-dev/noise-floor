@@ -15,7 +15,8 @@ const LOOPS := {"smelter": "hum_smelter", "press": "hum_press", "purifier": "hum
 		"canner": "hum_canner", "generator": "engine_generator", "car": "engine_car",
 		# M17a: work on the water tower (hammering borrows the press, the pump the generator's engine)
 		"tower_hammer": "hum_press", "tower_pump": "engine_generator",
-		"cart": "engine_car"}  # F5: a supply cart on the road
+		"cart": "engine_car",  # F5: a supply cart on the road
+		"horn_truck": "horn"}  # R1b: a crashed truck's stuck horn (the one-off, looped: _looped)
 const STEPS := ["step_1", "step_2", "step_3", "step_4"]
 const EVENTS := {"footstep_walk": STEPS, "footstep_sprint": STEPS, "melee_hit": ["hit_body"],
 		"block": ["bash"],  # V15: a guarded hit reuses the existing solid thud
@@ -110,6 +111,17 @@ static func play_at(parent: Node, sound: String, pos: Vector3, volume_db: float 
 
 
 ## Drop the loaded sounds (at exit, so Godot doesn't report them as still in use).
+## R1b: a one-off sound (the horn) made to loop, for a horn that's stuck on.
+static func _looped(s: AudioStream) -> AudioStream:
+	if s is AudioStreamWAV:
+		var w := (s as AudioStreamWAV).duplicate() as AudioStreamWAV
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = int(w.get_length() * w.mix_rate)
+		return w
+	return s
+
+
 static func clear_cache() -> void:
 	_streams.clear()
 
@@ -257,7 +269,7 @@ func _update_hums(recount: bool = true) -> void:
 		var p: AudioStreamPlayer3D = _hums.get(key)
 		if p == null:
 			p = AudioStreamPlayer3D.new()
-			p.stream = stream(LOOPS[s["kind"]])
+			p.stream = _looped(stream(LOOPS[s["kind"]])) if s["kind"] == "horn_truck" else stream(LOOPS[s["kind"]])
 			p.max_distance = MAX_DISTANCE
 			p.unit_size = 3.0
 			p.bus = WORLD_BUS if AudioServer.get_bus_index(WORLD_BUS) >= 0 else &"Master"

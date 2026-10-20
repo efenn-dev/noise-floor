@@ -84,6 +84,9 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	var kind := wave_kind(night)
 	if kind == "" or noise.continuous.is_empty():
 		return {}
+	var lure := _loudest(noise)
+	if lure.is_empty():  # R1b: only the world's own sounds (a crashed truck's horn): nothing of yours to come for
+		return {}
 	var count_rule := "night_wave_size" if night and kind != "wanderers" else "zombie_count"
 	var wanted := difficulty.count(count_rule, int(cfg[kind]), 1) if difficulty != null else int(cfg[kind])
 	var loud := loud_multiplier()
@@ -91,7 +94,6 @@ func tick(dt: float, noise: NoiseField, night: bool, horde: Horde) -> Dictionary
 	var size := mini(wanted, int(cfg["max_alive"]) - horde.alive_count())
 	if size <= 0:
 		return {}
-	var lure := _loudest(noise)
 	var by_road := kind != "wanderers"
 	var start := wave_start(lure["pos"], by_road)
 	var route := WorldMap.route(start, lure["pos"]) if by_road else []
@@ -138,6 +140,8 @@ func gain_now(noise: NoiseField, night: bool) -> float:
 	var dist := float(cfg["listen_distance"])
 	var used := {}
 	for s: Dictionary in noise.continuous:
+		if bool(s.get("world", false)):  # R1b: the world's own sounds (a crashed truck's horn) aren't your base's
+			continue
 		var at: Vector3 = s["pos"]
 		var walls: int
 		if _walls_cache.has(at):
@@ -254,12 +258,15 @@ func wave_kind(night: bool) -> String:
 
 
 ## F5: the continuous sound that's loudest to the world outside: its level listen_distance out through its leakiest
-## side (walls counted once and cached, as in gain_now). Ties keep the first.
+## side (walls counted once and cached, as in gain_now). Ties keep the first. R1b: the world's own sounds ("world": a
+## crashed truck's horn) don't count; {} if there's nothing else.
 func _loudest(noise: NoiseField) -> Dictionary:
 	var dist := float(cfg["listen_distance"])
-	var best: Dictionary = noise.continuous[0]
+	var best := {}
 	var best_level := -INF
 	for s: Dictionary in noise.continuous:
+		if bool(s.get("world", false)):
+			continue
 		var at: Vector3 = s["pos"]
 		if not _walls_cache.has(at):
 			_walls_cache[at] = noise.outdoor_walls(at, dist)

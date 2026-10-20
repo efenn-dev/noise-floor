@@ -2,6 +2,30 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-20 — R1b Supply trucks, forage piles, the named dead
+
+Emmitt: "should we make loot respawn? we were finding it hard to get materials ... maybe make more places like where we got Pete's old rifle?", then "nodes like in Rust". Plain loot respawn would undercut the factory (R1a), so loot comes back three ways that each cost something: a trip, a fight, or a walk round the block.
+
+**Built:**
+- **Supply trucks** (`Supplies`, `data/supplies.json` "truck"; `SimWorld.place_truck`): from day 2, every 3 days a van goes off the road at one of five roadside spots (never the same one twice running). Its back is a `supply_truck` loot container (6–9 rolls of planks, nails, plates, scrap, food, water, rounds, gas, bandages; 40% a gear piece, 15% a gun); its horn is stuck on at loudness 70 for 6 game hours or until it's searched. The horn is a continuous noise the zombies in earshot walk to; the Director doesn't count it as your base's noise (no heat, no infamy, no waves sent at it: the first soak had infamy at 950 by day 2 when it did). Three shamblers are already shuffling toward it when it lands. The base log names the road ("the highway, north of the junction"); carrying the radio relays it; anyone awake gets "A horn starts blaring somewhere to the north-east". Once quiet it's a wreck you can strip for scrap. `SupplyView` draws it (the van, rusted); on the map a red square, dark once searched. Flag `--truck[=quiet]`.
+- **Forage piles** (Rust-style; `data/resources.json` kinds `scrap_pile` and `log_pile`, with `holds` and no extractor; `data/supplies.json` "piles"): one a day from day 1, up to four standing, each on a seeded clear spot in the town's blocks (off the roads, out of the houses and shops, away from nodes, trucks and the start, 14 m from each other). E gathers from one by hand exactly like a node (`SimWorld.resource_node` falls through to `Supplies.pile_node`); at 0 it's "picked clean" and gone, and the next day brings another. Pale dots on the map. Flag `--piles`.
+- **The named dead** (`SimWorld.spawn_guardians` / `guardian_posts`; zombies.json `named`): Sheriff Dale in the police station's armory (Sheriff Dale's Riot Gun, a police-tier shotgun, plus shells), Doc Alvarez behind the pharmacy counter (Doc Alvarez's White Coat, plus med kits, bandages and a military rucksack), Hank the farmer inside the west barn's doorway (Hank's Splitting Maul, plus planks and nails), the lineman at the water tower (The Lineman's Headlamp, plus wall panels and scrap). Each is a guardian like Old Pete: never leaves the place, chases you inside it, gives up at the edge; each carries one gold piece (`_zombie_drop`: `zombie_extra_uniques` now gives pockets without a second unique). On the map a gold disc with their initial while they stand; "Sheriff Dale is on the move" in the base log when one leaves their spot (`_watch_named`, which replaced `_watch_pete`). Flag `--guardian=sheriff|pharmacist|farmer|lineman`.
+- **Save VERSION 27** holds the schedule under "supplies"; a save from before (fixture `save_v26.json`) loads with no trucks, and `main.gd` puts the four guardians out once (`SaveGame.holds_supplies`). The session log counts forage items taken and trucks searched. `test/test_supplies.gd`.
+
+**Try it on the PC:** `play.bat --truck` (a van 12 m ahead, horn blaring, three zombies on their way; `--truck=quiet` is one already searched), `play.bat --piles`, `play.bat --guardian=sheriff` (or pharmacist, farmer, lineman). In a real game the first truck lands at the end of day 2; press M to see where.
+
+**Tests:** 23,705 green (new `test_supplies.gd`: the data (spots beside roads, pile kinds, named types with gold pieces, a pile with an extractor refused); a truck on day 2 and every 3 days at a different spot, a container and a wreck, a horn the zombies hear that the Director doesn't count, three zombies round it, the log and the message, the horn stops when searched or after 6 hours, a hand-set day lands no truck; piles a day up to four on clear spots apart, gathered by hand to nothing and replaced; trucks and piles through a save; the v26 fixture loads and gets its guardians once; the four at their posts, inside their areas and clear of props, the sheriff behind the armory wall, the lineman beside the tower, the base log's "on the move", each body's gold piece and pockets, Old Pete unchanged). Soak one game-day: SOAK OK, 145 s. The three-day soak's "heat 100 at dusk sent a wave" check fails on main too: the W3 town keeps about 65 zombies alive against the Director's `max_alive` 40, so a wave's size is never positive there (not R1b; worth its own fix).
+
+**Known gaps:**
+- The truck is the van model rusted: no crash damage, no skid marks, no crate spilled on the ground.
+- The piles are the big node models at half size; a proper pile model is an art job for the PC.
+- There is no horn loop recording: the one-off horn is looped (`SoundView._looped`) and may click at the loop point.
+- Pile spots aren't checked against the town's street trees; a pile may stand in one.
+- The guardians' numbers (hp 160–260, damage 14–20), the truck's table and the pile counts are first guesses for the next log.
+- The schedule runs only at a real midnight (`_new_day(midnight)`): a game started with `--day=N` waits for the next one.
+
+**Next:** co-op Phase B (Host / Join over LAN from the title screen; docs/COOP_PLAN.md).
+
 ## 2026-10-19 — R1a Materials on their own: the excavators you'll actually meet
 
 Emmitt: "we were finding it hard to get materials" and "I want some way to also automate the basic materials like in Satisfactory with excavators." The excavators existed since F1 (the Salvager, Sawmill, water and fuel pumps on resource nodes) but their nearest spots were the junkyard and the woods, behind a Hub milestone, and nothing led a player there. R1b (supply trucks, named guardians) follows.

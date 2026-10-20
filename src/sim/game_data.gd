@@ -38,6 +38,7 @@ var areas: Dictionary = {}       # W3e: each WorldMap area's map name, loot mult
 var milestones: Dictionary = {}  # F2: the Hub's tiers and milestones, and the rescue broadcast: data/milestones.json
 var learning: Dictionary = {}    # P10: pieces you learn by building ("after"): data/learning.json
 var hit_zones: Dictionary = {}   # V33: damage per hit zone (torso, arm, leg), the leg line and the limp: data/hit_zones.json
+var supplies: Dictionary = {}    # R1b: supply trucks, forage piles and the named guardians' posts: data/supplies.json
 var load_errors: PackedStringArray = []
 
 
@@ -69,6 +70,8 @@ static func load_default() -> GameData:
 	data.learning.erase("_about")
 	data.hit_zones = _read_json(DIR + "hit_zones.json", data)
 	data.hit_zones.erase("_about")
+	data.supplies = _read_json(DIR + "supplies.json", data)
+	data.supplies.erase("_about")
 	return data
 
 
@@ -247,7 +250,10 @@ func validate() -> PackedStringArray:
 			errors.append("area '%s' needs a name and a loot multiplier of at least 1 in areas.json" % area)
 	for kind: String in resources.get("kinds", {}):  # F1
 		var ex := str(resources["kinds"][kind].get("extractor", ""))
-		if not buildables.has(ex) or str(buildables[ex].get("needs_node", "")) != kind:
+		if int(resources["kinds"][kind].get("holds", 0)) > 0:  # R1b: a forage pile: hand-gathered, no extractor
+			if ex != "" or (resources["kinds"][kind].get("hand", {}) as Dictionary).is_empty():
+				errors.append("resource kind '%s' holds a pile: it needs 'hand' and no extractor" % kind)
+		elif not buildables.has(ex) or str(buildables[ex].get("needs_node", "")) != kind:
 			errors.append("resource kind '%s' needs an extractor buildable whose needs_node is '%s'" % [kind, kind])
 	for n: Dictionary in resources.get("nodes", []):
 		if not resources["kinds"].has(n.get("kind", "")) or not resources.get("purity", {}).has(n.get("purity", "")):
@@ -325,6 +331,8 @@ func validate() -> PackedStringArray:
 	_check_seasons(errors, self)
 	_check_projects(errors, self)
 	_check_difficulty(errors, difficulty)
+	if not supplies.is_empty():
+		_check_supplies(errors, self)  # R1b
 	return errors
 
 
@@ -664,3 +672,47 @@ static func _check_projects(errors: PackedStringArray, d: GameData) -> void:
 		var need: String = d.buildables[id].get("needs_project", "")
 		if need != "" and not d.projects.is_empty() and not d.projects.has(need):
 			errors.append("buildable '%s' needs unknown project '%s'" % [id, need])
+
+
+## R1b: supplies.json. The truck has named spots on the map beside a road, a vehicle model and a loot table; the pile
+## kinds are piles (resources.json "holds"); each guardian is a named zombie type with a gold piece (gear.json
+## zombie_uniques) and a known post; the named dead's pockets (guns.json zombie_extra_uniques) hold real items.
+static func _check_supplies(errors: PackedStringArray, d: GameData) -> void:
+	var s := d.supplies
+	var tc: Dictionary = s.get("truck", {})
+	if tc.is_empty() or (tc.get("spots", []) as Array).is_empty():
+		errors.append("supplies.json needs a truck with spots")
+	if not d.vehicles.has(str(tc.get("model", ""))):
+		errors.append("supply truck model '%s' needs a vehicle" % tc.get("model", ""))
+	if not d.loot.has(str(tc.get("table", ""))):
+		errors.append("supply truck table '%s' needs a loot table" % tc.get("table", ""))
+	for key: String in ["first_day", "every_days", "horn_hours", "horn_loudness"]:
+		if float(tc.get(key, 0)) <= 0.0:
+			errors.append("supply truck needs a positive '%s'" % key)
+	for sp: Dictionary in tc.get("spots", []):
+		var pos: Array = sp.get("pos", [])
+		if pos.size() != 2 or str(sp.get("name", "")) == "" or not WorldMap.EXTENT.has_point(Vector2(float(pos[0]), float(pos[1]))):
+			errors.append("supply truck spot '%s' needs a name and a pos [x, z] on the map" % sp.get("name", "?"))
+		elif WorldMap.on_road(Vector2(float(pos[0]), float(pos[1])), 1.0):
+			errors.append("supply truck spot '%s' is on the road" % sp.get("name", "?"))
+	var pc: Dictionary = s.get("piles", {})
+	for kind in pc.get("kinds", []):
+		if int(((d.resources.get("kinds", {}) as Dictionary).get(kind, {}) as Dictionary).get("holds", 0)) <= 0:
+			errors.append("pile kind '%s' needs a resources.json kind with 'holds'" % kind)
+	if (pc.get("area", []) as Array).size() != 4:
+		errors.append("supplies.json piles need an area [x, z, w, h]")
+	for type: String in s.get("guardians", {}):
+		var g: Dictionary = s["guardians"][type]
+		if not d.zombies.has(type) or not bool(d.zombies[type].get("named", false)):
+			errors.append("guardian '%s' needs a named zombie type" % type)
+		if not str(g.get("post", "")) in SimWorld.GUARDIAN_POSTS:
+			errors.append("guardian '%s' needs a known post" % type)
+		if not d.gear.get("zombie_uniques", {}).has(type):
+			errors.append("guardian '%s' needs a gold piece (gear.json zombie_uniques)" % type)
+	for type: String in d.guns.get("zombie_extra_uniques", {}):
+		var e: Dictionary = d.guns["zombie_extra_uniques"][type]
+		if not d.zombies.has(type) or (e.has("unique") and not d.gear.get("uniques", {}).has(e["unique"])):
+			errors.append("zombie_extra_uniques '%s' needs a zombie and a real unique" % type)
+		for item: String in e.get("ammo", {}):
+			if not d.items.has(item):
+				errors.append("zombie_extra_uniques '%s' carries unknown item '%s'" % [type, item])

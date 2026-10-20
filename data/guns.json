@@ -51,6 +51,7 @@
 		"hunting_cabin": {"gun": 0.4, "part": 0.25, "ammo": 0.8},
 		"garage": {"gun": 0.04, "part": 0.08, "ammo": 0.18},
 		"gun_locker": {"gun": 0.35, "part": 0.3, "ammo": 0.8},
+		"supply_truck": {"gun": 0.07, "part": 0.4, "ammo": 0.4},
 		"police_desk": {"gun": 0.06, "part": 0.08, "ammo": 0.3},
 		"hardware": {"gun": 0.0, "part": 0.12, "ammo": 0.0},
 		"barn": {"gun": 0.03, "part": 0.05, "ammo": 0.1},
@@ -70,6 +71,10 @@
 	},
 	"part_weights": {"oil_filter_suppressor": 2, "machined_suppressor": 1, "extended_mag": 3, "scope": 2, "padded_stock": 3, "choke": 2},
 	"ammo_found": [4, 12],
-	"zombie_extra_uniques": {"old_pete": {"unique": "petes_deer_rifle", "ammo": {"ammo_standard": 10}}},
+	"zombie_extra_uniques": {"old_pete": {"unique": "petes_deer_rifle", "ammo": {"ammo_standard": 10}},
+		"sheriff": {"ammo": {"shells": 12, "ammo_standard": 8}},
+		"pharmacist": {"ammo": {"medkit": 2, "bandage": 4, "military_rucksack": 1}},
+		"farmer": {"ammo": {"plank": 6, "nails": 20, "canned_food": 2}},
+		"lineman": {"ammo": {"wall_panel": 2, "scrap_metal": 6, "repair_kit": 1}}},
 	"loaded_when_found": [0, 1]
 }

@@ -153,6 +153,18 @@ class MapDraw:
 			var cp: Vector3 = sim.carts.cart_at(key)["pos"]
 			var at := MapScreen.to_map(r, Vector2(cp.x, cp.z))
 			draw_rect(Rect2(at - Vector2(3.5, 3.5), Vector2(7, 7)), Color(0.95, 0.75, 0.2))
+		for t: Dictionary in sim.supplies.trucks:  # R1b: a crashed supply truck: red while its horn blares, dark once searched
+			var at := MapScreen.to_map(r, Vector2(t["pos"].x, t["pos"].z))
+			var live := sim.supplies.horn_on(t, sim.clock_hours(), sim.truck_searched)
+			draw_rect(Rect2(at - Vector2(4, 4), Vector2(8, 8)), Color(0.9, 0.2, 0.15) if live else Color(0.45, 0.22, 0.15))
+		for p: Dictionary in sim.supplies.piles:  # R1b: forage piles, small pale dots
+			var at := MapScreen.to_map(r, Vector2(p["pos"].x, p["pos"].z))
+			draw_circle(at, 2.5, Color(0.82, 0.8, 0.7))
+		for g: Dictionary in sim.named_alive():  # R1b: the named dead still at their posts: a gold disc with their initial
+			var at := MapScreen.to_map(r, Vector2(g["pos"].x, g["pos"].z))
+			draw_circle(at, 6.5, Color.BLACK)
+			draw_circle(at, 5.5, MapScreen.GOLD)
+			draw_string(font, at + Vector2(-4, 5), str(g["name"]).left(1), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.BLACK)
 		for key: String in [sim.hub_key(), sim.mast_key()]:
 			if key != "":
 				var c := sim.build.piece_center(key)
@@ -180,7 +192,7 @@ class MapDraw:
 			draw_circle(Vector2(lx + 6, ly - 5), 5.0, item[1])
 			draw_string(font, Vector2(lx + 16, ly), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.85, 0.85, 0.85))
 			lx += font.get_string_size(item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 40
-		draw_string(font, Vector2(lx, ly), "H Hub   R radio mast", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, MapScreen.GOLD)
+		draw_string(font, Vector2(lx, ly), "H Hub   R radio mast   red: a crashed truck   gold: the named dead", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, MapScreen.GOLD)
 
 	func _house(at: Vector2, color: Color) -> void:
 		draw_rect(Rect2(at + Vector2(-5, -2), Vector2(10, 8)), color)

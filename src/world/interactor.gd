@@ -304,10 +304,6 @@ func node_status(id: String) -> String:
 	var n := sim.resource_node(id)
 	if n.is_empty():
 		return ""
-	var extractor: String = sim.data.buildables[n["extractor"]]["name"]
-	var built := sim.factory.machines.get(n["cell"]) as Factory.Machine
-	var machine_line := "%s: %s" % [extractor, built.status()] if built != null \
-			else "Or build a %s on the yellow spot (B, Extractors)" % extractor
 	var hand := sim.hand_gather(n)  # P5: gather here by hand, or how far along you are
 	var hand_line := ""
 	if sim.gathering == id:
@@ -316,6 +312,12 @@ func node_status(id: String) -> String:
 	elif not hand.is_empty():
 		hand_line = "[E] %s by hand: a %s every %.0f s (loud)" % [hand["verb"], sim.data.item_name(hand["item"]).to_lower(),
 				sim.gather_seconds(n)]
+	if n.get("pile", false):  # R1b: a forage pile: by hand only, until it's gone
+		return "%s (%d left)%s" % [n["name"], int(n["left"]), ("\n" + hand_line) if hand_line != "" else ""]
+	var extractor: String = sim.data.buildables[n["extractor"]]["name"]
+	var built := sim.factory.machines.get(n["cell"]) as Factory.Machine
+	var machine_line := "%s: %s" % [extractor, built.status()] if built != null \
+			else "Or build a %s on the yellow spot (B, Extractors)" % extractor
 	return "%s (%s)\n%s%s" % [n["name"], n["purity"], (hand_line + "\n") if hand_line != "" else "", machine_line]
 
 

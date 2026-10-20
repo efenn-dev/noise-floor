@@ -67,6 +67,10 @@ const LOOKS := {
 	"brute": {"skin": Color(0.19, 0.21, 0.17), "shirts": [Color(0.16, 0.14, 0.12), Color(0.20, 0.18, 0.13)],
 			"dim": 0.42},
 	"old_pete": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.62, 0.16, 0.08)], "scale": 1.25},  # M13: the fireman
+	"sheriff": {"skin": Color(0.42, 0.44, 0.36), "shirts": [Color(0.72, 0.62, 0.38)], "scale": 1.15},  # R1b: the tan uniform shirt
+	"pharmacist": {"skin": Color(0.5, 0.5, 0.44), "shirts": [Color(0.88, 0.88, 0.86)], "scale": 1.05},  # R1b: the white coat
+	"farmer": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.22, 0.3, 0.5)], "scale": 1.22},  # R1b: denim
+	"lineman": {"skin": Color(0.4, 0.42, 0.34), "shirts": [Color(0.95, 0.5, 0.1)], "scale": 1.12},  # R1b: the orange hi-vis
 }
 const LOOPED := ["Idle", "Walk", "Run", "Punch", "Crawl"]
 const MOANS := 13  # assets/sounds/zombie/moan_NN.wav (CC0, assets/CREDITS.md)
