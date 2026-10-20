@@ -93,7 +93,8 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 			var heard := noise.loudest_heard(z.pos, z.hearing(ctx["night"]))
 			if not heard.is_empty():  # Q4: a sound from something it may not break is walked to, not wrecked
 				z.hear(heard["pos"], heard["key"] if breakable(ctx["pieces"], heard["key"]) else "")
-		var player_pos: Vector3 = ctx["player_pos"]
+		var who := nearest_player(z.pos, ctx)  # co-op A: the nearest living player, or the one player
+		var player_pos: Vector3 = who["pos"]
 		var far := Vector2(z.pos.x - player_pos.x, z.pos.z - player_pos.z).length() > FAR_THINK
 		var lazy := far and (z.is_dead() or z.state == ZombieBrain.State.IDLE or z.state == ZombieBrain.State.WANDER)
 		if lazy and (_ticks + id) % THINK_EVERY != 0:
@@ -101,17 +102,36 @@ func tick(dt: float, ctx: Dictionary) -> Array:
 			continue
 		var step := dt * THINK_EVERY if lazy else dt
 		var eye := z.pos + Vector3.UP * z.eye_height()
-		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, ctx["player_pos"], z.los_clear,
-				ctx["night"], ctx["player_lit"], z.stats)
+		var sees := not z.is_dead() and ZombieBrain.can_see(eye, z.facing, player_pos, z.los_clear,
+				ctx["night"], who["lit"], z.stats)
 		if _spared_for(z, ctx["pieces"], z.blocked_by) \
 				or (z.state == ZombieBrain.State.BREAK and _spared_for(z, ctx["pieces"], z.break_key)):
 			z.leave_furniture()  # M16, Q4: zombies only break what's on BREAKABLE_KINDS
-		for e: Dictionary in z.think(step, ctx["player_pos"], sees, ctx["player_dead"], ctx["pieces"]):
+		for e: Dictionary in z.think(step, player_pos, sees, who["dead"], ctx["pieces"]):
 			e["zombie"] = id
+			e["player"] = who["index"]  # co-op A: whom it went for
 			events.append(e)
 		if z.is_dead() and z.dead_time >= (ZombieBrain.SEARCHED_CORPSE_TIME if z.searched else ZombieBrain.CORPSE_TIME):
 			zombies.erase(id)
 	return events
+
+
+## Co-op A: of ctx["players"] ({index, pos, dead, lit} each), the nearest one alive to `at`, or the nearest of all when
+## none is alive; without a roster, the one player the older ctx keys describe (index 0).
+static func nearest_player(at: Vector3, ctx: Dictionary) -> Dictionary:
+	var roster: Array = ctx.get("players", [])
+	if roster.is_empty():
+		return {"index": 0, "pos": ctx["player_pos"], "dead": ctx["player_dead"], "lit": ctx["player_lit"]}
+	var best: Dictionary = {}
+	var best_d := INF
+	for p: Dictionary in roster:
+		var d := Vector2(p["pos"].x - at.x, p["pos"].z - at.z).length_squared()
+		var alive_wins: bool = not p["dead"] and not best.is_empty() and best["dead"]
+		var dead_loses: bool = p["dead"] and not best.is_empty() and not best["dead"]
+		if best.is_empty() or alive_wins or (not dead_loses and d < best_d):
+			best = p
+			best_d = d
+	return best
 
 
 ## Q4: may a zombie break the piece at `key`? Town pieces count by their kind too (town walls are "wall").

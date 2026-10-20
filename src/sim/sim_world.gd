@@ -19,7 +19,88 @@ signal container_searched(id: String)  # V18: the world opens this container's l
 var clock: GameClock
 var data: GameData
 var difficulty: Difficulty
-var inventory := Inventory.new()
+## Co-op A (docs/COOP_PLAN.md): every player in the game (PlayerSlot: stats, pockets, gear, guns, hotbar, skills,
+## position, messages...). The player, inventory, gear, guns, hotbar, skills and player_* properties below read and
+## write players[active], so the rules written for one player act for whichever player is active: `as_player(i, what)`
+## runs something as player i (the host will run a joined player's actions that way) and step() runs the per-player
+## rules for each in turn (_tick_player). `local` is the player this machine draws and controls. Slot 0 is the host.
+var players: Array = []
+var local := 0
+var active := 0:
+	set(v):
+		active = v
+		if loot != null:
+			loot.actor = v
+		if vehicles != null:
+			vehicles.actor = v
+var player: PlayerStats:
+	get: return players[active].stats
+var inventory: Inventory:
+	get: return players[active].inventory
+var gear: Gear:
+	get: return players[active].gear
+var guns: Gunplay:
+	get: return players[active].guns
+var hotbar: Hotbar:
+	get: return players[active].hotbar
+var skills: Skills:
+	get: return players[active].skills
+## Written by the world each frame: where the player stands, looks, whether the flashlight is on, sneaking.
+var player_pos: Vector3:
+	get: return players[active].pos
+	set(v): players[active].pos = v
+var player_facing: Vector3:
+	get: return players[active].facing
+	set(v): players[active].facing = v
+var player_lit: bool:
+	get: return players[active].lit
+	set(v): players[active].lit = v
+var player_sneaking: bool:
+	get: return players[active].sneaking
+	set(v): players[active].sneaking = v
+## V17: an active scripted window crossing. Rules and timing live here; Player only draws the curve.
+## {key, from, to, elapsed, duration}. `vault_landing` hands the exact endpoint to the world for one frame.
+var player_vault: Dictionary:
+	get: return players[active].vault
+	set(v): players[active].vault = v
+var vault_landing: Vector3:
+	get: return players[active].vault_landing
+	set(v): players[active].vault_landing = v
+## V17: timed E interaction on sharp remnants: {key, elapsed, duration}.
+var clearing_glass: Dictionary:
+	get: return players[active].clearing_glass
+	set(v): players[active].clearing_glass = v
+var spawn_point: Vector3:
+	get: return players[active].spawn_point
+	set(v): players[active].spawn_point = v
+## Q6: seconds after a respawn during which zombies take no notice of you (data/survival.json "respawn_grace"),
+## so dying near your bed doesn't mean dying again the moment you're back. Swinging, shooting or throwing ends it.
+var respawn_grace: float:
+	get: return players[active].respawn_grace
+	set(v): players[active].respawn_grace = v
+## Short notices for the HUD ("Moaning to the north..."): {text, time_left}, the active player's.
+var messages: Array:
+	get: return players[active].messages
+	set(v): players[active].messages = v
+## P5: gathering by hand at a resource node (E): the node being worked ("" = none) and seconds into this round.
+var gathering: String:
+	get: return players[active].gathering
+	set(v): players[active].gathering = v
+var gather_progress: float:
+	get: return players[active].gather_progress
+	set(v): players[active].gather_progress = v
+var ready_throw: String:
+	get: return players[active].ready_throw
+	set(v): players[active].ready_throw = v
+var perk_snooze_until: float:  # P12: no perk pick before this absolute game hour (clock_hours); Later and a zombie set it; saved
+	get: return players[active].perk_snooze_until
+	set(v): players[active].perk_snooze_until = v
+var perk_reset_day: int:  # P13: the game day a tree's points were last taken back (once a day); saved
+	get: return players[active].perk_reset_day
+	set(v): players[active].perk_reset_day = v
+var _combat_at: float:  # P12: clock_hours of your last swing, shot or hit taken: a pick waits for calm
+	get: return players[active].combat_at
+	set(v): players[active].combat_at = v
 var build: BuildGrid
 var factory: Factory
 var horde: Horde
@@ -33,10 +114,6 @@ var automation: Automation
 ## M17a: big projects (the water tower), their sites, phases and what's done
 var projects: Projects
 var carts: Carts  # F5: supply carts between cart stops
-## P5 (Emmitt: "how should we make users gather materials for things like the smelter?"): gathering by hand at a
-## resource node (E): the node being worked ("" = none) and seconds into this round.
-var gathering := ""
-var gather_progress := 0.0
 const GATHER_REACH := 4.0  # stay this close to the node (its spot or its pile) or the gathering stops
 ## F6: what machines made yesterday (item -> count), and Factory.made as it stood when today began.
 var made_yesterday: Dictionary = {}
@@ -53,10 +130,6 @@ var rescue_day := -1  # the day the broadcast started, then the day rescued
 var broadcast_hours := 0.0
 var rescue_due := -1.0
 var _signal_on := true  # the mast had power last tick (to say when it drops and comes back)
-## F4: the last game day the dawn perk pick was offered (not saved: a loaded game with points offers it again).
-var perk_reset_day := -1  # P13: the game day a tree's points were last taken back (once a day); saved
-var perk_snooze_until := 0.0  # P12: no perk pick before this absolute game hour (clock_hours); Later and a zombie set it; saved
-var _combat_at := -100.0  # P12: clock_hours of your last swing, shot or hit taken: a pick waits for calm
 var _heard_cache: Dictionary = {}  # F5: heard_preview results, cleared when the build grid changes
 const PERK_OFFER_SAFE := 12.0  # no living zombie this close (metres) when the pick opens (P12: 25 never held in town)
 const PERK_OFFER_CALM := 0.2  # P12: game hours since your last swing, shot or hit before a pick opens (12 s real)
@@ -69,22 +142,14 @@ var radio_lines: Array = []
 var _pete_busy := false
 ## The town's cars: position, fuel (gas cans, siphoned with G), damage, wrecks, and the one you drive.
 var vehicles: Vehicles
-var hotbar: Hotbar  # S3: the ten slots under keys 1-9 and 0
-## Skills that level by doing and the perks they earn (M12). Kept when you die.
-var skills: Skills
 ## V25: saved first-hour objectives and the most recent quick-equip suggestion.
 var guidance := Guidance.new()
-## M13: your gear (weapon and things you wear, each piece rolled). Skills.bonus() includes it.
-var gear: Gear
-## M14/V14 slots: what's in your hands (melee, primary or sidearm), spread, magazine and reloads.
-var guns: Gunplay
 ## V30 ballistics live in the fixed sim: crossbow bolts, thrown bottles/bombs and their presentation events.
 var projectiles: Array = []
 var thrown: Array = []
 var projectile_events: Array = []
 var projectile_pickups: Dictionary = {}  # container id -> world position for the world pickup view
 var embedded_bolts: Dictionary = {}      # zombie id -> recoverable bolts added to its corpse
-var ready_throw := ""
 var _next_projectile := 1
 var _ballistic_rng := RandomNumberGenerator.new()
 ## For the stats screen: zombies killed (by you, your turrets, traps or your car) and your deaths.
@@ -92,8 +157,6 @@ var tally := {"kills": 0, "deaths": 0}  # saved; `stats` below is the per-sittin
 var _counted_dead: Dictionary = {}
 var _day := 1
 var director: Director
-## Short notices for the HUD ("Moaning to the north..."): {text, time_left}.
-var messages: Array = []
 ## Cars you've already been told have no key (see enter_car).
 var _told_no_key := {}
 var _told_glass := false  # W2: the first window you break tells you it was loud
@@ -104,17 +167,8 @@ var storages: Dictionary = {}
 ## Storage crates can hold rolled gear as well as stackable items.
 var storage_gear: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
-var player := PlayerStats.new()
 ## What happened this session (deaths, builds, loudest sounds...), for the playtest session log.
 var stats := RunStats.new()
-## Written by the world each frame: where the player stands and whether the flashlight is on.
-var player_pos := Vector3.ZERO
-## V17: an active scripted window crossing. Rules and timing live here; Player only draws the curve.
-## {key, from, to, elapsed, duration}. `vault_landing` hands the exact endpoint to the world for one frame.
-var player_vault: Dictionary = {}
-var vault_landing := Vector3.INF
-## V17: timed E interaction on sharp remnants: {key, elapsed, duration}.
-var clearing_glass: Dictionary = {}
 ## P3: town cell -> house name (from know_houses), so the session log can say which houses you went into.
 var house_cells: Dictionary = {}
 ## W3c: suburb houses that weren't laid because an older save already had something built where they'd stand
@@ -122,16 +176,8 @@ var house_cells: Dictionary = {}
 var suburbs_skipped: Array = []
 ## W3d: the same for the countryside's buildings (the farmhouses, barns and the hunting cabin).
 var rural_skipped: Array = []
-var player_lit := false
-var player_facing := Vector3(0, 0, -1)  # S4: where you look (flat), for the jumpscare rules
 var scares: Scares  # S4: jumpscare stings (SoundView plays scares.fired)
 var _told_corpse := false  # S4: "dead zombies can be searched", once
-## Written by the world each frame: moving while crouched (Sneaking xp near zombies that haven't noticed you).
-var player_sneaking := false
-var spawn_point := Vector3.ZERO
-## Q6: seconds after a respawn during which zombies take no notice of you (data/survival.json "respawn_grace"),
-## so dying near your bed doesn't mean dying again the moment you're back. Swinging, shooting or throwing ends it.
-var respawn_grace := 0.0
 ## Bags dropped where the player died: {id: int, pos: Vector3, items: {item: count}}.
 var bags: Array = []
 var _next_bag := 1
@@ -148,6 +194,7 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	data = p_data if p_data != null else GameData.load_default()
 	difficulty = Difficulty.new(data.difficulty)
 	apply_difficulty(p_difficulty)
+	add_player("You")  # co-op A: slot 0, the host; its stats, pockets, gear, guns, hotbar and skills
 	build = BuildGrid.new(data)
 	_setup_resource_nodes()  # F1
 	factory = Factory.new(data)
@@ -155,14 +202,13 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	climate = Climate.new(data, build, power)
 	if not data.seasons.is_empty():
 		clock.set_calendar(data.seasons)  # M16: four seasons; sunrise and sunset follow them
-		player.cold_cfg = data.seasons["warmth"]
 	defense = Defense.new(data, build, factory)
 	horde = Horde.new(data, seed_value, difficulty)
 	noise = NoiseField.new(data, build)
 	director = Director.new(data, seed_value, difficulty)
 	loot = Loot.new(data, seed_value, difficulty)
 	vehicles = Vehicles.new(data)
-	hotbar = Hotbar.new(data)
+	active = 0  # co-op A: points the loot searches and the cars at the host
 	scares = Scares.new()
 	base_log = BaseLog.new(data, build)
 	automation = Automation.new(data, build, power, noise)
@@ -185,29 +231,53 @@ func _init(start_hour: float = 8.0, p_data: GameData = null, p_seed: int = 1,
 	salvage = Salvage.new(data)  # P11
 	salvage.day = clock.day  # R1a: felled trees grow back by the day
 	director.watch(build)  # M15: the Director's wall counts are cached until the grid changes
-	skills = Skills.new(data)
-	factory.skills = skills  # belt speed, craft speed, planter yield
+	factory.skills = skills  # belt speed, craft speed, planter yield (the host's: the base is one)
 	noise.skills = skills    # quieter machines (Dampened Gears)
 	power.skills = skills    # quieter generators
 	loot.skills = skills     # search time, Lucky Find
-	gear = Gear.new(data)
-	skills.gear = gear       # M13: every bonus(effect) query includes what you wear
-	gear.give_start()        # the pipe, white, in the weapon slot
-	guns = Gunplay.new(data, gear, skills)
-	defense.gear = gear  # M15: turret suppressors and scopes are gear pieces
+	defense.gear = gear  # M15: turret suppressors and scopes are gear pieces (the host's)
 	_day = clock.day
-	player.cfg = data.survival
-	player.difficulty = difficulty
 	_rng.seed = hash([seed_value, "sim"])
 	_ballistic_rng.seed = hash([seed_value, "v30_ballistics"])
-	player.died.connect(_on_player_died)
-	player.respawned.connect(_on_player_respawned)
 	build.piece_added.connect(_on_piece_added)
 	build.piece_removed.connect(_on_piece_removed)
 	build.piece_added.connect(func(_k: String) -> void: _heard_cache.clear())  # F5: walls change what's heard
 	build.piece_removed.connect(func(_k: String, _p: Dictionary) -> void: _heard_cache.clear())
 	build.piece_changed.connect(func(_k: String) -> void: _heard_cache.clear())
 	build.piece_built.connect(_on_piece_built)
+
+
+## Co-op A: a player joins the game: their own stats, pockets, gear (the starting pipe), guns, hotbar and skills,
+## standing at the host's spawn point. Returns their index (0 is the host, made in _init). Their death and respawn
+## run the one-player rules as them.
+func add_player(p_name: String) -> int:
+	var slot := PlayerSlot.new(data, difficulty, p_name)
+	var i := players.size()
+	if i > 0:
+		slot.spawn_point = players[0].spawn_point
+		slot.pos = slot.spawn_point
+	players.append(slot)
+	slot.stats.died.connect(_on_slot_died.bind(i))
+	slot.stats.respawned.connect(_on_slot_respawned.bind(i))
+	return i
+
+
+## Co-op A: runs `what` as player `i`: every player_* rule reads and writes that player meanwhile. Returns what it
+## returned. (The host runs a joined player's actions this way.)
+func as_player(i: int, what: Callable) -> Variant:
+	var was := active
+	active = i
+	var out: Variant = what.call()
+	active = was
+	return out
+
+
+func _on_slot_died(i: int) -> void:
+	as_player(i, _on_player_died)
+
+
+func _on_slot_respawned(i: int) -> void:
+	as_player(i, _on_player_respawned)
 
 
 ## V29: the single sim entry point for selecting a tuning table. Call before spawning/restoring zombies;
@@ -260,8 +330,6 @@ func step() -> void:
 		stats.cart_items += maxi(0, carts.delivered - _carts_seen)
 		_carts_seen = carts.delivered
 	vehicles.tick(TICK)
-	_tick_hotwire()
-	_tick_gather()  # P5
 	_tick_learning()  # P10
 	noise.refresh(factory, TICK, power, vehicles)
 	noise.continuous.append_array(climate.noise_sources())  # M16: lit stoves crackle
@@ -270,42 +338,29 @@ func step() -> void:
 	_tick_rescue()  # F2
 	_note_noise()
 	_tick_first_night()
-	player.carry_ratio = carry_ratio()
-	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
-	player.heal_mult = 1.0 + skills.bonus("heal_rate")
-	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
-	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
-			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
-	_tick_window_actions()
-	var was_bleeding := player.bleeding
-	player.tick(TICK)
-	if was_bleeding and not player.bleeding and not player.dead:
-		add_message("The bleeding stopped", 3.0)  # Q5: on its own (a bandage clears it outside the tick)
-	_cold_messages()
-	guns.tick(TICK, inventory)
+	var was_active := active
+	for i in players.size():  # co-op A: the rules that are one-per-player, for each player in turn
+		active = i
+		_tick_player(season, night_now)
+	active = was_active
 	_tick_ballistics(TICK)
-	if sprinted:
-		_practice("fitness", "sprint_second", TICK)
-	if player_sneaking and not player.dead and _unnoticed_zombie_near():
-		_practice("sneaking", "sneak_second", TICK)
-	var found := loot.tick(TICK, player_pos)
-	if not found.is_empty():
-		_finish_search(found)
 	var night := clock.is_night()
-	respawn_grace = maxf(0.0, respawn_grace - TICK)
+	var roster := []  # co-op A: every player; each zombie minds the nearest living one (Horde.nearest_player)
+	for i in players.size():
+		var s: PlayerSlot = players[i]
+		roster.append({"index": i, "pos": s.pos, "dead": s.stats.dead or s.respawn_grace > 0.0,
+				"lit": s.lit or automation.in_light(s.pos)})
 	var ctx := {"player_pos": player_pos, "player_dead": player.dead or respawn_grace > 0.0, "night": night,
-			"player_lit": player_lit or automation.in_light(player_pos), "pieces": build.pieces, "noise": noise}
+			"player_lit": player_lit or automation.in_light(player_pos), "pieces": build.pieces, "noise": noise,
+			"players": roster}
 	for e: Dictionary in horde.tick(TICK, ctx):
 		var z: ZombieBrain = horde.zombies.get(e["zombie"])
 		if z == null:
 			continue
 		if e["target"] == "scream":
 			noise.emit(z.pos, float(z.stats["scream_loudness"]), "scream")  # pulls in everything nearby
-		elif e["target"] == "player" and vehicles.driving != "":
-			vehicles.damage(vehicles.driving, z.attack_damage())  # the car takes it while you're inside
-			noise.emit_kind(z.pos, "zombie_bash")
 		elif e["target"] == "player":
-			zombie_hit_player(z)
+			as_player(int(e.get("player", local)), _zombie_reaches.bind(z))  # co-op A: whichever player it went for
 		elif build.pieces.has(e["target"]):
 			var at := z.pos  # the noise is where the zombie stands, not inside the wall it hits
 			noise.emit_kind(at, "zombie_bash")  # banging on your walls draws more of them
@@ -317,7 +372,8 @@ func step() -> void:
 			var structure_damage := zombie_structure_damage(z, target)
 			if structure_damage > 0 and build.damage(target, structure_damage):
 				noise.emit_kind(build.piece_center(target) if was_window else at, "glass_break" if was_window else "wreck")
-	scares.tick(TICK, horde.zombies, player_pos, player_facing, player.dead)  # S4
+	var me: PlayerSlot = players[local]
+	scares.tick(TICK, horde.zombies, me.pos, me.facing, me.stats.dead)  # S4: the stings are for this screen's player
 	defense.stats = stats  # F4: the session's (main.gd may swap the stats object in after setup)
 	defense.night = night  # F4: fences stay armed all night
 	defense.tick(TICK, horde, noise)
@@ -553,6 +609,43 @@ func _note_goals() -> void:
 				Guidance.FEED_STEPS, when_text())
 
 
+## Co-op A: one tick of the rules that belong to one player (the active one): hotwiring, gathering, carry weight,
+## warmth, window climbs, hunger and health, the gun in hand, sprint and sneak practice, the search in progress.
+func _tick_player(season: Dictionary, night_now: bool) -> void:
+	_tick_hotwire()
+	_tick_gather()  # P5
+	player.carry_ratio = carry_ratio()
+	player.stamina_regen_mult = 1.0 + skills.bonus("stamina_regen")
+	player.heal_mult = 1.0 + skills.bonus("heal_rate")
+	var sprinted := player.sprinting and not player.asleep and player.can_sprint()
+	player.warmth_rate = climate.warmth_rate(season, night_now, climate.heat_near(player_pos), is_indoors(player_pos),
+			player.asleep, skills.bonus("warmth")) / clock.seconds_per_hour() if not data.seasons.is_empty() else 0.0
+	_tick_window_actions()
+	var was_bleeding := player.bleeding
+	player.tick(TICK)
+	if was_bleeding and not player.bleeding and not player.dead:
+		add_message("The bleeding stopped", 3.0)  # Q5: on its own (a bandage clears it outside the tick)
+	_cold_messages()
+	guns.tick(TICK, inventory)
+	if sprinted:
+		_practice("fitness", "sprint_second", TICK)
+	if player_sneaking and not player.dead and _unnoticed_zombie_near():
+		_practice("sneaking", "sneak_second", TICK)
+	var found := loot.tick(TICK, player_pos)
+	if not found.is_empty():
+		_finish_search(found)
+	respawn_grace = maxf(0.0, respawn_grace - TICK)
+
+
+## A zombie's attack lands on the active player: the car takes it while they're inside, otherwise they do.
+func _zombie_reaches(z: ZombieBrain) -> void:
+	if vehicles.driving != "":
+		vehicles.damage(vehicles.driving, z.attack_damage())  # the car takes it while you're inside
+		noise.emit_kind(z.pos, "zombie_bash")
+	else:
+		zombie_hit_player(z)
+
+
 func add_message(text: String, seconds: float = 6.0) -> void:
 	messages.append({"text": text, "time_left": seconds})
 
@@ -675,9 +768,10 @@ func _wear_block_weapon() -> void:
 func _unnoticed_zombie_near() -> bool:
 	var reach := float(data.skills["sneak_range"])
 	var calm := [ZombieBrain.State.IDLE, ZombieBrain.State.WANDER, ZombieBrain.State.INVESTIGATE]
+	var at := player_pos
 	for id: int in horde.zombies:
 		var z: ZombieBrain = horde.zombies[id]
-		if z.state in calm and _flat_dist(z.pos, player_pos) <= reach:
+		if z.state in calm and _flat_dist(z.pos, at) <= reach:
 			return true
 	return false
 
@@ -3263,9 +3357,10 @@ func note_combat() -> void:
 
 ## F4: is a living zombie within `r` m of you (flat distance)?
 func zombie_within(r: float) -> bool:
+	var at := player_pos
 	for id: int in horde.zombies:
 		var z: ZombieBrain = horde.zombies[id]
-		if not z.is_dead() and _flat_dist(z.pos, player_pos) < r:
+		if not z.is_dead() and _flat_dist(z.pos, at) < r:
 			return true
 	return false
 

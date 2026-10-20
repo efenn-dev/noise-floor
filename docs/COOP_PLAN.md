@@ -46,7 +46,7 @@ Zombies target the **nearest** living player, hear both, and a wave walks to the
 
 Each phase is one pull request (or two), tests green, single-player untouched, and something to try at the end except the first.
 
-### Phase A — the rules can hold two players (1 session, nothing to see)
+### Phase A — the rules can hold two players (1 session, nothing to see) — DONE 2026-10-19 (see the devlog)
 
 The sim's one `player` becomes `players[]`, with everything that was one-per-game becoming one-per-player: PlayerStats, Inventory, Gear, Gunplay, Hotbar, Skills, position and facing, the active search, the car being driven, the pending vault. `sim.player`, `sim.inventory`, `sim.gear` and friends stay as aliases for player 0 so the ~260 places in the drawing code that use them keep compiling, and get rewritten to "the local player" in Phase C. Zombies, the Director, noise, loot and cars take a player index or a position instead of assuming the one. Saves hold a `players` list (an old save becomes a one-player list). The soak and every test still pass. A headless test plays two players in the same sim: both loot, both build, a zombie switches to the nearer one.
 
