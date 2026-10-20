@@ -77,6 +77,7 @@ var gathered := 0
 var perk_picks_offered := 0
 var perk_picks_later := 0
 var perk_picks_closed := 0  # by a zombie coming close
+var perk_resets := 0  # P13: a tree's points taken back
 var goals: Dictionary = {}  # chapter -> {"step", "of", "when"}: the furthest step and when it was reached
 var build_menu_opens := 0
 var build_menu_seconds := 0.0
@@ -413,6 +414,8 @@ func _p3_lines() -> PackedStringArray:
 	var picks := "Picks offered: %d" % perk_picks_offered  # P12
 	if perk_picks_later > 0 or perk_picks_closed > 0:
 		picks += " (Later %d, a zombie closed %d)" % [perk_picks_later, perk_picks_closed]
+	if perk_resets > 0:
+		picks += ". Points taken back: %d time%s" % [perk_resets, "" if perk_resets == 1 else "s"]  # P13
 	out.append("Perk points earned: %d, spent: %d%s. %s." % [perk_points_earned, spent, (" (" + ", ".join(pk) + ")") if not pk.is_empty() else "", picks])
 	if guns.is_empty():
 		out.append("Weapons: never fired or thrown.")

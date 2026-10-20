@@ -54,6 +54,7 @@ var broadcast_hours := 0.0
 var rescue_due := -1.0
 var _signal_on := true  # the mast had power last tick (to say when it drops and comes back)
 ## F4: the last game day the dawn perk pick was offered (not saved: a loaded game with points offers it again).
+var perk_reset_day := -1  # P13: the game day a tree's points were last taken back (once a day); saved
 var perk_snooze_until := 0.0  # P12: no perk pick before this absolute game hour (clock_hours); Later and a zombie set it; saved
 var _combat_at := -100.0  # P12: clock_hours of your last swing, shot or hit taken: a pick waits for calm
 var _heard_cache: Dictionary = {}  # F5: heard_preview results, cleared when the build grid changes
@@ -3446,6 +3447,26 @@ func spend_perk(perk: String) -> String:
 	if why == "":
 		stats.note_perk(perk)
 	return why
+
+
+## P13: whether a tree's points can be taken back now (once a game day).
+func can_reset_perks() -> bool:
+	return perk_reset_day != clock.day
+
+
+## P13: takes every point out of `tree` and hands them back, once a game day. Returns "" or why not.
+func reset_perks(tree: String) -> String:
+	if not data.skills["trees"].has(tree):
+		return "No such tree"
+	if skills.tree_points(tree) <= 0:
+		return "No points in %s to take back" % skills.tree_name(tree)
+	if not can_reset_perks():
+		return "You took points back today already: tomorrow"
+	var n := skills.reset_tree(tree)
+	perk_reset_day = clock.day
+	stats.perk_resets += 1
+	add_message("%d point%s back from %s" % [n, "" if n == 1 else "s", skills.tree_name(tree)], 3.0)
+	return ""
 
 
 ## P3: learns which town cells belong to which house (TownPlan.generate's "houses"), for the session log.

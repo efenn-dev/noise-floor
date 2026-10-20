@@ -67,7 +67,7 @@ const SPAWN := Vector3(0, 0, 6)
 const DEFAULT_ZOMBIES := 8
 const STASH_CELL := Vector2i(1, 3)  # just east of the spawn point
 const ROADSIDE_ZOMBIES := 8  # W3e: wandering the roads between the places (a new game)
-const PERK_PICK_CLOSE := 12.0  # F4: a zombie this close (m) closes the perk pick
+const PERK_PICK_CLOSE := 12.0  # F4: a zombie this close (m) closes the perk pick (P13: the prompted skill tree)
 ## The area the zombie navmesh covers. W3a: the whole bigger map (WorldMap.EXTENT), in NavBaker tiles.
 const NAV_BOUNDS := AABB(Vector3(-360, -1, -460), Vector3(720, 8, 760))
 const GROUND_SIZE := Vector2(840, 880)  # W3a: x -420..420, z -520..360 (centred at GROUND_Z), past the map's edge
@@ -109,7 +109,6 @@ var workbench_screen: WorkbenchScreen  # M14: E on a workbench
 var sensor_screen: SensorScreen  # M15: E on a sensor
 var project_screen: ProjectScreen  # M17a: E on the water tower
 var hub_screen: HubScreen  # F2: E on the Hub
-var perk_pick: PerkPickScreen  # F4: the dawn perk pick (three cards)
 var _victory: CanvasLayer  # F2: shown once when rescue comes
 var _rescue_was := ""  # F2: the rescue state last frame (the victory shows when broadcasting turns rescued)
 var park: Dictionary = {}  # M17a: ParkPlan.generate(seed): warehouses, crates, zombies, wrecks, fences, the tower
@@ -293,10 +292,6 @@ func _ready() -> void:
 	add_child(hub_screen)
 	hub_screen.setup(sim)
 	hub_screen.message.connect(func(text: String) -> void: sim.add_message(text, 5.0))
-	perk_pick = PerkPickScreen.new()
-	add_child(perk_pick)
-	perk_pick.setup(sim)
-	perk_pick.message.connect(func(text: String) -> void: sim.add_message(text, 3.0))
 	base_log_screen = BaseLogScreen.new()
 	add_child(base_log_screen)
 	base_log_screen.setup(sim)
@@ -389,7 +384,7 @@ func _ready() -> void:
 		skills_screen.open()  # --skills, for screenshots
 	if args.has("perk-pick"):  # F4: --perk-pick, the dawn perk pick with three points, for screenshots
 		sim.skills.perk_points = maxi(sim.skills.perk_points, 3)
-		perk_pick.open()
+		skills_screen.open_prompt()  # P13: the quiet-moment pick is the skill tree
 	if args.has("weapon"):  # V11: --weapon=axe holds a mint melee weapon of that base (pipe, bat, axe, machete, knife)
 		var base := str(args["weapon"])
 		if sim.data.gear["bases"].has(base) and sim.data.gear["bases"][base]["slot"] == "weapon":
@@ -594,7 +589,7 @@ func _open_sensor(key: String) -> void:
 
 func _m15_screen_open() -> bool:
 	return sensor_screen.is_open() or base_log_screen.is_open() or help_screen.is_open() or map_screen.is_open() \
-			or project_screen.is_open() or (hub_screen != null and hub_screen.is_open()) 			or (perk_pick != null and perk_pick.is_open())  # P3: help; M17a: project; F2: Hub; F4: perk pick
+			or project_screen.is_open() or (hub_screen != null and hub_screen.is_open())  # P3: help; M17a: project; F2: Hub
 
 
 ## M17a: E on the water tower.
@@ -701,15 +696,15 @@ func _fill_demo_log() -> void:
 ## F4: opens the dawn perk pick when SimWorld says it's time (not in screenshots or tests, not over another screen),
 ## and closes it if a zombie comes close while it's open.
 func _tick_perk_pick() -> void:
-	if perk_pick.is_open():
-		if sim.player.dead or sim.zombie_within(PERK_PICK_CLOSE):
-			perk_pick.close_for("zombie")  # P12: it comes back once things are quiet again
+	if skills_screen.is_open():
+		if skills_screen.prompted and (sim.player.dead or sim.zombie_within(PERK_PICK_CLOSE)):
+			skills_screen.close_for("zombie")  # P12: it comes back once things are quiet again
 		return
 	if _shot_path != "" or GameSession.skip_hints or menus.is_open() or inventory_screen.is_open() 			or skills_screen.is_open() or workbench_screen.is_open() or _m15_screen_open() or build_menu.is_open():
 		return
 	if sim.perk_offer_ready():
 		sim.note_perk_offered()  # P12: counted; Later or a zombie sets the snooze
-		perk_pick.open()
+		skills_screen.open_prompt()  # P13: the tree, with the affordable perks glowing
 
 
 ## First-game hints: a new game only (no save loaded, no --demo-*/--cam/--no-hints, not a screenshot).

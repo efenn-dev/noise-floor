@@ -377,12 +377,34 @@ static func _check_skills(errors: PackedStringArray, skills: Dictionary) -> void
 			errors.append("skill '%s' needs a name, xp and effects" % s)
 	var perks: Dictionary = skills.get("perks", {})
 	var trees: Dictionary = skills.get("trees", {})
+	var rows: Array = skills.get("tree_rows", [0, 3, 6])
+	var placed := {}
 	for t: String in trees:
 		for p: String in trees[t].get("perks", []):
 			if not perks.has(p) or not (perks[p].get("effects") is Dictionary) or perks[p]["effects"].is_empty():
 				errors.append("perk '%s' (tree %s) needs effects" % [p, t])
-			elif perks[p].has("synergy") and not trees.has(perks[p]["synergy"].get("tree", "")):
+				continue
+			if perks[p].has("synergy") and not trees.has(perks[p]["synergy"].get("tree", "")):
 				errors.append("perk '%s' synergy names an unknown tree" % p)
+			if placed.has(p):
+				errors.append("perk '%s' is in two trees" % p)
+			placed[p] = true
+			# P13: a row the tree has, an arrow to a perk above it in the same tree, a picture that exists
+			var row := int(perks[p].get("row", 1))
+			if row < 1 or row > rows.size():
+				errors.append("perk '%s' row %d: the tree has rows 1-%d" % [p, row, rows.size()])
+			var need := str(perks[p].get("needs", ""))
+			if need != "":
+				if not need in trees[t]["perks"]:
+					errors.append("perk '%s' needs '%s', which isn't in its tree" % [p, need])
+				elif int(perks.get(need, {}).get("row", 1)) >= row:
+					errors.append("perk '%s' needs '%s', which isn't in a row above it" % [p, need])
+			var icon := str(perks[p].get("icon", ""))
+			if icon == "" or not ResourceLoader.exists("res://assets/icons/%s.png" % icon):
+				errors.append("perk '%s' has no picture (assets/icons/%s.png)" % [p, icon])
+	for p: String in perks:
+		if not placed.has(p):
+			errors.append("perk '%s' is in no tree" % p)
 
 
 ## M15: defense.json. Every action in action_order has a name and hold; items it names exist.

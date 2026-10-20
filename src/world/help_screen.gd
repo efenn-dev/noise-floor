@@ -54,7 +54,7 @@ const ROWS := [
 	["Cars", [], "F", "headlights"],
 	["Cars", [], "R", "hotwire a car with no key (needs Mechanics)"],
 	["Screens", ["inventory"], "", "your gear and pockets"],
-	["Screens", ["skills"], "", "skills and perks"],
+	["Screens", ["skills"], "", "skills and the perk trees (click a glowing picture to spend a point)"],
 	["Screens", ["objectives"], "", "show or hide the first-night objectives"],
 	["Screens", ["base_log"], "", "base log: what happened at your base"],
 	["Screens", ["map"], "", "the map: roads, places, resource spots, your base and you"],
