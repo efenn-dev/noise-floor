@@ -2,6 +2,34 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
+## 2026-10-19 — P13 The perk trees, Diablo 2 style
+
+Emmitt, looking at the P12 perk pick: "can we turn this into a skill tree like in Diablo 2?" The plan is `docs/SKILL_TREE_PLAN.md`; this is the build.
+
+**Built:**
+- **Three trees, three rows each** (`data/skills.json`, `Skills`):
+  - A row opens with points in that tree: row 1 from the start, row 2 at 3, row 3 at 6 (`tree_rows`, `Skills.row_open`). Points in another tree don't count.
+  - Arrows: a perk with `needs` wants a point in the perk above it first (`Skills.needs`, `why_locked`). `can_spend` refuses with the reason in words: "Needs 3 points in Engineer first", "Needs a point in Tuned Machines first".
+  - 25 perks, 13 of them new, all on bonuses the game already applies: Cheap Repairs, Green Thumb, Pack Mule, Careful Hands, Silent Running (Engineer); Parkour, Light Gear, Deep Pockets, Night Walker, Treasure Sense (Ghost); Shove, Field Medic, Iron Hide (Fighter). Three carry synergies (Dampened Gears from Ghost as before; Silent Running from Engineer; Treasure Sense from Ghost).
+  - **Take points back**: `SimWorld.reset_perks(tree)` empties a tree into your pocket, once a game day (`perk_reset_day`, saved). A six-year-old will misclick.
+  - The data check (`GameData.validate`) refuses a perk in no tree or two, a row the tree hasn't got, an arrow to a perk outside its tree or not above it, and a perk without a picture.
+- **The K screen's right side is the tree** (`SkillsScreen`):
+  - Each perk is a square with a picture (from the icons the game already has: a belt for Fast Lines, an axe for Heavy Swing, a bandage for Field Medic...) and five rank pips. Gold glow: you can put a point in now. Grey and dark: its row isn't open, or its arrow isn't met; the row says "3 points in Engineer open this row". Green: maxed.
+  - Arrows drawn from each perk to the one it needs, gold once that one has a point.
+  - Pointing at a perk spells it out under the trees: rank, what it does, what it needs, its synergy and how many points feed it.
+  - "Take points back" under each tree. Scaled up on big windows like the build menu.
+  - **The quiet-moment pick opens the tree** (`open_prompt`), landing with the details on the first perk you can take, with a banner and a Later button; K and Esc are Later while prompted. The three-card screen is gone.
+- The session log's perk line adds "Points taken back: N times" when it happened.
+
+**Try it on the PC:** `play.bat`, press K. Or `play.bat --perk-pick` for the prompted tree with three points to spend.
+
+**Known gaps:**
+- The pictures are borrowed item and piece icons. Drawn perk icons (Codex) would be one batch later; the layout won't change.
+- The 13 new perks' numbers are a first draft; the log's perks-taken line tunes them.
+- No arrows across trees, and no perk that needs two others. Fine for 25 perks.
+
+**Next:** co-op Phase A (the rules hold two players), per `docs/COOP_PLAN.md`; each player gets a tree of their own.
+
 ## 2026-10-18 — P12 Perk picks that happen, hold right-click to take things down, logs that answer
 
 A review of Emmitt's 14 session logs and Kaleb's one (PLAYTESTS 2026-10-18). Three things the logs made plain:

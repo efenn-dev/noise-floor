@@ -36,8 +36,8 @@ func test_all_skills_in_data() -> void:
 	check(not sim.skills.is_disabled("firearms"), "Firearms works since M14")
 	check(not sim.data.skills["skills"]["firearms"]["xp"].is_empty(), "and shots give Firearms xp")
 	for t: String in sim.data.skills["trees"]:
-		eq(sim.data.skills["trees"][t]["perks"].size(), 6 if t == "fighter" else 3,
-				"three perks in %s (Fighter has three gun perks since M14)" % t)
+		eq(sim.data.skills["trees"][t]["perks"].size(), 9 if t == "fighter" else 8,
+				"P13: eight perks in %s, nine in Fighter (three rows)" % t)
 
 
 func test_level_thresholds() -> void:
@@ -488,3 +488,81 @@ func test_save_and_load_xp_perks_and_points() -> void:
 	eq(b.skills.perks, {"soft_step": 2, "fast_lines": 1}, "perks back")
 	eq(b.skills.perk_points, 3, "points back")
 	near(b.noise_loudness("footstep_sprint"), float(b.data.noise["sounds"]["footstep_sprint"]) - 6.0, "and they work")
+
+
+# --- P13: the tree -------------------------------------------------------------------
+
+func test_the_tree_data_checks_out() -> void:
+	var data := GameData.load_default()
+	eq(data.validate(), PackedStringArray(), "skills.json checks out (rows, arrows, pictures)")
+	var sk := Skills.new(data)
+	eq(sk.rows(), [0, 3, 6], "three rows: open, 3 points, 6 points")
+	var n := 0
+	for t: String in data.skills["trees"]:
+		for row in [1, 2, 3]:
+			check(sk.row_perks(t, row).size() >= 2 and sk.row_perks(t, row).size() <= 3, "%s row %d has 2-3 perks" % [t, row])
+			n += sk.row_perks(t, row).size()
+	eq(n, data.skills["perks"].size(), "every perk sits in a row (%d)" % n)
+	eq(sk.needs("cheap_repairs"), "tuned_machines", "an arrow")
+	eq(sk.needs("fast_lines"), "", "a row-1 perk has none")
+	for perk: String in data.skills["perks"]:
+		var need := sk.needs(perk)
+		if need != "":
+			check(sk.row_of(need) < sk.row_of(perk) and sk.tree_of(need) == sk.tree_of(perk), "%s's arrow comes from a row above in its tree" % perk)
+		check(ResourceLoader.exists("res://assets/icons/%s.png" % sk.icon(perk)), "%s has a picture" % perk)
+	# A sanity check on the new perks' numbers: every effect key is one the game already reads somewhere.
+	var read := PackedStringArray()
+	for path: String in ["res://src/sim/sim_world.gd", "res://src/sim/factory.gd", "res://src/sim/gunplay.gd", "res://src/sim/gear.gd",
+			"res://src/sim/loot.gd", "res://src/sim/player_stats.gd", "res://src/sim/power_grid.gd", "res://src/sim/noise_field.gd",
+			"res://src/world/player.gd", "res://src/world/shooter.gd", "res://src/world/melee.gd", "res://src/sim/vehicles.gd",
+			"res://src/sim/climate.gd", "res://src/sim/skills.gd"]:
+		if FileAccess.file_exists(path):
+			read.append(FileAccess.get_file_as_string(path))
+	var all := "\n".join(read)
+	for perk: String in data.skills["perks"]:
+		for effect: String in data.skills["perks"][perk]["effects"]:
+			check(all.contains('"%s"' % effect), "%s's effect '%s' is read by the game" % [perk, effect])
+
+
+func test_rows_open_by_points_in_the_tree_and_arrows_gate() -> void:
+	var sim := SimWorld.new(10.0)
+	var sk := sim.skills
+	sk.perk_points = 12
+	check(sk.spend("cheap_repairs").begins_with("Needs 3 points in Engineer"), "row 2 waits for 3 points in the tree (%s)" % sk.spend("cheap_repairs"))
+	check(sk.spend("pack_mule").begins_with("Needs 3 points"), "Pack Mule too, though it has no arrow")
+	for i in 3:
+		eq(sk.spend("fast_lines"), "", "Fast Lines %d" % (i + 1))
+	eq(sk.spend("pack_mule"), "", "3 points in: row 2 is open for Pack Mule")
+	check(sk.spend("cheap_repairs").begins_with("Needs a point in Tuned Machines"), "Cheap Repairs still wants its arrow (%s)" % sk.spend("cheap_repairs"))
+	eq(sk.spend("tuned_machines"), "", "a point in Tuned Machines")
+	check(sk.spend("careful_hands").begins_with("Needs 6 points in Engineer"), "row 3 waits for 6 (%d so far)" % sk.tree_points("engineer"))
+	eq(sk.spend("cheap_repairs"), "", "opens Cheap Repairs")
+	eq(sk.tree_points("engineer"), 6, "six points in Engineer")
+	eq(sk.spend("careful_hands"), "", "row 3 opens, its arrow (Cheap Repairs) met")
+	check(sk.spend("silent_running").begins_with("Needs a point in Dampened Gears"), "Silent Running wants Dampened Gears")
+	check(sk.why_locked("fast_lines") == "" and sk.why_locked("heavy_swing") == "", "row-1 perks are never locked")
+	check(sk.spend("gunsmith").begins_with("Needs 6 points in Fighter"), "Fighter's rows gate the old perks the same way (%s)" % sk.spend("gunsmith"))
+	# Points in another tree don't count.
+	eq(sk.tree_points("fighter"), 0, "nothing in Fighter yet")
+	check(not sk.row_open("fighter", 2), "Fighter's row 2 is shut however many Engineer points you have")
+
+
+func test_reset_gives_a_trees_points_back_once_a_day() -> void:
+	var sim := SimWorld.new(10.0)
+	var sk := sim.skills
+	sk.perk_points = 5
+	sk.spend("soft_step")
+	sk.spend("soft_step")
+	sk.spend("heavy_swing")
+	eq(sim.reset_perks("ghost"), "", "Ghost's points come back")
+	eq(sk.rank("soft_step"), 0, "Soft Step is back to 0")
+	eq(sk.perk_points, 4, "the two points are back (2 unspent + 2)")
+	eq(sk.rank("heavy_swing"), 1, "Fighter is untouched")
+	check(sim.reset_perks("fighter").begins_with("You took points back today"), "once a game day")
+	check(sim.reset_perks("ghost").begins_with("No points in Ghost"), "an empty tree says so")
+	eq(sim.stats.perk_resets, 1, "the log counts one reset")
+	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
+	eq(int(d["perk_reset_day"]), sim.clock.day, "the day is saved")
+	sim.clock.day += 1
+	eq(sim.reset_perks("fighter"), "", "tomorrow Fighter can be reset")
+	eq(sk.perk_points, 5, "all five back")

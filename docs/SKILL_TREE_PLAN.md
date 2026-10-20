@@ -1,6 +1,6 @@
 # Skill tree plan: perks as a Diablo 2 tree
 
-*Written 2026-10-19 by Claude Fable 5.1 at Emmitt's request ("can we turn this into a skill tree like in Diablo 2?"), looking at the P12 perk pick. A plan for one milestone (P13); building starts once PR #108 is merged.*
+*Written 2026-10-19 by Claude Fable 5.1 at Emmitt's request ("can we turn this into a skill tree like in Diablo 2?"), looking at the P12 perk pick. Built the same day as P13 (see the devlog); the layout below is the design, with one change: Deadeye was dropped so every row holds at most three nodes, 25 perks in all.*
 
 ## What Diablo 2 does that this game doesn't yet
 

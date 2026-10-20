@@ -182,27 +182,6 @@ func test_the_repair_station_draws_power_only_with_work() -> void:
 	eq(bin.count, 4, "with one panel")
 
 
-func test_the_perk_offer_is_one_per_tree_lowest_rank_first() -> void:
-	var sk := Skills.new(data)
-	var offer := sk.offer(1)
-	eq(offer.size(), (data.skills["trees"] as Dictionary).size(), "one card per tree")
-	var trees := offer.map(func(p: String) -> String: return sk.tree_of(p))
-	for tree: String in data.skills["trees"]:
-		check(trees.has(tree), "one from %s" % tree)
-	check(sk.offer(1) == offer, "the same day gives the same cards")
-	var varied := false
-	for seed in range(2, 8):
-		varied = varied or sk.offer(seed) != offer
-	check(varied, "other days give other cards")
-	var engineer: Array = data.skills["trees"]["engineer"]["perks"]
-	sk.perks[engineer[0]] = 1
-	sk.perks[engineer[1]] = 1
-	check(sk.offer(5).has(engineer[2]), "the tree's lowest-rank perk is offered first")
-	for p: String in engineer:
-		sk.perks[p] = sk.max_rank()
-	eq(sk.offer(5).size(), offer.size() - 1, "a tree with every perk at the top has no card")
-
-
 func test_the_perk_pick_waits_for_points_calm_and_safety() -> void:
 	# P12: not once at dawn with nothing within 25 m (which, in a town full of zombies, never came: 24 points unspent
 	# between Emmitt and Kaleb), but at any quiet moment.
@@ -259,37 +238,23 @@ func test_the_perk_pick_waits_for_points_calm_and_safety() -> void:
 	near(b.perk_snooze_until, sim.perk_snooze_until, "and comes back")
 
 
-func test_the_perk_pick_screen_spends_points() -> void:
+func test_the_prompted_tree_spends_points_and_snoozes() -> void:
+	# P13: the quiet-moment pick opens the skill tree (SkillsScreen.open_prompt), not three cards.
 	var sim := SimWorld.new(9.0)
 	sim.skills.perk_points = 2
-	var screen := PerkPickScreen.new()
+	var screen := SkillsScreen.new()
 	tree.root.add_child(screen)
 	screen.setup(sim)
-	screen.open()
-	eq(screen.offered.size(), 3, "three cards")
-	var first: String = screen.offered[0]
-	screen.pick(0)
+	screen.open_prompt()
+	check(screen.is_open() and screen.prompted, "open, prompted")
+	var first := screen.hovered
+	check(first != "" and sim.skills.can_spend(first) == "", "it points at a perk you can take (%s)" % first)
+	screen.spend(first)
 	eq(sim.skills.rank(first), 1, "a click buys that perk")
-	eq(sim.skills.perk_points, 1, "with a point")
-	check(screen.is_open(), "points left: still open, with new cards")
-	screen.pick(1)
-	eq(sim.skills.perk_points, 0, "the last point")
-	check(not screen.is_open(), "closes when they're spent")
-	eq(sim.stats.perk_picks_later, 0, "spending every point isn't Later")
-	# P12: Later and a zombie closing it set the snooze; the first pick explains itself.
-	sim.skills.perks.clear()
-	sim.skills.perk_points = 1
-	screen.open()
-	check(screen._intro.visible, "no perk taken yet: the screen says what a perk is")
+	eq(sim.skills.perk_points, 1, "with a point left")
+	check(screen.is_open(), "points left: still open")
 	screen.later()
-	check(not screen.is_open() and sim.stats.perk_picks_later == 1, "Later closes it and is counted")
+	check(not screen.is_open(), "Later closes it")
+	eq(sim.stats.perk_picks_later, 1, "and is counted")
 	check(sim.perk_snooze_until > sim.clock_hours() + 1.0, "and puts it off a while")
-	sim.perk_snooze_until = 0.0
-	screen.open()
-	screen.close_for("zombie")
-	check(not screen.is_open() and sim.stats.perk_picks_closed == 1, "a zombie closing it is counted")
-	check(sim.perk_snooze_until <= sim.clock_hours() + SimWorld.PERK_SNOOZE_CLOSED + 0.01, "and it comes back sooner")
-	sim.skills.perks["soft_step"] = 1
-	screen.open()
-	check(not screen._intro.visible, "once you have a perk, no explanation")
 	screen.free()

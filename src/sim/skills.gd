@@ -7,6 +7,8 @@ extends RefCounted
 ##                       "value per `every` levels" (Farming: 1 extra vegetable per 3 levels)
 ##   perks.<id>.effects  what each rank gives; perks.<id>.synergy adds more per `every` points spent
 ##                       in another tree (Dampened Gears gains from Ghost), once you have a rank
+##   perks.<id>.row/needs/icon  P13: the tree's row the perk sits in, the perk above it that wants a point
+##                       first, and its picture; tree_rows: points in the tree each row needs ([0, 3, 6])
 ##   levels_per_perk_point: every 3 skill levels gained in total earn a perk point
 ## The rules ask one question, bonus(effect), and get the sum over every skill level and perk rank,
 ## so a test can set levels or ranks and read the numbers. Skills and perks survive death.
@@ -14,7 +16,7 @@ extends RefCounted
 var data: GameData
 var xp: Dictionary = {}     # skill -> total xp
 var perks: Dictionary = {}  # perk -> rank (1-5); missing = 0
-## Points earned and not yet spent. Never refunded (respec is a later milestone).
+## Points earned and not yet spent. P13: reset_tree gives a tree's back (SimWorld allows it once a game day).
 var perk_points := 0
 ## M13: what you wear. bonus() adds its stats in, Strength levels from gear count for Strength's
 ## effects, and "+N to <tree> perks" raises every perk you have a rank in, in that tree (past 5 too).
@@ -105,9 +107,80 @@ func can_spend(perk: String) -> String:
 		return "No such perk"
 	if rank(perk) >= max_rank():
 		return "%s is at its top rank" % perk_name(perk)
+	var locked := why_locked(perk)
+	if locked != "":
+		return locked
 	if perk_points <= 0:
 		return "No perk points (one every %d skill levels)" % int(data.skills["levels_per_perk_point"])
 	return ""
+
+
+# --- P13: the tree ---------------------------------------------------------------
+
+## The points in a tree each row needs, row 1 first: [0, 3, 6].
+func rows() -> Array:
+	var out := []
+	for v in data.skills.get("tree_rows", [0, 3, 6]):
+		out.append(int(v))
+	return out
+
+
+func row_of(perk: String) -> int:
+	return int(data.skills["perks"][perk].get("row", 1))
+
+
+## The perk above `perk` that wants a point before it ("" if none).
+func needs(perk: String) -> String:
+	return str(data.skills["perks"][perk].get("needs", ""))
+
+
+## The perk's picture: an assets/icons name.
+func icon(perk: String) -> String:
+	return str(data.skills["perks"][perk].get("icon", ""))
+
+
+func tree_name(tree: String) -> String:
+	return str(data.skills["trees"][tree]["name"])
+
+
+## Whether `row` of `tree` is open: enough points spent in that tree.
+func row_open(tree: String, row: int) -> bool:
+	return tree_points(tree) >= row_needs(row)
+
+
+func row_needs(row: int) -> int:
+	var r := rows()
+	return int(r[clampi(row - 1, 0, r.size() - 1)])
+
+
+## The perks of `tree` in `row`, in the tree's order.
+func row_perks(tree: String, row: int) -> Array:
+	var out := []
+	for perk: String in data.skills["trees"][tree]["perks"]:
+		if row_of(perk) == row:
+			out.append(perk)
+	return out
+
+
+## "" when `perk`'s row is open and its arrow (needs) is met; otherwise why not, in a few words.
+func why_locked(perk: String) -> String:
+	var tree := tree_of(perk)
+	if tree != "" and not row_open(tree, row_of(perk)):
+		return "Needs %d points in %s first" % [row_needs(row_of(perk)), tree_name(tree)]
+	var need := needs(perk)
+	if need != "" and rank(need) <= 0:
+		return "Needs a point in %s first" % perk_name(need)
+	return ""
+
+
+## Takes every point out of `tree` and hands them back. Returns how many. (SimWorld.reset_perks limits it.)
+func reset_tree(tree: String) -> int:
+	var n := 0
+	for perk: String in data.skills["trees"][tree]["perks"]:
+		n += rank(perk)
+		perks.erase(perk)
+	perk_points += n
+	return n
 
 
 ## Spends a perk point on `perk`. Returns "" or why not.
@@ -117,28 +190,6 @@ func spend(perk: String) -> String:
 		perk_points -= 1
 		perks[perk] = rank(perk) + 1
 	return why
-
-
-## F4: up to three perks for the dawn pick (PerkPickScreen), one from each tree: of that tree's perks below the
-## top rank, one with the fewest ranks so far, chosen by `seed` (the day) so the offer changes from day to day.
-func offer(seed: int) -> Array:
-	var out := []
-	var trees: Array = data.skills["trees"].keys()
-	for i in trees.size():
-		var lowest := []
-		var low_rank := max_rank()
-		for perk: String in data.skills["trees"][trees[i]]["perks"]:
-			var r := rank(perk)
-			if r >= max_rank():
-				continue
-			if r < low_rank:
-				lowest = [perk]
-				low_rank = r
-			elif r == low_rank:
-				lowest.append(perk)
-		if not lowest.is_empty():
-			out.append(lowest[posmod(seed + i, lowest.size())])
-	return out
 
 
 ## Points spent in a tree ("ghost"), for synergies.
