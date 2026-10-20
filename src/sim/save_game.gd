@@ -270,6 +270,8 @@ static func _standing(sim: SimWorld, i: int) -> Vector3:
 
 ## Co-op A: lays one player's share `sd` (see _slot_dict; an old save's top level for slot 0) over the active player.
 static func _load_slot(sim: SimWorld, sd: Dictionary, version: int) -> void:
+	if sd.has("name"):
+		sim.players[sim.active].name = str(sd["name"])  # Co-op B: the host's slot carries the host's name
 	sim.inventory.take_all(_counts(sim.inventory))  # keep the same Inventory object: others hold it
 	sim.inventory.give_all(_ints(sd["inventory"]))
 	var pl: Dictionary = sd["player"]
