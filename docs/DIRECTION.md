@@ -2,6 +2,15 @@
 
 *Written 2026-10-12 by Claude Fable 5.1 at Emmitt's request, after reading the design doc, the devlog, the sim code and the first fifteen pull requests. This file outranks the milestone list in `GAME_DESIGN.md`: when they disagree, follow this one. Update it when a decision below changes.*
 
+## Update, 2026-10-19: a skill tree, then co-op with Kaleb (Emmitt's asks)
+
+Two plans written at Emmitt's request, both outside this file:
+
+- `docs/SKILL_TREE_PLAN.md`: the P12 perk pick becomes a Diablo 2 style tree (three trees, three rows that open at 3 and 6 points, arrows, synergies, a picture per perk from the icons the game already has, a free daily reset). One session: **P13**, after PR #108 (P12) is merged.
+- `docs/COOP_PLAN.md`: Kaleb plays alongside Emmitt over the house network. The host runs the rules; the other PC shows a copy and sends its actions. Five phases, six to eight sessions, the first with nothing to see. Three decisions for Emmitt are listed at its end.
+
+Order from here: merge P12 → P13 skill tree → co-op Phase A (the rules hold two players) → Phase B (join over the network) → C → D → E. The log-review backlog (the muffler prompt, doors, a payoff for the first factory) slots in between phases when a playtest asks for it.
+
 ## Update, 2026-10-15 (evening): the premise, and the stance on building (Fable review; Emmitt asked for it in the roadmap)
 
 *Written by Claude Fable 5.1 after Emmitt asked whether the premise is unique and interesting, and said the game "seems to be leaning closer to Project Zomboid rather than Satisfactory; the building and automation have had almost no work and aren't nearly as satisfying as Satisfactory." He asked for these ideas in the roadmap. F2 (#81) and F3 (#82) were open when this was written; this section says what comes after them and how to judge them.*
