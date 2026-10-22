@@ -47,7 +47,7 @@ A new game's first 30 minutes (day 1, the first night, the next morning) look, s
 | V30 | New weapons (Emmitt approved): shotgun, crossbow, pipe bomb, bottle | Codex (code), Claude (fixes, balance) | Merged (#72) | Each one found, used and heard in play |
 | V31 | The left arm on long guns reads as one arm (sleeve centred on the model's cuff) | Claude | Merged (#73) | No floating sleeve on the rifle, shotgun or crossbow |
 | Q6 | Second pre-playtest check: `tools/soak.sh --days=3` and `tools/tour.sh` on `main` after V23-V31; fixes for what they and the screenshots found | Claude, branch `q6-pre-playtest` | PR open; SOAK OK; tour checked | Soak OK, tour checked, tests green |
-| V8 | Playtest #2 on the polished build (30 min from a new game, session log pasted in), then tuning from it (replaces S3-2 and S3-3) | Emmitt (+ Kaleb), then Claude | Ready after Q6 merges (V5 can follow) | Entry in `docs/PLAYTESTS.md`; tuning PR merged |
+| V8 | Playtest #2 on the polished build (30 min from a new game, session log pasted in), then tuning from it (replaces S3-2 and S3-3) | Emmitt (+ the kid), then Claude | Ready after Q6 merges (V5 can follow) | Entry in `docs/PLAYTESTS.md`; tuning PR merged |
 
 Order: V2 runs in Codex while Claude builds V1; then V3 and V4 (code) while Codex does V5 and V6 (art); V7 after V2 merges because both touch the zombie; V8 last. Before V8, run `tools/soak.sh --days=3` and `tools/tour.sh` on `main`, as DIRECTION.md asks.
 
@@ -78,7 +78,7 @@ Emmitt drives a car, closes a door behind him, and builds from a hotbar and a bu
 | S3-1 | Playtest #1 fixes: driving (E bounced you out), doors (couldn't close, walked through the open panel), plus the hotbar (1-9, 0) and the build menu (B) he asked for | Fable 5.1, worktree `noise-floor-s3`, branch `s3-playtest-fixes` | Merged (#42) | PR merged; Emmitt drives, closes a door, builds from the hotbar |
 | S3-1b | Second pass from Playtest #1 (his second message): piece pictures, first-factory walkthrough (hints, build menu notes, F1 guide, no-power message), lootable corpses, jumpscare stings | Fable 5.1, worktree `noise-floor-s4`, branch `s4-playtest-1b` | Merged (#43) | PR merged; Emmitt builds a running smelter from the tips alone |
 | S3-1c | Art pass with Codex: zombie skin and clothes textures (object-space triplanar, like car paint), gun metal and wood, then clothes variety per zombie | Codex, worktree `noise-floor-art3`, branch `s3-1c-codex-art` | Implemented in code with coverage tests; Godot crashed on sandbox log access, so the full suite and five Forward+ screenshots still need PC validation before merge | Zombies and guns read as textured in a screenshot |
-| S3-2 | Playtest #2 on the merged build (30 min, session log pasted in) | Emmitt (+ Kaleb) | Waiting on S3-1 and S3-1b | Entry in `docs/PLAYTESTS.md` |
+| S3-2 | Playtest #2 on the merged build (30 min, session log pasted in) | Emmitt (+ the kid) | Waiting on S3-1 and S3-1b | Entry in `docs/PLAYTESTS.md` |
 | S3-3 | Tuning from Playtest #2 (the builders' flagged soft spots: infamy and heat climb, early water, winter stove, park difficulty) | Fable plans, Opus 5.5 builds | Waiting on S3-2 | PR merged |
 
 ---
@@ -103,7 +103,7 @@ Emmitt drives a car, closes a door behind him, and builds from a hotbar and a bu
 
 # Sprint 2 — "Into the houses"
 
-*Started 2026-10-12, right after Sprint 1 closed: #16, #17 and #18 merged, and Emmitt's first play (on the old build, before play.bat caught up) said two things: no way into the buildings, and cars that would not drive. Lead: Claude Fable 5.1. Builders: Claude Opus 5.5. QA: Emmitt and Kaleb. Budget rule unchanged: the lead checks the 5-hour window before launching a builder, stops launching at 75%, one build agent on the PC at a time; cloud sessions on the credit don't count against it.*
+*Started 2026-10-12, right after Sprint 1 closed: #16, #17 and #18 merged, and Emmitt's first play (on the old build, before play.bat caught up) said two things: no way into the buildings, and cars that would not drive. Lead: Claude Fable 5.1. Builders: Claude Opus 5.5. QA: Emmitt and the kid. Budget rule unchanged: the lead checks the 5-hour window before launching a builder, stops launching at 75%, one build agent on the PC at a time; cloud sessions on the credit don't count against it.*
 
 ## Sprint goal
 
@@ -115,7 +115,7 @@ Emmitt opens a front door, loots a kitchen in the dark, closes the door and hear
 |---|---|---|---|---|
 | S2-1 | P1 playtest fixes: car prompts explain keys and wrecks; play.bat writes an update log and a version line the title screen shows | Opus 5.5 agent | Merged (#20) | PR merged; Emmitt sees the version on the title screen |
 | S2-2 | W1a — into the houses (plan: `docs/plans/W1.md`) | Opus 5.5 agent on the PC, worktree `noise-floor-w1a` (Emmitt chose local, 2026-10-13) | PR #21 open; 1546 checks green; 455 town pieces, first bake 48 ms | PR merged; walk in, loot inside, closed door muffles; tests and screenshots per the plan |
-| S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + Kaleb | Ready now | Entry in `docs/PLAYTESTS.md` |
+| S2-3 | Playtest #1 on the merged build (30 min, with the session log) | Emmitt + the kid | Ready now | Entry in `docs/PLAYTESTS.md` |
 | S2-4 | W1b — life inside: zombies in some houses, factory floor, hordes on roads, props | Opus 5.5 agent on the PC, worktree `noise-floor-w1b`, stacked on #22 | PR #23 open; 2022 checks green | |
 | S2-5 | Sprint review: read Playtest #1 and the session logs; plan Sprint 3 (M12 skills unless the playtest says otherwise) | Fable | Waiting on S2-3 | Sprint 3 board here |
 
@@ -161,11 +161,11 @@ Not in this run: tuning of any kind (waits for Playtest #1), M16, M17, anything 
 
 # Sprint 1 — "Someone plays it" (closed 2026-10-12)
 
-*Started 2026-10-12. Ends when the first entry lands in `docs/PLAYTESTS.md`. Lead: Claude Fable 5.1 (plans, review, this board). Builders: Claude Opus 5.5 sessions and agents, one milestone per worktree. QA: Emmitt, with Kaleb when he's willing. Update the Status column as things move; keep the table honest.*
+*Started 2026-10-12. Ends when the first entry lands in `docs/PLAYTESTS.md`. Lead: Claude Fable 5.1 (plans, review, this board). Builders: Claude Opus 5.5 sessions and agents, one milestone per worktree. QA: Emmitt, with the kid when he's willing. Update the Status column as things move; keep the table honest.*
 
 ## Sprint goal
 
-Emmitt and Kaleb play Noise Floor for 30 minutes on `main` via `play.bat` and write the first playtest entry, and the game itself writes a session log they can paste in. Nothing else matters this sprint.
+Emmitt and the kid play Noise Floor for 30 minutes on `main` via `play.bat` and write the first playtest entry, and the game itself writes a session log they can paste in. Nothing else matters this sprint.
 
 ## Budget rule
 
@@ -179,7 +179,7 @@ Stay inside the account's 5-hour usage window. The lead checks it before launchi
 | S1-2 | Direction, playtest template, this board | Fable | PR #17 open, clean | PR merged |
 | S1-3 | P0 playtest kit: session log the game writes on death and quit, first-five-minutes hints for a new game | Opus 5.5 agent, worktree `noise-floor-p0` | PR #18 open; M11 merged in by the lead (a `stats` name clash fixed); 1067 checks green | PR merged; tests green; Emmitt finds the log file on his PC |
 | S1-4 | Save upgrades: bump `SaveGame.VERSION` per milestone, load old saves with defaults, fixture-save test | Done inside PR #16 (VERSION 2; version-1 saves load with defaults; test added) | Done | A committed save from the previous version still loads in a test |
-| S1-5 | Playtest #1 (30 minutes, then one `PLAYTESTS.md` entry) | Emmitt + Kaleb | Ready now on current `main`; play again after #16 and P0 land | Entry pushed to `main` |
+| S1-5 | Playtest #1 (30 minutes, then one `PLAYTESTS.md` entry) | Emmitt + the kid | Ready now on current `main`; play again after #16 and P0 land | Entry pushed to `main` |
 | S1-6 | Sprint review: read the playtest and the session log, plan Sprint 2 (W1 real town) | Fable | Waiting on S1-5 | `docs/plans/W1.md` written, Sprint 2 board here |
 
 ## What Emmitt tests, and when
@@ -194,7 +194,7 @@ Stay inside the account's 5-hour usage window. The lead checks it before launchi
 - A file appeared under `%APPDATA%\Godot\app_userdata\Noise Floor\sessions\` with a readable summary under 40 lines.
 - On a new game, hints told you what to do first (find the crate, build a smelter, it's loud, wall it or muffle it) and went away by themselves.
 
-**Then Playtest #1.** Thirty minutes, ideally with Kaleb, then fill in the template at the top of `docs/PLAYTESTS.md` and paste the session log. Short answers are fine. That entry decides Sprint 2.
+**Then Playtest #1.** Thirty minutes, ideally with the kid, then fill in the template at the top of `docs/PLAYTESTS.md` and paste the session log. Short answers are fine. That entry decides Sprint 2.
 
 ## Rules of play for builders
 

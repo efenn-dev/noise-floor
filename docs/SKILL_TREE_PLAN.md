@@ -7,7 +7,7 @@
 - **Three trees of real depth.** Each tree is rows of skills; the lower rows open as your character grows. Ours has three trees of 3, 3 and 6 perks, all open from the first point.
 - **Arrows.** Skills lead to skills: you can't take the big one without the small one under it. Ours has none.
 - **Synergies.** Points in one skill feed another, so a build has a shape. Ours has exactly one (Dampened Gears gets stronger with Ghost points).
-- **A picture per skill.** You read the tree by its icons. Ours is text rows with a "+1" button, which is a wall for Kaleb.
+- **A picture per skill.** You read the tree by its icons. Ours is text rows with a "+1" button, which is a wall for the kid.
 
 ## The design
 
@@ -55,4 +55,4 @@ One session (P13). Data and rules first (cloud-safe), then the screen and screen
 ## Not decided here
 
 - The exact numbers on the 14 new perks. Draft values go in; the next playtest's log (perks taken, resets) tunes them.
-- Whether the 13 levelling skills should also show as a picture grid. Later, if Kaleb reaches for them.
+- Whether the 13 levelling skills should also show as a picture grid. Later, if the kid reaches for them.

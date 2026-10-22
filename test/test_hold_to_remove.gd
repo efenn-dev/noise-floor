@@ -1,5 +1,5 @@
 extends "res://test/base_test.gd"
-## P12 (Emmitt's log: the Hub built four times in one sitting, so it came down three; Kaleb's door vanished): in
+## P12 (Emmitt's log: the Hub built four times in one sitting, so it came down three; Kid's door vanished): in
 ## build mode a tap of right-click no longer takes a piece down. You hold it for BuildController.HOLD_TO_REMOVE on
 ## the piece while the HUD's ring fills; letting go early or looking away cancels. Real mouse buttons through the
 ## Input singleton (so BuildController's _unhandled_input and Input.is_action_pressed both see them).

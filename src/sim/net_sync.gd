@@ -1,6 +1,6 @@
 class_name NetSync
 extends RefCounted
-## Co-op B (docs/COOP_PLAN.md: Kaleb walks into Dad's world): what goes over the house network between the host's
+## Co-op B (docs/COOP_PLAN.md: Kid walks into Dad's world): what goes over the house network between the host's
 ## SimWorld and a joiner's copy, as plain dictionaries (headless-tested; NetSession carries them). The host sends a
 ## joiner one `snapshot` (the save dictionary, exactly what a load uses) and then `refresh`es: the clock, every player,
 ## every zombie, belts and machines, the cars, the pieces that changed since the last refresh (added, removed, opened

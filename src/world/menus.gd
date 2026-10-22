@@ -93,7 +93,7 @@ func _init() -> void:
 	_new_profile = _screen()
 	_new_heading = _label("New game", 48)
 	_new_profile.get_child(0).add_child(_new_heading)
-	_new_profile.get_child(0).add_child(_label("Name this save (for example, Dad or Kaleb)", 20))
+	_new_profile.get_child(0).add_child(_label("Name this save (for example, Dad or Kid)", 20))
 	_profile_name = LineEdit.new()
 	_profile_name.name = "ProfileName"
 	_profile_name.placeholder_text = "Slot name"

@@ -2,7 +2,7 @@
 
 Newest first. One entry per milestone: what was built, how to try it, known gaps, next.
 
-## 2026-10-20 — Co-op B: Kaleb can walk into Dad's world
+## 2026-10-20 — Co-op B: The kid can walk into Dad's world
 
 docs/COOP_PLAN.md Phase B. The title screen has **Host a game (house network)** and **Join a game**. Hosting opens a port and says so with a beacon every second, so the joiner's screen lists "Dad's game — 192.168.1.5" without any typing (a typed address stays as the fallback, and a name box). Joining asks the host for a place, gets the world as a save and loads it the way a save loads, arrives standing beside the host facing them, and from then on sees what the host sees: the clock, every zombie, belts and machines, cars, doors opening, walls going up or coming down, containers searched, trucks landing. The other player is a blue capsule with their name over it. The joiner walks and looks; doing things (E, swings, building, pockets) is Phase C, and a gate swallows those keys with a line saying so.
 
@@ -13,7 +13,7 @@ docs/COOP_PLAN.md Phase B. The title screen has **Host a game (house network)** 
 - `main.gd`: `_net_setup` after `_ready` (hosting from `--host`, the title's choice or the pause menu's "Host this game"; joining from `--join` or the join screen: the link waits, the scene reloads into the world when it arrives); a joiner's scene sets `sim.local`/`active` to its slot, pauses the sim, faces the host on arrival, ages its own HUD messages, follows the host's clock for the sky and parks the cars where the host says (`_joiner_tick`); saving and loading are the host's only. `Menus`: the two title buttons, the join screen, hosting from an empty slot starts a new game. `GameSession.net_role` / `net_name`.
 - Flags `--host[=PORT]`, `--join=ADDR[:PORT]`, `--name=NAME`, `--join-screen`. `test/test_net_sync.gd` (snapshot, every kind of change through a refresh, the joiner's own position kept, zombies cleared, walls removed, positions up with the guards) and `test/test_net_session.gd` (host and joiner in one process over 127.0.0.1: the slot, the world file, refreshes, the position up, the beacon; nobody home is said in words).
 
-**Try it on the PC (two machines on the house network):** on yours, `play.bat`, **Host a game**, pick your save (or an empty slot for a new game). On Kaleb's, **Join a game**: your game appears in a second or two; he types his name and presses it. He arrives beside you. On one PC: a second window with `play.bat --join=127.0.0.1 --name=Kaleb` while the first runs `play.bat --host`.
+**Try it on the PC (two machines on the house network):** on yours, `play.bat`, **Host a game**, pick your save (or an empty slot for a new game). On the kid's, **Join a game**: your game appears in a second or two; he types his name and presses it. He arrives beside you. On one PC: a second window with `play.bat --join=127.0.0.1 --name=Kid` while the first runs `play.bat --host`.
 
 **Tests:** the full suite green (23,752 checks on the run before the last test fix; `tools/test.sh net_` 68 checks: the snapshot loads as a copy; a refresh carries every kind of change and the copy matches the host piece by piece, zombie by zombie, belt by belt; the joiner's own position is kept; cleared zombies and removed walls go; positions up with slot 0 and NaN refused; the real link in one process: welcome, world file, refreshes, position up, beacon, nobody-home in words). Soak one game-day: SOAK OK, 165 s (with other work running on the box). Screenshots: the title's two new buttons, the join screen, and a real two-process join on this PC (a headless host, the joiner's shot shows "Dad" in a blue capsule beside it in Dad's world).
 
@@ -23,7 +23,7 @@ docs/COOP_PLAN.md Phase B. The title screen has **Host a game (house network)** 
 - Every zombie is refreshed every time (about 8 KB a refresh with the whole town; fine on a house network, Phase E trims it) and all bodies animate on the joiner (no resting).
 - A capsule, not a survivor body; the host's bag drops and thrown things aren't carried.
 - If the host quits, the joiner is told and stays in a frozen copy until they quit to the title.
-- The portable launcher doesn't know about joining yet (Phase E); Kaleb's PC needs this build through the usual update first.
+- The portable launcher doesn't know about joining yet (Phase E); the kid's PC needs this build through the usual update first.
 
 **Next:** co-op Phase C (every action through one gate: run locally, send to the host), per docs/COOP_PLAN.md.
 
@@ -121,9 +121,9 @@ Emmitt, looking at the P12 perk pick: "can we turn this into a skill tree like i
 
 ## 2026-10-18 — P12 Perk picks that happen, hold right-click to take things down, logs that answer
 
-A review of Emmitt's 14 session logs and Kaleb's one (PLAYTESTS 2026-10-18). Three things the logs made plain:
+A review of Emmitt's 14 session logs and the kid's one (PLAYTESTS 2026-10-18). Three things the logs made plain:
 - 24 perk points unspent between them, in every session. The dawn perk pick needed no zombie within 25 m, once a day, one card, and a zombie within 12 m closed it for the day. In a town with 11 waves an hour, that moment never came.
-- The Hub built 4 times in one sitting (so taken down 3 times), and Kaleb's vanishing door before it: in build mode a single right-click deleted what you looked at, while right-click is "block" and "aim" everywhere else.
+- The Hub built 4 times in one sitting (so taken down 3 times), and the kid's vanishing door before it: in build mode a single right-click deleted what you looked at, while right-click is "block" and "aim" everywhere else.
 - The log couldn't say the difficulty, whether the goals were seen, whether a pick was offered, or how the build menu was used.
 
 **Built:**
@@ -149,14 +149,14 @@ A review of Emmitt's 14 session logs and Kaleb's one (PLAYTESTS 2026-10-18). Thr
 
 **Known gaps:**
 - The pick's "quiet" test is distance and time, not line of sight: a zombie 13 m away in plain view counts as quiet.
-- Nothing is read aloud yet (Kaleb).
+- Nothing is read aloud yet (the kid).
 - The rest of the review: mufflers and "what they hear", doors, a payoff for the first factory.
 
 **Next:** the next playtest with these logs; then "what the zombies hear" (the muffler prompt) from the same review.
 
 ## 2026-10-17 — P11 Chop trees for planks, strip broken cars for scrap
 
-Same playtest as P10 (Emmitt and Kaleb, 30+ minutes): "The problem was resources ... We need a way to chop down trees for lumber and a way to get metal scrap."
+Same playtest as P10 (Emmitt and the kid, 30+ minutes): "The problem was resources ... We need a way to chop down trees for lumber and a way to get metal scrap."
 
 **Built:**
 - **Swing at a tree to chop it down** (`Salvage`, `SimWorld.player_hit_tree`).
@@ -196,7 +196,7 @@ Same playtest as P10 (Emmitt and Kaleb, 30+ minutes): "The problem was resources
 **Next:** the next playtest, with P10 and P11 together.
 ## 2026-10-16 — P10 A picture build menu, and pieces you learn by building
 
-Playtest (Emmitt and Kaleb, 30+ minutes): Kaleb "can't read very well", so the build menu's wall of text lost him: "thumbnails and a sidebar nav with icons for categories so he can see the machines better and the items required to craft it". Emmitt: "players should be limited on what they can build early so they can get eased into what they can build and how the items work."
+Playtest (Emmitt and the kid, 30+ minutes): the kid "can't read very well", so the build menu's wall of text lost him: "thumbnails and a sidebar nav with icons for categories so he can see the machines better and the items required to craft it". Emmitt: "players should be limited on what they can build early so they can get eased into what they can build and how the items work."
 
 **Built:**
 - **The build menu (B) is pictures first** (`BuildMenu`):
@@ -224,9 +224,9 @@ Playtest (Emmitt and Kaleb, 30+ minutes): Kaleb "can't read very well", so the b
 
 **Next:** P11, from the same playtest: chopping trees for planks and stripping wrecked cars for scrap metal.
 
-## 2026-10-16 — P9 Kaleb's updates come from the internet too
+## 2026-10-16 — P9 the kid's updates come from the internet too
 
-Emmitt: "can we make it easier to update the game for kaleb so he sees the new changes? we can use our cdn server". Kaleb's copy only updated from R: over the home network, which needs this PC switched on and his PC able to reach the share. His logs never arrived, so it probably wasn't reaching it.
+Emmitt: "can we make it easier to update the game for the kid so he sees the new changes? we can use our cdn server". The kid's copy only updated from R: over the home network, which needs this PC switched on and his PC able to reach the share. His logs never arrived, so it probably wasn't reaching it.
 
 **Built:**
 - **A private family folder on the CDN:** https://cdn.agencyedge.io/noisefloor/ on hermes.
@@ -249,7 +249,7 @@ Emmitt: "can we make it easier to update the game for kaleb so he sees the new c
 - A damaged copy keeps the old version.
 - The CDN now holds 43be875 with the new launcher.
 
-**For Kaleb's PC:** it gets the new launcher with its next update from R:, so this PC must be on when he starts the game that once. Leave the window open until "Updated". From then on, updates also come over the internet, whether or not this PC is on.
+**For the kid's PC:** it gets the new launcher with its next update from R:, so this PC must be on when he starts the game that once. Leave the window open until "Updated". From then on, updates also come over the internet, whether or not this PC is on.
 
 **Known gaps:** play logs still only reach R:, so they only arrive when his PC can see the share.
 ## 2026-10-16 — V39 Supporting hands that cradle, a two-handed axe, and a real scope
@@ -886,7 +886,7 @@ Emmitt, after playing: "I was not able to sleep or regain energy", "if you jump 
 Emmitt and his son share the PC and there was one save file, so they overwrote each other. Built by Codex (one job on his ChatGPT plan); a safer migration, two fixes and the checks by Claude Opus 5.5.
 
 **Built:**
-- **Three save slots**, each its own file (`user://saves/slot_N.json`) with a name you type ("Dad", "Kaleb"), the day and time in game, time played, zombies killed and when it was last played. The title screen's Continue opens a slot picker; New game asks which slot (warning before replacing one) and for a name; each slot has Delete with a confirm. The pause menu, F5 and F9 use the slot you're playing; session logs name it. Settings stay shared.
+- **Three save slots**, each its own file (`user://saves/slot_N.json`) with a name you type ("Dad", "Kid"), the day and time in game, time played, zombies killed and when it was last played. The title screen's Continue opens a slot picker; New game asks which slot (warning before replacing one) and for a name; each slot has Delete with a confirm. The pause menu, F5 and F9 use the slot you're playing; session logs name it. Settings stay shared.
 - **Your old save becomes slot 1 automatically** the first time, named "Slot 1". It is COPIED: the old `save.json` is never deleted (Codex's version moved it, which would have made a screenshot or test run of this branch take the save away from the current build on main).
 - Fixes: the slot picker's test helper looked one level too shallow; the migrated save's "Last played" showed UTC instead of local time.
 
@@ -2076,7 +2076,7 @@ Built by Claude Opus 5.5.
 ## 2026-10-12 — M10 Look and sound
 
 **Built:**
-- **Our own zombie** (`tools/art/zombie.py`): a rigged, animated low-poly townsperson (grey-green skin, torn work shirt, jeans, boots) that Codex built in Blender after Kaleb ruled the CC0 goblin "cursed". It has Idle, Walk, Punch, HitReact and Death animations. `ZombieBody` picks the animation from the brain's state and real speed (the walk speeds up and slows to match the feet), flinches when hit, and plays the death fall instead of tipping the body over. Each zombie gets its own shirt colour and a slightly different size.
+- **Our own zombie** (`tools/art/zombie.py`): a rigged, animated low-poly townsperson (grey-green skin, torn work shirt, jeans, boots) that Codex built in Blender after the kid ruled the CC0 goblin "cursed". It has Idle, Walk, Punch, HitReact and Death animations. `ZombieBody` picks the animation from the brain's state and real speed (the walk speeds up and slows to match the feet), flinches when hit, and plays the death fall instead of tipping the body over. Each zombie gets its own shirt colour and a slightly different size.
 - **Every building piece has a model now:** belt, bed, crate, door (hinge and handle on the right sides), barricade, spike strip, and a nail turret whose `Head` turns to aim. The Blender kit gained separate parts (`part()`, `SEPARATE`). Wrecked cars, fridges and cabinets in town are models too (`_dress()` in `main.gd` keeps the old colliders; missing models fall back to boxes).
 - **Textures** (Codex photos, seamless via `make_tileable.py`, drawn by the new `Surfaces` helper): asphalt road, brick and painted-siding houses (every third house brick), a brick factory, dry grass and dirt ground, and corrugated scrap for built walls. A missing texture falls back to a plain colour.
 - **Sound** (`SoundView`): every working machine and running generator hums with its own sound at its loudness in the noise system, so a muffler really makes it quieter and what you hear is what zombies hear. Footsteps (none while crouching, same as the noise system), pipe hits, wall bashes, doors and turret shots play from the sim's noise events. The wind turns into a colder howl at night. A hard limiter keeps a big factory from clipping. Zombies moan now and then (more often when chasing), grunt when they attack or get hit, and moan once when they die. Plus a pipe-swing whoosh, a build clunk and the flashlight click. All of these except the zombie voices are generated by `tools/audio/synth.py` (deterministic; loop points written into the WAVs). The zombie voices are a CC0 pack (`assets/CREDITS.md`).

@@ -43,9 +43,9 @@ func test_new_game_choice_defaults_normal_and_reaches_the_slot() -> void:
 		chosen.append([slot, profile_name, difficulty]))
 	menus.open_slots(true)
 	menus.choose_slot(2)
-	(menus.find_child("ProfileName", true, false) as LineEdit).text = "Kaleb"
+	(menus.find_child("ProfileName", true, false) as LineEdit).text = "Kid"
 	menus.start_new_profile()
-	eq(chosen, [[2, "Kaleb", "normal"]], "New game defaults to Normal after the slot name")
+	eq(chosen, [[2, "Kid", "normal"]], "New game defaults to Normal after the slot name")
 
 	menus.open_slots(true)
 	menus.choose_slot(3)

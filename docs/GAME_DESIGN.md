@@ -228,4 +228,4 @@ Each milestone is one cloud session or branch, sized to finish. Check the box wh
 ## Open questions (decide when we get there)
 - Map: hand-built town vs. procedurally generated blocks? (Hand-built greybox until M6.)
 - Hardcore mode (permadeath): an opt-in option, after M17. Normal mode keeps skills on death and leaves your items on your body.
-- How hard should nights be? Tune after M5 playtests with Emmitt (and Kaleb).
+- How hard should nights be? Tune after M5 playtests with Emmitt (and the kid).

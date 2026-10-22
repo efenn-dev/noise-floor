@@ -19,7 +19,7 @@ sed 's/\r$//; s/$/\r/' tools/portable/README.txt > "$dest/README.txt"
 cp build/version_published.txt "$dest/version.txt"
 echo "publish_family: $dest now has $(head -n 1 "$dest/version.txt")"
 if [ "${NO_CDN:-}" != "1" ]; then
-  host="${CDN_HOST:-cdnpublish@5.78.128.105}"
+  host="${CDN_HOST:?set CDN_HOST=user@host (the family CDN box)}"
   key="${CDN_KEY:-$HOME/.ssh/cliplabpro-cdn-publish.ed25519}"
   dir="${CDN_DIR:-/var/www/noisefloor}"
   ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -i "$key")

@@ -168,7 +168,7 @@ func _physics_process(delta: float) -> void:
 		_tick_remove_hold(delta)  # P12
 
 
-## P12 (the Hub came down three times in one sitting; Kaleb's door vanished): a piece comes down after HOLD_TO_REMOVE
+## P12 (the Hub came down three times in one sitting; Kid's door vanished): a piece comes down after HOLD_TO_REMOVE
 ## seconds of right-click held on it, not at a tap, since right-click is "block" and "aim" everywhere else. Looking
 ## at another piece starts over; letting go early cancels and says to hold.
 func start_remove_hold() -> void:

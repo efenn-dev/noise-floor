@@ -55,13 +55,13 @@ func test_a_joiner_gets_a_slot_the_world_refreshes_and_the_host_gets_its_positio
 	check(NetSession.pack({"a": 1}).size() > 0 and NetSession.unpack(NetSession.pack({"a": Vector3(1, 2, 3)}))["a"] == Vector3(1, 2, 3),
 			"dictionaries pack and unpack")
 	eq(joiner.listen(), "", "the joiner listens for games")
-	eq(joiner.join("127.0.0.1", PORT, "Kaleb"), "", "joining")
+	eq(joiner.join("127.0.0.1", PORT, "Kid"), "", "joining")
 	check(await _until(func() -> bool: return joiner.local_slot >= 0), "the joiner is welcomed (%s)" % joiner.status)
 	eq(joiner.local_slot, 1, "into slot 1")
 	eq(sim.players.size(), 2, "the host added a player")
 	if sim.players.size() == 2:
-		eq(sim.players[1].name, "Kaleb", "by name")
-	check(sim.messages.any(func(m: Dictionary) -> bool: return "Kaleb joined" in str(m["text"])), "and says so")
+		eq(sim.players[1].name, "Kid", "by name")
+	check(sim.messages.any(func(m: Dictionary) -> bool: return "Kid joined" in str(m["text"])), "and says so")
 	check(await _until(func() -> bool: return joiner.snapshot_ready), "the world arrives (%s)" % joiner.status)
 	var d := SaveGame.read(NetSession.JOIN_FILE)
 	eq(int(d.get("version", 0)), SaveGame.VERSION, "as a save of the current version")
@@ -105,7 +105,7 @@ func test_a_joiner_with_nobody_there_is_told() -> void:
 	await tree.process_frame
 	var why := [""]  # a lambda copies a plain local; an array it can write into
 	joiner.link_failed.connect(func(w: String) -> void: why[0] = w)
-	eq(joiner.join("127.0.0.1", PORT + 5, "Kaleb"), "", "joining a port with nobody on it starts")
+	eq(joiner.join("127.0.0.1", PORT + 5, "Kid"), "", "joining a port with nobody on it starts")
 	check(await _until(func() -> bool: return why[0] != ""), "and fails in words (%s)" % why[0])
 	check("Nobody answered" in why[0], "which say nobody answered")
 	joiner.close()

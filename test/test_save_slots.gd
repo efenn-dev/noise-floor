@@ -72,7 +72,7 @@ func test_three_slots_and_meta_block() -> void:
 	_reset_slots()
 	eq(GameSession.SLOT_COUNT, 3, "the slot count is data-driven from one constant")
 	eq(_write_slot(1, "Dad", 3, 14.5, 3723.0, 17), "", "slot 1 saves")
-	eq(_write_slot(2, "Kaleb", 8, 21.25, 95.0, 4), "", "slot 2 saves")
+	eq(_write_slot(2, "Kid", 8, 21.25, 95.0, 4), "", "slot 2 saves")
 	eq(_write_slot(3, "Guest", 1, 8.0, 0.0, 0), "", "slot 3 saves")
 	for slot in range(1, GameSession.SLOT_COUNT + 1):
 		check(FileAccess.file_exists(GameSession.slot_path(slot)), "slot %d has its own file" % slot)
@@ -91,7 +91,7 @@ func test_three_slots_and_meta_block() -> void:
 func test_title_lists_names_summaries_and_empty_slot() -> void:
 	_reset_slots()
 	_write_slot(1, "Dad", 3, 14.5, 3723.0, 17)
-	_write_slot(2, "Kaleb", 8, 21.25, 95.0, 4)
+	_write_slot(2, "Kid", 8, 21.25, 95.0, 4)
 	var menus := Menus.new()
 	tree.root.add_child(menus)
 	menus.show_title(GameSession.slot_summaries())
@@ -100,7 +100,7 @@ func test_title_lists_names_summaries_and_empty_slot() -> void:
 	check("Dad" in menus.slot_text(1) and "Day 3, 14:30" in menus.slot_text(1), "Dad's day and time are listed")
 	check("1 h 02 min played" in menus.slot_text(1) and "17 zombies killed" in menus.slot_text(1),
 			"Dad's play time and kills are summarized")
-	check("Kaleb" in menus.slot_text(2) and "Last played" in menus.slot_text(2), "Kaleb and the date are listed")
+	check("Kid" in menus.slot_text(2) and "Last played" in menus.slot_text(2), "Kid and the date are listed")
 	check("Empty" in menus.slot_text(3), "an unused slot says Empty")
 	menus.queue_free()
 	await tree.process_frame
@@ -110,7 +110,7 @@ func test_title_lists_names_summaries_and_empty_slot() -> void:
 func test_used_new_game_and_delete_need_confirmation() -> void:
 	_reset_slots()
 	_write_slot(1, "Dad", 3, 14.5, 300.0, 2)
-	_write_slot(2, "Kaleb", 2, 9.0, 100.0, 1)
+	_write_slot(2, "Kid", 2, 9.0, 100.0, 1)
 	var old_dad := FileAccess.get_file_as_string(GameSession.slot_path(1))
 	var menus := Menus.new()
 	tree.root.add_child(menus)
@@ -137,7 +137,7 @@ func test_used_new_game_and_delete_need_confirmation() -> void:
 		GameSession.delete_slot(slot))
 	menus.request_delete(2)
 	eq(delete_calls.size(), 0, "Delete does nothing before confirmation")
-	check(FileAccess.file_exists(GameSession.slot_path(2)), "Kaleb's save is intact before delete confirmation")
+	check(FileAccess.file_exists(GameSession.slot_path(2)), "Kid's save is intact before delete confirmation")
 	menus.confirm_pending()
 	eq(delete_calls, [2], "Delete emits only after confirmation")
 	check(not FileAccess.file_exists(GameSession.slot_path(2)), "the confirmed slot is deleted")
@@ -174,7 +174,7 @@ func test_continue_and_f5_f9_use_the_current_slot() -> void:
 	_reset_slots()
 	_write_slot(1, "Dad", 2, 10.0, 600.0, 3, 71.0)
 	var dad_before := FileAccess.get_file_as_string(GameSession.slot_path(1))
-	GameSession.start_new_slot(2, "Kaleb")
+	GameSession.start_new_slot(2, "Kid")
 	GameSession.skip_menu = true
 	GameSession.skip_hints = true
 	InputSetup.assume_captured = true
@@ -194,7 +194,7 @@ func test_continue_and_f5_f9_use_the_current_slot() -> void:
 	check(not FileAccess.file_exists(GameSession.slot_path(3)), "F5 does not create another slot")
 	var saved := SaveGame.read(GameSession.slot_path(2))
 	var saved_meta: Dictionary = saved.get("meta", {})
-	eq(saved_meta.get("name"), "Kaleb", "F5 writes current-slot metadata")
+	eq(saved_meta.get("name"), "Kid", "F5 writes current-slot metadata")
 	eq(int(saved_meta.get("day", 0)), 5, "F5 metadata uses the live day")
 	main.sim.player.water = 3.0
 	_key(main.get_viewport(), KEY_F9)

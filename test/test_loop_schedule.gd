@@ -184,7 +184,7 @@ func test_the_repair_station_draws_power_only_with_work() -> void:
 
 func test_the_perk_pick_waits_for_points_calm_and_safety() -> void:
 	# P12: not once at dawn with nothing within 25 m (which, in a town full of zombies, never came: 24 points unspent
-	# between Emmitt and Kaleb), but at any quiet moment.
+	# between Emmitt and Kid), but at any quiet moment.
 	var sim := SimWorld.new(9.0)
 	sim.player_pos = Vector3(0, 0, 0)
 	check(not sim.perk_offer_ready(), "no points: nothing to offer")

@@ -4,6 +4,4 @@
 # family_cdn.txt) is tried only when none of them answers, e.g. when the PC with the drive is off.
 R:\Reserve\Noise Floor
 \\NUGGET\Reserve\Noise Floor
-\\nugget.attlocal.net\Reserve\Noise Floor
-\\192.168.1.148\Reserve\Noise Floor
 https://cdn.agencyedge.io/noisefloor

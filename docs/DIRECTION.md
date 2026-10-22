@@ -2,12 +2,12 @@
 
 *Written 2026-10-12 by Claude Fable 5.1 at Emmitt's request, after reading the design doc, the devlog, the sim code and the first fifteen pull requests. This file outranks the milestone list in `GAME_DESIGN.md`: when they disagree, follow this one. Update it when a decision below changes.*
 
-## Update, 2026-10-19: a skill tree, then co-op with Kaleb (Emmitt's asks)
+## Update, 2026-10-19: a skill tree, then co-op with the kid (Emmitt's asks)
 
 Two plans written at Emmitt's request, both outside this file:
 
 - `docs/SKILL_TREE_PLAN.md`: the P12 perk pick becomes a Diablo 2 style tree (three trees, three rows that open at 3 and 6 points, arrows, synergies, a picture per perk from the icons the game already has, a free daily reset). One session: **P13**, after PR #108 (P12) is merged.
-- `docs/COOP_PLAN.md`: Kaleb plays alongside Emmitt over the house network. The host runs the rules; the other PC shows a copy and sends its actions. Five phases, six to eight sessions, the first with nothing to see. Three decisions for Emmitt are listed at its end.
+- `docs/COOP_PLAN.md`: the kid plays alongside Emmitt over the house network. The host runs the rules; the other PC shows a copy and sends its actions. Five phases, six to eight sessions, the first with nothing to see. Three decisions for Emmitt are listed at its end.
 
 Order from here: merge P12 → P13 skill tree → co-op Phase A (the rules hold two players) → Phase B (join over the network) → C → D → E. The log-review backlog (the muffler prompt, doors, a payoff for the first factory) slots in between phases when a playtest asks for it.
 
@@ -94,11 +94,11 @@ In the thirty hours after this file was written, builders (Claude Opus 5.5, one 
 
 ## The one thing that's wrong: nobody has played it
 
-Fifteen pull requests merged in a day. One recorded playtest, which found a mouse bug and a "cursed" zombie model. Every number in `data/` (loudness, heat thresholds, drain rates, loot odds, zombie damage) was picked by a model and checked by a test, never felt by a person. The design doc's own gate, "tune after M5 playtests with Emmitt (and Kaleb)", was skipped, and the list kept growing: seven more system milestones (M11–M17) are queued for a game no one has played for half an hour.
+Fifteen pull requests merged in a day. One recorded playtest, which found a mouse bug and a "cursed" zombie model. Every number in `data/` (loudness, heat thresholds, drain rates, loot odds, zombie damage) was picked by a model and checked by a test, never felt by a person. The design doc's own gate, "tune after M5 playtests with Emmitt (and the kid)", was skipped, and the list kept growing: seven more system milestones (M11–M17) are queued for a game no one has played for half an hour.
 
-Systems are cheap now. Finding out whether the game is fun is the expensive, scarce thing, and only Emmitt and Kaleb can produce it. So:
+Systems are cheap now. Finding out whether the game is fun is the expensive, scarce thing, and only Emmitt and the kid can produce it. So:
 
-**Rule: after each milestone merges, the next one is chosen from a playtest, not from the list.** A playtest is Emmitt (and Kaleb when he's willing) playing at least 30 minutes on `main` via `play.bat`, then filling in one entry in `docs/PLAYTESTS.md` (template at the top of that file). The next session reads the newest playtest entry before anything else and fixes what it says first.
+**Rule: after each milestone merges, the next one is chosen from a playtest, not from the list.** A playtest is Emmitt (and the kid when he's willing) playing at least 30 minutes on `main` via `play.bat`, then filling in one entry in `docs/PLAYTESTS.md` (template at the top of that file). The next session reads the newest playtest entry before anything else and fixes what it says first.
 
 ## Order of work from here
 
@@ -112,7 +112,7 @@ M11 (the world gets worse) was already started by another session when this was 
 2. **W1 — A real town.** For a first-person game the world is the thing you stare at, and today the houses are textured boxes with the loot standing outside them. This is the biggest unforced risk left and it blocks M17 (a second area) outright. Build a small kit of room layouts from the Blender kit (a few house interiors, a shop, the factory floor), put containers inside, give houses doors, and make the town's buildings muffle sound the way built walls do (the noise system's own listed gap). Keep the seeded code assembly: it fits the repo and the tests; just assemble from rooms instead of boxes. Hordes should follow the roads.
 3. **M12 Skills, then M13 Loot, before more pressure.** The game currently has no progression: nothing to get better at, nothing to find. For a kid playtester that is why you quit. Rewards before pressure is the prior; Playtest #1 can overrule it.
 4. **M14 Guns, then M15 Automated defense**, with a **stress test** first: one headless test that runs 200 zombies, 50 machines and 10 game-days in seconds, and reports how long a tick takes. The noise query is zombies × sounds with a grid walk per pair every half second, the Director re-counts walls in eight directions once a second, and the navmesh re-bakes the whole town after every build. Fine today; M11 and M15 assume many more zombies and a base that fights while you're away. Find the cliff before building on it.
-5. **Save compatibility, done with every milestone from now on.** `SaveGame.VERSION` is 1 and a mismatch refuses to load. Every milestone that adds state either leaves the version alone (and silently half-loads) or breaks every save. Once Emmitt and Kaleb have real saves, a merge that wipes them ends playtesting. Bump the version per milestone, add a small per-version upgrade step (fill in defaults for new keys), and keep a committed fixture save from the previous version that a test must still load.
+5. **Save compatibility, done with every milestone from now on.** `SaveGame.VERSION` is 1 and a mismatch refuses to load. Every milestone that adds state either leaves the version alone (and silently half-loads) or breaks every save. Once Emmitt and the kid have real saves, a merge that wipes them ends playtesting. Bump the version per milestone, add a small per-version upgrade step (fill in defaults for new keys), and keep a committed fixture save from the previous version that a test must still load.
 6. **M16 Seasons, M17 Further out**, in that order, each after a playtest.
 
 ## How a session should work on this game now
@@ -127,7 +127,7 @@ M11 (the world gets worse) was already started by another session when this was 
 
 - **Decided 2026-10-13: free assets only for now.** No paid asset packs or freelance artists. Revisit if Codex and Blender can't make convincing zombies and first-person arms.
 
-- **Who is the player?** The recommendation: Emmitt and Kaleb on a forgiving "normal"; hardcore later as an option. Tuning follows from this.
+- **Who is the player?** The recommendation: Emmitt and the kid on a forgiving "normal"; hardcore later as an option. Tuning follows from this.
 - **Map style for W1.** Recommendation: a kit of rooms assembled by seeded code. The alternative is hand-built scenes in the Godot editor, which look better per hour of human work but can't be built in cloud sessions or tested headlessly.
 
 ## What this review did not do

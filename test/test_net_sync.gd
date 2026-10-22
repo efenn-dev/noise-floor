@@ -41,20 +41,20 @@ func _round_trip(d: Dictionary) -> Dictionary:
 
 func test_the_snapshot_is_the_save_and_a_copy_loads_from_it() -> void:
 	var host := _world(3)
-	host.add_player("Kaleb")
+	host.add_player("Kid")
 	var d := _round_trip(NetSync.snapshot(host))
 	eq(int(d["version"]), SaveGame.VERSION, "the snapshot is a save of the current version")
 	eq((d["players"] as Array).size(), 2, "with both players")
 	var copy := _world(3)
 	eq(SaveGame.apply(copy, d), "", "a copy built the way a load is")
 	eq(copy.players.size(), 2, "has both players")
-	eq(copy.players[1].name, "Kaleb", "by name")
+	eq(copy.players[1].name, "Kid", "by name")
 	eq(copy.horde.zombies.size(), host.horde.zombies.size(), "and the same zombies")
 
 
 func test_refreshes_keep_the_copy_in_step_and_leave_the_joiners_own_position_alone() -> void:
 	var host := _world(3)
-	var kaleb := host.add_player("Kaleb")
+	var kid := host.add_player("Kid")
 	var rich := _rich()
 	eq(host.build.place("foundation", Vector2i(3, 9), N, rich), "", "a foundation")
 	eq(host.build.place("smelter", Vector2i(3, 9), N, rich), "", "a smelter on it")
@@ -62,8 +62,8 @@ func test_refreshes_keep_the_copy_in_step_and_leave_the_joiners_own_position_alo
 	eq(host.build.place("belt", Vector2i(3, 10), N, rich), "", "a belt")
 	var copy := _world(3)
 	eq(SaveGame.apply(copy, _round_trip(NetSync.snapshot(host))), "", "the copy loads")
-	copy.local = kaleb
-	copy.active = kaleb
+	copy.local = kid
+	copy.active = kid
 	copy.paused = true
 	var sync := NetSync.new(host)
 	for i in 40:
@@ -89,14 +89,14 @@ func test_refreshes_keep_the_copy_in_step_and_leave_the_joiners_own_position_alo
 	var t := host.supplies.add_truck(Vector3(9, 0, 120), 0.3, host.clock.day, host.clock_hours() + 6.0, 1, "the south road")
 	host.place_truck(t)
 	host.step()
-	copy.players[kaleb].pos = Vector3(9, 0, 9)  # the joiner walked here on its own machine
+	copy.players[kid].pos = Vector3(9, 0, 9)  # the joiner walked here on its own machine
 	var wire: Variant = NetSession.unpack(NetSession.pack(sync.refresh(1.5)))
 	check(wire is Dictionary, "a refresh survives the wire")
 	var d: Dictionary = wire
-	NetSync.apply_refresh(copy, d, kaleb)
+	NetSync.apply_refresh(copy, d, kid)
 	near(copy.clock.time_of_day, host.clock.time_of_day, "the clock", 0.0001)
 	eq(copy.players[0].pos, host.players[0].pos, "the host's position")
-	eq(copy.players[kaleb].pos, Vector3(9, 0, 9), "but the joiner's own position is left alone")
+	eq(copy.players[kid].pos, Vector3(9, 0, 9), "but the joiner's own position is left alone")
 	near(copy.players[0].stats.food, host.players[0].stats.food, "the host's food", 0.001)
 	check(copy.build.pieces.has(wall), "the new wall is there")
 	if copy.build.pieces.has(wall):
@@ -115,26 +115,26 @@ func test_refreshes_keep_the_copy_in_step_and_leave_the_joiners_own_position_alo
 	host.horde.zombies.erase(victim.id)
 	var again := sync.refresh(0.1)
 	check(not again.has("pieces"), "piece changes are sent once")
-	NetSync.apply_refresh(copy, again, kaleb)
+	NetSync.apply_refresh(copy, again, kid)
 	check(not copy.horde.zombies.has(victim.id), "a zombie cleared on the host is gone from the copy")
 	eq(host.build.remove(wall, rich), "", "the host takes the wall down")
-	NetSync.apply_refresh(copy, sync.refresh(0.1), kaleb)
+	NetSync.apply_refresh(copy, sync.refresh(0.1), kid)
 	check(not copy.build.pieces.has(wall), "and it's gone from the copy")
 
 
 func test_the_host_takes_the_joiners_position_but_never_its_own_or_a_bad_one() -> void:
 	var host := _world(5)
-	var kaleb := host.add_player("Kaleb")
-	var st := NetSync.player_state(host, kaleb)
+	var kid := host.add_player("Kid")
+	var st := NetSync.player_state(host, kid)
 	eq(st.size(), 4, "position, facing, light, sneaking")
-	NetSync.apply_player_state(host, kaleb, Vector3(4, 0, 7), Vector3(0, 0, 1), true, true)
-	eq(host.players[kaleb].pos, Vector3(4, 0, 7), "the joiner's position")
-	check(host.players[kaleb].lit and host.players[kaleb].sneaking, "light and sneaking")
+	NetSync.apply_player_state(host, kid, Vector3(4, 0, 7), Vector3(0, 0, 1), true, true)
+	eq(host.players[kid].pos, Vector3(4, 0, 7), "the joiner's position")
+	check(host.players[kid].lit and host.players[kid].sneaking, "light and sneaking")
 	var before: Vector3 = host.players[0].pos
 	NetSync.apply_player_state(host, 0, Vector3(99, 0, 99), Vector3(0, 0, 1), false, false)
 	eq(host.players[0].pos, before, "slot 0 is the host's own: a joiner can't move it")
-	NetSync.apply_player_state(host, kaleb, Vector3(NAN, 0, 0), Vector3(0, 0, 1), false, false)
-	eq(host.players[kaleb].pos, Vector3(4, 0, 7), "a NaN position is thrown away")
+	NetSync.apply_player_state(host, kid, Vector3(NAN, 0, 0), Vector3(0, 0, 1), false, false)
+	eq(host.players[kid].pos, Vector3(4, 0, 7), "a NaN position is thrown away")
 	NetSync.apply_player_state(host, 7, Vector3(1, 0, 1), Vector3(0, 0, 1), false, false)
 	eq(host.players.size(), 2, "an unknown slot does nothing")
 	var z := host.horde.spawn("shambler", Vector3(4, 0, 12))
