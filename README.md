@@ -22,3 +22,7 @@ tools/shot.sh day --time=10 # screenshot to .shots/day.png
 ```
 
 Built with Godot 4.7 (GDScript 2.0).
+
+## License
+
+MIT. See [LICENSE](LICENSE). Copyright (c) 2026 Emmitt Fennessey.
