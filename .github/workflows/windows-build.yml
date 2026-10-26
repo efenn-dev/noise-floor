@@ -1,0 +1,49 @@
+# Builds the Windows download (NoiseFloor-windows.zip) from main and posts it as the "latest-build" release,
+# so testers can always grab the newest game at https://github.com/efenn-dev/noise-floor/releases/latest
+# Runs on every push to main, or by hand from the Actions tab ("Run workflow").
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot 4.7 (sha512-checked)
+        run: FORCE_CLOUD_SETUP=1 bash tools/cloud-setup.sh
+
+      - name: Install the Windows export templates (sha512-checked)
+        run: |
+          set -euo pipefail
+          tpz=Godot_v4.7-stable_export_templates.tpz
+          curl -fsSL --retry 3 -o "$tpz" "https://github.com/godotengine/godot/releases/download/4.7-stable/$tpz"
+          echo "1035dfde4edcc2472bb0c0b9610ce3ee9302642c2b9957e9066372f9f6bb759ab250c8887551a66f0bc5f51bbd9a58bb45e33a0f29844e97615a9b1138c1120e  $tpz" | sha512sum -c -
+          dest="$HOME/.local/share/godot/export_templates/4.7.stable"
+          mkdir -p "$dest"
+          unzip -o -j -q "$tpz" templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe templates/version.txt -d "$dest"
+          rm "$tpz"
+
+      - name: Export
+        run: bash tools/export.sh
+
+      - name: Publish the latest-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build build/NoiseFloor-windows.zip \
+            --title "Noise Floor (latest build)" --latest --target "$GITHUB_SHA" \
+            --notes "Windows: download NoiseFloor-windows.zip below, unzip it, double-click NoiseFloor.exe. If Windows says it protected your PC, click More info, then Run anyway. Build: $(cat version.txt)"

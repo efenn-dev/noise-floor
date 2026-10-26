@@ -1,0 +1,33 @@
+NOISE FLOOR - early test build
+==============================
+
+First-person survival and factory building. Scavenge the town, build machines and belts...
+but machines make noise, and noise draws the dead.
+
+HOW TO PLAY
+-----------
+1. Unzip this folder anywhere (Desktop is fine).
+2. Double-click NoiseFloor.exe.
+3. Windows may say "Windows protected your PC" because the game isn't signed.
+   Click "More info", then "Run anyway". (It's a small hobby game; signing costs money.)
+
+You need a 64-bit Windows PC with a graphics card from the last ~8 years.
+
+CONTROLS
+--------
+Press F1 in the game for the full list. The basics:
+  W A S D      move           Mouse        look
+  Shift        sprint         Ctrl         crouch (quieter)
+  Left click   swing / shoot  Right click  aim or block
+  E            use, search, open doors, sleep, get in cars
+  Tab          inventory      B            build menu
+  F            flashlight     Esc          pause and save
+
+TIPS
+----
+- Eat and drink to stay alive; health slowly comes back when you're fed and watered,
+  and fast when you sleep in a bed.
+- Everything loud (machines, guns, cars, running) is heard by zombies. Night is worse.
+
+Saves and play logs are kept in:  %APPDATA%\Godot\app_userdata\Noise Floor\
+The build you're playing is shown on the title screen. Please mention it when you send feedback.
