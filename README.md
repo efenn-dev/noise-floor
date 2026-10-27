@@ -8,11 +8,9 @@ First-person survival automation. Scavenge to survive, build machines and belts 
 
 ## Play on Windows
 
-```bash
-C:/projects/Godot_v4.7-stable_win64.exe/Godot_v4.7-stable_win64.exe --path C:/projects/noise-floor
-```
+**Download:** [NoiseFloor-windows.zip](https://github.com/efenn-dev/noise-floor/releases/latest) (under "Assets"). Unzip it and double-click `NoiseFloor.exe`. If Windows says it protected your PC, click **More info**, then **Run anyway**. Nothing else to install. It's rebuilt automatically every time `main` changes.
 
-Pull the latest first: `git -C C:/projects/noise-floor pull`.
+Developing on the PC instead: double-click `play.bat` in a clone of this repo (needs Godot 4.7).
 
 ## Develop
 
